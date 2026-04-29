@@ -1,7 +1,7 @@
 /**
  * MÓDULO: Utilitários Centralizados
  * Funções reutilizáveis para parsing, validação e operações comuns
- * 
+ *
  * OBJETIVO: Eliminar duplicação de código e melhorar maintainability
  */
 
@@ -12,7 +12,7 @@
 /**
  * Normaliza data para um timestamp (milissegundos desde epoch)
  * Aceita: Date object, string DD/MM/YYYY, string YYYY-MM-DD
- * 
+ *
  * @param {Date|string} data - Data em qualquer formato suportado
  * @returns {number|null} Timestamp normalizado ou null se inválido
  */
@@ -34,14 +34,18 @@ function normalizarData(data) {
     let dateObj;
 
     // Formato DD/MM/YYYY
-    if (str.includes('/') && !str.includes('-')) {
-      const partes = str.split('/');
+    if (str.includes("/") && !str.includes("-")) {
+      const partes = str.split("/");
       if (partes.length === 3) {
-        dateObj = new Date(parseInt(partes[2]), parseInt(partes[1]) - 1, parseInt(partes[0]));
+        dateObj = new Date(
+          parseInt(partes[2]),
+          parseInt(partes[1]) - 1,
+          parseInt(partes[0]),
+        );
       }
     }
     // Formato YYYY-MM-DD
-    else if (str.includes('-')) {
+    else if (str.includes("-")) {
       dateObj = new Date(str);
     }
     // Tenta parse genérico
@@ -56,50 +60,50 @@ function normalizarData(data) {
 
     return null;
   } catch (e) {
-    console.error('Erro em normalizarData:', e.message);
+    console.error("Erro em normalizarData:", e.message);
     return null;
   }
 }
 
 /**
  * Formata data para string DD/MM/YYYY
- * 
+ *
  * @param {Date|string|number} data - Data em qualquer formato
  * @returns {string} Data formatada como DD/MM/YYYY ou string vazia se inválido
  */
 function formatarData(data) {
   try {
-    if (!data) return '';
+    if (!data) return "";
 
     let dateObj;
 
     if (data instanceof Date) {
       dateObj = data;
-    } else if (typeof data === 'number') {
+    } else if (typeof data === "number") {
       dateObj = new Date(data);
     } else {
       const ts = normalizarData(data);
-      if (ts === null) return '';
+      if (ts === null) return "";
       dateObj = new Date(ts);
     }
 
-    if (!dateObj || isNaN(dateObj.getTime())) return '';
+    if (!dateObj || isNaN(dateObj.getTime())) return "";
 
-    const dia = String(dateObj.getDate()).padStart(2, '0');
-    const mes = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const dia = String(dateObj.getDate()).padStart(2, "0");
+    const mes = String(dateObj.getMonth() + 1).padStart(2, "0");
     const ano = dateObj.getFullYear();
 
     return `${dia}/${mes}/${ano}`;
   } catch (e) {
-    console.error('Erro em formatarData:', e.message);
-    return '';
+    console.error("Erro em formatarData:", e.message);
+    return "";
   }
 }
 
 /**
  * Normaliza horário para minutos desde 00:00
  * Aceita: Date object, string HH:MM, string HH:MM:SS
- * 
+ *
  * @param {Date|string} hora - Hora em qualquer formato
  * @returns {number|null} Minutos desde 00:00 ou null se inválido
  */
@@ -116,7 +120,7 @@ function normalizarHora(hora) {
     const str = String(hora).trim();
     if (!str) return null;
 
-    const partes = str.split(':');
+    const partes = str.split(":");
     if (partes.length < 2) return null;
 
     const hh = parseInt(partes[0], 10);
@@ -128,30 +132,30 @@ function normalizarHora(hora) {
 
     return hh * 60 + mm;
   } catch (e) {
-    console.error('Erro em normalizarHora:', e.message);
+    console.error("Erro em normalizarHora:", e.message);
     return null;
   }
 }
 
 /**
  * Formata minutos desde 00:00 para string HH:MM
- * 
+ *
  * @param {number} minutos - Minutos desde 00:00
  * @returns {string} Horário formatado como HH:MM
  */
 function formatarHora(minutos) {
   try {
-    if (typeof minutos !== 'number' || minutos < 0 || minutos >= 1440) {
-      return '';
+    if (typeof minutos !== "number" || minutos < 0 || minutos >= 1440) {
+      return "";
     }
 
-    const hh = String(Math.floor(minutos / 60)).padStart(2, '0');
-    const mm = String(minutos % 60).padStart(2, '0');
+    const hh = String(Math.floor(minutos / 60)).padStart(2, "0");
+    const mm = String(minutos % 60).padStart(2, "0");
 
     return `${hh}:${mm}`;
   } catch (e) {
-    console.error('Erro em formatarHora:', e.message);
-    return '';
+    console.error("Erro em formatarHora:", e.message);
+    return "";
   }
 }
 
@@ -161,13 +165,13 @@ function formatarHora(minutos) {
 
 /**
  * Valida se uma string é um email válido
- * 
+ *
  * @param {string} email - Email a validar
  * @returns {boolean} true se válido
  */
 function validarEmail(email) {
   try {
-    if (!email || typeof email !== 'string') return false;
+    if (!email || typeof email !== "string") return false;
 
     const emailLimpo = String(email).trim().toLowerCase();
     const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -180,7 +184,7 @@ function validarEmail(email) {
 
 /**
  * Normaliza e valida email
- * 
+ *
  * @param {string} email - Email a normalizar
  * @returns {string} Email normalizado ou lança erro se inválido
  */
@@ -194,13 +198,13 @@ function normalizarEmail(email) {
 
 /**
  * Valida se uma string é um ID válido (formato: PREFIXO-TIMESTAMP-RANDOM)
- * 
+ *
  * @param {string} id - ID a validar
  * @returns {boolean} true se válido
  */
 function validarID(id) {
   try {
-    if (!id || typeof id !== 'string') return false;
+    if (!id || typeof id !== "string") return false;
 
     const idLimpo = String(id).trim();
     // Padrão: XXX-....-.... (prefixo de 3 letras, seguido de timestamp e random)
@@ -214,7 +218,7 @@ function validarID(id) {
 
 /**
  * Normaliza e valida ID
- * 
+ *
  * @param {string} id - ID a normalizar
  * @returns {string} ID normalizado ou lança erro se inválido
  */
@@ -228,13 +232,13 @@ function normalizarID(id) {
 
 /**
  * Valida formato de horário HH:MM
- * 
+ *
  * @param {string} hora - Hora a validar
  * @returns {boolean} true se válido
  */
 function validarFormatoHora(hora) {
   try {
-    if (!hora || typeof hora !== 'string') return false;
+    if (!hora || typeof hora !== "string") return false;
 
     const regex = /^([01]\d|2[0-3]):([0-5]\d)$/;
     return regex.test(String(hora).trim());
@@ -249,7 +253,7 @@ function validarFormatoHora(hora) {
 
 /**
  * Verifica se dois horários se sobrepõem
- * 
+ *
  * @param {number} ini1 - Minutos de início do período 1
  * @param {number} ter1 - Minutos de término do período 1
  * @param {number} ini2 - Minutos de início do período 2
@@ -257,8 +261,12 @@ function validarFormatoHora(hora) {
  * @returns {boolean} true se há sobreposição
  */
 function horariosSobrepostos(ini1, ter1, ini2, ter2) {
-  if (typeof ini1 !== 'number' || typeof ter1 !== 'number' ||
-      typeof ini2 !== 'number' || typeof ter2 !== 'number') {
+  if (
+    typeof ini1 !== "number" ||
+    typeof ter1 !== "number" ||
+    typeof ini2 !== "number" ||
+    typeof ter2 !== "number"
+  ) {
     return false;
   }
 
@@ -267,7 +275,7 @@ function horariosSobrepostos(ini1, ter1, ini2, ter2) {
 
 /**
  * Calcula duração em minutos entre dois horários
- * 
+ *
  * @param {Date|string|number} inicio - Horário inicial
  * @param {Date|string|number} fim - Horário final
  * @returns {number|null} Duração em minutos ou null se inválido
@@ -293,7 +301,7 @@ function calcularDuracaoMinutos(inicio, fim) {
 
 /**
  * Cria um mapa {id → linha completa} para lookup rápido
- * 
+ *
  * @param {Array<Array>} dados - Array 2D com dados (primeira coluna = ID)
  * @returns {Object} Mapa {id → [dados da linha]}
  */
@@ -304,7 +312,7 @@ function criarIndiceID(dados) {
 
   dados.forEach((linha, idx) => {
     if (Array.isArray(linha) && linha.length > 0) {
-      const id = String(linha[0] || '').trim();
+      const id = String(linha[0] || "").trim();
       if (id) {
         indice[id] = { dados: linha, indice: idx };
       }
@@ -316,7 +324,7 @@ function criarIndiceID(dados) {
 
 /**
  * Cria um mapa {valor de coluna → linha completa} para lookup rápido
- * 
+ *
  * @param {Array<Array>} dados - Array 2D com dados
  * @param {number} coluna - Índice da coluna a usar como chave (0-indexed)
  * @returns {Object} Mapa {valor → [dados da linha]}
@@ -324,13 +332,13 @@ function criarIndiceID(dados) {
 function criarIndiceColuna(dados, coluna) {
   const indice = {};
 
-  if (!Array.isArray(dados) || typeof coluna !== 'number' || coluna < 0) {
+  if (!Array.isArray(dados) || typeof coluna !== "number" || coluna < 0) {
     return indice;
   }
 
   dados.forEach((linha, idx) => {
     if (Array.isArray(linha) && linha[coluna] !== undefined) {
-      const chave = String(linha[coluna] || '').trim();
+      const chave = String(linha[coluna] || "").trim();
       if (chave) {
         if (!indice[chave]) {
           indice[chave] = [];
@@ -349,24 +357,24 @@ function criarIndiceColuna(dados, coluna) {
 
 /**
  * Sanitiza texto removendo caracteres perigosos e limitando tamanho
- * 
+ *
  * @param {string} texto - Texto a sanitizar
  * @param {number} maxLen - Comprimento máximo (default: 5000)
  * @returns {string} Texto sanitizado
  */
 function sanitizarTexto(texto, maxLen = 5000) {
   try {
-    return String(texto || '')
-      .replace(/[<>]/g, '')
+    return String(texto || "")
+      .replace(/[<>]/g, "")
       .substring(0, maxLen);
   } catch (e) {
-    return '';
+    return "";
   }
 }
 
 /**
  * Sanitiza número para evitar injection
- * 
+ *
  * @param {*} valor - Valor a validar como número
  * @param {number} min - Valor mínimo aceito (default: -Infinity)
  * @param {number} max - Valor máximo aceito (default: Infinity)
@@ -392,7 +400,7 @@ function sanitizarNumero(valor, min = -Infinity, max = Infinity) {
 
 /**
  * Obtém lock com retry automático
- * 
+ *
  * @param {string} nome - Nome identificador do lock
  * @param {number} timeoutMs - Timeout em ms (default: 10000)
  * @param {number} maxTentativas - Máximo de tentativas (default: 3)
@@ -407,7 +415,9 @@ function obterLockComRetry(nome, timeoutMs = 10000, maxTentativas = 3) {
       return lock;
     } catch (e) {
       if (tentativa === maxTentativas) {
-        throw new Error(`Não foi possível obter lock "${nome}" após ${maxTentativas} tentativas.`);
+        throw new Error(
+          `Não foi possível obter lock "${nome}" após ${maxTentativas} tentativas.`,
+        );
       }
       // Aguarda progressivamente mais entre tentativas (backoff exponencial)
       Utilities.sleep(Math.pow(2, tentativa - 1) * 1000);
@@ -421,13 +431,13 @@ function obterLockComRetry(nome, timeoutMs = 10000, maxTentativas = 3) {
 
 /**
  * Converte minutos para string de duração legível (ex: "2h 30min")
- * 
+ *
  * @param {number} minutos - Duração em minutos
  * @returns {string} String formatada
  */
 function formatarDuracao(minutos) {
   try {
-    if (typeof minutos !== 'number' || minutos < 0) return '';
+    if (typeof minutos !== "number" || minutos < 0) return "";
 
     const horas = Math.floor(minutos / 60);
     const mins = minutos % 60;
@@ -440,7 +450,7 @@ function formatarDuracao(minutos) {
       return `${mins}min`;
     }
   } catch (e) {
-    return '';
+    return "";
   }
 }
 
@@ -450,15 +460,19 @@ function formatarDuracao(minutos) {
 
 /**
  * Compara duas strings de forma tolerante (trim + lowercase)
- * 
+ *
  * @param {string} str1 - Primeira string
  * @param {string} str2 - Segunda string
  * @returns {boolean} true se iguais (ignorando caso e espaços)
  */
 function compararStrings(str1, str2) {
   try {
-    const s1 = String(str1 || '').trim().toLowerCase();
-    const s2 = String(str2 || '').trim().toLowerCase();
+    const s1 = String(str1 || "")
+      .trim()
+      .toLowerCase();
+    const s2 = String(str2 || "")
+      .trim()
+      .toLowerCase();
     return s1 === s2;
   } catch (e) {
     return false;
@@ -471,7 +485,7 @@ function compararStrings(str1, str2) {
 
 /**
  * Log seguro de erro sem expor informações sensíveis
- * 
+ *
  * @param {string} contexto - Contexto onde o erro ocorreu
  * @param {Error} erro - Objeto de erro
  * @param {Object} contextoAdicional - Dados adicionais para debug (opcional)
@@ -483,7 +497,7 @@ function logarErroSeguro(contexto, erro, contextoAdicional = {}) {
 
     // Futuramente: enviar para serviço externo de logging
   } catch (e) {
-    console.error('Erro ao fazer log:', e);
+    console.error("Erro ao fazer log:", e);
   }
 }
 
@@ -494,7 +508,7 @@ function logarErroSeguro(contexto, erro, contextoAdicional = {}) {
 /**
  * Cria mapa de admins para lookup rápido por email
  * Retorna: { email → { nivel, indice } }
- * 
+ *
  * @param {Array<Array>} dadosAdmins - Array de admins (coluna 0 = email, coluna 1 = nível)
  * @returns {Object} Mapa de email → { nivel, indice }
  */
@@ -508,8 +522,10 @@ function criarIndiceAdmins(dadosAdmins) {
       const email = normalizarEmail_safe(linha[0]);
       if (email) {
         indice[email] = {
-          nivel: String(linha[1] || '').toLowerCase().trim(),
-          indice: idx
+          nivel: String(linha[1] || "")
+            .toLowerCase()
+            .trim(),
+          indice: idx,
         };
       }
     }
@@ -533,7 +549,7 @@ function normalizarEmail_safe(email) {
 /**
  * Cria mapa de salas para lookup rápido por ID
  * Retorna: { salaID → { nome, capacidade, email } }
- * 
+ *
  * @param {Array<Array>} dadosSalas - Array de salas
  * @returns {Object} Mapa de ID sala → dados
  */
@@ -544,13 +560,13 @@ function criarIndiceSalas(dadosSalas) {
 
   dadosSalas.forEach((linha, idx) => {
     if (Array.isArray(linha) && linha.length > 0) {
-      const id = String(linha[0] || '').trim();
+      const id = String(linha[0] || "").trim();
       if (id) {
         indice[id] = {
-          nome: String(linha[1] || '').trim(),
+          nome: String(linha[1] || "").trim(),
           capacidade: sanitizarNumero(linha[2], 0),
           email: normalizarEmail_safe(linha[4]),
-          indice: idx
+          indice: idx,
         };
       }
     }
@@ -562,7 +578,7 @@ function criarIndiceSalas(dadosSalas) {
 /**
  * Cria mapa de itens para lookup rápido por ID
  * Retorna: { itemID → { nome, categoria, qtd, mapa_alocacao } }
- * 
+ *
  * @param {Array<Array>} dadosItens - Array de itens
  * @returns {Object} Mapa de ID item → dados
  */
@@ -573,21 +589,21 @@ function criarIndiceItens(dadosItens) {
 
   dadosItens.forEach((linha, idx) => {
     if (Array.isArray(linha) && linha.length > 0) {
-      const id = String(linha[0] || '').trim();
+      const id = String(linha[0] || "").trim();
       if (id) {
         let mapaAlocacao = {};
         try {
-          mapaAlocacao = JSON.parse(String(linha[4] || '{}'));
+          mapaAlocacao = JSON.parse(String(linha[4] || "{}"));
         } catch (e) {
           mapaAlocacao = {};
         }
 
         indice[id] = {
-          nome: String(linha[1] || '').trim(),
-          categoria: String(linha[2] || '').trim(),
+          nome: String(linha[1] || "").trim(),
+          categoria: String(linha[2] || "").trim(),
           qtd: sanitizarNumero(linha[3], 0),
           alocacao: mapaAlocacao,
-          indice: idx
+          indice: idx,
         };
       }
     }
