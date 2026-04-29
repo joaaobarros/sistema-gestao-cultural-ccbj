@@ -16,7 +16,7 @@ function getBaseUrl() {
 // 👤 ADMINS
 // ================================
 function obterAdmins() {
-  const aba = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Administradores");
+  const aba = _getSheet('Administradores');
   if (!aba || aba.getLastRow() < 2) return [];
   return aba.getRange(2, 1, aba.getLastRow() - 1, 1)
     .getValues()
@@ -28,7 +28,7 @@ function obterAdmins() {
 // 👤 DONO DO ESPAÇO (email responsável, col 5)
 // ================================
 function obterDonoEspaco(nomeOuIdEspaco, diaSemana) {
-  const aba = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Configuracoes");
+  const aba = _getSheet('Configuracoes');
   if (!aba || aba.getLastRow() < 2) return null;
   const dados = aba.getDataRange().getValues();
   for (let i = 1; i < dados.length; i++) {
@@ -68,8 +68,7 @@ function notificarSolicitacao(s) {
     const dest   = [...new Set([dono, ...admins].filter(Boolean))];
     if (!dest.length) return;
 
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const configSheet = ss.getSheetByName('Configuracoes');
+    const configSheet = _getSheet('Configuracoes');
     let nomeSala = s.sala || '—';
     if (configSheet && configSheet.getLastRow() > 1) {
       const dados = configSheet.getDataRange().getValues();
@@ -142,8 +141,7 @@ function chat_criarSolicitacao(tipo, subtipo, dados, usuario, justificativa) {
   lock.waitLock(10000);
 
   try {
-    const ss  = SpreadsheetApp.getActiveSpreadsheet();
-    const aba = ss.getSheetByName('Solicitacoes');
+    const aba = _getSheet('Solicitacoes');
     if (!aba) throw new Error("Aba 'Solicitacoes' não encontrada. Execute o Setup.");
 
     const id = gerarId('SOL');
@@ -197,8 +195,7 @@ function chat_criarSolicitacao(tipo, subtipo, dados, usuario, justificativa) {
 // 📋 LISTAR SOLICITAÇÕES
 // ================================
 function listarSolicitacoesPendentes(emailUsuario) {
-  const ss  = SpreadsheetApp.getActiveSpreadsheet();
-  const aba = ss.getSheetByName('Solicitacoes');
+  const aba = _getSheet('Solicitacoes');
   if (!aba || aba.getLastRow() < 2) return [];
 
   const dados  = aba.getRange(2, 1, aba.getLastRow() - 1, 12).getDisplayValues();
@@ -206,7 +203,7 @@ function listarSolicitacoesPendentes(emailUsuario) {
   const email  = String(emailUsuario || '').toLowerCase().trim();
   const isAdmin = admins.includes(email);
 
-  const configSheet = ss.getSheetByName('Configuracoes');
+  const configSheet = _getSheet('Configuracoes');
   const salasComoResponsavel = new Set();
   if (configSheet && configSheet.getLastRow() > 1) {
     configSheet.getRange(2, 1, configSheet.getLastRow() - 1, 5).getValues().forEach(function(row) {
@@ -262,7 +259,7 @@ function listarTodasSolicitacoes(emailUsuario) {
   const isAdm  = admins.includes(emailL);
   if (!isAdm) {
     // Verifica se é dono de algum espaço
-    const configS = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Configuracoes');
+    const configS = _getSheet('Configuracoes');
     let ehDono = false;
     if (configS && configS.getLastRow() > 1) {
       configS.getRange(2, 1, configS.getLastRow()-1, 5).getValues().forEach(function(row) {
@@ -278,8 +275,7 @@ function listarTodasSolicitacoes(emailUsuario) {
     if (!ehDono) throw new Error('Acesso negado.');
   }
 
-  const ss  = SpreadsheetApp.getActiveSpreadsheet();
-  const aba = ss.getSheetByName('Solicitacoes');
+  const aba = _getSheet('Solicitacoes');
   if (!aba || aba.getLastRow() < 2) return [];
 
   return aba.getRange(2, 1, aba.getLastRow() - 1, 12).getDisplayValues()
@@ -314,8 +310,7 @@ function aprovarSolicitacao(id, emailAprovador) {
 
   let isDonoEspaco = false;
   if (!isAdmin) {
-    const ss2 = SpreadsheetApp.getActiveSpreadsheet();
-    const abaSol = ss2.getSheetByName('Solicitacoes');
+    const abaSol = _getSheet('Solicitacoes');
     if (abaSol) {
       const linhasSol = abaSol.getDataRange().getValues();
       for (let i = 1; i < linhasSol.length; i++) {
@@ -349,8 +344,7 @@ function aprovarSolicitacao(id, emailAprovador) {
   lock.waitLock(30000);
 
   try {
-    const ss  = SpreadsheetApp.getActiveSpreadsheet();
-    const aba = ss.getSheetByName('Solicitacoes');
+    const aba = _getSheet('Solicitacoes');
     const dados = aba.getDataRange().getValues();
 
     let linha = -1, sol = null;
@@ -429,8 +423,7 @@ function recusarSolicitacao(id, justificativa, emailAprovador) {
 
   let isDonoEspacoR = false;
   if (!isAdminR) {
-    const ss3 = SpreadsheetApp.getActiveSpreadsheet();
-    const abaSolR = ss3.getSheetByName('Solicitacoes');
+    const abaSolR = _getSheet('Solicitacoes');
     if (abaSolR) {
       const linhasSolR = abaSolR.getDataRange().getValues();
       for (let i = 1; i < linhasSolR.length; i++) {
@@ -467,8 +460,7 @@ function recusarSolicitacao(id, justificativa, emailAprovador) {
   lock.waitLock(30000);
 
   try {
-    const ss  = SpreadsheetApp.getActiveSpreadsheet();
-    const aba = ss.getSheetByName('Solicitacoes');
+    const aba = _getSheet('Solicitacoes');
     const dados = aba.getDataRange().getValues();
 
     let linha = -1, sol = null;

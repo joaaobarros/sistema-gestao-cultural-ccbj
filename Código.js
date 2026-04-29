@@ -2901,40 +2901,6 @@ function parsearJsonIA(resposta) {
 }
 
 /**
- * Verifica se usuário tem permissão de Comunicação ou superior
- */
-function verificarPermissao(nivelMinimo, emailUsuario) {
-  
-
-  const email = (emailUsuario && emailUsuario.includes('@'))
-    ? String(emailUsuario).toLowerCase().trim()
-    : obterEmailUsuario('');
-
-  const abaAdmins = _getSheet('Administradores');
-  if (!abaAdmins) throw new Error("Aba 'Administradores' não encontrada.");
-
-  const dados = abaAdmins.getDataRange().getValues();
-
-  for (let i = 1; i < dados.length; i++) {
-    const emailPlanilha = String(dados[i][0] || '').toLowerCase().trim();
-    const nivel = String(dados[i][1] || '').toLowerCase().trim();
-
-    if (emailPlanilha === email) {
-      const temPermissao =
-        (nivelMinimo === 'admin' && (nivel === 'admin' || nivel === 'superadmin')) ||
-        (nivelMinimo === 'superadmin' && nivel === 'superadmin');
-
-      if (!temPermissao) {
-        throw new Error(`Acesso negado. Nível necessário: ${nivelMinimo}. Seu nível: ${nivel}`);
-      }
-      return true;
-    }
-  }
-
-  throw new Error(`Acesso negado: ${email} não é administrador.`);
-}
-
-/**
  * Retorna lista de emails conhecidos no sistema para autocomplete
  */
 function resolverNomePorEmail(email) {
@@ -3887,25 +3853,6 @@ function _notificarCancelamentoMesmoDia({ sala, nome, inicio, fim, emailAtual })
   }
 }
 
-function registrarAcesso(email, nivel) {
-  try {
-    
-    const aba = _getSheet('LogAcessos');
-    if (!aba) return;
-
-    aba.appendRow([
-      new Date(),
-      email,
-      email.split('@')[0],
-      nivel,
-      'N/A',
-      'WEBAPP'
-    ]);
-  } catch (e) {
-    console.warn('Falha ao registrar acesso:', e.message);
-  }
-}
-
 function verificarPermissao(nivelNecessario, email) {
   
   const aba = _getSheet('Administradores');
@@ -3931,68 +3878,9 @@ function verificarPermissao(nivelNecessario, email) {
 
   throw new Error('Permissão negada.');
 }
-
-function detectarComportamentoSuspeito(acao) {
-  return true;
-}
-
-function detectarComportamentoSuspeito() {
-  return true;
-}
-
-function registrarAcesso(email, nivel) {
-  try {
-    
-    const aba = _getSheet('LogAcessos');
-    if (!aba) return;
-
-    aba.appendRow([
-      new Date(),
-      email,
-      email.split('@')[0],
-      nivel,
-      'N/A',
-      'WEBAPP'
-    ]);
-  } catch (e) {
-    console.warn('Erro registrar acesso:', e.message);
-  }
-}
-
-function verificarPermissao(nivelNecessario, email) {
-  
-  const aba = _getSheet('Administradores');
-
-  if (!aba || aba.getLastRow() < 2) {
-    throw new Error('Nenhum administrador configurado.');
-  }
-
-  const dados = aba.getRange(2, 1, aba.getLastRow() - 1, 2).getValues();
-
-  const usuario = String(email).toLowerCase().trim();
-
-  for (let i = 0; i < dados.length; i++) {
-    const emailPlanilha = String(dados[i][0]).toLowerCase().trim();
-    const nivel = String(dados[i][1]).toLowerCase().trim();
-
-    if (emailPlanilha === usuario) {
-      if (nivel === nivelNecessario || nivel === 'superadmin') {
-        return true;
-      }
-    }
-  }
-
-  throw new Error('Permissão negada.');
-}
-
-function analisarDisponibilidadeReal(payload) {
-  return { conflito: false };
-}
-
 
 function _salvarCamposCODIP(idReserva, dados) {
   try {
-    const ss    = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = _getSheet('RelatoriosCODIP');
     if (!sheet) throw new Error('Aba RelatoriosCODIP não encontrada');
 
@@ -4108,3 +3996,15 @@ function obterDadosContratos() {
 function testeVSCode() {
   Logger.log("funcionando");
 }
+
+// ── Stubs — funcionalidades em desenvolvimento ────────────────────────────────
+function salvarContrato()      { throw new Error('EM_BREVE'); }
+function excluirContrato()     { throw new Error('EM_BREVE'); }
+function salvarMeta()          { throw new Error('EM_BREVE'); }
+function excluirMeta()         { throw new Error('EM_BREVE'); }
+function salvarRubrica()       { throw new Error('EM_BREVE'); }
+function excluirRubrica()      { throw new Error('EM_BREVE'); }
+function salvarIndicador()     { throw new Error('EM_BREVE'); }
+function excluirIndicador()    { throw new Error('EM_BREVE'); }
+function obterMetricasCODIP()  { throw new Error('EM_BREVE'); }
+function gerarDocumentoDownload() { throw new Error('EM_BREVE'); }

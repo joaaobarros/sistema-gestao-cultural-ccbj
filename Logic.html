@@ -21,6 +21,15 @@ let ultimoEstadoAtualizacao = {
   horaTer: null
 };
 
+function _handleServerError(err) {
+  showLoader(false);
+  if (err && err.message === 'EM_BREVE') {
+    Swal.fire('Em breve', 'Essa funcionalidade ainda será implementada.', 'info');
+    return;
+  }
+  Swal.fire('Erro', (err && err.message) || String(err), 'error');
+}
+
 function corBg(cor) {
   return {
     blue: 'bg-blue-100',
@@ -1349,9 +1358,7 @@ function gerarDocumentoDownloadPDF(conteudo) {
       link.click();
       Swal.fire({ icon: 'success', title: 'Download iniciado' });
     })
-    .withFailureHandler(function(err) {
-      Swal.fire('Erro', err.message, 'error');
-    })
+    .withFailureHandler(_handleServerError)
     .gerarDocumentoDownload(conteudo);
 }
 
@@ -10036,9 +10043,7 @@ function carregarMetricasCODIP() {
       document.getElementById('codipTaxa').innerText = res.taxaPresenca + '%';
 
     })
-    .withFailureHandler(function() {
-      console.warn('Erro ao carregar métricas CODIP');
-    })
+    .withFailureHandler(_handleServerError)
     .obterMetricasCODIP();
 }
 
@@ -10692,7 +10697,7 @@ function abrirModalContrato(dados) {
     showLoader(true);
     google.script.run
       .withSuccessHandler(function(){ showLoader(false); carregarDadosContratos(renderizarContratos); codipPopularContratos(); })
-      .withFailureHandler(function(e){ showLoader(false); Swal.fire('Erro',e.message,'error'); })
+      .withFailureHandler(_handleServerError)
       .salvarContrato(r.value, AppState.usuario.email);
   });
 }
@@ -10715,7 +10720,7 @@ function excluirContratoUI(id) {
     showLoader(true);
     google.script.run
       .withSuccessHandler(function(){ showLoader(false); carregarDadosContratos(renderizarContratos); })
-      .withFailureHandler(function(e){ showLoader(false); Swal.fire('Erro',e.message,'error'); })
+      .withFailureHandler(_handleServerError)
       .excluirContrato(id, AppState.usuario.email);
   });
 }
@@ -10768,7 +10773,7 @@ function abrirModalMeta(idContrato, dados) {
     showLoader(true);
     google.script.run
       .withSuccessHandler(function(){ showLoader(false); carregarDadosContratos(renderizarContratos); })
-      .withFailureHandler(function(e){ showLoader(false); Swal.fire('Erro',e.message,'error'); })
+      .withFailureHandler(_handleServerError)
       .salvarMeta(r.value, AppState.usuario.email);
   });
 }
@@ -10791,7 +10796,7 @@ function excluirMetaUI(id) {
     showLoader(true);
     google.script.run
       .withSuccessHandler(function(){ showLoader(false); carregarDadosContratos(renderizarContratos); })
-      .withFailureHandler(function(e){ showLoader(false); Swal.fire('Erro',e.message,'error'); })
+      .withFailureHandler(_handleServerError)
       .excluirMeta(id, AppState.usuario.email);
   });
 }
@@ -10855,7 +10860,7 @@ function abrirModalRubrica(idMeta, dados) {
     showLoader(true);
     google.script.run
       .withSuccessHandler(function(){ showLoader(false); carregarDadosContratos(renderizarContratos); })
-      .withFailureHandler(function(e){ showLoader(false); Swal.fire('Erro',e.message,'error'); })
+      .withFailureHandler(_handleServerError)
       .salvarRubrica(r.value, AppState.usuario.email);
   });
 }
@@ -10876,7 +10881,7 @@ function excluirRubricaUI(id) {
     showLoader(true);
     google.script.run
       .withSuccessHandler(function(){ showLoader(false); carregarDadosContratos(renderizarContratos); })
-      .withFailureHandler(function(e){ showLoader(false); Swal.fire('Erro',e.message,'error'); })
+      .withFailureHandler(_handleServerError)
       .excluirRubrica(id, AppState.usuario.email);
   });
 }
@@ -10986,7 +10991,7 @@ function abrirModalIndicador(idMeta, idContrato, dados) {
     showLoader(true);
     google.script.run
       .withSuccessHandler(function(){ showLoader(false); carregarDadosContratos(function(){ renderizarContratos(); codipPopularContratos(); }); })
-      .withFailureHandler(function(e){ showLoader(false); Swal.fire('Erro',e.message,'error'); })
+      .withFailureHandler(_handleServerError)
       .salvarIndicador(r.value, AppState.usuario.email);
   });
 }
@@ -11007,7 +11012,7 @@ function excluirIndicadorUI(id) {
     showLoader(true);
     google.script.run
       .withSuccessHandler(function(){ showLoader(false); carregarDadosContratos(renderizarContratos); })
-      .withFailureHandler(function(e){ showLoader(false); Swal.fire('Erro',e.message,'error'); })
+      .withFailureHandler(_handleServerError)
       .excluirIndicador(id, AppState.usuario.email);
   });
 }
