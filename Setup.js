@@ -382,3 +382,13 @@ function liberarItensOrfaos(idSalaDeletada) {
 
   console.log('liberarItensOrfaos: sala "' + idSala + '", liberado: ' + total);
 }
+
+function debugProps() {
+  const props = PropertiesService.getScriptProperties().getProperties();
+  console.log(props);
+}
+
+function processarFilasAutomaticamente() {
+  // Placeholder para trigger agendado — sem operação
+  console.log('processarFilasAutomaticamente: noop');
+}
