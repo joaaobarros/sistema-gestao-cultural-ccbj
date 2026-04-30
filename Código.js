@@ -33,9 +33,10 @@ function _getSheet(nomeAba) {
 
     // RELATORIOS
     'RelatoriosCODIP': ['RELATORIOS', 'RelatoriosCODIP'],
-    'Contratos': ['RELATORIOS', 'Contratos'],
-    'Metas': ['RELATORIOS', 'Metas'],
-    'Indicadores': ['RELATORIOS', 'Indicadores']
+    'Contratos':   ['RELATORIOS', 'Contratos'],
+    'Metas':       ['RELATORIOS', 'Metas'],
+    'Indicadores': ['RELATORIOS', 'Indicadores'],
+    'Rubricas':    ['RELATORIOS', 'Rubricas']
   };
 
   const conf = mapa[nomeAba];
@@ -3981,15 +3982,14 @@ ${String(texto || '').trim()}`;
 
 function obterDadosContratos() {
   try {
-    const aba = _getSheet('Contratos');
-
-    if (!aba || aba.getLastRow() < 2) return [];
-
-    return aba.getRange(2, 1, aba.getLastRow() - 1, aba.getLastColumn())
-              .getDisplayValues();
-
-  } catch (e) {
-    throw new Error('Erro ao obter contratos: ' + e.message);
+    return {
+      contratos:   obterContratos(),
+      metas:       obterMetas(),
+      indicadores: obterIndicadores(),
+      rubricas:    obterRubricas()
+    };
+  } catch(e) {
+    throw new Error('Erro ao carregar dados: ' + e.message);
   }
 }
 
@@ -3997,14 +3997,491 @@ function testeVSCode() {
   Logger.log("funcionando");
 }
 
-// ── Stubs — funcionalidades em desenvolvimento ────────────────────────────────
-function salvarContrato()      { throw new Error('EM_BREVE'); }
-function excluirContrato()     { throw new Error('EM_BREVE'); }
-function salvarMeta()          { throw new Error('EM_BREVE'); }
-function excluirMeta()         { throw new Error('EM_BREVE'); }
-function salvarRubrica()       { throw new Error('EM_BREVE'); }
-function excluirRubrica()      { throw new Error('EM_BREVE'); }
-function salvarIndicador()     { throw new Error('EM_BREVE'); }
-function excluirIndicador()    { throw new Error('EM_BREVE'); }
-function obterMetricasCODIP()  { throw new Error('EM_BREVE'); }
+// ── Stubs — funcionalidades em desenvolvimento ─────────────────────────────────
+function obterMetricasCODIP()     { throw new Error('EM_BREVE'); }
 function gerarDocumentoDownload() { throw new Error('EM_BREVE'); }
+
+
+// ==============================
+// CONTRATOS
+// ==============================
+
+function obterContratos() {
+  const aba = _getSheet('Contratos');
+  if (!aba || aba.getLastRow() < 2) return [];
+  const rows = aba.getDataRange().getValues();
+  const result = [];
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    if (!String(r[0]).trim()) continue;
+    result.push({
+      id:            String(r[0]),
+      nome:          String(r[1]  || ''),
+      numero:        String(r[2]  || ''),
+      descricao:     String(r[3]  || ''),
+      vigIni:        r[4] ? String(r[4]) : '',
+      vigFim:        r[5] ? String(r[5]) : '',
+      status:        String(r[6]  || ''),
+      valorTotal:    Number(r[7]) || 0,
+      fonteRecurso:  String(r[8]  || ''),
+      contrapartida: Number(r[9]) || 0,
+      modalidade:    String(r[10] || ''),
+      obsFinanceiro: String(r[11] || '')
+    });
+  }
+  return result;
+}
+
+function obterContratoPorId(id) {
+  const idStr = String(id || '').trim();
+  const todos = obterContratos();
+  for (let i = 0; i < todos.length; i++) {
+    if (todos[i].id === idStr) return todos[i];
+  }
+  return null;
+}
+
+function salvarContrato(dados, email) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const aba   = _getSheet('Contratos');
+    const id    = String(dados.id || '').trim();
+    const linha = [
+      id || gerarId('CTR'),
+      String(dados.nome          || ''),
+      String(dados.numero        || ''),
+      String(dados.descricao     || ''),
+      dados.vigIni               || '',
+      dados.vigFim               || '',
+      String(dados.status        || 'ATIVO'),
+      Number(dados.valorTotal)   || 0,
+      String(dados.fonteRecurso  || ''),
+      Number(dados.contrapartida)|| 0,
+      String(dados.modalidade    || ''),
+      String(dados.obsFinanceiro || '')
+    ];
+    if (!id) {
+      aba.appendRow(linha);
+    } else {
+      const rows = aba.getDataRange().getValues();
+      let found = false;
+      for (let i = 1; i < rows.length; i++) {
+        if (String(rows[i][0]).trim() === id) {
+          aba.getRange(i + 1, 1, 1, linha.length).setValues([linha]);
+          found = true;
+          break;
+        }
+      }
+      if (!found) aba.appendRow(linha);
+    }
+    registrarLog('SALVAR', 'CONTRATO', linha[0], JSON.stringify(dados), '', '', String(email || ''));
+    return true;
+  } catch(e) {
+    console.error('salvarContrato:', e.message);
+    return false;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function excluirContrato(id, email) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const aba   = _getSheet('Contratos');
+    const rows  = aba.getDataRange().getValues();
+    const idStr = String(id || '').trim();
+    for (let i = 1; i < rows.length; i++) {
+      if (String(rows[i][0]).trim() === idStr) {
+        aba.deleteRow(i + 1);
+        registrarLog('EXCLUIR', 'CONTRATO', idStr, '', '', '', String(email || ''));
+        return true;
+      }
+    }
+    return false;
+  } catch(e) {
+    console.error('excluirContrato:', e.message);
+    return false;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function atualizarContrato(id, campos, email) {
+  try {
+    const atual = obterContratoPorId(id);
+    if (!atual) return false;
+    const merged = {};
+    for (const k in atual) merged[k] = atual[k];
+    for (const k in campos) merged[k] = campos[k];
+    merged.id = String(id);
+    return salvarContrato(merged, email);
+  } catch(e) {
+    console.error('atualizarContrato:', e.message);
+    return false;
+  }
+}
+
+
+// ==============================
+// METAS
+// ==============================
+
+function obterMetas() {
+  const aba = _getSheet('Metas');
+  if (!aba || aba.getLastRow() < 2) return [];
+  const rows = aba.getDataRange().getValues();
+  const result = [];
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    if (!String(r[0]).trim()) continue;
+    result.push({
+      id:         String(r[0]),
+      idContrato: String(r[1] || ''),
+      numero:     String(r[2] || ''),
+      titulo:     String(r[3] || ''),
+      descricao:  String(r[4] || ''),
+      tipoMeta:   String(r[5] || 'CONTRATUAL')
+    });
+  }
+  return result;
+}
+
+function obterMetaPorId(id) {
+  const idStr = String(id || '').trim();
+  const todos = obterMetas();
+  for (let i = 0; i < todos.length; i++) {
+    if (todos[i].id === idStr) return todos[i];
+  }
+  return null;
+}
+
+function salvarMeta(dados, email) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const aba   = _getSheet('Metas');
+    const id    = String(dados.id || '').trim();
+    const linha = [
+      id || gerarId('META'),
+      String(dados.idContrato || ''),
+      String(dados.numero     || ''),
+      String(dados.titulo     || ''),
+      String(dados.descricao  || ''),
+      String(dados.tipoMeta   || 'CONTRATUAL')
+    ];
+    if (!id) {
+      aba.appendRow(linha);
+    } else {
+      const rows = aba.getDataRange().getValues();
+      let found = false;
+      for (let i = 1; i < rows.length; i++) {
+        if (String(rows[i][0]).trim() === id) {
+          aba.getRange(i + 1, 1, 1, linha.length).setValues([linha]);
+          found = true;
+          break;
+        }
+      }
+      if (!found) aba.appendRow(linha);
+    }
+    registrarLog('SALVAR', 'META', linha[0], JSON.stringify(dados), '', '', String(email || ''));
+    return true;
+  } catch(e) {
+    console.error('salvarMeta:', e.message);
+    return false;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function excluirMeta(id, email) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const aba   = _getSheet('Metas');
+    const rows  = aba.getDataRange().getValues();
+    const idStr = String(id || '').trim();
+    for (let i = 1; i < rows.length; i++) {
+      if (String(rows[i][0]).trim() === idStr) {
+        aba.deleteRow(i + 1);
+        registrarLog('EXCLUIR', 'META', idStr, '', '', '', String(email || ''));
+        return true;
+      }
+    }
+    return false;
+  } catch(e) {
+    console.error('excluirMeta:', e.message);
+    return false;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function atualizarMeta(id, campos, email) {
+  try {
+    const atual = obterMetaPorId(id);
+    if (!atual) return false;
+    const merged = {};
+    for (const k in atual) merged[k] = atual[k];
+    for (const k in campos) merged[k] = campos[k];
+    merged.id = String(id);
+    return salvarMeta(merged, email);
+  } catch(e) {
+    console.error('atualizarMeta:', e.message);
+    return false;
+  }
+}
+
+
+// ==============================
+// INDICADORES
+// ==============================
+
+function obterIndicadores() {
+  const aba = _getSheet('Indicadores');
+  if (!aba || aba.getLastRow() < 2) return [];
+  const rows = aba.getDataRange().getValues();
+  const result = [];
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    if (!String(r[0]).trim()) continue;
+    const meses = [
+      Number(r[5])  || 0, Number(r[6])  || 0, Number(r[7])  || 0,
+      Number(r[8])  || 0, Number(r[9])  || 0, Number(r[10]) || 0,
+      Number(r[11]) || 0, Number(r[12]) || 0, Number(r[13]) || 0,
+      Number(r[14]) || 0, Number(r[15]) || 0, Number(r[16]) || 0
+    ];
+    result.push({
+      id:            String(r[0]),
+      idMeta:        String(r[1] || ''),
+      idContrato:    String(r[2] || ''),
+      ano:           Number(r[3]) || new Date().getFullYear(),
+      texto:         String(r[4] || ''),
+      nome:          String(r[4] || ''),
+      tipoIndicador: String(r[17] || 'CONTRATUAL'),
+      numero:        String(r[18] || ''),
+      meses:         meses,
+      q1: meses[0] + meses[1] + meses[2],
+      q2: meses[3] + meses[4] + meses[5],
+      q3: meses[6] + meses[7] + meses[8],
+      q4: meses[9] + meses[10] + meses[11]
+    });
+  }
+  return result;
+}
+
+function obterIndicadorPorId(id) {
+  const idStr = String(id || '').trim();
+  const todos = obterIndicadores();
+  for (let i = 0; i < todos.length; i++) {
+    if (todos[i].id === idStr) return todos[i];
+  }
+  return null;
+}
+
+function salvarIndicador(dados, email) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const aba    = _getSheet('Indicadores');
+    const id     = String(dados.id || '').trim();
+    const anoRef = Number(dados.ano) || new Date().getFullYear();
+    const m      = dados.meses;
+    let mesesArr = [];
+    if (m && !Array.isArray(m) && typeof m === 'object') {
+      mesesArr = m[anoRef] || m[String(anoRef)] || [];
+    } else if (Array.isArray(m)) {
+      mesesArr = m;
+    }
+    while (mesesArr.length < 12) mesesArr.push(0);
+    const linha = [
+      id || gerarId('IND'),
+      String(dados.idMeta       || ''),
+      String(dados.idContrato   || ''),
+      anoRef,
+      String(dados.nome || dados.texto || ''),
+      Number(mesesArr[0])  || 0,
+      Number(mesesArr[1])  || 0,
+      Number(mesesArr[2])  || 0,
+      Number(mesesArr[3])  || 0,
+      Number(mesesArr[4])  || 0,
+      Number(mesesArr[5])  || 0,
+      Number(mesesArr[6])  || 0,
+      Number(mesesArr[7])  || 0,
+      Number(mesesArr[8])  || 0,
+      Number(mesesArr[9])  || 0,
+      Number(mesesArr[10]) || 0,
+      Number(mesesArr[11]) || 0,
+      String(dados.tipoIndicador || 'CONTRATUAL'),
+      String(dados.numero        || '')
+    ];
+    if (!id) {
+      aba.appendRow(linha);
+    } else {
+      const rows = aba.getDataRange().getValues();
+      let found = false;
+      for (let i = 1; i < rows.length; i++) {
+        if (String(rows[i][0]).trim() === id) {
+          aba.getRange(i + 1, 1, 1, linha.length).setValues([linha]);
+          found = true;
+          break;
+        }
+      }
+      if (!found) aba.appendRow(linha);
+    }
+    registrarLog('SALVAR', 'INDICADOR', linha[0], JSON.stringify(dados), '', '', String(email || ''));
+    return true;
+  } catch(e) {
+    console.error('salvarIndicador:', e.message);
+    return false;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function excluirIndicador(id, email) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const aba   = _getSheet('Indicadores');
+    const rows  = aba.getDataRange().getValues();
+    const idStr = String(id || '').trim();
+    for (let i = 1; i < rows.length; i++) {
+      if (String(rows[i][0]).trim() === idStr) {
+        aba.deleteRow(i + 1);
+        registrarLog('EXCLUIR', 'INDICADOR', idStr, '', '', '', String(email || ''));
+        return true;
+      }
+    }
+    return false;
+  } catch(e) {
+    console.error('excluirIndicador:', e.message);
+    return false;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function atualizarIndicador(id, campos, email) {
+  try {
+    const atual = obterIndicadorPorId(id);
+    if (!atual) return false;
+    const merged = {};
+    for (const k in atual) merged[k] = atual[k];
+    for (const k in campos) merged[k] = campos[k];
+    merged.id = String(id);
+    return salvarIndicador(merged, email);
+  } catch(e) {
+    console.error('atualizarIndicador:', e.message);
+    return false;
+  }
+}
+
+
+// ==============================
+// RUBRICAS
+// ==============================
+
+function obterRubricas() {
+  const aba = _getSheet('Rubricas');
+  if (!aba || aba.getLastRow() < 2) return [];
+  const rows = aba.getDataRange().getValues();
+  const result = [];
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    if (!String(r[0]).trim()) continue;
+    result.push({
+      id:     String(r[0]),
+      idMeta: String(r[1] || ''),
+      nome:   String(r[2] || ''),
+      valor:  Number(r[3]) || 0,
+      obs:    String(r[4] || '')
+    });
+  }
+  return result;
+}
+
+function obterRubricaPorId(id) {
+  const idStr = String(id || '').trim();
+  const todos = obterRubricas();
+  for (let i = 0; i < todos.length; i++) {
+    if (todos[i].id === idStr) return todos[i];
+  }
+  return null;
+}
+
+function salvarRubrica(dados, email) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const aba   = _getSheet('Rubricas');
+    const id    = String(dados.id || '').trim();
+    const linha = [
+      id || gerarId('RUB'),
+      String(dados.idMeta || ''),
+      String(dados.nome   || ''),
+      Number(dados.valor) || 0,
+      String(dados.obs    || '')
+    ];
+    if (!id) {
+      aba.appendRow(linha);
+    } else {
+      const rows = aba.getDataRange().getValues();
+      let found = false;
+      for (let i = 1; i < rows.length; i++) {
+        if (String(rows[i][0]).trim() === id) {
+          aba.getRange(i + 1, 1, 1, linha.length).setValues([linha]);
+          found = true;
+          break;
+        }
+      }
+      if (!found) aba.appendRow(linha);
+    }
+    registrarLog('SALVAR', 'RUBRICA', linha[0], JSON.stringify(dados), '', '', String(email || ''));
+    return true;
+  } catch(e) {
+    console.error('salvarRubrica:', e.message);
+    return false;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function excluirRubrica(id, email) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const aba   = _getSheet('Rubricas');
+    const rows  = aba.getDataRange().getValues();
+    const idStr = String(id || '').trim();
+    for (let i = 1; i < rows.length; i++) {
+      if (String(rows[i][0]).trim() === idStr) {
+        aba.deleteRow(i + 1);
+        registrarLog('EXCLUIR', 'RUBRICA', idStr, '', '', '', String(email || ''));
+        return true;
+      }
+    }
+    return false;
+  } catch(e) {
+    console.error('excluirRubrica:', e.message);
+    return false;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function atualizarRubrica(id, campos, email) {
+  try {
+    const atual = obterRubricaPorId(id);
+    if (!atual) return false;
+    const merged = {};
+    for (const k in atual) merged[k] = atual[k];
+    for (const k in campos) merged[k] = campos[k];
+    merged.id = String(id);
+    return salvarRubrica(merged, email);
+  } catch(e) {
+    console.error('atualizarRubrica:', e.message);
+    return false;
+  }
+}

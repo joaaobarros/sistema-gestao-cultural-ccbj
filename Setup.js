@@ -91,8 +91,9 @@ const MODULOS = {
         'ID Meta','ID Indicador','Atualizado em'
       ],
       'Contratos':   ['ID','Nome','Número','Descrição','Vigência Início','Vigência Fim','Status','Valor Total','Fonte Recurso','Contrapartida','Modalidade','Obs Financeiro'],
-      'Metas':       ['ID','ID Contrato','Número','Título','Descrição'],
-      'Indicadores': ['ID','ID Meta','ID Contrato','Ano','Texto do Indicador','Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'],
+      'Metas':       ['ID','ID Contrato','Número','Título','Descrição','TipoMeta'],
+      'Indicadores': ['ID','ID Meta','ID Contrato','Ano','Texto do Indicador','Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez','TipoIndicador','Número'],
+      'Rubricas':    ['ID','ID Meta','Nome','Valor','Obs'],
     }
   },
 
