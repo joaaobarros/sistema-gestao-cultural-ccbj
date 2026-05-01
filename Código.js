@@ -9,7 +9,7 @@
 // CONFIG
 // ==============================
 
-const BASE_URL_FALLBACK = "https://script.google.com/macros/s/AKfycbzw2Gum2jte37SUmkEvbHUkwkxD_BRg51s_E7p3VUeODP2pIZUyO76yL5E2JuiuMUp1wg/exec";
+const BASE_URL_FALLBACK = "https://script.google.com/macros/s/SEU_ID_AQUI/exechttps://script.google.com/macros/s/AKfycbzw2Gum2jte37SUmkEvbHUkwkxD_BRg51s_E7p3VUeODP2pIZUyO76yL5E2JuiuMUp1wg/exec";
 
 function getBaseUrl() {
   try {
