@@ -1,15 +1,11 @@
 // ============================================================
-// Código.gs — Controller principal
-// Mantém: doGet, doPost, helpers globais, ChatService
-// Todas as funções de domínio foram movidas para módulos.
+// Codigo.gs — Controller principal
 // ============================================================
-
-// ==============================
-// CONFIG
-// ==============================
 
 const BASE_URL_FALLBACK =
   "https://script.google.com/macros/s/AKfycbzw2Gum2jte37SUmkEvbHUkwkxD_BRg51s_E7p3VUeODP2pIZUyO76yL5E2JuiuMUp1wg/exec";
+
+// ── Config ──────────────────────────────────────────────────
 
 function getBaseUrl() {
   try {
@@ -19,97 +15,7 @@ function getBaseUrl() {
   }
 }
 
-function _getSheet(nomeAba) {
-  const mapa = {
-    // MASTER
-    Administradores: ["MASTER", "Administradores"],
-    Configuracoes: ["MASTER", "Configuracoes"],
-    Listas: ["MASTER", "Listas"],
-    Logs: ["MASTER", "Logs"],
-    LogAcessos: ["MASTER", "LogAcessos"],
-
-    // ESPACOS
-    Reservas: ["ESPACOS", "Reservas"],
-    Itens: ["ESPACOS", "Itens"],
-    Solicitacoes: ["ESPACOS", "Solicitacoes"],
-
-    // COMUNICACAO
-    ReservasRECE: ["COMUNICACAO", "ReservasRECE"],
-
-    // RELATORIOS
-    RelatoriosCODIP: ["RELATORIOS", "RelatoriosCODIP"],
-    Contratos: ["RELATORIOS", "Contratos"],
-    Metas: ["RELATORIOS", "Metas"],
-    Indicadores: ["RELATORIOS", "Indicadores"],
-    Rubricas: ["RELATORIOS", "Rubricas"],
-    RubricasMemoria: ["RELATORIOS", "RubricasMemoria"],
-  };
-
-  const conf = mapa[nomeAba];
-
-  if (!conf) {
-    throw new Error("Aba não mapeada: " + nomeAba);
-  }
-
-  return _abrirAba(conf[0], conf[1]);
-}
-
-function _getMapaPlanilhas() {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("CONFIG");
-  const dados = sheet.getDataRange().getValues();
-
-  const mapa = {};
-  for (let i = 1; i < dados.length; i++) {
-    const tipo = String(dados[i][0]).trim();
-    const id = String(dados[i][1]).trim();
-    if (tipo && id) mapa[tipo] = id;
-  }
-
-  return mapa;
-}
-
-function _abrirAba(tipo, nomeAba) {
-  const MAPA_PLANILHAS = _getMapaPlanilhas();
-
-  const id = MAPA_PLANILHAS[tipo];
-
-  if (!id) {
-    throw new Error("Planilha não mapeada: " + tipo);
-  }
-
-  const ss = SpreadsheetApp.openById(id);
-  const aba = ss.getSheetByName(nomeAba);
-
-  if (!aba) {
-    throw new Error("Aba não encontrada: " + nomeAba);
-  }
-
-  return aba;
-}
-
-// ==============================
-// HELPERS GLOBAIS
-// ==============================
-
-function sanitizarTexto(str) {
-  return String(str || "")
-    .replace(/[<>]/g, "")
-    .substring(0, 5000);
-}
-
-function obterMapaSalas() {
-  const sheet = _getSheet("Configuracoes");
-  const mapa = {};
-  if (sheet && sheet.getLastRow() > 1) {
-    sheet
-      .getRange(2, 1, sheet.getLastRow() - 1, 2)
-      .getValues()
-      .forEach((s) => {
-        if (s[0] && s[1]) mapa[String(s[0]).trim()] = String(s[1]).trim();
-      });
-  }
-  return mapa;
-}
+// ── Helpers globais ─────────────────────────────────────────
 
 function include(filename) {
   return HtmlService.createHtmlOutputFromFile(filename).getContent();
@@ -129,13 +35,21 @@ function isMesmoDia(dataReserva) {
   return hoje.getTime() === data.getTime();
 }
 
-function _notificarCancelamentoMesmoDia({
-  sala,
-  nome,
-  inicio,
-  fim,
-  emailAtual,
-}) {
+function obterMapaSalas() {
+  const sheet = _getSheet("Configuracoes");
+  const mapa = {};
+  if (sheet && sheet.getLastRow() > 1) {
+    sheet
+      .getRange(2, 1, sheet.getLastRow() - 1, 2)
+      .getValues()
+      .forEach((s) => {
+        if (s[0] && s[1]) mapa[String(s[0]).trim()] = String(s[1]).trim();
+      });
+  }
+  return mapa;
+}
+
+function _notificarCancelamentoMesmoDia({ sala, nome, inicio, fim, emailAtual }) {
   try {
     const abaAdmins = _getSheet("Administradores");
     if (!abaAdmins || abaAdmins.getLastRow() < 2) return;
@@ -174,13 +88,11 @@ function testeVSCode() {
   Logger.log("funcionando");
 }
 
-// ==============================
-// doGet / doPost
-// ==============================
+// ── doGet / doPost ──────────────────────────────────────────
 
 function doGet(e) {
   const acao = e && e.parameter && e.parameter.acao;
-  const id = e && e.parameter && e.parameter.id;
+  const id   = e && e.parameter && e.parameter.id;
 
   if (acao && id) {
     if (acao === "aprovar") {
@@ -221,7 +133,7 @@ function doGet(e) {
 
 function doPost(e) {
   try {
-    const id = e.parameter.id;
+    const id   = e.parameter.id;
     const just = (e.parameter.justificativa || "").trim();
     const email = Session.getActiveUser().getEmail();
     recusarSolicitacao(id, just, email);
