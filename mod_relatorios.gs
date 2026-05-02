@@ -179,6 +179,60 @@ Responda SOMENTE JSON no formato:
 }
 
 // ==============================
+// 🔥 VERSIONAMENTO / COMPARAÇÃO
+// ==============================
+
+function compararVersoesContrato(idContrato, v1, v2) {
+  const aba = _getSheet("ContratosVersoes");
+  const dados = aba.getDataRange().getValues();
+
+  const versoes = dados
+    .slice(1)
+    .filter((v) => String(v[1]).trim() === String(idContrato).trim());
+
+  const snap1 = versoes.find((v) => Number(v[2]) === Number(v1));
+  const snap2 = versoes.find((v) => Number(v[2]) === Number(v2));
+
+  if (!snap1 || !snap2) return [];
+
+  const s1 = JSON.parse(snap1[3]);
+  const s2 = JSON.parse(snap2[3]);
+
+  const mapa1 = {};
+  const mapa2 = {};
+
+  s1.rubricas.forEach((r) => {
+    const nome = r[2];
+    mapa1[nome] = Number(r[3]) || 0;
+  });
+
+  s2.rubricas.forEach((r) => {
+    const nome = r[2];
+    mapa2[nome] = Number(r[3]) || 0;
+  });
+
+  const todos = new Set([...Object.keys(mapa1), ...Object.keys(mapa2)]);
+
+  const diff = [];
+
+  todos.forEach((nome) => {
+    const vAnt = mapa1[nome] || 0;
+    const vNovo = mapa2[nome] || 0;
+
+    if (vAnt !== vNovo) {
+      diff.push({
+        nome,
+        valorAnterior: vAnt,
+        valorNovo: vNovo,
+        tipo: vNovo > vAnt ? "AUMENTO" : vNovo < vAnt ? "REDUCAO" : "IGUAL",
+      });
+    }
+  });
+
+  return diff;
+}
+
+// ==============================
 // CODIP
 // ==============================
 
@@ -817,6 +871,31 @@ function atualizarIndicador(id, campos, email) {
 // RUBRICAS
 // ==============================
 
+function _mapaMetas() {
+  const metas = obterMetas(); // já existe no seu sistema
+  const mapa = {};
+
+  metas.forEach((m) => {
+    mapa[m[0]] = m[2]; // ID_META → NOME_META
+  });
+
+  return mapa;
+}
+
+function _mapaRubricas() {
+  const rubricas = obterRubricas();
+  const mapa = {};
+
+  rubricas.forEach((r) => {
+    mapa[r[0]] = {
+      nome: r[2],
+      idMeta: r[1],
+    };
+  });
+
+  return mapa;
+}
+
 function obterRubricas() {
   const aba = _getSheet("Rubricas");
   if (!aba || aba.getLastRow() < 2) return [];
@@ -851,19 +930,31 @@ function salvarRubrica(dados, email) {
 
   try {
     const aba = _getSheet("Rubricas");
+    const abaMemoria = _getSheet("RubricasMemoria");
 
     const idFinal = String(dados.id || gerarId("RUB")).trim();
+
+    // 🔹 memória de cálculo (sempre fonte de verdade)
+    const memoriaArr = Array.isArray(dados.memoriaCalculo)
+      ? dados.memoriaCalculo
+      : [];
+
+    // 🔹 calcula valor automaticamente
+    const valorCalculado = memoriaArr.reduce((soma, item) => {
+      const qtd = Number(item.qtd) || 0;
+      const val = Number(item.valor) || 0;
+      return soma + qtd * val;
+    }, 0);
 
     const linha = [
       idFinal,
       String(dados.idMeta || ""),
       String(dados.nome || ""),
-      Number(dados.valor) || 0,
+      valorCalculado,
       String(dados.obs || ""),
     ];
 
-    let isEdicao = false;
-
+    // 🔹 salva/atualiza rubrica (SEM JSON duplicado)
     if (!dados.id) {
       aba.appendRow(linha);
     } else {
@@ -874,27 +965,84 @@ function salvarRubrica(dados, email) {
         if (String(rows[i][0]).trim() === idFinal) {
           aba.getRange(i + 1, 1, 1, linha.length).setValues([linha]);
           found = true;
-          isEdicao = true;
           break;
         }
       }
 
-      if (!found) {
-        aba.appendRow(linha);
+      if (!found) aba.appendRow(linha);
+    }
+
+    // 🔹 limpa memória antiga da rubrica
+    if (abaMemoria.getLastRow() > 1) {
+      const memRows = abaMemoria.getDataRange().getValues();
+
+      for (let i = memRows.length - 1; i >= 1; i--) {
+        if (String(memRows[i][1]).trim() === idFinal) {
+          abaMemoria.deleteRow(i + 1);
+        }
       }
     }
 
+    // 🔹 salva nova memória (linha a linha)
+    memoriaArr.forEach((item) => {
+      const qtd = Number(item.qtd) || 0;
+      const val = Number(item.valor) || 0;
+      const subtotal = qtd * val;
+
+      abaMemoria.appendRow([
+        gerarId("MEM"),
+        idFinal,
+        String(item.descricao || ""),
+        String(dados.metrica || ""),
+        qtd,
+        val,
+        subtotal,
+        new Date(),
+        String(email || ""),
+        "SIM",
+      ]);
+    });
+
+    // 🔹 log
     registrarLog(
       "SALVAR",
       "RUBRICA",
       idFinal,
-      JSON.stringify(dados),
+      JSON.stringify({
+        ...dados,
+        valorCalculado,
+        memoriaCalculo: memoriaArr,
+      }),
       "",
       "",
       String(email || ""),
     );
 
+    // 🔹 atualiza agregação
     atualizarValorRubrica(idFinal);
+
+    // 🔹 versionamento automático
+    try {
+      let idContrato = dados.idContrato;
+
+      if (!idContrato && dados.idMeta) {
+        const metas = _getSheet("Metas").getDataRange().getValues();
+
+        const meta = metas.find(
+          (m) => String(m[0]).trim() === String(dados.idMeta).trim(),
+        );
+
+        if (meta) {
+          idContrato = meta[1];
+        }
+      }
+
+      if (idContrato) {
+        salvarVersaoContrato(idContrato, email);
+      }
+    } catch (e) {
+      console.warn("Erro ao versionar contrato:", e.message);
+    }
 
     return true;
   } catch (e) {
@@ -1062,18 +1210,16 @@ function adicionarItemMemoriaRubrica(dados, emailUsuario) {
       subtotal,
       new Date(),
       emailUsuario,
-      true
+      true,
     ]);
 
     atualizarValorRubrica(dados.idRubrica);
 
     return true;
-
   } finally {
     lock.releaseLock();
   }
 }
-
 
 function calcularValorRubrica(idRubrica) {
   const aba = _getSheet("RubricasMemoria");
@@ -1084,17 +1230,13 @@ function calcularValorRubrica(idRubrica) {
   let total = 0;
 
   for (let i = 0; i < dados.length; i++) {
-    if (
-      String(dados[i][1]) === String(idRubrica) &&
-      dados[i][9] === true
-    ) {
+    if (String(dados[i][1]) === String(idRubrica) && dados[i][9] === true) {
       total += Number(dados[i][6] || 0);
     }
   }
 
   return total;
 }
-
 
 function atualizarValorRubrica(idRubrica) {
   const valor = calcularValorRubrica(idRubrica);
@@ -1110,4 +1252,413 @@ function atualizarValorRubrica(idRubrica) {
   }
 
   return false;
+}
+
+function criarSnapshotContrato(idContrato, emailUsuario) {
+  const abaVersoes = _getSheet("ContratosVersoes");
+
+  const contrato = obterContratoPorId(idContrato);
+  const metas = obterMetas().filter((m) => m[1] === idContrato);
+  const rubricas = obterRubricas();
+  const memoria = _getSheet("RubricasMemoria").getDataRange().getValues();
+
+  const rubricasFiltradas = rubricas.filter((r) =>
+    metas.some((m) => m[0] === r[1]),
+  );
+
+  const memoriaFiltrada = memoria.filter((m, i) => {
+    if (i === 0) return false;
+    return rubricasFiltradas.some((r) => r[0] === m[1]);
+  });
+
+  const snapshot = {
+    contrato,
+    metas,
+    rubricas: rubricasFiltradas,
+    memoria: memoriaFiltrada,
+  };
+
+  const dados = abaVersoes.getDataRange().getValues();
+  let versao = 1;
+
+  for (let i = 1; i < dados.length; i++) {
+    if (String(dados[i][1]) === String(idContrato)) {
+      versao = Math.max(versao, Number(dados[i][2]) + 1);
+    }
+  }
+
+  abaVersoes.appendRow([
+    gerarId("VER"),
+    idContrato,
+    versao,
+    JSON.stringify(snapshot),
+    new Date(),
+    emailUsuario,
+  ]);
+
+  return versao;
+}
+
+function obterHistoricoContrato(idContrato) {
+  const aba = _getSheet("ContratosVersoes");
+  const dados = aba.getDataRange().getValues();
+
+  return dados
+    .filter((r, i) => i > 0 && String(r[1]) === String(idContrato))
+    .map((r) => ({
+      versao: r[2],
+      criadoEm: r[4],
+      criadoPor: r[5],
+    }));
+}
+
+function _obterSnapshotVersao(idContrato, versao) {
+  const aba = _getSheet("ContratosVersoes");
+  const dados = aba.getDataRange().getValues();
+
+  for (let i = 1; i < dados.length; i++) {
+    if (
+      String(dados[i][1]) === String(idContrato) &&
+      Number(dados[i][2]) === Number(versao)
+    ) {
+      return JSON.parse(dados[i][3]);
+    }
+  }
+
+  throw new Error("Versão não encontrada");
+}
+
+function compararVersoesContrato(idContrato, v1, v2) {
+  const snap1 = _obterSnapshotVersao(idContrato, v1);
+  const snap2 = _obterSnapshotVersao(idContrato, v2);
+
+  const resultado = {
+    contrato: {},
+    metas: [],
+    rubricas: [],
+    memoria: [],
+  };
+
+  // 🔹 CONTRATO (simples)
+  if (JSON.stringify(snap1.contrato) !== JSON.stringify(snap2.contrato)) {
+    resultado.contrato = {
+      antes: snap1.contrato,
+      depois: snap2.contrato,
+    };
+  }
+
+  // 🔹 METAS
+  const mapaMeta1 = Object.fromEntries(snap1.metas.map((m) => [m[0], m]));
+  const mapaMeta2 = Object.fromEntries(snap2.metas.map((m) => [m[0], m]));
+
+  Object.keys({ ...mapaMeta1, ...mapaMeta2 }).forEach((id) => {
+    const m1 = mapaMeta1[id];
+    const m2 = mapaMeta2[id];
+
+    if (JSON.stringify(m1) !== JSON.stringify(m2)) {
+      resultado.metas.push({ id, antes: m1, depois: m2 });
+    }
+  });
+
+  // 🔹 RUBRICAS
+  const mapaRub1 = Object.fromEntries(snap1.rubricas.map((r) => [r[0], r]));
+  const mapaRub2 = Object.fromEntries(snap2.rubricas.map((r) => [r[0], r]));
+
+  Object.keys({ ...mapaRub1, ...mapaRub2 }).forEach((id) => {
+    const r1 = mapaRub1[id];
+    const r2 = mapaRub2[id];
+
+    if (JSON.stringify(r1) !== JSON.stringify(r2)) {
+      resultado.rubricas.push({ id, antes: r1, depois: r2 });
+    }
+  });
+
+  // 🔹 MEMÓRIA DE CÁLCULO
+  const mapaMem1 = Object.fromEntries(snap1.memoria.map((m) => [m[0], m]));
+  const mapaMem2 = Object.fromEntries(snap2.memoria.map((m) => [m[0], m]));
+
+  Object.keys({ ...mapaMem1, ...mapaMem2 }).forEach((id) => {
+    const m1 = mapaMem1[id];
+    const m2 = mapaMem2[id];
+
+    if (JSON.stringify(m1) !== JSON.stringify(m2)) {
+      resultado.memoria.push({ id, antes: m1, depois: m2 });
+    }
+  });
+
+  return resultado;
+}
+
+function compararVersoesContratoDetalhado(idContrato, v1, v2) {
+  const snap1 = _obterSnapshotVersao(idContrato, v1);
+  const snap2 = _obterSnapshotVersao(idContrato, v2);
+
+  const resultado = {
+    resumo: {
+      totalAntes: 0,
+      totalDepois: 0,
+      diferenca: 0,
+    },
+    rubricas: [],
+    alteracoes: [],
+  };
+
+  // 🔹 MAPEAR MEMÓRIA POR RUBRICA
+  function agruparMemoria(memoria) {
+    const mapa = {};
+
+    memoria.forEach((m, i) => {
+      if (i === 0) return;
+
+      const idRub = m[1];
+      const subtotal = Number(m[6] || 0);
+
+      if (!mapa[idRub]) {
+        mapa[idRub] = {
+          total: 0,
+          itens: [],
+        };
+      }
+
+      mapa[idRub].total += subtotal;
+      mapa[idRub].itens.push(m);
+    });
+
+    return mapa;
+  }
+
+  const mem1 = agruparMemoria(snap1.memoria);
+  const mem2 = agruparMemoria(snap2.memoria);
+
+  const todasRubricas = new Set([...Object.keys(mem1), ...Object.keys(mem2)]);
+
+  todasRubricas.forEach((idRub) => {
+    const r1 = mem1[idRub] || { total: 0 };
+    const r2 = mem2[idRub] || { total: 0 };
+
+    const diff = r2.total - r1.total;
+
+    if (diff !== 0) {
+      resultado.rubricas.push({
+        idRubrica: idRub,
+        antes: r1.total,
+        depois: r2.total,
+        diferenca: diff,
+        tipo: diff > 0 ? "AUMENTO" : "REDUCAO",
+      });
+    }
+
+    resultado.resumo.totalAntes += r1.total;
+    resultado.resumo.totalDepois += r2.total;
+  });
+
+  resultado.resumo.diferenca =
+    resultado.resumo.totalDepois - resultado.resumo.totalAntes;
+
+  return resultado;
+}
+
+function obterRankingImpactoRubricas(idContrato, v1, v2) {
+  const diff = compararVersoesContratoDetalhado(idContrato, v1, v2);
+
+  const mapaMetas = _mapaMetas();
+  const mapaRubricas = _mapaRubricas();
+
+  return diff.rubricas
+    .sort((a, b) => Math.abs(b.diferenca) - Math.abs(a.diferenca))
+    .map((r) => {
+      const rub = mapaRubricas[r.idRubrica] || {};
+      const nomeRubrica = rub.nome || "Rubrica desconhecida";
+      const nomeMeta = mapaMetas[rub.idMeta] || "Meta desconhecida";
+
+      return {
+        idRubrica: r.idRubrica,
+        nomeRubrica,
+        nomeMeta,
+        label: `${nomeMeta} → ${nomeRubrica}`,
+        impacto: r.diferenca,
+        tipo: r.tipo,
+      };
+    });
+}
+
+function gerarHeatmapAlteracoes(idContrato, v1, v2) {
+  const diff = compararVersoesContratoDetalhado(idContrato, v1, v2);
+
+  const mapaMetas = _mapaMetas();
+  const mapaRubricas = _mapaRubricas();
+
+  return diff.rubricas.map((r) => {
+    const rub = mapaRubricas[r.idRubrica] || {};
+
+    let intensidade = 0;
+    if (diff.resumo.totalAntes > 0) {
+      intensidade = Math.abs(r.diferenca) / diff.resumo.totalAntes;
+    }
+
+    return {
+      idRubrica: r.idRubrica,
+      nomeMeta: mapaMetas[rub.idMeta] || "Meta desconhecida",
+      nomeRubrica: rub.nome || "Rubrica desconhecida",
+      label: `${mapaMetas[rub.idMeta] || ""} → ${rub.nome || ""}`,
+      intensidade,
+      tipo: r.tipo,
+    };
+  });
+}
+
+function gerarAlertasContrato(idContrato, v1, v2) {
+  const diff = compararVersoesContratoDetalhado(idContrato, v1, v2);
+
+  const mapaMetas = _mapaMetas();
+  const mapaRubricas = _mapaRubricas();
+
+  const alertas = [];
+
+  if (diff.resumo.totalAntes > 0) {
+    const percentual = diff.resumo.diferenca / diff.resumo.totalAntes;
+
+    if (percentual > 0.1) {
+      alertas.push({
+        tipo: "AUMENTO_CRITICO",
+        mensagem: "Contrato aumentou mais de 10%",
+        percentual,
+      });
+    }
+  }
+
+  diff.rubricas.forEach((r) => {
+    const rub = mapaRubricas[r.idRubrica] || {};
+    const nomeMeta = mapaMetas[rub.idMeta] || "";
+    const nomeRubrica = rub.nome || "";
+
+    if (Math.abs(r.diferenca) > 5000) {
+      alertas.push({
+        tipo: "RUBRICA_CRITICA",
+        label: `${nomeMeta} → ${nomeRubrica}`,
+        impacto: r.diferenca,
+      });
+    }
+  });
+
+  return alertas;
+}
+
+function obterDashboardComparativoContrato(idContrato, v1, v2) {
+  const diff = compararVersoesContratoDetalhado(idContrato, v1, v2);
+
+  return {
+    resumo: diff.resumo,
+    ranking: obterRankingImpactoRubricas(idContrato, v1, v2),
+    heatmap: gerarHeatmapAlteracoes(idContrato, v1, v2),
+    alertas: gerarAlertasContrato(idContrato, v1, v2),
+  };
+}
+
+function obterTimelineContrato(idContrato) {
+  const aba = _getSheet("ContratosVersoes");
+  const dados = aba.getDataRange().getValues();
+
+  const versoes = dados
+    .filter((r, i) => i > 0 && String(r[1]) === String(idContrato))
+    .map((r) => ({
+      versao: Number(r[2]),
+      criadoEm: r[4],
+      criadoPor: r[5],
+    }))
+    .sort((a, b) => a.versao - b.versao);
+
+  const timeline = [];
+
+  for (let i = 1; i < versoes.length; i++) {
+    const anterior = versoes[i - 1];
+    const atual = versoes[i];
+
+    const diff = compararVersoesContratoDetalhado(
+      idContrato,
+      anterior.versao,
+      atual.versao,
+    );
+
+    timeline.push({
+      de: anterior.versao,
+      para: atual.versao,
+      data: atual.criadoEm,
+      usuario: atual.criadoPor,
+      impacto: diff.resumo.diferenca,
+    });
+  }
+
+  return timeline;
+}
+
+function salvarVersaoContrato(idContrato, email) {
+  if (!idContrato) return false;
+
+  const abaVersoes = _getSheet("ContratosVersoes");
+  const contratos = _getSheet("Contratos").getDataRange().getValues();
+  const metas = _getSheet("Metas").getDataRange().getValues();
+  const rubricas = _getSheet("Rubricas").getDataRange().getValues();
+  const memoria = _getSheet("RubricasMemoria").getDataRange().getValues();
+
+  // 🔹 contrato
+  const contrato = contratos.find(
+    (c) => String(c[0]).trim() === String(idContrato).trim(),
+  );
+  if (!contrato) throw new Error("Contrato não encontrado");
+
+  // 🔹 metas do contrato
+  const metasFiltradas = metas.filter(
+    (m) => String(m[1]).trim() === String(idContrato).trim(),
+  );
+
+  // 🔹 rubricas por meta
+  const rubricasFiltradas = rubricas.filter((r) =>
+    metasFiltradas.some((m) => String(m[0]).trim() === String(r[1]).trim()),
+  );
+
+  // 🔹 memória por rubrica
+  const memoriaFiltrada = memoria.filter((mem) =>
+    rubricasFiltradas.some(
+      (r) => String(r[0]).trim() === String(mem[1]).trim(),
+    ),
+  );
+
+  // 🔹 estrutura completa
+  const snapshot = {
+    contrato,
+    metas: metasFiltradas,
+    rubricas: rubricasFiltradas,
+    memoria: memoriaFiltrada,
+  };
+
+  // 🔹 descobrir próxima versão
+  let versao = 1;
+
+  if (abaVersoes.getLastRow() > 1) {
+    const versoes = abaVersoes
+      .getRange(2, 1, abaVersoes.getLastRow() - 1, 3)
+      .getValues();
+
+    const versoesContrato = versoes
+      .filter((v) => String(v[1]).trim() === String(idContrato).trim())
+      .map((v) => Number(v[2]) || 0);
+
+    if (versoesContrato.length) {
+      versao = Math.max(...versoesContrato) + 1;
+    }
+  }
+
+  const linha = [
+    gerarId("VERS"),
+    idContrato,
+    versao,
+    JSON.stringify(snapshot),
+    new Date(),
+    String(email || ""),
+  ];
+
+  abaVersoes.appendRow(linha);
+
+  return true;
 }
