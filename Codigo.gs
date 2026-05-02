@@ -20,14 +20,37 @@ function getBaseUrl() {
 }
 
 function _getSheet(nomeAba) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const aba = ss.getSheetByName(nomeAba);
+  const mapa = {
+    // MASTER
+    Administradores: ["MASTER", "Administradores"],
+    Configuracoes: ["MASTER", "Configuracoes"],
+    Listas: ["MASTER", "Listas"],
+    Logs: ["MASTER", "Logs"],
+    LogAcessos: ["MASTER", "LogAcessos"],
 
-  if (!aba) {
-    throw new Error("Aba não encontrada: " + nomeAba);
+    // ESPACOS
+    Reservas: ["ESPACOS", "Reservas"],
+    Itens: ["ESPACOS", "Itens"],
+    Solicitacoes: ["ESPACOS", "Solicitacoes"],
+
+    // COMUNICACAO
+    ReservasRECE: ["COMUNICACAO", "ReservasRECE"],
+
+    // RELATORIOS
+    RelatoriosCODIP: ["RELATORIOS", "RelatoriosCODIP"],
+    Contratos: ["RELATORIOS", "Contratos"],
+    Metas: ["RELATORIOS", "Metas"],
+    Indicadores: ["RELATORIOS", "Indicadores"],
+    Rubricas: ["RELATORIOS", "Rubricas"],
+  };
+
+  const conf = mapa[nomeAba];
+
+  if (!conf) {
+    throw new Error("Aba não mapeada: " + nomeAba);
   }
 
-  return aba;
+  return _abrirAba(conf[0], conf[1]);
 }
 
 // ==============================
