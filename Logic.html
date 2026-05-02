@@ -10864,115 +10864,164 @@ function excluirMetaUI(id) {
 
 // ── MODAL RUBRICA ─────────────────────────────────────────────
 function abrirModalRubrica(idMeta, dados) {
+
   dados = dados || {};
 
-  const meta = (_ctrCache.metas||[]).find(function(m){
-    return m.id === idMeta;
-  }) || {};
+  const meta = (_ctrCache.metas||[]).find(m => m.id === idMeta) || {};
+
+  let memoriaCalculo = [];
+
+  function calcularTotal() {
+    const total = memoriaCalculo.reduce((s,i)=>{
+      return s + (Number(i.qtd||0) * Number(i.valor||0));
+    },0);
+
+    const el = document.getElementById('rubValor');
+    if (el) {
+      el.value = total.toLocaleString('pt-BR', {
+        minimumFractionDigits:2,
+        maximumFractionDigits:2
+      });
+    }
+  }
+
+  function renderizarMemoria() {
+
+    const container = document.getElementById('memoriaCalculoContainer');
+    if (!container) return;
+
+    container.innerHTML = memoriaCalculo.map((item, i)=>`
+
+      <div class="flex gap-2">
+
+        <input class="ctr-input flex-1"
+          placeholder="Descrição"
+          value="${escaparHTML(item.descricao||'')}"
+          onchange="memoriaCalculo[${i}].descricao=this.value">
+
+        <input type="number" class="ctr-input w-20"
+          value="${item.qtd||1}"
+          onchange="memoriaCalculo[${i}].qtd=Number(this.value); calcularTotal();">
+
+        <input type="number" class="ctr-input w-24"
+          value="${item.valor||0}"
+          onchange="memoriaCalculo[${i}].valor=Number(this.value); calcularTotal();">
+
+        <button onclick="removerItemMemoria(${i})"
+          class="text-red-500 text-xs px-2">✕</button>
+
+      </div>
+
+    `).join('');
+
+    calcularTotal();
+  }
+
+  window.adicionarItemMemoria = function() {
+    memoriaCalculo.push({ descricao:'', qtd:1, valor:0 });
+    renderizarMemoria();
+  }
+
+  window.removerItemMemoria = function(i) {
+    memoriaCalculo.splice(i,1);
+    renderizarMemoria();
+  }
 
   Swal.fire({
+
     title: dados.id ? 'Editar Rubrica' : 'Nova Rubrica',
-    width: Math.min(500, window.innerWidth - 32),
+    width: 520,
 
     html: `
-      <div class="text-left space-y-4">
+      <div class="space-y-4 text-left">
 
-        ${meta.titulo ? `
-        <div class="flex items-center gap-2 px-3 py-2 bg-emerald-50 border border-emerald-100 rounded-xl">
-          <i class="fas fa-bullseye text-emerald-400 text-xs shrink-0"></i>
-          <span class="text-[10px] font-black text-emerald-500 uppercase tracking-wide shrink-0">Meta:</span>
-          <span class="text-[11px] text-emerald-700 font-semibold truncate">
-            Meta ${escaparHTML(meta.numero||'')} — ${escaparHTML(meta.titulo)}
-          </span>
-        </div>` : ''}
-
-        <!-- NOME -->
         <div>
-          <label class="ctr-label">Nome da Rubrica</label>
+          <label class="ctr-label">Nome</label>
           <input id="rubNome" class="ctr-input"
-            value="${escaparHTML(dados.nome||'')}"
-            placeholder="Ex.: Cachê artistas, Locação de equipamentos...">
+            value="${escaparHTML(dados.nome||'')}">
         </div>
 
-        <!-- MEMÓRIA -->
         <div>
-          <label class="text-xs font-bold text-slate-500 uppercase">
-            Memória de cálculo
-          </label>
+          <label class="ctr-label">Memória de cálculo</label>
+          <div id="memoriaCalculoContainer" class="space-y-2 mt-2"></div>
 
-          <div id="memoriaCalculoContainer" class="mt-2 space-y-2"></div>
-
-          <button type="button"
-            onclick="adicionarItemMemoria()"
-            class="mt-2 text-xs bg-purple-600 hover:bg-purple-700 text-white px-3 py-2 rounded-xl font-bold">
-            + Adicionar item
+          <button onclick="adicionarItemMemoria()"
+            class="mt-2 text-xs bg-purple-600 text-white px-3 py-2 rounded-xl">
+            + Adicionar
           </button>
         </div>
 
-        <!-- VALOR -->
         <div>
-          <label class="ctr-label">Valor calculado</label>
-          <div class="flex items-center gap-2 mt-1">
-            <span class="text-green-600 font-bold">R$</span>
-            <input id="rubValor"
-              class="ctr-input"
-              style="background:#f1f5f9;font-weight:900"
-              readonly>
-          </div>
+          <label class="ctr-label">Valor</label>
+          <input id="rubValor" class="ctr-input" readonly>
         </div>
 
-        <!-- OBS -->
         <div>
-          <label class="ctr-label">Observação</label>
-          <textarea id="rubObs" class="ctr-input"
-            style="min-height:56px;resize:vertical">${escaparHTML(dados.obs||'')}</textarea>
+          <label class="ctr-label">Obs</label>
+          <textarea id="rubObs" class="ctr-input">${escaparHTML(dados.obs||'')}</textarea>
         </div>
 
-      </div>`,
+      </div>
+    `,
 
-    showCancelButton: true,
-    confirmButtonText: '<i class="fas fa-save mr-1"></i>Salvar',
-    cancelButtonText: 'Cancelar',
-    confirmButtonColor: '#059669',
+    didOpen: function() {
 
-    didOpen: function () {
+      if (dados.id) {
 
-      memoriaCalculo = [];
+        google.script.run
+          .withSuccessHandler(function(lista){
 
-      if (dados && dados.id) {
-        carregarMemoriaRubrica(dados.id);
+            memoriaCalculo = Array.isArray(lista)
+              ? lista.map(item=>({
+                  descricao: item[2],
+                  qtd: Number(item[4]),
+                  valor: Number(item[5])
+                }))
+              : [];
+
+            if (!memoriaCalculo.length) {
+              memoriaCalculo = [{ descricao:'', qtd:1, valor:0 }];
+            }
+
+            renderizarMemoria();
+
+          })
+          .obterMemoriaRubrica(dados.id);
+
       } else {
+
         memoriaCalculo = [{ descricao:'', qtd:1, valor:0 }];
         renderizarMemoria();
+
       }
 
     },
 
-    preConfirm: function () {
+    preConfirm: function() {
 
-      const nome = document.getElementById('rubNome')?.value.trim();
+      const nome = document.getElementById('rubNome').value.trim();
 
-      if (!nome){
-        Swal.showValidationMessage('Nome da rubrica obrigatório.');
+      if (!nome) {
+        Swal.showValidationMessage('Nome obrigatório');
         return false;
       }
 
-      const total = memoriaCalculo.reduce(function(s,i){
+      const total = memoriaCalculo.reduce((s,i)=>{
         return s + (Number(i.qtd||0) * Number(i.valor||0));
       },0);
 
-      if (total <= 0){
-        Swal.showValidationMessage('Adicione itens na memória de cálculo.');
+      if (total <= 0) {
+        Swal.showValidationMessage('Valor inválido');
         return false;
       }
 
       return {
         id: dados.id || null,
-        idMeta: idMeta,
-        nome: nome,
+        idMeta,
+        nome,
         valor: total,
-        memoriaCalculo: memoriaCalculo,
-        obs: document.getElementById('rubObs')?.value.trim()
+        memoriaCalculo,
+        obs: document.getElementById('rubObs').value
       };
     }
 
@@ -10991,6 +11040,7 @@ function abrirModalRubrica(idMeta, dados) {
       .salvarRubrica(r.value, AppState.usuario.email);
 
   });
+
 }
 
 let memoriaCalculo = [];
