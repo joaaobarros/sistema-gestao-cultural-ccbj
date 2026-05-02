@@ -123,7 +123,6 @@ function mostrarAba(idAba) {
     if (titulo) titulo.innerText = titulos[idAba] || 'Sistema CCBJ';
   }
 
-  // Busca pelo data-aba (novo padrão) e pelo onclick legado (fallback)
   const botaoAtivo =
     document.querySelector(`button[data-aba="${idAba}"]`) ||
     document.querySelector(`button[onclick="mostrarAba('${idAba}')"]`);
@@ -131,11 +130,17 @@ function mostrarAba(idAba) {
     botaoAtivo.classList.add('bg-white/10', 'text-white', 'border-purple-500');
     botaoAtivo.classList.remove('text-purple-200', 'border-transparent');
   }
-// Proteção de acesso
-if (typeof AppState !== 'undefined' && !AppState.usuario.isAdmin && !AppState.usuario.isSuperadmin) {
-  if (idAba === 'aba-gestao-admin' || idAba === 'aba-auditoria') {
-    mostrarAba('aba-lista-reservas');
-    return;
+
+  if (idAba === 'aba-contratos-fin') {
+    carregarDadosContratos(renderizarContratos);
+  }
+
+  // Proteção de acesso
+  if (typeof AppState !== 'undefined' && !AppState.usuario.isAdmin && !AppState.usuario.isSuperadmin) {
+    if (idAba === 'aba-gestao-admin' || idAba === 'aba-auditoria') {
+      mostrarAba('aba-lista-reservas');
+      return;
+    }
   }
 }
 
@@ -186,7 +191,7 @@ if (window.innerWidth < 768) {
 }
 
 window.scrollTo(0, 0);
-}
+
 
 // ── Modo RECE ────────────────────────────────────────────────────────────────
 function alternarModoRece(ativado) {
