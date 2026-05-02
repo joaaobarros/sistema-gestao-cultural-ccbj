@@ -141,7 +141,7 @@
 /* ── Memória de Cálculo ───────────────────────────────── */
 .mem-row {
   display:grid;
-  grid-template-columns:1fr 72px 100px 32px;
+  grid-template-columns:1fr 90px 70px 110px 1fr 32px;
   gap:6px;
   align-items:center;
   margin-bottom:6px;
@@ -486,99 +486,99 @@ function abrirModalContrato(dadosIn) {
     confirmButtonColor: '#6366f1',
     customClass:{ popup:'rounded-3xl', confirmButton:'rounded-xl font-black text-sm', cancelButton:'rounded-xl font-bold text-sm' },
     html: `
-<div class="text-left" style="max-height:72vh;overflow-y:auto;padding:0 24px 20px">
+        <div class="text-left" style="max-height:72vh;overflow-y:auto;padding:0 24px 20px">
 
-  <!-- Identificação -->
-  <div style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:16px;padding:16px;margin-bottom:14px">
-    <p style="font-size:10px;font-weight:900;color:#6366f1;text-transform:uppercase;letter-spacing:.08em;margin:0 0 12px">
-      <i class="fas fa-file-contract mr-1"></i>Identificação
-    </p>
-    <div style="margin-bottom:10px">
-      <label style="font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;display:block;margin-bottom:5px">Nome / Título *</label>
-      <input id="ctrNome" class="ctr-input" value="${escaparHTML(dados.nome||'')}" placeholder="Ex.: Contrato de Gestão CCBJ 2025/2027" style="width:100%;box-sizing:border-box">
-    </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
-      <div>
-        <label style="font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;display:block;margin-bottom:5px">Número</label>
-        <input id="ctrNumero" class="ctr-input" value="${escaparHTML(dados.numero||'')}" placeholder="005/2025" style="width:100%;box-sizing:border-box">
-      </div>
-      <div>
-        <label style="font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;display:block;margin-bottom:5px">Status</label>
-        <select id="ctrStatus" class="ctr-input" style="width:100%;box-sizing:border-box">
-          <option ${(dados.status||'Ativo')==='Ativo'?'selected':''}>Ativo</option>
-          <option ${dados.status==='Encerrado'?'selected':''}>Encerrado</option>
-          <option ${dados.status==='Suspenso'?'selected':''}>Suspenso</option>
-        </select>
-      </div>
-    </div>
-    <div>
-      <label style="font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;display:block;margin-bottom:5px">Objeto / Descrição</label>
-      <textarea id="ctrDesc" class="ctr-input" rows="3" placeholder="Objetivo e escopo..." style="width:100%;box-sizing:border-box;resize:vertical;min-height:60px">${escaparHTML(dados.descricao||'')}</textarea>
-    </div>
-  </div>
-
-  <!-- Vigência -->
-  <div style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:16px;padding:16px;margin-bottom:14px">
-    <p style="font-size:10px;font-weight:900;color:#6366f1;text-transform:uppercase;letter-spacing:.08em;margin:0 0 12px">
-      <i class="fas fa-calendar-alt mr-1"></i>Vigência
-    </p>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-      <div>
-        <label style="font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;display:block;margin-bottom:5px">Início</label>
-        <input id="ctrIni" class="ctr-input" value="${escaparHTML(_fmtDataBR(dados.vigIni))}" placeholder="01/01/2025" style="width:100%;box-sizing:border-box">
-      </div>
-      <div>
-        <label style="font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;display:block;margin-bottom:5px">Fim</label>
-        <input id="ctrFim" class="ctr-input" value="${escaparHTML(_fmtDataBR(dados.vigFim))}" placeholder="31/12/2027" style="width:100%;box-sizing:border-box">
-      </div>
-    </div>
-  </div>
-
-  <!-- Financeiro -->
-  <div style="background:#f0fdf4;border:1.5px solid #bbf7d0;border-radius:16px;padding:16px">
-    <p style="font-size:10px;font-weight:900;color:#059669;text-transform:uppercase;letter-spacing:.08em;margin:0 0 12px">
-      <i class="fas fa-coins mr-1"></i>Financeiro
-    </p>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
-      <div>
-        <label style="font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;display:block;margin-bottom:5px">Valor Total</label>
-        <div style="position:relative">
-          <span style="position:absolute;left:11px;top:50%;transform:translateY(-50%);font-size:11px;font-weight:800;color:#059669;pointer-events:none">R$</span>
-          <input id="ctrValorTotal" class="ctr-input" style="padding-left:30px;text-align:right;font-weight:800;color:#059669;width:100%;box-sizing:border-box" value="${valFmt}" placeholder="0,00">
+        <!-- Identificação -->
+        <div style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:16px;padding:16px;margin-bottom:14px">
+            <p style="font-size:10px;font-weight:900;color:#6366f1;text-transform:uppercase;letter-spacing:.08em;margin:0 0 12px">
+            <i class="fas fa-file-contract mr-1"></i>Identificação
+            </p>
+            <div style="margin-bottom:10px">
+            <label style="font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;display:block;margin-bottom:5px">Nome / Título *</label>
+            <input id="ctrNome" class="ctr-input" value="${escaparHTML(dados.nome||'')}" placeholder="Ex.: Contrato de Gestão CCBJ 2025/2027" style="width:100%;box-sizing:border-box">
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+            <div>
+                <label style="font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;display:block;margin-bottom:5px">Número</label>
+                <input id="ctrNumero" class="ctr-input" value="${escaparHTML(dados.numero||'')}" placeholder="005/2025" style="width:100%;box-sizing:border-box">
+            </div>
+            <div>
+                <label style="font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;display:block;margin-bottom:5px">Status</label>
+                <select id="ctrStatus" class="ctr-input" style="width:100%;box-sizing:border-box">
+                <option ${(dados.status||'Ativo')==='Ativo'?'selected':''}>Ativo</option>
+                <option ${dados.status==='Encerrado'?'selected':''}>Encerrado</option>
+                <option ${dados.status==='Suspenso'?'selected':''}>Suspenso</option>
+                </select>
+            </div>
+            </div>
+            <div>
+            <label style="font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;display:block;margin-bottom:5px">Objeto / Descrição</label>
+            <textarea id="ctrDesc" class="ctr-input" rows="3" placeholder="Objetivo e escopo..." style="width:100%;box-sizing:border-box;resize:vertical;min-height:60px">${escaparHTML(dados.descricao||'')}</textarea>
+            </div>
         </div>
-      </div>
-      <div>
-        <label style="font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;display:block;margin-bottom:5px">Fonte de Recurso</label>
-        <input id="ctrFonte" class="ctr-input" value="${escaparHTML(dados.fonteRecurso||'')}" placeholder="SECULT-CE, Prefeitura..." style="width:100%;box-sizing:border-box">
-      </div>
-    </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
-      <div>
-        <label style="font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;display:block;margin-bottom:5px">Contrapartida</label>
-        <div style="position:relative">
-          <span style="position:absolute;left:11px;top:50%;transform:translateY(-50%);font-size:11px;font-weight:800;color:#6366f1;pointer-events:none">R$</span>
-          <input id="ctrContrapartida" class="ctr-input" style="padding-left:30px;text-align:right;font-weight:800;color:#6366f1;width:100%;box-sizing:border-box" value="${ctrFmt}" placeholder="0,00">
+
+        <!-- Vigência -->
+        <div style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:16px;padding:16px;margin-bottom:14px">
+            <p style="font-size:10px;font-weight:900;color:#6366f1;text-transform:uppercase;letter-spacing:.08em;margin:0 0 12px">
+            <i class="fas fa-calendar-alt mr-1"></i>Vigência
+            </p>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div>
+                <label style="font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;display:block;margin-bottom:5px">Início</label>
+                <input id="ctrIni" class="ctr-input" value="${escaparHTML(_fmtDataBR(dados.vigIni))}" placeholder="01/01/2025" style="width:100%;box-sizing:border-box">
+            </div>
+            <div>
+                <label style="font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;display:block;margin-bottom:5px">Fim</label>
+                <input id="ctrFim" class="ctr-input" value="${escaparHTML(_fmtDataBR(dados.vigFim))}" placeholder="31/12/2027" style="width:100%;box-sizing:border-box">
+            </div>
+            </div>
         </div>
-      </div>
-      <div>
-        <label style="font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;display:block;margin-bottom:5px">Modalidade</label>
-        <select id="ctrModalidade" class="ctr-input" style="width:100%;box-sizing:border-box">
-          <option value="" ${!dados.modalidade?'selected':''}>Selecione...</option>
-          <option ${dados.modalidade==='Convênio'?'selected':''}>Convênio</option>
-          <option ${dados.modalidade==='Contrato de Gestão'?'selected':''}>Contrato de Gestão</option>
-          <option ${dados.modalidade==='Termo de Fomento'?'selected':''}>Termo de Fomento</option>
-          <option ${dados.modalidade==='Termo de Colaboração'?'selected':''}>Termo de Colaboração</option>
-          <option ${dados.modalidade==='OSC'?'selected':''}>OSC</option>
-          <option ${dados.modalidade==='Outro'?'selected':''}>Outro</option>
-        </select>
-      </div>
-    </div>
-    <div>
-      <label style="font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;display:block;margin-bottom:5px">Observações financeiras</label>
-      <textarea id="ctrObsFinan" class="ctr-input" rows="2" placeholder="Parcelas, cronograma..." style="width:100%;box-sizing:border-box;resize:vertical">${escaparHTML(dados.obsFinanceiro||'')}</textarea>
-    </div>
-  </div>
-</div>`,
+
+        <!-- Financeiro -->
+        <div style="background:#f0fdf4;border:1.5px solid #bbf7d0;border-radius:16px;padding:16px">
+            <p style="font-size:10px;font-weight:900;color:#059669;text-transform:uppercase;letter-spacing:.08em;margin:0 0 12px">
+            <i class="fas fa-coins mr-1"></i>Financeiro
+            </p>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+            <div>
+                <label style="font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;display:block;margin-bottom:5px">Valor Total</label>
+                <div style="position:relative">
+                <span style="position:absolute;left:11px;top:50%;transform:translateY(-50%);font-size:11px;font-weight:800;color:#059669;pointer-events:none">R$</span>
+                <input id="ctrValorTotal" class="ctr-input" style="padding-left:30px;text-align:right;font-weight:800;color:#059669;width:100%;box-sizing:border-box" value="${valFmt}" placeholder="0,00">
+                </div>
+            </div>
+            <div>
+                <label style="font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;display:block;margin-bottom:5px">Fonte de Recurso</label>
+                <input id="ctrFonte" class="ctr-input" value="${escaparHTML(dados.fonteRecurso||'')}" placeholder="SECULT-CE, Prefeitura..." style="width:100%;box-sizing:border-box">
+            </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+            <div>
+                <label style="font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;display:block;margin-bottom:5px">Contrapartida</label>
+                <div style="position:relative">
+                <span style="position:absolute;left:11px;top:50%;transform:translateY(-50%);font-size:11px;font-weight:800;color:#6366f1;pointer-events:none">R$</span>
+                <input id="ctrContrapartida" class="ctr-input" style="padding-left:30px;text-align:right;font-weight:800;color:#6366f1;width:100%;box-sizing:border-box" value="${ctrFmt}" placeholder="0,00">
+                </div>
+            </div>
+            <div>
+                <label style="font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;display:block;margin-bottom:5px">Modalidade</label>
+                <select id="ctrModalidade" class="ctr-input" style="width:100%;box-sizing:border-box">
+                <option value="" ${!dados.modalidade?'selected':''}>Selecione...</option>
+                <option ${dados.modalidade==='Convênio'?'selected':''}>Convênio</option>
+                <option ${dados.modalidade==='Contrato de Gestão'?'selected':''}>Contrato de Gestão</option>
+                <option ${dados.modalidade==='Termo de Fomento'?'selected':''}>Termo de Fomento</option>
+                <option ${dados.modalidade==='Termo de Colaboração'?'selected':''}>Termo de Colaboração</option>
+                <option ${dados.modalidade==='OSC'?'selected':''}>OSC</option>
+                <option ${dados.modalidade==='Outro'?'selected':''}>Outro</option>
+                </select>
+            </div>
+            </div>
+            <div>
+            <label style="font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;display:block;margin-bottom:5px">Observações financeiras</label>
+            <textarea id="ctrObsFinan" class="ctr-input" rows="2" placeholder="Parcelas, cronograma..." style="width:100%;box-sizing:border-box;resize:vertical">${escaparHTML(dados.obsFinanceiro||'')}</textarea>
+            </div>
+        </div>
+        </div>`,
     didOpen: function(){
       ['ctrIni','ctrFim'].forEach(function(id){
         var el=document.getElementById(id);
@@ -728,49 +728,98 @@ function abrirModalRubrica(idMeta, dadosIn){
     cancelButtonText:'Cancelar', confirmButtonColor:'#6366f1',
     customClass:{popup:'rounded-3xl',confirmButton:'rounded-xl font-black text-sm',cancelButton:'rounded-xl font-bold text-sm'},
     html:`
-<div class="text-left" style="padding:0 20px 16px">
-  ${meta.titulo?`<div style="display:flex;align-items:center;gap:8px;padding:7px 12px;background:#eef2ff;border:1px solid #c7d2fe;border-radius:10px;margin-bottom:12px">
-    <i class="fas fa-bullseye text-indigo-400 text-xs"></i>
-    <span style="font-size:10px;font-weight:900;color:#4338ca">Meta ${escaparHTML(meta.numero||'')} — ${escaparHTML(meta.titulo)}</span>
-  </div>`:''}
-  <div style="margin-bottom:10px">
-    <label style="font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;display:block;margin-bottom:5px">Nome da Rubrica *</label>
-    <input id="rubNome" class="ctr-input" style="width:100%;box-sizing:border-box" value="${escaparHTML(dados.nome||'')}" placeholder="Ex.: Cache de Artistas">
-  </div>
-  <div style="margin-bottom:12px">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-      <label style="font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase">Memória de Cálculo</label>
-      <button type="button" onclick="_memAdicionarLinha()" style="font-size:9px;font-weight:900;color:#6366f1;background:#eef2ff;border:none;border-radius:8px;padding:4px 10px;cursor:pointer;text-transform:uppercase;letter-spacing:.06em">
-        <i class="fas fa-plus mr-1"></i>Linha
-      </button>
-    </div>
-    <div style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:12px;padding:10px">
-      <div style="display:grid;grid-template-columns:1fr 70px 100px 28px;gap:5px;margin-bottom:6px">
-        <span style="font-size:9px;font-weight:900;color:#94a3b8;text-transform:uppercase;padding:0 2px">Descrição</span>
-        <span style="font-size:9px;font-weight:900;color:#94a3b8;text-transform:uppercase;text-align:center">Qtd</span>
-        <span style="font-size:9px;font-weight:900;color:#94a3b8;text-transform:uppercase;text-align:right;padding-right:4px">Unit. (R$)</span>
-        <span></span>
-      </div>
-      <div id="memLinhas"></div>
-    </div>
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px;padding:10px 12px;background:#f0fdf4;border:1.5px solid #bbf7d0;border-radius:12px">
-      <span style="font-size:10px;font-weight:900;color:#059669;text-transform:uppercase">Total calculado</span>
-      <span id="memTotal" style="font-size:16px;font-weight:900;color:#059669">R$ 0,00</span>
-    </div>
-  </div>
-  <div>
-    <label style="font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;display:block;margin-bottom:5px">Observação</label>
-    <textarea id="rubObs" class="ctr-input" rows="2" style="width:100%;box-sizing:border-box;resize:vertical" placeholder="Memória ou justificativa...">${escaparHTML(dados.obs||'')}</textarea>
-  </div>
-</div>`,
+        <div class="text-left" style="padding:0 20px 16px">
+        ${meta.titulo?`<div style="display:flex;align-items:center;gap:8px;padding:7px 12px;background:#eef2ff;border:1px solid #c7d2fe;border-radius:10px;margin-bottom:12px">
+            <i class="fas fa-bullseye text-indigo-400 text-xs"></i>
+            <span style="font-size:10px;font-weight:900;color:#4338ca">Meta ${escaparHTML(meta.numero||'')} — ${escaparHTML(meta.titulo)}</span>
+        </div>`:''}
+
+        <div style="margin-bottom:10px">
+            <label style="font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;display:block;margin-bottom:5px">
+            Nome da Rubrica *
+            </label>
+            <input id="rubNome" class="ctr-input" style="width:100%;box-sizing:border-box"
+            value="${escaparHTML(dados.nome||'')}" placeholder="Ex.: Cache de Artistas">
+        </div>
+
+        <div style="margin-bottom:12px">
+            
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+            <label style="font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase">
+                Memória de Cálculo
+            </label>
+            <button type="button" onclick="_memAdicionarLinha()"
+                style="font-size:9px;font-weight:900;color:#6366f1;background:#eef2ff;border:none;border-radius:8px;padding:4px 10px;cursor:pointer;text-transform:uppercase;letter-spacing:.06em">
+                <i class="fas fa-plus mr-1"></i>Linha
+            </button>
+            </div>
+
+            <div style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:12px;padding:10px">
+
+            <!-- HEADER -->
+            <div style="display:grid;grid-template-columns:1fr 90px 70px 110px 1fr 28px;gap:5px;margin-bottom:6px">
+                <span style="font-size:9px;font-weight:900;color:#94a3b8;text-transform:uppercase;padding:0 2px">Descrição</span>
+                <span style="font-size:9px;font-weight:900;color:#94a3b8;text-transform:uppercase;text-align:center">Tipo</span>
+                <span style="font-size:9px;font-weight:900;color:#94a3b8;text-transform:uppercase;text-align:center">Qtd</span>
+                <span style="font-size:9px;font-weight:900;color:#94a3b8;text-transform:uppercase;text-align:right;padding-right:4px">Unit. (R$)</span>
+                <span style="font-size:9px;font-weight:900;color:#94a3b8;text-transform:uppercase;padding-left:4px">Obs</span>
+                <span></span>
+            </div>
+
+            <div id="memLinhas"></div>
+
+            </div>
+
+            <!-- TOTAL -->
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px;padding:10px 12px;background:#f0fdf4;border:1.5px solid #bbf7d0;border-radius:12px">
+            <span style="font-size:10px;font-weight:900;color:#059669;text-transform:uppercase">
+                Total calculado
+            </span>
+            <span id="memTotal" style="font-size:16px;font-weight:900;color:#059669">
+                R$ 0,00
+            </span>
+            </div>
+
+        </div>
+
+        <div>
+            <label style="font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;display:block;margin-bottom:5px">
+            Observação
+            </label>
+            <textarea id="rubObs" class="ctr-input" rows="2"
+            style="width:100%;box-sizing:border-box;resize:vertical"
+            placeholder="Memória ou justificativa...">${escaparHTML(dados.obs||'')}</textarea>
+        </div>
+        </div>`,
     didOpen: function(){
       if (dados.id){
         google.script.run
           .withSuccessHandler(function(lista){
             _memoriaCalculo = Array.isArray(lista)
-              ? lista.map(function(i){return {descricao:String(i[2]||''),qtd:Number(i[4])||1,valor:Number(i[5])||0};})
-              : [{descricao:'',qtd:1,valor:0}];
-            if (!_memoriaCalculo.length) _memoriaCalculo=[{descricao:'',qtd:1,valor:0}];
+            ? lista.map(function(i){
+                return {
+                    descricao: String(i[2]||''),
+                    tipo: String(i[3]||'mensal'),
+                    qtd: Number(i[4])||1,
+                    valor: Number(i[5])||0,
+                    obs: String(i[9]||'')
+                };
+                })
+              : [{
+                descricao:'',
+                tipo:'mensal',
+                qtd:1,
+                valor:0,
+                obs:''
+                }];
+            if (!_memoriaCalculo.length)
+                _memoriaCalculo=[{
+                    descricao:'',
+                    tipo:'mensal',
+                    qtd:1,
+                    valor:0,
+                    obs:''
+                }];
             _memRenderizar();
           })
           .obterMemoriaRubrica(dados.id);
@@ -784,7 +833,23 @@ function abrirModalRubrica(idMeta, dadosIn){
       if(!nome){Swal.showValidationMessage('Nome obrigatório.');return false;}
       var total=_memoriaCalculo.reduce(function(s,i){return s+Number(i.qtd||0)*Number(i.valor||0);},0);
       if(total<=0){Swal.showValidationMessage('Valor total deve ser maior que zero.');return false;}
-      return {id:dados.id||null,idMeta,nome,valor:total,memoriaCalculo:_memoriaCalculo,obs:document.getElementById('rubObs')?.value.trim()};
+      return {
+        id: dados.id || null,
+        idMeta,
+        nome,
+        valor: total,
+        memoriaCalculo: _memoriaCalculo.map(function(i){
+        return {
+            descricao: i.descricao || '',
+            tipo: i.tipo || 'mensal',
+            qtd: Number(i.qtd) || 0,
+            valor: Number(i.valor) || 0,
+            subtotal: (Number(i.qtd)||0) * (Number(i.valor)||0),
+            obs: i.obs || ''
+        };
+        }),
+        obs: document.getElementById('rubObs')?.value.trim()
+        };
     }
   }).then(function(r){
     if(!r.isConfirmed) return;
@@ -800,17 +865,35 @@ function _memRenderizar(){
   var container=document.getElementById('memLinhas');
   if(!container) return;
   container.innerHTML=_memoriaCalculo.map(function(item,i){
-    return '<div class="mem-row" style="display:grid;grid-template-columns:1fr 70px 100px 28px;gap:5px;margin-bottom:5px">'
-      +'<input class="mem-input" placeholder="Descrição" value="'+escaparHTML(item.descricao||'')+'" oninput="_memoriaCalculo['+i+'].descricao=this.value">'
-      +'<input type="number" class="mem-input" style="text-align:center" min="0" value="'+(item.qtd||1)+'" oninput="_memoriaCalculo['+i+'].qtd=Number(this.value);_memAtualizarTotal()">'
-      +'<input type="number" class="mem-input mem-input-money" min="0" step="0.01" value="'+(item.valor||0)+'" oninput="_memoriaCalculo['+i+'].valor=Number(this.value);_memAtualizarTotal()">'
-      +'<button type="button" onclick="_memRemoverLinha('+i+')" style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;background:#fee2e2;border:none;border-radius:7px;cursor:pointer;color:#dc2626;font-size:10px">✕</button>'
-      +'</div>';
+    return '<div class="mem-row" style="display:grid;grid-template-columns:1fr 90px 70px 110px 1fr 28px;gap:5px;margin-bottom:5px">'
+        +'<input class="mem-input" placeholder="Descrição" value="'+escaparHTML(item.descricao||'')+'" oninput="_memoriaCalculo['+i+'].descricao=this.value">'
+        +'<select class="mem-input" onchange="_memoriaCalculo['+i+'].tipo=this.value">'
+            +'<option value="mensal" '+(item.tipo==='mensal'?'selected':'')+'>Mensal</option>'
+            +'<option value="diaria" '+(item.tipo==='diaria'?'selected':'')+'>Diária</option>'
+            +'<option value="hora" '+(item.tipo==='hora'?'selected':'')+'>Hora técnica</option>'
+            +'<option value="unitario" '+(item.tipo==='unitario'?'selected':'')+'>Unitário</option>'
+        +'</select>'
+        +'<input type="number" class="mem-input" style="text-align:center" min="0" value="'+(item.qtd||1)+'" oninput="_memoriaCalculo['+i+'].qtd=Number(this.value);_memAtualizarTotal()">'
+        +'<input class="mem-input mem-input-money" value="'+_fmtMoedaBR(item.valor||0).replace('R$','').trim()+'" oninput="_memoriaCalculo['+i+'].valor=_parseMoedaBR(this.value);_memAtualizarTotal()">'
+        +'<input class="mem-input" placeholder="Detalhe..." value="'+escaparHTML(item.obs||'')+'" oninput="_memoriaCalculo['+i+'].obs=this.value">'
+        +'<button type="button" onclick="_memRemoverLinha('+i+')" style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;background:#fee2e2;border:none;border-radius:7px;cursor:pointer;color:#dc2626;font-size:10px">✕</button>'
+        +'</div>';
   }).join('');
   _memAtualizarTotal();
+  setTimeout(function(){
+    document.querySelectorAll('.mem-input-money').forEach(function(el){
+        _mascaraMoedaEl(el);
+    });
+    }, 0);
 }
 function _memAdicionarLinha(){
-  _memoriaCalculo.push({descricao:'',qtd:1,valor:0});
+  _memoriaCalculo.push({
+    descricao:'',
+    tipo:'mensal',
+    qtd:1,
+    valor:0,
+    obs:''
+  });
   _memRenderizar();
 }
 function _memRemoverLinha(i){
@@ -899,35 +982,35 @@ function abrirModalIndicador(idMeta, idContrato, dadosIn){
     cancelButtonText:'Cancelar', confirmButtonColor:'#6366f1',
     customClass:{popup:'rounded-3xl',confirmButton:'rounded-xl font-black text-sm',cancelButton:'rounded-xl font-bold text-sm'},
     html:`
-<div class="text-left" style="max-height:74vh;overflow-y:auto;padding:0 20px 16px">
-  ${metaObj.titulo?`<div style="display:flex;align-items:center;gap:8px;padding:7px 12px;background:#eef2ff;border:1px solid #c7d2fe;border-radius:10px;margin-bottom:12px">
-    <i class="fas fa-bullseye text-indigo-400 text-xs"></i>
-    <span style="font-size:10px;font-weight:900;color:#4338ca">Meta ${escaparHTML(metaObj.numero||'')} — ${escaparHTML(metaObj.titulo)}</span>
-  </div>`:''}
-  <div style="display:grid;grid-template-columns:80px 1fr;gap:10px;margin-bottom:10px">
-    <div>
-      <label style="font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;display:block;margin-bottom:5px">Nº</label>
-      <input id="indNum" class="ctr-input" style="text-align:center;width:100%;box-sizing:border-box" value="${escaparHTML(dados.numero||'')}" placeholder="01">
-    </div>
-    <div>
-      <label style="font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;display:block;margin-bottom:5px">Nome do Indicador *</label>
-      <input id="indNome" class="ctr-input" style="width:100%;box-sizing:border-box" value="${escaparHTML(dados.nome||dados.texto||'')}" placeholder="Ex.: Nº de pessoas atendidas presencialmente">
-    </div>
-  </div>
-  <div style="margin-bottom:12px">
-    <label style="font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;display:block;margin-bottom:5px">Metodologia</label>
-    <textarea id="indDesc" class="ctr-input" rows="2" style="width:100%;box-sizing:border-box;resize:vertical" placeholder="Como é medido...">${escaparHTML(dados.descricao||'')}</textarea>
-  </div>
-  <div>
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-      <label style="font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase">Metas mensais por ano de vigência</label>
-      ${ctr.vigIni?`<span style="font-size:10px;color:#cbd5e1"><i class="fas fa-calendar mr-1"></i>${escaparHTML(_fmtDataBR(ctr.vigIni)||'')} a ${escaparHTML(_fmtDataBR(ctr.vigFim)||'')}</span>`:''}
-    </div>
-    <div style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:14px;padding:14px;max-height:240px;overflow-y:auto">
-      ${faixasHtml}
-    </div>
-  </div>
-</div>`,
+        <div class="text-left" style="max-height:74vh;overflow-y:auto;padding:0 20px 16px">
+        ${metaObj.titulo?`<div style="display:flex;align-items:center;gap:8px;padding:7px 12px;background:#eef2ff;border:1px solid #c7d2fe;border-radius:10px;margin-bottom:12px">
+            <i class="fas fa-bullseye text-indigo-400 text-xs"></i>
+            <span style="font-size:10px;font-weight:900;color:#4338ca">Meta ${escaparHTML(metaObj.numero||'')} — ${escaparHTML(metaObj.titulo)}</span>
+        </div>`:''}
+        <div style="display:grid;grid-template-columns:80px 1fr;gap:10px;margin-bottom:10px">
+            <div>
+            <label style="font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;display:block;margin-bottom:5px">Nº</label>
+            <input id="indNum" class="ctr-input" style="text-align:center;width:100%;box-sizing:border-box" value="${escaparHTML(dados.numero||'')}" placeholder="01">
+            </div>
+            <div>
+            <label style="font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;display:block;margin-bottom:5px">Nome do Indicador *</label>
+            <input id="indNome" class="ctr-input" style="width:100%;box-sizing:border-box" value="${escaparHTML(dados.nome||dados.texto||'')}" placeholder="Ex.: Nº de pessoas atendidas presencialmente">
+            </div>
+        </div>
+        <div style="margin-bottom:12px">
+            <label style="font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;display:block;margin-bottom:5px">Metodologia</label>
+            <textarea id="indDesc" class="ctr-input" rows="2" style="width:100%;box-sizing:border-box;resize:vertical" placeholder="Como é medido...">${escaparHTML(dados.descricao||'')}</textarea>
+        </div>
+        <div>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+            <label style="font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase">Metas mensais por ano de vigência</label>
+            ${ctr.vigIni?`<span style="font-size:10px;color:#cbd5e1"><i class="fas fa-calendar mr-1"></i>${escaparHTML(_fmtDataBR(ctr.vigIni)||'')} a ${escaparHTML(_fmtDataBR(ctr.vigFim)||'')}</span>`:''}
+            </div>
+            <div style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:14px;padding:14px;max-height:240px;overflow-y:auto">
+            ${faixasHtml}
+            </div>
+        </div>
+        </div>`,
     preConfirm:function(){
       var nome=document.getElementById('indNome')?.value.trim();
       if(!nome){Swal.showValidationMessage('Nome obrigatório.');return false;}
@@ -1088,4 +1171,24 @@ window.codipPopularContratos = function(){
   var si=document.getElementById('codipSelectIndicador');
   if(si) si.innerHTML='<option value="">Selecione um indicador...</option>';
 };
+
+function coletarMemoriaCalculoUI() {
+  const rows = document.querySelectorAll('.mem-row');
+
+  return Array.from(rows).map(row => ({
+    descricao: row.querySelector('.mem-desc')?.value || '',
+    tipo: row.querySelector('.mem-tipo')?.value || '',
+    quantidade: Number(row.querySelector('.mem-qtd')?.value) || 0,
+    valorUnitario: _parseMoedaBR(row.querySelector('.mem-unit')?.value),
+    observacao: row.querySelector('.mem-obs')?.value || ''
+  }));
+}
+
+function calcularMemoria(memoria) {
+  return memoria.map(l => {
+    const subtotal = l.quantidade * l.valorUnitario;
+    return { ...l, subtotal };
+  });
+}
+
 </script>
