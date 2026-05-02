@@ -1,0 +1,41 @@
+<script>
+function _handleServerError(err) {
+  showLoader(false);
+  if (err && err.message === 'EM_BREVE') {
+    Swal.fire('Em breve', 'Essa funcionalidade ainda será implementada.', 'info');
+    return;
+  }
+  Swal.fire('Erro', (err && err.message) || String(err), 'error');
+}
+
+function corBg(cor) {
+  return {
+    blue: 'bg-blue-100',
+    purple: 'bg-purple-100',
+    amber: 'bg-amber-100'
+  }[cor] || 'bg-slate-100';
+}
+
+function corTexto(cor) {
+  return {
+    blue: 'text-blue-600',
+    purple: 'text-purple-600',
+    amber: 'text-amber-600'
+  }[cor] || 'text-slate-600';
+}
+
+// ── Utilitários de string ───────────────────────────────────────────────────
+function escaparHTML(str) {
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function showLoader(exibir) {
+  const loader = document.getElementById('globalLoader');
+  if (loader) exibir ? loader.classList.remove('hidden') : loader.classList.add('hidden');
+}
+</script>

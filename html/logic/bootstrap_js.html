@@ -1,0 +1,261 @@
+  <script>
+    if (typeof toggleSidebar === 'undefined') {
+      function toggleSidebar() {
+        var sidebar = document.getElementById('sidebarPrincipal');
+        var overlay = document.getElementById('sidebarOverlay');
+        if (sidebar) sidebar.classList.toggle('-translate-x-full');
+        if (overlay) overlay.classList.toggle('hidden');
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+
+      // ── 1. inicializarApp + change listeners de horário/sala ──────────────
+      console.log("Iniciando Sistema CCBJ...");
+      inicializarApp();
+
+      const inicio = document.getElementById('horaInicio');
+      const termino = document.getElementById('horaTermino');
+      const sala = document.getElementById('selectSala');
+
+      if (inicio) inicio.addEventListener('change', atualizarTudoTempoReal);
+      if (termino) termino.addEventListener('change', atualizarTudoTempoReal);
+      if (sala) sala.addEventListener('change', atualizarTudoTempoReal);
+
+      // ── 2. click delegation para botões com data-acao ────────────────────
+      document.body.addEventListener('click', function(e) {
+
+        const btn = e.target.closest('[data-acao]');
+        if (!btn) return;
+
+        var acao = btn.dataset.acao;
+        var id   = btn.dataset.id || null;
+
+        var acoes = {
+
+          'editar-espaco': function() {
+            abrirModalConfig('espaco', id, btn.dataset.nome, btn.dataset.capacidade, btn.dataset.email || '');
+          },
+
+          'excluir-espaco': function() {
+            dispararExclusao(id, 'espaco');
+          },
+
+          'editar-item': function() {
+            abrirModalConfig('item', id, btn.dataset.nome, btn.dataset.qtd, btn.dataset.categoria);
+          },
+
+          'excluir-item': function() {
+            dispararExclusao(id, 'item');
+          },
+
+          'editar-setor': function() {
+            abrirModalConfig('setor', id, btn.dataset.nome);
+          },
+
+          'excluir-setor': function() {
+            dispararExclusao(id, 'setor');
+          },
+
+          'editar-usuario': function() {
+            abrirModalConfig('usuario', id, btn.dataset.email, btn.dataset.nivel);
+          },
+
+          'excluir-usuario': function() {
+            dispararExclusao(id, 'usuario');
+          },
+
+          'habilitar-reserva': function() {
+            habilitarReserva(id);
+          },
+
+          'editar-reserva': function() {
+            prepararEdicao(id);
+          },
+
+          'cancelar-reserva': function() {
+            confirmarCancelamento(id, btn.dataset.nome);
+          },
+
+          'excluir-reserva': function() {
+            excluirDefinitivo(id, 'reserva');
+          },
+
+          'editar-rece': function() {
+            prepararEdicaoRece(id);
+          },
+
+          'cancelar-rece': function() {
+            confirmarCancelamentoRece(id, btn.dataset.nome);
+          },
+
+          'excluir-rece': function() {
+            excluirReceDefinitivo(id);
+          },
+
+          'rollback-seletivo': function() {
+
+            if (!AppState.usuario.isSuperadmin) {
+              Swal.fire('Acesso Negado', 'Apenas Superadmins podem desfazer ações.', 'error');
+              return;
+            }
+
+            var timestamp = btn.dataset.timestamp;
+
+            Swal.fire({
+              title: 'Desfazer esta ação?',
+              text: 'Esta operação reverterá a alteração selecionada. Não pode ser desfeita.',
+              icon: 'warning',
+              showCancelButton: true,
+              confirmButtonColor: '#f59e0b',
+              confirmButtonText: 'Sim, desfazer!',
+              cancelButtonText: 'Cancelar'
+            }).then(function(result) {
+
+              if (!result.isConfirmed) return;
+
+              showLoader(true);
+
+              google.script.run
+                .withSuccessHandler(function() {
+                  showLoader(false);
+
+                  Swal.fire({
+                    title: 'Desfeito!',
+                    text: 'Ação revertida com sucesso.',
+                    icon: 'success',
+                    timer: 2500,
+                    showConfirmButton: false
+                  });
+
+                  carregarAuditoria();
+                  carregarReservas();
+                  if (AppState.colecoes.reservasRece) carregarReservasRece();
+
+                })
+                .withFailureHandler(function(err) {
+                  showLoader(false);
+                  Swal.fire('Erro no Rollback', err.message, 'error');
+                })
+                .rollbackAcaoPorTimestamp(AppState.usuario.email, timestamp);
+
+            });
+
+          }
+
+        };
+
+        if (acoes[acao]) {
+          acoes[acao]();
+        }
+
+      });
+
+      // ── 3. ATUALIZA ITENS FIXOS AO TROCAR SALA ───────────────────────────
+      const select = document.getElementById('selectSala');
+      if (select) {
+
+        document.getElementById('selectVolantes')?.addEventListener('change', atualizarMaxQuantidade);
+
+        select.addEventListener('change', function() {
+
+          const idSala = this.value;
+
+          // Bloco externo
+          const blocoExt = document.getElementById('blocoExterno');
+          if (blocoExt) {
+            if (idSala === 'EXTERNO') {
+              blocoExt.classList.remove('hidden');
+            } else {
+              blocoExt.classList.add('hidden');
+              const inp = document.getElementById('inputEnderecoExterno');
+              if (inp) inp.value = '';
+              document.getElementById('blocoRotaExterna')?.classList.add('hidden');
+            }
+          }
+
+          itensFixosSelecionados = [];
+          renderizarCarrinhoFixos();
+
+          const container = document.getElementById('itensFixosSala');
+          const bloco = document.getElementById('blocoItensFixos');
+          if (!container || !bloco) return;
+
+          const itens = obterItensFixosDaSala(idSala);
+
+          if (itens.length === 0) {
+            bloco.classList.add('hidden');
+            container.innerHTML = '';
+            return;
+          }
+
+          bloco.classList.remove('hidden');
+          container.innerHTML = itens.map(i => `
+            <div class="flex items-center justify-between bg-white/10 rounded-xl px-3 py-2 border border-white/20 mb-2">
+              <div class="flex flex-col">
+                <span class="text-[11px] font-bold text-white">
+                  <b class="text-purple-300">${i.qtd}x</b> ${escaparHTML(i.nome)}
+                  <span class="text-[9px] text-slate-400 ml-1">(fixo)</span>
+                </span>
+              </div>
+              <div class="flex items-center gap-2">
+                <input type="number" min="1" max="${i.qtd}" value="1"
+                  id="qtd_fixo_${escaparHTML(i.nome.replace(/\s/g,'_'))}"
+                  class="w-12 text-center text-xs bg-white/10 border border-white/20 rounded-lg py-1 text-white font-bold outline-none">
+                <button type="button"
+                  onclick="adicionarItemFixoCarrinho('${escaparHTML(i.nome)}', ${i.qtd})"
+                  class="text-[9px] font-black bg-purple-600 hover:bg-purple-500 text-white px-2 py-1 rounded-lg transition-all uppercase">
+                  + Usar
+                </button>
+              </div>
+            </div>
+          `).join('');
+
+        });
+
+      }
+
+      // ── 4. Favoritos dragover + carregarPreferenciasUsuario ───────────────
+      const favContainer = document.getElementById('favoritosContainer');
+      if (favContainer) {
+        favContainer.addEventListener('dragover', e => { e.preventDefault(); });
+        google.script.run
+          .withSuccessHandler(function(prefs) {
+            iniciarPreferencias(prefs);
+          })
+          .carregarPreferenciasUsuario();
+      }
+
+      // ── 5. data-aba listeners + setTimeout (conteúdo original) ───────────
+      document.querySelectorAll('[data-aba]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var aba = this.getAttribute('data-aba');
+          var sidebar = document.getElementById('sidebarPrincipal');
+          var overlay = document.getElementById('sidebarOverlay');
+          if (sidebar && window.innerWidth < 768) {
+            sidebar.classList.add('-translate-x-full');
+            if (overlay) overlay.classList.add('hidden');
+          }
+          if (typeof mostrarAba === 'function') mostrarAba(aba);
+        });
+      });
+
+      setTimeout(function () {
+        var inicio  = document.getElementById('horaInicio');
+        var termino = document.getElementById('horaTermino');
+        var sala    = document.getElementById('selectSala');
+        if (inicio)  inicio.addEventListener('change',  function () { if (typeof atualizarDisponibilidadeItens === 'function') atualizarDisponibilidadeItens(); if (typeof bloquearHorariosVisualmente === 'function') bloquearHorariosVisualmente(); });
+        if (termino) termino.addEventListener('change', function () { if (typeof atualizarDisponibilidadeItens === 'function') atualizarDisponibilidadeItens(); if (typeof bloquearHorariosVisualmente === 'function') bloquearHorariosVisualmente(); });
+        if (sala)    sala.addEventListener('change',    function () { if (typeof bloquearHorariosVisualmente === 'function') bloquearHorariosVisualmente(); });
+        if (typeof calendarInstance !== 'undefined' && calendarInstance && calendarInstance.config) {
+          calendarInstance.config.onChange.push(function () {
+            if (typeof atualizarDisponibilidadeItens === 'function') atualizarDisponibilidadeItens();
+            if (typeof bloquearHorariosVisualmente   === 'function') bloquearHorariosVisualmente();
+            if (typeof renderizarPreviewDatas        === 'function') renderizarPreviewDatas();
+            if (typeof atualizarContadorLote         === 'function') atualizarContadorLote();
+          });
+        }
+      }, 800);
+
+    });
+  </script>

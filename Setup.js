@@ -24,11 +24,12 @@ const MODULOS = {
     pasta:  'CCBJ — Sistema',
     prop:   PROP.MASTER,
     abas: {
-      'Administradores': ['Email', 'NivelAcesso'],
-      'Configuracoes':   ['ID', 'Espaço', 'Capacidade', 'Resumo Itens', 'Email Responsável'],
-      'Listas':          ['Setores'],
-      'Logs':            ['Data/Hora', 'Usuário', 'Ação', 'Tipo', 'Alvo', 'Detalhes', 'Dados Antes', 'Dados Depois'],
-      'LogAcessos':      ['Data/Hora', 'Email', 'Nome Usuário', 'Nível Acesso', 'IP Aprox.', 'User Agent'],
+      'Administradores':      ['Email', 'NivelAcesso'],
+      'Configuracoes':        ['ID', 'Espaço', 'Capacidade', 'Resumo Itens', 'Email Responsável'],
+      'Listas':               ['Setores'],
+      'Logs':                 ['Data/Hora', 'Usuário', 'Ação', 'Tipo', 'Alvo', 'Detalhes', 'Dados Antes', 'Dados Depois'],
+      'LogAcessos':           ['Data/Hora', 'Email', 'Nome Usuário', 'Nível Acesso', 'IP Aprox.', 'User Agent'],
+      'PreferenciasUsuarios': ['email', 'chave', 'valor', 'atualizadoEm'],
     }
   },
 

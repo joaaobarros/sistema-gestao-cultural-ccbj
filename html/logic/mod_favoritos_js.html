@@ -1,0 +1,118 @@
+<script>
+
+let dragItem = null;
+let dragOrigem = null;
+let dragIndex = null;
+let favoritos = [];
+
+function salvarFavoritos() {
+  google.script.run
+    .withFailureHandler(err => {
+      console.error('Erro ao salvar favoritos:', err);
+    })
+    .salvarPreferenciasUsuario('favoritos', favoritos);
+}
+
+function iniciarDrag(e) {
+  const el = e.currentTarget;
+  dragOrigem = 'menu';
+  dragItem = {
+    aba: el.dataset.aba,
+    nome: el.querySelector('span')?.innerText.trim() || '',
+    icon: el.querySelector('i')?.className || ''
+  };
+  e.dataTransfer.setData('text/plain', dragItem.aba);
+}
+
+function iniciarDragFavorito(e, index) {
+  dragOrigem = 'favorito';
+  dragIndex = index;
+  e.dataTransfer.setData('text/plain', index);
+}
+
+function onDragOverItem(e, index) {
+  e.preventDefault();
+}
+
+function onDropReorder(e, index) {
+  e.preventDefault();
+  if (dragOrigem !== 'favorito') return;
+  if (dragIndex === null) return;
+  const item = favoritos.splice(dragIndex, 1)[0];
+  favoritos.splice(index, 0, item);
+  dragIndex = null;
+  dragOrigem = null;
+  salvarFavoritos();
+  renderizarFavoritos();
+}
+
+function onDropFavoritos(e) {
+  e.preventDefault();
+  if (!dragItem || dragOrigem !== 'menu') return;
+  const jaExiste = favoritos.some(f => f.aba === dragItem.aba);
+  if (jaExiste) return;
+  favoritos.push(dragItem);
+  dragItem = null;
+  dragOrigem = null;
+  salvarFavoritos();
+  renderizarFavoritos();
+}
+
+function onDragOverFavoritos(e) {
+  e.preventDefault();
+}
+
+function iniciarPreferencias(preferencias) {
+  favoritos = preferencias?.favoritos || [];
+  renderizarFavoritos();
+}
+
+function resetarFavoritos() {
+  favoritos = [];
+  salvarFavoritos();
+  renderizarFavoritos();
+}
+
+function renderizarFavoritos() {
+  const container = document.getElementById('favoritosContainer');
+  if (!container) return;
+
+  if (!favoritos.length) {
+    container.innerHTML = `
+      <div class="text-[9px] text-slate-600 italic px-2 py-1">
+        Arraste abas para cá
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = favoritos.map((f, index) => `
+    <div
+      class="flex items-center justify-between group bg-white/5 rounded-lg"
+      draggable="true"
+      ondragstart="iniciarDragFavorito(event, ${index})"
+      ondragover="onDragOverItem(event, ${index})"
+      ondrop="onDropReorder(event, ${index})"
+    >
+      <button data-aba="${f.aba}"
+        onclick="mostrarAba('${f.aba}')"
+        class="nav-item w-full bg-transparent">
+        <i class="${f.icon} w-5 text-center text-xs"></i>
+        <span class="text-xs font-semibold">${f.nome}</span>
+      </button>
+      <button onclick="removerFavorito(${index})"
+        class="opacity-0 group-hover:opacity-100 px-2 text-slate-400 hover:text-red-400 transition">
+        <i class="fas fa-times text-[10px]"></i>
+      </button>
+    </div>
+  `).join('');
+}
+
+function removerFavorito(index) {
+  favoritos.splice(index, 1);
+  salvarFavoritos();
+  renderizarFavoritos();
+}
+
+
+</script>

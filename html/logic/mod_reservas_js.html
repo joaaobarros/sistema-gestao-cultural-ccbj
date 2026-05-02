@@ -1,0 +1,4337 @@
+<script>
+function sincronizarAbaAtual() {
+  if (typeof showLoader === "function") showLoader(true);
+  const btnSync = document.querySelector('.fa-sync-alt')?.parentElement;
+  if (btnSync) btnSync.classList.add('animate-spin');
+
+  google.script.run
+    .withSuccessHandler(function(dados) {
+      AppState.colecoes.salas          = dados.salas || [];
+      AppState.colecoes.itens          = dados.listaItens || [];
+      AppState.colecoes.setores        = dados.setores || [];
+      AppState.colecoes.administradores = dados.administradores || [];
+
+      if (typeof renderizarEspacosAdmin === "function") renderizarEspacosAdmin();
+      if (typeof renderizarItensAdmin   === "function") renderizarItensAdmin();
+      if (typeof renderizarSetoresAdmin === "function") renderizarSetoresAdmin();
+      if (typeof renderizarAdmins       === "function") renderizarAdmins();
+      if (typeof popularSelectsIniciais === "function") popularSelectsIniciais();
+      if (typeof renderizarReservas     === "function") renderizarReservas();
+
+      if (typeof showLoader === "function") showLoader(false);
+      if (btnSync) btnSync.classList.remove('animate-spin');
+
+      Swal.mixin({ toast: true, position: 'top-end', showConfirmButton: false, timer: 2000, timerProgressBar: true })
+        .fire({ icon: 'success', title: 'Dados sincronizados com a planilha' });
+    })
+    .withFailureHandler(function(err) {
+      if (typeof showLoader === "function") showLoader(false);
+      if (btnSync) btnSync.classList.remove('animate-spin');
+      Swal.fire('Erro na Sincronização', err.message, 'error');
+    })
+    .obterDadosIniciais(AppState.usuario.email); // ← email passado
+}
+
+
+
+/**
+ * POPULAR SELECTS INICIAIS
+ * Preenche os dropdowns de Sala, Setor e Itens Volantes no carregamento.
+ */
+function popularSelectsIniciais() {
+  const selSala = document.getElementById('selectSala');
+  const selSetor = document.getElementById('selectSetor');
+  const selFiltroSetor = document.getElementById('filtroSetor');
+  const selFiltroSala = document.getElementById('filtroSala');
+  const selVolantes = document.getElementById('selectVolantes');
+
+  // ===== SALAS (FORMULÁRIO) =====
+  if (selSala) {
+    const salas = AppState.colecoes.salas || [];
+    selSala.innerHTML =
+      '<option value="">Selecione um local...</option>' +
+      salas.map(s => {
+        const id = s[0] ?? '';
+        const nome = s[1] ?? 'Sem nome';
+        const cap = s[2] ?? '-';
+        return `<option value="${escaparHTML(id)}">${escaparHTML(nome)} (Cap: ${cap})</option>`;
+      }).join('') +
+      '<option value="EXTERNO" style="font-weight:900;color:#0891b2">📍 Externo (fora do CCBJ)</option>';
+  }
+
+  // ===== SETORES =====
+  const setores = AppState.colecoes.setores || [];
+  const optionsSetor = setores
+    .filter(s => s && String(s).trim() !== '')
+    .map(setor => `<option value="${escaparHTML(setor)}">${escaparHTML(setor)}</option>`)
+    .join('');
+
+  if (selSetor) selSetor.innerHTML = '<option value="">Selecione o setor...</option>' + optionsSetor;
+  if (selFiltroSetor) selFiltroSetor.innerHTML = '<option value="">TODOS OS SETORES</option>' + optionsSetor;
+
+  // ===== FILTRO SALA (USA ID COMO VALUE, NOME COMO LABEL) =====
+  // Isso garante que a comparação com r[4] (que é ID) funcione corretamente
+  if (selFiltroSala) {
+    const salas = AppState.colecoes.salas || [];
+    selFiltroSala.innerHTML =
+      '<option value="">TODAS AS SALAS</option>' +
+      salas.map(s => {
+        const id = String(s[0] || '').trim();
+        const nome = String(s[1] || '').trim();
+        return `<option value="${escaparHTML(id)}">${escaparHTML(nome)}</option>`;
+      }).join('');
+  }
+
+  // ===== ITENS VOLANTES =====
+  // Será atualizado dinamicamente com disponibilidade por horário
+  // Por enquanto popula com estoque total como fallback
+  if (selVolantes) {
+    const itens = AppState.colecoes.itens || [];
+    const itensValidos = itens.filter(i => Number(i?.[3]) > 0);
+    const nomesVistos = new Set();
+    const itensUnicos = [];
+
+    itensValidos.forEach(i => {
+      const nome = String(i?.[1] || '').trim();
+      if (!nome || nomesVistos.has(nome)) return;
+      nomesVistos.add(nome);
+      itensUnicos.push({ nome, qtd: Number(i?.[3] || 0) });
+    });
+
+    selVolantes.innerHTML =
+      '<option value="">Selecionar item...</option>' +
+      itensUnicos.map(i =>
+        `<option value="${escaparHTML(i.nome)}">${escaparHTML(i.nome)} (Disp: ${i.qtd})</option>`
+      ).join('');
+  }
+
+  if (typeof configurarCalendario === "function") configurarCalendario(false);
+
+  // Popula filtros do dashboard
+  const dashSala = document.getElementById('dashFiltroSala');
+  const dashSetor = document.getElementById('dashFiltroSetor');
+  if (dashSala) {
+    dashSala.innerHTML = '<option value="">Todos os espaços</option>' +
+      (AppState.colecoes.salas || []).map(s =>
+        `<option value="${escaparHTML(String(s[0]))}">${escaparHTML(String(s[1]))}</option>`
+      ).join('');
+  }
+  if (dashSetor) {
+    dashSetor.innerHTML = '<option value="">Todos os setores</option>' +
+      (AppState.colecoes.setores || []).filter(Boolean).map(s =>
+        `<option value="${escaparHTML(s)}">${escaparHTML(s)}</option>`
+      ).join('');
+  }
+
+  const agendaSala = document.getElementById('agendaGoogleSala');
+
+  if (agendaSala) {
+    agendaSala.innerHTML =
+      '<option value="">Todas as salas</option>' +
+      (AppState.colecoes.salas || []).map(s =>
+        `<option value="${escaparHTML(String(s[0]))}">${escaparHTML(String(s[1]))}</option>`
+      ).join('');
+
+    if (agendaSala.options.length > 1) {
+      agendaSala.value = agendaSala.options[1].value;
+    }
+
+    if (document.getElementById('viewAgendaGoogle') &&
+        !document.getElementById('viewAgendaGoogle').classList.contains('hidden')) {
+      window._agendaGoogleSemana = 0;
+      renderizarModoAgendaGoogle();
+    }
+
+  }
+
+  // ===== AGENDA RECE =====
+  const agendaReceSalaEl = document.getElementById('agendaReceSala');
+
+  if (agendaReceSalaEl) {
+    agendaReceSalaEl.innerHTML =
+      '<option value="">Todas as salas</option>' +
+      (AppState.colecoes.salas || []).map(s =>
+        `<option value="${escaparHTML(String(s[1]))}">${escaparHTML(String(s[1]))}</option>`
+      ).join('');
+  }
+}
+
+/**
+ * CONFIGURAR CALENDÁRIO (FLATPICKR)
+ * @param {boolean} modoLote Ativa ou desativa a seleção múltipla.
+ */
+function configurarCalendario(modoLote) {
+  if (calendarInstance) calendarInstance.destroy();
+
+  calendarInstance = flatpickr("#inputData", {
+    mode: modoLote ? "multiple" : "single",
+    dateFormat: "d/m/Y",
+    locale: "pt",
+    minDate: "today",
+    disableMobile: "true",
+    inline: false,
+    onChange: function(selectedDates, dateStr) {
+
+      console.log("Datas selecionadas:", dateStr);
+
+      // Auto-preenche data término RECE com a última data selecionada
+      if (selectedDates.length > 0) {
+        const ultimaData = selectedDates[selectedDates.length - 1];
+        const diaF  = String(ultimaData.getDate()).padStart(2,'0');
+        const mesF  = String(ultimaData.getMonth()+1).padStart(2,'0');
+        const anoF  = ultimaData.getFullYear();
+        const dataFormatada = `${diaF}/${mesF}/${anoF}`;
+        const receDataTermino = document.getElementById('receDataTermino');
+        if (receDataTermino && (!receDataTermino.value || AppState.modoLote)) {
+          receDataTermino.value = dataFormatada;
+        }
+      }
+
+      const inputInicio = document.getElementById('horaInicio');
+      const inputTermino = document.getElementById('horaTermino');
+
+      // ── BLOQUEIO DE HORÁRIO PARA HOJE ─────────────────────────────
+      if (selectedDates.length > 0) {
+
+        const hoje = new Date();
+        hoje.setHours(0, 0, 0, 0);
+
+        const dataSel = new Date(selectedDates[0]);
+        dataSel.setHours(0, 0, 0, 0);
+
+        if (dataSel.getTime() === hoje.getTime()) {
+
+          const agora = new Date();
+          const horaMin = agora.getHours();
+          const minMin = agora.getMinutes() >= 30 ? 0 : 30;
+          const horaFinal = agora.getMinutes() >= 30 ? horaMin + 1 : horaMin;
+
+          const minStr = String(minMin).padStart(2, '0');
+          const horaStr = String(Math.max(8, horaFinal)).padStart(2, '0');
+
+          const minHoje = `${horaStr}:${minStr}`;
+
+          if (inputInicio) inputInicio.min = minHoje;
+          if (inputTermino) inputTermino.min = minHoje;
+
+        } else {
+
+          if (inputInicio) inputInicio.min = "08:00";
+          if (inputTermino) inputTermino.min = "08:00";
+
+        }
+      }
+
+      // ── ATUALIZAÇÃO CENTRAL (CÉREBRO DO SISTEMA) ───────────────────
+      atualizarTudoTempoReal();
+
+      // ── SUGESTÕES (apenas se houver data) ──────────────────────────
+      if (selectedDates.length > 0 && typeof atualizarSugestoes === 'function') {
+        atualizarSugestoes();
+      }
+
+      // ── UI AUXILIAR ────────────────────────────────────────────────
+      renderizarPreviewDatas();
+      atualizarContadorLote();
+
+    }
+  });
+// Flatpickr para data término RECE (sincronizado, somente leitura via JS)
+  const receTermino = document.getElementById('receDataTermino');
+  if (receTermino) {
+    receTermino.removeAttribute('readonly');
+    if (!receTermino._fp) {
+      receTermino._fp = flatpickr(receTermino, {
+        dateFormat: "d/m/Y",
+        locale: "pt",
+        minDate: "today",
+        disableMobile: true
+      });
+    }
+  }
+}
+
+/**
+ * RESETAR FORMULÁRIO
+ * Limpa todos os campos e volta para o estado inicial.
+ */
+function resetarFormulario() {
+  document.getElementById('formReserva').reset();
+  document.getElementById('inputReservaId').value = "";
+  document.getElementById('carrinhoVolantes').innerHTML = "";
+  document.getElementById('checkLote').checked = false;
+  alternarModoLote(false);
+
+  // Reseta itens volantes
+  itensSelecionados = [];
+
+  // Reseta itens fixos
+  itensFixosSelecionados = [];
+  renderizarCarrinhoFixos();
+
+  // Esconde bloco de fixos e limpa seleção da sala
+  const blocoFixos = document.getElementById('blocoItensFixos');
+  if (blocoFixos) blocoFixos.classList.add('hidden');
+  const itensFixosSala = document.getElementById('itensFixosSala');
+  if (itensFixosSala) itensFixosSala.innerHTML = '';
+
+  // Reseta botão de submissão para estado original
+  const btn = document.querySelector('#formReserva button[type="submit"]');
+  btn.innerHTML = '<i class="fas fa-check-double"></i> Confirmar Agendamento';
+  btn.className = btn.className.replace('bg-blue-600', 'bg-purple-600');
+  btn.disabled = false;
+
+  AppState.editandoId = null;
+    window.modoEdicao = null;  
+  
+    if (btn.classList.contains('bg-yellow-500')) {
+    btn.classList.replace('bg-yellow-500', 'bg-purple-600');
+  }
+
+  // Reseta RECE
+  modoRece = false;
+  const checkRece = document.getElementById('checkRece');
+  if (checkRece) checkRece.checked = false;
+  alternarModoRece(false);
+  AppState.editandoReceId = null;
+  ['receCategorias','receParceiros','receAcessibilidades',
+   'recePublicoAlvo','receArtista','receiveLinkInscricao',
+   'receDescricao','receObservacoes']
+    .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  const receClass = document.getElementById('receClassificacao');
+  if (receClass) receClass.value = '';
+  const receAcesso = document.getElementById('receAcesso');
+  if (receAcesso) receAcesso.value = '';
+
+ // Limpa convidados internos
+  convidadosInternos = [];
+  renderizarChipsConvidados();
+  sincronizarInputConvidados();
+  document.getElementById('checkConvidarCalendar') && (document.getElementById('checkConvidarCalendar').checked = false);
+
+  // Limpa evento institucional
+  const checkEI = document.getElementById('checkEventoInstitucional');
+  if (checkEI) { checkEI.checked = false; alternarEventoInstitucional(false); }
+  const inputEE = document.getElementById('inputEmailsExternos');
+  if (inputEE) inputEE.value = '';
+  const inputTC = document.getElementById('inputTextoConvite');
+  if (inputTC) inputTC.value = '';
+
+  // Limpa imagem RECE
+  const imgFile = document.getElementById('receImagemFile');
+  if (imgFile) imgFile.value = '';
+  const imgUrl = document.getElementById('receImagemUrl');
+  if (imgUrl) imgUrl.value = '';
+  const imgPrev = document.getElementById('receImagemPreview');
+  if (imgPrev) imgPrev.classList.add('hidden');
+  const imgPrevImg = document.getElementById('receImagemPreviewImg');
+  if (imgPrevImg) imgPrevImg.src = '';
+
+  const checkCodip = document.getElementById('checkCodip');
+  if (checkCodip) checkCodip.checked = false;
+
+  alternarModoCodip(false);
+
+}
+
+
+
+/**
+ * RENDERIZAR CARRINHO DE ITENS
+ * Atualiza a lista visual (ul) no formulário.
+ */
+function renderizarCarrinhoItens() {
+  const lista = document.getElementById('carrinhoVolantes');
+  if (!lista) return;
+
+  if (itensSelecionados.length === 0) {
+    lista.innerHTML = '<p class="text-[10px] text-slate-500 text-center py-2">Nenhum item selecionado.</p>';
+    return;
+  }
+
+  lista.innerHTML = itensSelecionados.map((item, index) => `
+    <li class="flex justify-between items-center bg-slate-50 p-2 rounded-xl border border-slate-100 group transition-all hover:bg-white hover:shadow-sm">
+      <div class="flex flex-col overflow-hidden">
+        <span class="text-[11px] font-bold text-slate-700 truncate">
+          <b class="text-purple-600 mr-1">${escaparHTML(String(item.qtd))}x</b>
+          ${escaparHTML(item.nome)}
+        </span>
+      </div>
+      <button type="button"
+        onclick="removerItemCarrinho(${Number(index)})"
+        class="ml-2 p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
+        title="Remover da lista">
+        <i class="fas fa-trash-alt text-xs"></i>
+      </button>
+    </li>
+  `).join('');
+}
+
+function removerItemCarrinho(index) {
+  if (index < 0 || index >= itensSelecionados.length) return;
+  itensSelecionados.splice(index, 1);
+  renderizarCarrinhoItens();
+}
+
+
+function adicionarItemFixoCarrinho(nome, maxQtd) {
+  const inputId = 'qtd_fixo_' + nome.replace(/\s/g, '_');
+  const input = document.getElementById(inputId);
+  const qtd = parseInt(input?.value) || 1;
+
+  if (qtd < 1 || qtd > maxQtd) {
+    Swal.fire('Atenção', `Quantidade inválida. Máximo disponível: ${maxQtd}`, 'warning');
+    return;
+  }
+
+  const existente = itensFixosSelecionados.findIndex(i => i.nome === nome);
+  if (existente > -1) {
+    itensFixosSelecionados[existente].qtd = qtd;
+  } else {
+    itensFixosSelecionados.push({ nome, qtd });
+  }
+
+  renderizarCarrinhoFixos();
+}
+
+
+
+function finalizarSucesso(msg, dadosOriginais, datasAgendadas) {
+  showLoader(false);
+
+  if (
+    document.getElementById('checkConvidarCalendar')?.checked &&
+    Array.isArray(convidadosInternos) &&
+    convidadosInternos.length > 0
+  ) {
+    enviarConvitesCalendarInterno();
+  }
+
+  const eraRece = modoRece;
+  const dadosReceCopy = eraRece ? coletarDadosRece() : null;
+
+  // Captura arquivo ANTES de resetar
+  const fileInput = document.getElementById('receImagemFile');
+  const temArquivo =
+    eraRece &&
+    fileInput &&
+    fileInput.files &&
+    fileInput.files.length > 0;
+
+  const prosseguir = (imagemUrl) => {
+    Swal.fire('Sucesso!', msg, 'success');
+    resetarFormulario();
+    itensSelecionados = [];
+    itensFixosSelecionados = [];
+    mostrarAba('aba-lista-reservas');
+    carregarReservas();
+    document.querySelector('#formReserva button[type="submit"]').disabled = false;
+
+    if (dadosOriginais) {
+      salvarPreferenciasUsuario({
+        sala: dadosOriginais.sala,
+        horaInicio: dadosOriginais.horaInicio,
+        horaTermino: dadosOriginais.horaTermino,
+        itensVolantes: dadosOriginais.itensVolantes
+      });
+    }
+
+    if (eraRece && dadosOriginais && dadosReceCopy) {
+      const dataInicio = datasAgendadas?.[0] || dadosOriginais.data || '';
+      const dataTermino =
+        datasAgendadas && datasAgendadas.length > 1
+          ? datasAgendadas[datasAgendadas.length - 1]
+          : dataInicio;
+
+      // dataTermino: último dia do lote ou igual à data início
+      const dataTerminoRece = (dadosReceCopy.dataTermino && String(dadosReceCopy.dataTermino).trim())
+        ? String(dadosReceCopy.dataTermino).trim()
+        : (datasAgendadas && datasAgendadas.length > 1
+            ? datasAgendadas[datasAgendadas.length - 1]
+            : dataInicio);
+
+      const payload = {
+        id: AppState.editandoReceId || null,
+        idReservaGeral: dadosOriginais.id || '',
+        titulo: dadosOriginais.nomeAcao,
+        dataInicio,
+        dataTermino: dataTerminoRece,
+        horaInicio: dadosOriginais.horaInicio,
+        horaTermino: dadosOriginais.horaTermino,
+        espaco: AppState.mapaSalas?.[dadosOriginais.sala] || dadosOriginais.sala,
+        responsavel: dadosOriginais.responsavel,
+        categorias: dadosReceCopy.categorias,
+        parceiros: dadosReceCopy.parceiros,
+        acessibilidades: dadosReceCopy.acessibilidades,
+        classificacao: dadosReceCopy.classificacao,
+        publicoAlvo: dadosReceCopy.publicoAlvo,
+        artista: dadosReceCopy.artista,
+        linkInscricao: dadosReceCopy.linkInscricao,
+        acesso: dadosReceCopy.acesso,
+        descricao: dadosReceCopy.descricao,
+        observacoes: dadosReceCopy.observacoes,
+        imagemUrl: imagemUrl || dadosReceCopy.imagemUrl || '',
+        convidadosInternos: dadosReceCopy.convidadosInternos || '',
+        eventoInstitucional: dadosReceCopy.eventoInstitucional || false,
+        convidadosExternos: dadosReceCopy.convidadosExternos || ''
+      };
+
+      google.script.run
+        .withSuccessHandler(() => {
+          if (typeof carregarReservasRece === 'function') {
+            carregarReservasRece();
+          }
+          AppState.editandoReceId = null;
+        })
+        .withFailureHandler((err) => {
+          Swal.fire(
+            'Aviso',
+            'Agendamento salvo, mas erro ao registrar na Agenda RECE: ' + err.message,
+            'warning'
+          );
+          AppState.editandoReceId = null;
+        })
+        .salvarReservaRece(payload);
+    }
+  };
+
+  if (temArquivo) {
+    uploadImagemSeNecessario()
+      .then(prosseguir)
+      .catch(() => prosseguir(''));
+  } else {
+    prosseguir(dadosReceCopy?.imagemUrl || '');
+  }
+}
+
+function finalizarErro(err) {
+  showLoader(false);
+  Swal.fire('Erro no Processamento', err.message, 'error');
+  document.querySelector('#formReserva button[type="submit"]').disabled = false;
+}
+
+
+/**
+ * CARREGAR RESERVAS
+ * Solicita ao Code.gs a lista atualizada de todas as reservas (Coluna A-P).
+ */
+function carregarReservas() {
+  const corpoTabela = document.getElementById('corpoTabela');
+  const contador = document.getElementById('contadorResultados');
+  
+  // Feedback visual de carregamento na tabela
+  corpoTabela.innerHTML = `
+    <tr>
+      <td colspan="5" class="p-10 text-center">
+        <i class="fas fa-spinner animate-spin text-purple-600 text-2xl"></i>
+        <p class="text-slate-400 text-xs mt-2 font-bold uppercase tracking-widest">Atualizando Agenda...</p>
+      </td>
+    </tr>
+  `;
+
+  google.script.run
+  .withSuccessHandler(function(reservas) {
+
+    // 🔒 Garante que sempre será array
+    AppState.colecoes.reservas = Array.isArray(reservas) ? reservas : [];
+
+    // 🔒 Evita erro se função não existir
+    if (typeof renderizarReservas === 'function') {
+      renderizarReservas();
+    } else {
+      console.warn('renderizarReservas não definida');
+    }
+
+  })
+  .withFailureHandler(function(err) {
+
+    console.error('Erro ao obter reservas:', err);
+
+    Swal.fire(
+      'Erro',
+      'Não foi possível ler a agenda: ' + (err?.message || err),
+      'error'
+    );
+
+  })
+  .obterReservas();
+
+}
+
+
+function _badgeRece(titulo, data, idReservaGeral) {
+  const rece = AppState.colecoes.reservasRece || [];
+  const t = String(titulo || '').trim().toUpperCase();
+  const d = String(data || '').trim();
+
+  // Busca por ID de vínculo (col 24) ou título+data
+  const recVinculado = rece.find(function(rec) {
+    const idVinculo = String(rec[24] || '').trim();
+    const tituloRece = String(rec[1] || '').trim().toUpperCase();
+    const dataRece   = String(rec[2] || '').trim();
+    return (idReservaGeral && idVinculo === String(idReservaGeral).trim()) ||
+           (tituloRece === t && dataRece === d);
+  });
+
+  if (!recVinculado) return '';
+
+  const idRece = escaparHTML(String(recVinculado[0] || ''));
+
+  return `<button
+    type="button"
+    onclick="event.stopPropagation(); abrirItemRece('${idRece}')"
+    class="mt-1 inline-flex items-center gap-1 bg-yellow-100 hover:bg-yellow-300 text-yellow-700 text-[8px] font-black px-1.5 py-0.5 rounded-full uppercase tracking-wide transition-colors cursor-pointer border border-yellow-200">
+    <i class="fas fa-star text-[7px]"></i>VER RECE
+  </button>`;
+}
+
+function abrirItemRece(idRece) {
+
+  const irParaRece = function() {
+    const rec = (AppState.colecoes.reservasRece || []).find(r => String(r[0]).trim() === String(idRece).trim());
+    if (!rec) {
+      Swal.fire('Aviso', 'Registro RECE não encontrado. Sincronize e tente novamente.', 'warning');
+      return;
+    }
+
+    // Detecta modo atual da aba RECE (lista ou agenda)
+    const agendaReceVisivel = document.getElementById('viewAgendaRece') &&
+      !document.getElementById('viewAgendaRece').classList.contains('hidden');
+
+    mostrarAba('aba-agenda-rece');
+
+    setTimeout(function() {
+
+      if (agendaReceVisivel) {
+        // ── MODO AGENDA: navega até a semana do evento e destaca o bloco ──
+        const partes = String(rec[2] || '').split('/');
+        if (partes.length === 3) {
+          const dataEvento = new Date(Number(partes[2]), Number(partes[1]) - 1, Number(partes[0]));
+          const hoje = new Date(); hoje.setHours(0,0,0,0);
+          const dow = hoje.getDay() === 0 ? 6 : hoje.getDay() - 1;
+          const inicioSemanaAtual = new Date(hoje);
+          inicioSemanaAtual.setDate(hoje.getDate() - dow);
+
+          const diffMs = dataEvento.getTime() - inicioSemanaAtual.getTime();
+          const diffSemanas = Math.floor(diffMs / (7 * 24 * 60 * 60 * 1000));
+          window._agendaReceSemana = diffSemanas;
+        }
+        renderizarModoAgendaRece();
+
+        setTimeout(function() {
+          // Localiza o bloco pelo título e aplica destaque pulsante
+          const blocos = document.querySelectorAll('#agendaReceContainer [title]');
+          blocos.forEach(function(el) {
+            if ((el.getAttribute('title') || '').includes(rec[1] || '')) {
+              el.style.transition = 'box-shadow 0.3s, transform 0.3s';
+              el.style.boxShadow  = '0 0 0 3px #f59e0b, 0 0 16px 4px rgba(245,158,11,0.5)';
+              el.style.transform  = 'scale(1.04)';
+              el.style.zIndex     = '30';
+              el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              setTimeout(function() {
+                el.style.boxShadow = '';
+                el.style.transform = '';
+                el.style.zIndex    = '';
+              }, 3500);
+            }
+          });
+        }, 500);
+
+      } else {
+        // ── MODO LISTA: garante renderização e destaca a linha ──
+        // Limpa filtros para garantir que o item apareça
+        const busca = document.getElementById('receBusca');
+        if (busca) busca.value = '';
+        const fIni = document.getElementById('receFiltroInicio');
+        const fFim = document.getElementById('receFiltroFim');
+        if (fIni) fIni.value = '';
+        if (fFim) fFim.value = '';
+
+        renderizarTabelaRece();
+
+        setTimeout(function() {
+          const linhas = document.querySelectorAll('#corpoTabelaRece tr');
+          let alvo = null;
+
+          linhas.forEach(function(tr) {
+            // Identifica pela primeira célula (título) ou pelo data-id se existir
+            const primeiraCell = tr.querySelector('td:first-child');
+            if (primeiraCell && (primeiraCell.textContent || '').trim().toUpperCase() ===
+                String(rec[1] || '').trim().toUpperCase()) {
+              alvo = tr;
+            }
+          });
+
+          if (!alvo && linhas.length) {
+            // Fallback: procura qualquer célula que contenha o título
+            linhas.forEach(function(tr) {
+              if (!alvo && (tr.innerText || '').toUpperCase().includes(
+                  String(rec[1] || '').trim().toUpperCase())) {
+                alvo = tr;
+              }
+            });
+          }
+
+          if (alvo) {
+            alvo.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            alvo.style.transition = 'background 0.3s, box-shadow 0.3s';
+            alvo.style.background = '#fef9c3';
+            alvo.style.boxShadow  = 'inset 0 0 0 2px #f59e0b';
+            setTimeout(function() {
+              alvo.style.background = '';
+              alvo.style.boxShadow  = '';
+            }, 3500);
+          }
+        }, 400);
+      }
+
+    }, 250);
+  };
+
+  if (!AppState.colecoes.reservasRece || !AppState.colecoes.reservasRece.length) {
+    showLoader(true);
+    google.script.run
+      .withSuccessHandler(function(rece) {
+        AppState.colecoes.reservasRece = rece || [];
+        showLoader(false);
+        irParaRece();
+      })
+      .withFailureHandler(function() {
+        showLoader(false);
+        irParaRece();
+      })
+      .obterReservasRece();
+  } else {
+    irParaRece();
+  }
+}
+
+function _parseDataMs(raw) {
+  try {
+    var d = null;
+    if (raw instanceof Date) { d = new Date(raw); }
+    else {
+      var str = String(raw || '').trim();
+      if (str.includes('/')) { var p = str.split('/'); if (p.length===3) d = new Date(p[2],p[1]-1,p[0]); }
+      else if (str.includes('-')) { d = new Date(str); }
+    }
+    if (d) { d.setHours(0,0,0,0); return d.getTime(); }
+  } catch(e) {}
+  return null;
+}
+
+function _gerarLinhaReserva(r) {
+  var isCancelado = String(r[13] || '').toUpperCase() === 'CANCELADO';
+  var turnos = {
+    'MANHÃ':'bg-amber-100 text-amber-700','TARDE':'bg-blue-100 text-blue-700',
+    'NOITE':'bg-indigo-100 text-indigo-700','MANHÃ/TARDE':'bg-orange-100 text-orange-700',
+    'TARDE/NOITE':'bg-violet-100 text-violet-700','MULTITURNO':'bg-slate-200 text-slate-700'
+  };
+  var corTurno = turnos[r[5]] || 'bg-slate-100 text-slate-700';
+  var salaNome = (AppState.mapaSalas && AppState.mapaSalas[r[4]]) ? AppState.mapaSalas[r[4]] : (r[4] || '—');
+  var podeEditar   = AppState.usuario.isAdmin || AppState.usuario.isSuperadmin || AppState.usuario.email === r[8];
+  var podeCancelar = !isCancelado && (AppState.usuario.isAdmin || AppState.usuario.isSuperadmin || AppState.usuario.email === r[8]);
+  var podeExcluir  = false;
+
+  var itensHTML = '<span class="text-[9px] text-slate-300 italic">Nenhum</span>';
+  if (r[12] && r[12] !== 'Nenhum') {
+    itensHTML = r[12].split(/[,|]/).filter(function(i){return i.trim()!=='';}).map(function(item){
+      return '<span class="bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded text-[9px] font-bold">'+escaparHTML(item.trim())+'</span>';
+    }).join('');
+  }
+
+  var badgeRece = _badgeRece(r[6], r[1], r[0]);
+
+  var badgePendente = (function() {
+    var sol = (_solicitacoesCache || []).find(function(s) {
+      return s.idReserva === String(r[0]) && s.status === 'PENDENTE';
+    });
+    if (!sol) return '';
+    var labels = { 'CANCELAMENTO': '⏳ Cancelamento pendente', 'ALTERACAO': '⏳ Alteração pendente', 'RESERVA': '⏳ Aprovação pendente' };
+    return '<span class="mt-1 inline-flex items-center gap-1 bg-amber-100 text-amber-700 text-[8px] font-black px-1.5 py-0.5 rounded-full uppercase tracking-wide border border-amber-200">' + (labels[sol.tipo] || '⏳ Pendente') + '</span>';
+  })();
+
+  var btnEditar = podeEditar
+    ? '<button data-acao="editar-reserva" data-id="'+escaparHTML(r[0])+'" aria-label="Editar" class="w-8 h-8 rounded-lg bg-slate-100 text-slate-600 hover:bg-purple-600 hover:text-white transition-all"><i class="fas fa-edit text-xs"></i></button>'
+    : '';
+  var btnCancelar = podeCancelar
+    ? '<button data-acao="cancelar-reserva" data-id="'+escaparHTML(r[0])+'" data-nome="'+escaparHTML(r[6])+'" aria-label="Cancelar" class="w-8 h-8 rounded-lg bg-slate-100 text-red-500 hover:bg-red-600 hover:text-white transition-all"><i class="fas fa-ban text-xs"></i></button>'
+    : '';
+  var btnExcluir = podeExcluir
+    ? '<button data-acao="excluir-reserva" data-id="'+escaparHTML(r[0])+'" aria-label="Excluir" class="w-8 h-8 rounded-lg bg-red-50 text-red-400 hover:bg-red-700 hover:text-white transition-all"><i class="fas fa-trash-alt text-xs"></i></button>'
+    : '';
+
+  return '<tr class="hover:bg-slate-50/80 transition-colors '+(isCancelado?'opacity-50 grayscale':'')+'">'
+    +'<td class="p-4"><div class="flex flex-col">'
+    +'<span class="font-black text-slate-700 text-sm">'+escaparHTML(r[1])+'</span>'
+    +'<div class="flex items-center gap-2 mt-1">'
+    +'<span class="text-[10px] font-bold text-slate-400"><i class="far fa-clock mr-1"></i>'+escaparHTML(r[2])+' - '+escaparHTML(r[3])+'</span>'
+    +'<span class="'+corTurno+' text-[9px] font-black px-1.5 py-0.5 rounded uppercase">'+escaparHTML(r[5])+'</span>'
+    +'</div></div></td>'
+    +'<td class="p-4"><div class="flex flex-col">'
+    +'<span class="font-bold text-slate-800 text-sm uppercase leading-tight">'+escaparHTML(r[6])+'</span>'
+    +'<span class="text-[10px] text-purple-600 font-black mt-1 uppercase tracking-tighter"><i class="fas fa-map-marker-alt mr-1"></i>'+escaparHTML(salaNome)+'</span>'
+    +'<span class="text-[9px] text-slate-400 font-medium mt-0.5 italic">Por: '+escaparHTML(r[8])+' ('+escaparHTML(r[9])+')</span>'
+    +badgeRece
+    +badgePendente
+    +'</div></td>'
+    +'<td class="p-4"><div class="max-w-[240px] space-y-1">'
+    +'<p class="text-[10px] text-slate-500 break-words"><b>Release:</b> '+escaparHTML(r[11]||'---')+'</p>'
+    +'<div class="flex flex-wrap gap-1 mt-1">'+itensHTML+'</div>'
+    +'</div></td>'
+    +(function(){var _s=String(r[13]||'').toUpperCase(),_c=_s==='CANCELADO'?'bg-red-100 text-red-600':_s==='HABILITADO'?'bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200':'bg-green-100 text-green-600',_b=(_s!=='CANCELADO'&&_s!=='HABILITADO'&&(AppState.usuario.isAdmin||AppState.usuario.isSuperadmin||AppState.usuario.isHabilitador))?'<br><button data-acao="habilitar-reserva" data-id="'+escaparHTML(r[0])+'" class="mt-1 px-2 py-0.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[8px] font-black rounded-lg uppercase transition-all">Habilitar</button>':'';return'<td class="p-4 text-center"><span class="px-3 py-1 rounded-full text-[10px] font-black uppercase '+_c+'">'+escaparHTML(r[13])+'</span>'+_b+'</td>'})()
+    +'<td class="p-4 text-right"><div class="flex justify-end gap-2">'+btnEditar+btnCancelar+btnExcluir+'</div></td>'
+    +'</tr>';
+}
+
+/**
+ * RENDERIZAR RESERVAS
+ * Aplica os filtros do AppState e gera o HTML das linhas da tabela.
+ */
+function renderizarReservas() {
+
+  if (!AppState.colecoes.reservas?.length) {
+    console.warn("⚠️ Nenhuma reserva ainda");
+    return;
+  }
+
+  const corpoTabela = document.getElementById('corpoTabela');
+
+  const termoBusca = (document.getElementById('filtroBusca')?.value || '').toLowerCase().trim();
+  const setor = document.getElementById('filtroSetor')?.value || '';
+  const status = document.getElementById('filtroStatus')?.value || '';
+  const turno = document.getElementById('filtroTurno')?.value || '';
+  const salaId = document.getElementById('filtroSala')?.value || '';
+  const apenasMinhas = document.getElementById('filtroMinhas')?.checked;
+    
+  const hoje = new Date();
+  hoje.setHours(0, 0, 0, 0);
+  const hojeMs = hoje.getTime(); // ← declarado UMA VEZ aqui
+
+  let filtrados = (AppState.colecoes.reservas || []).filter(r => {
+
+    const nomeAcao    = (r[6] || "").toString().toLowerCase();
+    const idReserva   = (r[0] || "").toString().toLowerCase();
+    const responsavel = (r[8] || "").toString().toLowerCase();
+    const nomeSala    = (AppState.mapaSalas?.[r[4]] || r[4] || '').toString().toLowerCase().trim();
+
+    const matchSala = !salaId || String(r[4]).trim() === String(salaId).trim();
+
+    const matchBusca =
+      !termoBusca ||
+      nomeAcao.includes(termoBusca) ||
+      idReserva.includes(termoBusca) ||
+      responsavel.includes(termoBusca) ||
+      nomeSala.includes(termoBusca);
+
+    const matchSetor  = !setor  || r[9] === setor;
+    const matchStatus = !status || r[13] === status;
+    const matchTurno  = !turno  || r[5] === turno;
+    const matchUsuario =
+      !apenasMinhas ||
+      String(r[8]).trim().toLowerCase() === String(AppState.usuario.email).trim().toLowerCase();
+    
+
+    let data = null;
+    try {
+      const raw = r[1];
+      if (raw instanceof Date) {
+        data = new Date(raw);
+      } else {
+        const str = String(raw || '').trim();
+        if (str.includes('/')) {
+          const p = str.split('/');
+          if (p.length === 3) data = new Date(p[2], p[1] - 1, p[0]);
+        } else if (str.includes('-')) {
+          data = new Date(str);
+        }
+      }
+      if (data) data.setHours(0, 0, 0, 0);
+    } catch(e) { data = null; }
+
+    let matchPeriodo = true;
+    if (data) {
+      const inicio = AppState.filtros?.dataInicio;
+      const fim    = AppState.filtros?.dataFim;
+      if (inicio && fim)       matchPeriodo = data >= inicio && data <= fim;
+      else if (inicio && !fim) matchPeriodo = data >= inicio;
+      else if (!inicio && fim) matchPeriodo = data <= fim;
+      else                     matchPeriodo = true;
+    }
+
+    return matchBusca && matchSetor && matchStatus && matchTurno && matchPeriodo && matchSala && matchUsuario;
+  });
+
+  // ── Ordenação composta: data → hora início → hora término ──────────────
+  const parseDataMs = (r) => {
+    try {
+      const raw = r[1];
+      if (raw instanceof Date) { const d = new Date(raw); d.setHours(0,0,0,0); return d.getTime(); }
+      const str = String(raw || '').trim();
+      if (str.includes('/')) {
+        const p = str.split('/');
+        if (p.length === 3) { const d = new Date(p[2], p[1]-1, p[0]); d.setHours(0,0,0,0); return d.getTime(); }
+      } else if (str.includes('-')) {
+        const d = new Date(str); d.setHours(0,0,0,0); return d.getTime();
+      }
+    } catch(e) {}
+    return 0;
+  };
+
+  const parseHoraMin = (h) => {
+    if (!h) return 0;
+    const str = String(h).trim();
+    if (!str.includes(':')) return 0;
+    const p = str.split(':');
+    return parseInt(p[0], 10) * 60 + parseInt(p[1], 10);
+  };
+
+  // Separa passado e futuro/hoje para garantir que hoje em diante venha primeiro
+  const hoje0 = new Date(); hoje0.setHours(0,0,0,0);
+  const hojeMs2 = hoje0.getTime();
+
+  const futuras   = filtrados.filter(r => parseDataMs(r) >= hojeMs2);
+  const passadas  = filtrados.filter(r => parseDataMs(r) <  hojeMs2);
+
+  const ordenar = arr => arr.sort((a, b) => {
+    const dA = parseDataMs(a),     dB = parseDataMs(b);
+    if (dA !== dB) return dA - dB;
+    const iA = parseHoraMin(a[2]), iB = parseHoraMin(b[2]);
+    if (iA !== iB) return iA - iB;
+    return parseHoraMin(a[3]) - parseHoraMin(b[3]);
+  });
+
+  filtrados = [...ordenar(futuras), ...ordenar(passadas)];
+
+  const contadorElement = document.getElementById('contadorResultados');
+  if (contadorElement) contadorElement.innerText = filtrados.length + " Registros Encontrados";
+
+  if (filtrados.length === 0) {
+    corpoTabela.innerHTML = '';
+    document.getElementById('semResultados')?.classList.remove('hidden');
+    return;
+  }
+  document.getElementById('semResultados')?.classList.add('hidden');
+
+  let separadorInserido = false;
+  const linhas = [];
+
+  filtrados.forEach(r => {
+    const dataReservaMs = _parseDataMs(r[1]);
+    if (!separadorInserido && dataReservaMs && dataReservaMs >= hojeMs) {
+      separadorInserido = true;
+      linhas.push('<tr><td colspan="5" class="px-4 py-2 bg-purple-50 border-y border-purple-100"><span class="text-[9px] font-black text-purple-500 uppercase tracking-widest"><i class="fas fa-circle-dot mr-1"></i>A partir de hoje</span></td></tr>');
+    }
+    linhas.push(_gerarLinhaReserva(r));
+  });
+
+  corpoTabela.innerHTML = linhas.join('');
+}
+
+async function habilitarReserva(id) {
+  const result = await Swal.fire({
+    title: 'Habilitar espaço para uso?',
+    input: 'textarea',
+    inputPlaceholder: 'Observação (opcional — ex: som testado, cadeiras dispostas...)',
+    showCancelButton: true,
+    confirmButtonText: '<i class="fas fa-check mr-1"></i>Confirmar habilitação',
+    confirmButtonColor: '#059669',
+    cancelButtonText: 'Cancelar'
+  });
+  if (!result.isConfirmed) return;
+  showLoader(true);
+  google.script.run
+    .withSuccessHandler(function() {
+      showLoader(false);
+      // Atualiza status localmente para refletir imediatamente
+      const r = AppState.colecoes.reservas.find(x => x[0] === id);
+      if (r) r[13] = 'HABILITADO';
+      indexarReservas();
+      Swal.mixin({ toast:true, position:'top-end', showConfirmButton:false, timer:2500, timerProgressBar:true })
+        .fire({ icon:'success', title:'Espaço habilitado com sucesso!' });
+      // Recarrega o modo ativo
+      const diagVis  = document.getElementById('viewDiagrama')  && !document.getElementById('viewDiagrama').classList.contains('hidden');
+      const agendaVis = document.getElementById('viewAgendaGoogle') && !document.getElementById('viewAgendaGoogle').classList.contains('hidden');
+      if (diagVis)   renderizarModoDiagrama();
+      else if (agendaVis) renderizarModoAgendaGoogle();
+      else renderizarReservas();
+    })
+    .withFailureHandler(function(err) {
+      showLoader(false);
+      Swal.fire('Erro', err.message, 'error');
+    })
+    .habilitarReservaStatus(id, AppState.usuario.email, result.value || '');
+}
+
+async function confirmarCancelamento(id, nome) {
+
+  const email = AppState?.usuario?.email;
+
+  if (!email) {
+    Swal.fire('Erro', 'Usuário não identificado.', 'error');
+    return;
+  }
+
+  showLoader(true);
+
+  google.script.run
+    .withSuccessHandler(async function(permissao) {
+
+      showLoader(false);
+
+      const { podeCancelar, ehAdmin, ehDono } = permissao || {};
+
+      // 🔴 NÃO PODE CANCELAR → SOLICITAÇÃO
+      if (!podeCancelar) {
+
+      const result = await Swal.fire({
+        title: 'Solicitar cancelamento',
+        text: nome,
+        input: 'textarea',
+        inputPlaceholder: 'Justifique o cancelamento...',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Enviar solicitação'
+      });
+
+      // 🟢 usuário clicou em "Voltar" → não é erro
+      if (!result.isConfirmed) {
+        return;
+      }
+
+      const justificativa = (result.value || '').trim();
+
+      // 🔴 validação correta
+      const justificativaLimpa = String(justificativa || '').trim();
+
+      // 🔴 validação mais robusta
+      if (justificativaLimpa.length < 10) {
+        Swal.fire('Erro', 'Justificativa obrigatória (mínimo 10 caracteres)', 'error');
+        return;
+      }
+
+      // opcional: evitar texto inútil (recomendado)
+      if (!/[a-zA-Z0-9]/.test(justificativaLimpa)) {
+        Swal.fire('Erro', 'Informe uma justificativa válida.', 'error');
+        return;
+      }
+
+      showLoader(true);
+
+      google.script.run
+        .withSuccessHandler(() => {
+          showLoader(false);
+          Swal.fire('Solicitação enviada!', 'Aguardando aprovação.', 'success');
+          atualizarAgendaAposMudanca();
+        })
+        .withFailureHandler(err => {
+          showLoader(false);
+          Swal.fire('Erro', err.message, 'error');
+        })
+        .chat_criarSolicitacao(
+          "CANCELAMENTO",
+          "CANCELAMENTO_TOTAL",
+          { idReserva: id, nome },
+          email,
+          justificativaLimpa
+        );
+
+      return;
+    }
+
+      // 🟣 DONO → CANCELA COM JUSTIFICATIVA
+      if (ehDono) {
+
+      const result = await Swal.fire({
+        title: 'Cancelar reserva?',
+        html: `<b>${nome}</b><br><span style="font-size:12px;color:#64748b">Esta ação não pode ser desfeita.</span>`,
+        input: 'textarea',
+        inputPlaceholder: 'Informe o motivo do cancelamento...',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Sim, cancelar',
+        cancelButtonText: 'Voltar',
+        confirmButtonColor: '#dc2626',
+        cancelButtonColor: '#64748b'
+      });
+
+      // 🟢 usuário desistiu → não é erro
+      if (!result.isConfirmed) return;
+
+      const justificativa = (result.value || '').trim();
+
+      // 🔴 validação
+      if (justificativa.length < 10) {
+        Swal.fire('Erro', 'Justificativa obrigatória (mínimo 10 caracteres)', 'error');
+        return;
+      }
+
+      showLoader(true);
+
+      google.script.run
+        .withSuccessHandler(() => {
+          showLoader(false);
+          Swal.fire('Cancelado!', 'Reserva cancelada.', 'success');
+          atualizarAgendaAposMudanca();
+        })
+        .withFailureHandler(err => {
+          showLoader(false);
+          Swal.fire('Erro', err.message, 'error');
+        })
+        .cancelarReservaComJustificativa(id, email, justificativa);
+
+      return;
+    }
+    
+
+      // 🔵 ADMIN (NÃO DONO) → JUSTIFICATIVA OBRIGATÓRIA
+      if (ehAdmin && !ehDono) {
+
+      const result = await Swal.fire({
+        title: 'Cancelar esta reserva?',
+        html: `<b>${nome}</b><br><span style="font-size:12px;color:#64748b">Esta ação não pode ser desfeita.</span>`,
+        input: 'textarea',
+        inputPlaceholder: 'Descreva o motivo do cancelamento...',
+        icon: 'warning',
+
+        showCancelButton: true,
+
+        confirmButtonText: 'Confirmar cancelamento',
+        cancelButtonText: 'Voltar',
+
+        confirmButtonColor: '#dc2626',
+        cancelButtonColor: '#64748b'
+      });
+
+      // 🟢 usuário clicou em "Voltar" → sai silenciosamente
+      if (!result.isConfirmed) {
+        return;
+      }
+
+      const justificativa = (result.value || '').trim();
+
+      // 🔴 validação real (agora separada corretamente)
+      if (justificativa.length < 10) {
+        Swal.fire('Erro', 'Justificativa obrigatória (mínimo 10 caracteres)', 'error');
+        return;
+      }
+
+      showLoader(true);
+
+      google.script.run
+        .withSuccessHandler(() => {
+          showLoader(false);
+          Swal.fire('Cancelado!', 'Reserva cancelada com justificativa.', 'success');
+          atualizarAgendaAposMudanca();
+        })
+        .withFailureHandler(err => {
+          showLoader(false);
+          Swal.fire('Erro', err.message, 'error');
+        })
+        .cancelarReservaComJustificativa(id, email, justificativa);
+
+    }
+
+    })
+    .withFailureHandler(err => {
+      showLoader(false);
+      Swal.fire('Erro', err.message, 'error');
+    })
+    .verificarPermissaoCancelamento(id, email);
+}
+
+function aplicarAtalhoPeriodo() {
+
+  const valor = document.getElementById('filtroIntervalo').value;
+
+  const hoje = new Date();
+  hoje.setHours(0,0,0,0);
+
+  let inicio = null;
+  let fim = null;
+
+  if (valor === 'hoje') {
+    inicio = new Date(hoje);
+
+    fim = new Date(hoje);
+    fim.setHours(23, 59, 59, 999); // 🔥 ESSENCIAL
+  }
+
+  else if (valor === 'apartir') {
+    inicio = hoje;
+    fim = null;
+  }
+
+  else if (valor === '7') {
+    inicio = hoje;
+    fim = new Date(hoje);
+    fim.setDate(hoje.getDate() + 7);
+  }
+
+  else if (valor === '30') {
+    inicio = hoje;
+    fim = new Date(hoje);
+    fim.setDate(hoje.getDate() + 30);
+  }
+
+  else {
+    inicio = null;
+    fim = null;
+  }
+
+  AppState.filtros.dataInicio = inicio;
+  AppState.filtros.dataFim = fim;
+
+  renderizarReservas();
+}
+
+// ── Utilitário de debounce ────────────────────────────────────────────────
+// Atrasa a execução de fn até que o usuário pare de digitar/interagir
+// por `espera` milissegundos. Evita renderizações desnecessárias a cada tecla.
+function debounce(fn, espera) {
+  let timer;
+  return function(...args) {
+    clearTimeout(timer);
+    timer = setTimeout(() => fn.apply(this, args), espera);
+  };
+}
+
+const renderizarReservasDebounced = debounce(renderizarReservas, 220);
+
+// Busca de texto: debounced (usuário digita, aguarda parar)
+document.getElementById('filtroBusca')
+  .addEventListener('input', renderizarReservasDebounced);
+
+// Selects e toggles: disparo imediato (ação pontual, sem digitação)
+document.getElementById('filtroSetor')
+  .addEventListener('change', renderizarReservas);
+
+document.getElementById('filtroStatus')
+  .addEventListener('change', renderizarReservas);
+
+document.getElementById('filtroMinhas')
+  ?.addEventListener('change', function() {
+    const label = document.getElementById('labelMinhas');
+    if (this.checked) {
+      label.classList.remove('text-slate-400');
+      label.classList.add('text-purple-600');
+    } else {
+      label.classList.remove('text-purple-600');
+      label.classList.add('text-slate-400');
+    }
+    renderizarReservas();
+  });
+
+  
+
+const filtroSalaEl = document.getElementById('filtroSala');
+if (filtroSalaEl) filtroSalaEl.addEventListener('change', renderizarReservas);
+
+document.getElementById('filtroTurno')
+  ?.addEventListener('change', renderizarReservas);
+
+// ── Filtros da Agenda RECE em tempo real ─────────────────────────────────
+const renderizarTabelaReceDebounced = debounce(renderizarTabelaRece, 220);
+
+document.getElementById('receBusca')
+  ?.addEventListener('input', renderizarTabelaReceDebounced);
+
+document.getElementById('receFiltroInicio')
+  ?.addEventListener('change', renderizarTabelaRece);
+
+document.getElementById('receFiltroFim')
+  ?.addEventListener('change', renderizarTabelaRece);
+
+
+// --- RENDERIZAR ESPAÇOS ---
+/**
+ * RENDERIZAR ESPAÇOS (Painel Admin)
+ * Inclui classe 'item-renderizado' para suporte ao filtro de busca.
+ */
+
+// ── Lote Avançado / Diagrama / Agenda Google / RECE / CODIP Aba ──
+// ── Estado interno do lote avançado ──────────────────────────────────────
+var _loteSubModo = 'manual';
+var _loteSubModoMensal = 'diaFixo';
+
+// ── Substitui alternarModoLote ────────────────────────────────────────────
+function alternarModoLote(ativado) {
+  AppState.modoLote = ativado;
+  const painel = document.getElementById('painelLoteAvancado');
+  const label  = document.getElementById('labelData');
+
+  if (ativado) {
+    painel?.classList.remove('hidden');
+    if (label) label.innerHTML = 'Datas do Evento <span class="text-purple-400">(Seleção múltipla ativa)</span>';
+    configurarCalendario(true);
+    // Inicializa datas mínimas dos inputs do painel
+    const hoje = new Date().toISOString().slice(0, 10);
+    ['loteSemanalInicio','loteSemanalFim',
+     'loteIntervaloInicio','loteIntervaloFim',
+     'loteMensalInicio','loteMensalUtilInicio','loteMensalSemanaInicio']
+      .forEach(id => {
+        const el = document.getElementById(id);
+        if (el && !el.value) el.value = hoje;
+        if (el) el.min = hoje;
+      });
+    selecionarModoLote('manual');
+  } else {
+    painel?.classList.add('hidden');
+    if (label) label.innerHTML = 'Data do Evento';
+    configurarCalendario(false);
+    atualizarContadorLote();
+  }
+}
+
+// ── Seleciona modo (manual/semanal/intervalo/mensal) ─────────────────────
+function selecionarModoLote(modo) {
+  _loteSubModo = modo;
+
+  // Atualiza botões
+  document.querySelectorAll('.lote-modo-btn').forEach(b => b.classList.remove('lote-modo-ativo'));
+  const btn = document.getElementById('lote-btn-' + modo);
+  if (btn) btn.classList.add('lote-modo-ativo');
+
+  // Mostra painel correto
+  document.querySelectorAll('.lote-painel').forEach(p => p.classList.add('hidden'));
+  const painel = document.getElementById('painel-lote-' + modo);
+  if (painel) painel.classList.remove('hidden');
+
+  // Manual = flatpickr múltiplo, outros = flatpickr simples (datas via código)
+  configurarCalendario(modo === 'manual');
+}
+
+// ── Seleciona sub-modo mensal ─────────────────────────────────────────────
+function selecionarSubModoMensal(sub) {
+  _loteSubModoMensal = sub;
+  document.querySelectorAll('.mensal-sub-btn').forEach(b => b.classList.remove('mensal-sub-ativo'));
+  const btn = document.getElementById('mensal-btn-' + sub);
+  if (btn) btn.classList.add('mensal-sub-ativo');
+  document.querySelectorAll('.sub-mensal').forEach(p => p.classList.add('hidden'));
+  const painel = document.getElementById('sub-mensal-' + sub);
+  if (painel) painel.classList.remove('hidden');
+}
+
+// ── Gerador central de datas ──────────────────────────────────────────────
+function gerarDatasLote(tipo) {
+  const datas = [];
+  const hoje  = new Date(); hoje.setHours(0,0,0,0);
+
+  const parseDate = str => {
+    if (!str) return null;
+    const d = new Date(str + 'T00:00:00');
+    return isNaN(d) ? null : d;
+  };
+
+  const fmtData = d => {
+    return String(d.getDate()).padStart(2,'0') + '/' +
+           String(d.getMonth()+1).padStart(2,'0') + '/' +
+           d.getFullYear();
+  };
+
+  // ── SEMANAL ────────────────────────────────────────────────────────
+  if (tipo === 'semanal') {
+    const diasMarcados = Array.from(
+      document.querySelectorAll('#painel-lote-semanal input[type=checkbox]:checked')
+    ).map(c => Number(c.value));
+
+    if (diasMarcados.length === 0) {
+      Swal.fire('Atenção', 'Selecione pelo menos um dia da semana.', 'warning'); return;
+    }
+
+    const inicio = parseDate(document.getElementById('loteSemanalInicio')?.value);
+    const fim    = parseDate(document.getElementById('loteSemanalFim')?.value);
+
+    if (!inicio || !fim) { Swal.fire('Atenção', 'Preencha as datas de início e fim.', 'warning'); return; }
+    if (fim < inicio)    { Swal.fire('Atenção', 'A data fim deve ser posterior ao início.', 'warning'); return; }
+    if (inicio < hoje)   { Swal.fire('Atenção', 'A data de início não pode ser no passado.', 'warning'); return; }
+
+    const cursor = new Date(inicio);
+    while (cursor <= fim) {
+      if (diasMarcados.includes(cursor.getDay())) {
+        datas.push(fmtData(cursor));
+      }
+      cursor.setDate(cursor.getDate() + 1);
+    }
+  }
+
+  // ── INTERVALO ──────────────────────────────────────────────────────
+  else if (tipo === 'intervalo') {
+    const intervalo = parseInt(document.getElementById('loteIntervaloN')?.value) || 7;
+    const inicio    = parseDate(document.getElementById('loteIntervaloInicio')?.value);
+    const fimStr    = document.getElementById('loteIntervaloFim')?.value;
+    const fim       = fimStr ? parseDate(fimStr) : null;
+    const qtd       = parseInt(document.getElementById('loteIntervaloQtd')?.value) || 4;
+
+    if (!inicio) { Swal.fire('Atenção', 'Informe a data de início.', 'warning'); return; }
+    if (inicio < hoje) { Swal.fire('Atenção', 'A data de início não pode ser no passado.', 'warning'); return; }
+    if (intervalo < 1) { Swal.fire('Atenção', 'O intervalo deve ser de pelo menos 1 dia.', 'warning'); return; }
+
+    const cursor = new Date(inicio);
+    const limite = fim || null;
+    let count = 0;
+    const maxIteracoes = limite ? 3650 : qtd; // segurança
+
+    while (count < maxIteracoes) {
+      if (limite && cursor > limite) break;
+      datas.push(fmtData(cursor));
+      cursor.setDate(cursor.getDate() + intervalo);
+      count++;
+      if (!limite && count >= qtd) break;
+    }
+  }
+
+  // ── MENSAL ─────────────────────────────────────────────────────────
+  else if (tipo === 'mensal') {
+
+    // ---- Dia fixo do mês ----
+    if (_loteSubModoMensal === 'diaFixo') {
+      const dia    = parseInt(document.getElementById('loteMensalDia')?.value) || 1;
+      const inicio = parseDate(document.getElementById('loteMensalInicio')?.value);
+      const qtd    = parseInt(document.getElementById('loteMensalQtd')?.value) || 3;
+
+      if (!inicio) { Swal.fire('Atenção', 'Informe o mês inicial.', 'warning'); return; }
+      if (dia < 1 || dia > 31) { Swal.fire('Atenção', 'Dia do mês inválido (1-31).', 'warning'); return; }
+
+      let ano = inicio.getFullYear(), mes = inicio.getMonth();
+      for (let i = 0; i < qtd; i++) {
+        const d = new Date(ano, mes + i, dia);
+        // Ajusta se o dia não existe no mês (ex: dia 31 em fevereiro → vai para março)
+        if (d.getMonth() !== ((mes + i) % 12 + 12) % 12) {
+          // Usa último dia do mês
+          const ultimo = new Date(ano, mes + i + 1, 0);
+          datas.push(fmtData(ultimo));
+        } else if (d < hoje) {
+          // pula passado silenciosamente
+        } else {
+          datas.push(fmtData(d));
+        }
+      }
+    }
+
+    // ---- Dia útil do mês ----
+    else if (_loteSubModoMensal === 'diaUtil') {
+      const nUtil  = parseInt(document.getElementById('loteMensalNUtil')?.value) || 1;
+      const inicio = parseDate(document.getElementById('loteMensalUtilInicio')?.value);
+      const qtd    = parseInt(document.getElementById('loteMensalUtilQtd')?.value) || 3;
+
+      if (!inicio) { Swal.fire('Atenção', 'Informe o mês inicial.', 'warning'); return; }
+
+      const ehUtil = d => d.getDay() !== 0 && d.getDay() !== 6;
+
+      let ano = inicio.getFullYear(), mes = inicio.getMonth();
+      for (let i = 0; i < qtd; i++) {
+        const cursor = new Date(ano, mes + i, 1);
+        let contUtil = 0;
+        while (cursor.getMonth() === (mes + i) % 12 || cursor.getFullYear() > ano) {
+          // Avança até o mês correto
+          if (cursor.getMonth() !== new Date(ano, mes + i, 1).getMonth()) break;
+          if (ehUtil(cursor)) {
+            contUtil++;
+            if (contUtil === nUtil) {
+              if (cursor >= hoje) datas.push(fmtData(cursor));
+              break;
+            }
+          }
+          cursor.setDate(cursor.getDate() + 1);
+        }
+      }
+    }
+
+    // ---- Nth semana do mês ----
+    else if (_loteSubModoMensal === 'semanaMes') {
+      const nSemana   = parseInt(document.getElementById('loteMensalNSemana')?.value);
+      const diaSemana = parseInt(document.getElementById('loteMensalDiaSemana')?.value);
+      const inicio    = parseDate(document.getElementById('loteMensalSemanaInicio')?.value);
+      const qtd       = parseInt(document.getElementById('loteMensalSemanaQtd')?.value) || 3;
+
+      if (!inicio) { Swal.fire('Atenção', 'Informe o mês inicial.', 'warning'); return; }
+
+      let ano = inicio.getFullYear(), mes = inicio.getMonth();
+
+      for (let i = 0; i < qtd; i++) {
+        const mesAtual = (mes + i) % 12;
+        const anoAtual = ano + Math.floor((mes + i) / 12);
+        let resultado = null;
+
+        if (nSemana === -1) {
+          // Última ocorrência do dia no mês
+          const ultimoDia = new Date(anoAtual, mesAtual + 1, 0);
+          const cursor = new Date(ultimoDia);
+          while (cursor.getDay() !== diaSemana) cursor.setDate(cursor.getDate() - 1);
+          resultado = cursor;
+        } else {
+          // Nth ocorrência
+          const cursor = new Date(anoAtual, mesAtual, 1);
+          let count = 0;
+          while (cursor.getMonth() === mesAtual) {
+            if (cursor.getDay() === diaSemana) {
+              count++;
+              if (count === nSemana) { resultado = new Date(cursor); break; }
+            }
+            cursor.setDate(cursor.getDate() + 1);
+          }
+        }
+
+        if (resultado && resultado >= hoje) datas.push(fmtData(resultado));
+      }
+    }
+  }
+
+  if (datas.length === 0) {
+    Swal.fire('Sem resultados', 'Nenhuma data foi gerada com esses parâmetros. Verifique se as datas não estão no passado.', 'info');
+    return;
+  }
+
+  // Aplica no flatpickr (modo manual) + mostra preview
+  aplicarDatasNoCalendario(datas);
+}
+
+// ── Aplica array de strings DD/MM/YYYY no flatpickr ──────────────────────
+function aplicarDatasNoCalendario(datas) {
+  if (!calendarInstance) return;
+
+  // Converte DD/MM/YYYY → Date
+  const objs = datas.map(s => {
+    const p = s.split('/');
+    return new Date(p[2], p[1]-1, p[0]);
+  });
+
+  // Garante modo múltiplo
+  if (!AppState.modoLote) {
+    document.getElementById('checkLote').checked = true;
+    alternarModoLote(true);
+  }
+  configurarCalendario(true);
+
+  // Flatpickr aceita array de datas
+  setTimeout(() => {
+    calendarInstance.setDate(objs, true);
+    renderizarPreviewDatas();
+    atualizarContadorLote();
+    atualizarDisponibilidadeItens();
+    atualizarTudoTempoReal();
+  }, 50);
+}
+
+// ── Preview visual das datas selecionadas ─────────────────────────────────
+function renderizarPreviewDatas() {
+  const container = document.getElementById('loteListaDatas');
+  const painel    = document.getElementById('lotePreviewDatas');
+  if (!container || !calendarInstance) return;
+
+  const datas = calendarInstance.selectedDates || [];
+
+  if (datas.length === 0) {
+    painel?.classList.add('hidden');
+    return;
+  }
+
+  painel?.classList.remove('hidden');
+
+  container.innerHTML = datas
+    .slice()
+    .sort((a, b) => a - b)
+    .map((d, i) => {
+      const str = flatpickr.formatDate(d, 'd/m/Y');
+      const diasSemana = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+      const nomeDia = diasSemana[d.getDay()];
+      return `
+        <span class="lote-data-chip">
+          <span class="text-[8px] text-purple-400 font-black">${nomeDia}</span>
+          ${str}
+          <button type="button" onclick="removerDataLote(${i})" title="Remover">×</button>
+        </span>
+      `;
+    }).join('');
+
+  atualizarContadorLote();
+}
+
+// ── Remove data individual do lote ────────────────────────────────────────
+function removerDataLote(index) {
+  if (!calendarInstance) return;
+  const datas = [...(calendarInstance.selectedDates || [])].sort((a,b) => a-b);
+  datas.splice(index, 1);
+  calendarInstance.setDate(datas, true);
+  renderizarPreviewDatas();
+  atualizarContadorLote();
+}
+
+// ── Limpa todas as datas ──────────────────────────────────────────────────
+function limparDatasLote() {
+  if (!calendarInstance) return;
+  calendarInstance.clear();
+  renderizarPreviewDatas();
+  atualizarContadorLote();
+}
+
+// ── Atualiza contador ─────────────────────────────────────────────────────
+function atualizarContadorLote() {
+  const el = document.getElementById('loteContadorDatas');
+  if (!el) return;
+  const qtd = calendarInstance?.selectedDates?.length || 0;
+  el.textContent = qtd + (qtd === 1 ? ' data selecionada' : ' datas selecionadas');
+  el.className = qtd > 0
+    ? 'text-[10px] font-black text-purple-300 bg-purple-600/20 px-2 py-1 rounded-lg'
+    : 'text-[10px] font-black text-slate-400 bg-white/5 px-2 py-1 rounded-lg';
+}
+
+
+
+// ── Modo de visualização ─────────────────────────────────────────────────────
+function renderizarModoDiagrama() {
+  const container = document.getElementById('diagramaContainer');
+  const labelEl   = document.getElementById('diagramaSemanaLabel');
+  if (!container) return;
+
+  const hoje = new Date(); hoje.setHours(0,0,0,0);
+  const dow  = hoje.getDay()===0?6:hoje.getDay()-1;
+  window._diagramaSemana = window._diagramaSemana || 0;
+  window._diagramaDia    = window._diagramaDia !== undefined ? window._diagramaDia : dow;
+
+  const inicioSemana = new Date(hoje);
+  inicioSemana.setDate(hoje.getDate()-dow+window._diagramaSemana*7);
+  const dias = Array.from({length:7},function(_,i){ const d=new Date(inicioSemana); d.setDate(inicioSemana.getDate()+i); return d; });
+
+  const mAb=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  if (labelEl) labelEl.textContent=dias[0].getDate()+' '+mAb[dias[0].getMonth()]+' – '+dias[6].getDate()+' '+mAb[dias[6].getMonth()]+' '+dias[6].getFullYear();
+
+  _popularFiltrosDiagrama();
+  const _filtroSalaD  = document.getElementById('diagramaFiltroSala')?.value  || '';
+  const _filtroSetorD = document.getElementById('diagramaFiltroSetor')?.value || '';
+  const _filtroBuscaD = (document.getElementById('diagramaFiltroBusca')?.value||'').toLowerCase().trim();
+
+  const INICIO=8*60, FIM=21*60+30, TOTAL=FIM-INICIO;
+  const PX_PER_MIN = 3.2; // pixels por minuto → largura total = ~2592px
+  const TOTAL_PX = Math.round(TOTAL * PX_PER_MIN);
+  // Paleta exclusiva para espaços — sem verde (habilitado) nem âmbar (pendente)
+  const coresSal=['#2563eb','#0891b2','#6366f1','#c026d3','#db2777','#0e7490','#4338ca','#7e22ce'];
+  const nomsDias=['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'];
+
+  const normHora=function(h){ const p=String(h||'').split(':'); return parseInt(p[0])*60+parseInt(p[1]); };
+  const minToPx=function(m){ return Math.round((m-INICIO)*PX_PER_MIN); };
+  const durToPx=function(i,f){ return Math.round((Math.min(f,FIM)-Math.max(i,INICIO))*PX_PER_MIN); };
+
+  // ── Indexação de reservas ──────────────────────────────────────────────
+  const diaSel = window._diagramaDia;
+  const dSel   = dias[diaSel];
+  const dKey   = dSel.getFullYear()+'-'+String(dSel.getMonth()+1).padStart(2,'0')+'-'+String(dSel.getDate()).padStart(2,'0');
+
+  const _idxD = {};
+  (AppState.colecoes.reservas||[]).forEach(function(r) {
+    var s=String(r[1]||'').trim(), dk=null;
+    if (r[1] instanceof Date) { var _d=new Date(r[1]); dk=_d.getFullYear()+'-'+String(_d.getMonth()+1).padStart(2,'0')+'-'+String(_d.getDate()).padStart(2,'0'); }
+    else if (s.includes('/')) { var p=s.split('/'); dk=p[2]+'-'+p[1].padStart(2,'0')+'-'+p[0].padStart(2,'0'); }
+    else if (s.includes('-')) { dk=s.slice(0,10); }
+    var sk=String(r[4]||'').trim();
+    if (!dk||!sk) return;
+    if (!_idxD[dk]) _idxD[dk]={};
+    if (!_idxD[dk][sk]) _idxD[dk][sk]=[];
+    _idxD[dk][sk].push(r);
+  });
+  const indexDia = _idxD[dKey] || {};
+
+  // ── Hora atual ─────────────────────────────────────────────────────────
+  const agora   = new Date();
+  const ehHoje  = dSel.toDateString() === agora.toDateString();
+  const nowMin  = agora.getHours()*60+agora.getMinutes();
+  const nowPx   = ehHoje && nowMin>=INICIO && nowMin<=FIM ? minToPx(nowMin) : -1;
+
+  // ── Tabs dos dias ──────────────────────────────────────────────────────
+  const dayTabs = dias.map(function(d,i){
+    const ativo=i===diaSel, ehH=d.getTime()===hoje.getTime();
+    return '<button onclick="window._diagramaDia='+i+';renderizarModoDiagrama()"'
+      +' style="padding:5px 10px;border-radius:8px;font-size:10px;font-weight:900;text-transform:uppercase;border:none;cursor:pointer;'
+      +'background:'+(ativo?'#7c3aed':ehH?'#f3f0ff':'#f1f5f9')+';color:'+(ativo?'#fff':ehH?'#7c3aed':'#64748b')+'">'
+      +nomsDias[i]+'&nbsp;'+d.getDate()+'</button>';
+  }).join('');
+
+  // ── Régua de horas ─────────────────────────────────────────────────────
+  const horas=[8,9,10,11,12,13,14,15,16,17,18,19,20,21];
+  const horasRua = horas.map(function(h){
+    const px=minToPx(h*60);
+    return '<div style="position:absolute;left:'+px+'px;top:0;bottom:0;border-left:1px solid #e2e8f0;pointer-events:none"></div>'
+      +'<div style="position:absolute;left:'+(px+3)+'px;top:7px;font-size:9px;color:#94a3b8;font-weight:700;white-space:nowrap">'+h+'h</div>';
+  }).join('');
+
+  // ── Salas filtradas ────────────────────────────────────────────────────
+  const _salasFiltradas = (AppState.colecoes.salas||[]).filter(function(s){
+    return _filtroSalaD ? String(s[0]).trim()===_filtroSalaD : true;
+  });
+
+  // ── Coluna fixa de nomes ───────────────────────────────────────────────
+  const colNomes = _salasFiltradas.map(function(s){
+    return '<div style="height:52px;padding:0 10px;font-size:9px;font-weight:800;color:#7c3aed;'
+      +'text-transform:uppercase;letter-spacing:0.04em;display:flex;align-items:center;'
+      +'border-bottom:1px solid #f1f5f9;line-height:1.3">'
+      +escaparHTML(String(s[1]).trim())+'</div>';
+  }).join('');
+
+  // ── Linhas do grid ─────────────────────────────────────────────────────
+  const linhasGrid = _salasFiltradas.map(function(s,si){
+    const sid=String(s[0]).trim();
+    const cor=coresSal[si%coresSal.length];
+    const res=indexDia[sid]||[];
+    const gridLines = horas.map(function(h){
+      return '<div style="position:absolute;left:'+minToPx(h*60)+'px;top:0;bottom:0;border-left:1px solid #f1f5f9;pointer-events:none"></div>';
+    }).join('');
+
+    const blocos=res.filter(function(r){
+      if(String(r[13]||'').toUpperCase()==='CANCELADO') return false;
+      if(_filtroSetorD && String(r[9]||'').trim()!==_filtroSetorD) return false;
+      if(_filtroBuscaD && !String(r[6]||'').toLowerCase().includes(_filtroBuscaD)) return false;
+      return true;
+    }).map(function(r){
+      const ini=normHora(r[2]),ter=normHora(r[3]);
+      if(ter<=INICIO||ini>=FIM) return '';
+      var iniC=Math.max(ini,INICIO), terC=Math.min(ter,FIM);
+      var isHab = String(r[13]||'').toUpperCase()==='HABILITADO';
+      var isPast = ehHoje && terC <= nowMin;
+      var bg, bord, _txtCor, tag;
+      if (isHab) {
+        // HABILITADO — verde exclusivo, nunca usado em espaços
+        bg      = isPast ? '#bbf7d0' : '#059669';
+        bord    = '2px solid '+(isPast ? '#86efac' : '#047857');
+        _txtCor = isPast ? '#14532d' : '#fff';
+        tag     = '<div style="position:absolute;top:2px;right:3px;font-size:7px;font-weight:900;'
+          +'color:'+(isPast?'#14532d':'#fff')+';background:'+(isPast?'#86efac':'#047857')
+          +';border-radius:3px;padding:1px 3px">✓HAB</div>';
+      } else {
+        // PENDENTE — âmbar exclusivo, nunca usado em espaços
+        // Futuro: fundo neutro claro + borda âmbar tracejada (destaque visual)
+        // Passado: fundo âmbar suave (lembrete visual sem confundir com habilitado)
+        bg      = isPast ? '#fef3c7' : '#fff';
+        bord    = isPast ? '2px solid #fbbf24' : '2px dashed #f59e0b';
+        _txtCor = isPast ? '#92400e' : '#78350f';
+        tag     = '<div style="position:absolute;top:2px;right:3px;font-size:7px;font-weight:900;'
+          +'color:#fff;background:#f59e0b;border-radius:3px;padding:1px 3px">HAB?</div>';
+      }
+      var op = 1;
+      return '<div onclick="abrirDetalheReserva(\''+escaparHTML(r[0])+'\')"'
+        +' style="position:absolute;left:'+minToPx(iniC)+'px;width:'+Math.max(durToPx(iniC,terC)-2,4)+'px;top:5px;bottom:5px;'
+        +'background:'+bg+';border-radius:5px;cursor:pointer;overflow:hidden;border:'+bord+';'
+        +'opacity:'+op+';transition:opacity 0.2s"'
+        +' onmouseover="this.style.opacity=1" onmouseout="this.style.opacity='+op+'">'
+        +tag
+        +'<div style="padding:2px 5px;font-size:9px;font-weight:800;color:'+_txtCor+';white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+escaparHTML((r[6]||'').toUpperCase().substring(0,30))+'</div>'
+        +'<div style="padding:0 5px;font-size:8px;color:'+_txtCor+';opacity:0.7">'+r[2]+'–'+r[3]+'</div>'
+        +'</div>';
+    }).join('');
+
+    return '<div style="height:52px;position:relative;border-bottom:1px solid #f8fafc;">'+gridLines+blocos+'</div>';
+  }).join('');
+
+  // ── Marcador "agora" (linha vermelha fina sobre o scroll) ──────────────
+  // Será posicionado via JS após render, fixo no viewport do scroll
+
+  const temQualquer = _salasFiltradas.some(function(s){ return (indexDia[String(s[0]).trim()]||[]).length>0; });
+
+  container.innerHTML =
+    '<div style="padding:10px 14px;border-bottom:1px solid #f1f5f9;display:flex;gap:5px;flex-wrap:wrap;background:#fafafa">'
+      +dayTabs
+    +'</div>'
+    // Layout: coluna fixa + grid scrollável
+    +'<div style="display:flex;overflow:hidden;position:relative">'
+      // Coluna de nomes fixa
+      +'<div style="flex-shrink:0;width:120px;min-width:120px;border-right:2px solid #e2e8f0;background:#fafafa;z-index:10">'
+        +'<div style="height:28px;border-bottom:2px solid #e2e8f0;display:flex;align-items:center;padding:0 10px;font-size:9px;font-weight:900;color:#94a3b8;text-transform:uppercase">Espaço</div>'
+        +(temQualquer ? colNomes : '')
+      +'</div>'
+      // Grid scrollável
+      +'<div id="_diagScrollEl" style="flex:1;overflow-x:auto;overflow-y:hidden;position:relative">'
+        // Marcador "agora" fixo no viewport do scroll (via sticky)
+        +(nowPx>=0
+          ? '<div id="_diagNowMarker" style="position:sticky;left:40%;top:0;bottom:0;width:0;z-index:20;pointer-events:none;display:inline-block">'
+              +'<div style="width:2px;height:100%;background:rgba(239,68,68,0.7);position:absolute;left:0;top:0">'
+                +'<div style="width:8px;height:8px;background:#ef4444;border-radius:50%;position:absolute;top:-4px;left:-3px"></div>'
+                +'<div style="position:absolute;top:4px;left:4px;background:#ef4444;color:#fff;font-size:8px;font-weight:900;padding:1px 4px;border-radius:4px;white-space:nowrap">'
+                  +String(agora.getHours()).padStart(2,'0')+':'+String(agora.getMinutes()).padStart(2,'0')
+                +'</div>'
+              +'</div>'
+            +'</div>'
+          : '')
+        +'<div style="width:'+TOTAL_PX+'px;position:relative">'
+          // Régua de horas
+          +'<div style="height:28px;border-bottom:2px solid #e2e8f0;position:relative;background:#fff;overflow:hidden">'+horasRua+'</div>'
+          // Linhas por sala
+          +(temQualquer ? linhasGrid : '<div style="padding:40px;text-align:center;color:#cbd5e1;font-size:12px;font-weight:700">Sem reservas neste dia</div>')
+        +'</div>'
+      +'</div>'
+    +'</div>';
+
+  // ── Auto-scroll: posiciona "agora" a 40% da largura visível ───────────
+  setTimeout(function(){
+    const el = document.getElementById('_diagScrollEl');
+    if (!el) return;
+    if (nowPx >= 0) {
+      // Rola para que nowPx fique a 40% da largura visível do container
+      const alvo = nowPx - Math.round(el.clientWidth * 0.40);
+      el.scrollLeft = Math.max(0, alvo);
+    } else {
+      // Dia não é hoje → rola para o início
+      el.scrollLeft = 0;
+    }
+  }, 60);
+
+  // ── Atualiza relógio do marcador a cada minuto ─────────────────────────
+  if (window._diagClockTimer) clearInterval(window._diagClockTimer);
+  if (ehHoje) {
+    window._diagClockTimer = setInterval(function(){
+      if (!document.getElementById('diagramaContainer')) { clearInterval(window._diagClockTimer); return; }
+      renderizarModoDiagrama();
+    }, 60000);
+  }
+}
+
+function _popularFiltrosDiagrama() {
+  const selSala  = document.getElementById('diagramaFiltroSala');
+  const selSetor = document.getElementById('diagramaFiltroSetor');
+  if (selSala && selSala.options.length <= 1) {
+    (AppState.colecoes.salas||[]).forEach(s => {
+      const o = document.createElement('option');
+      o.value = String(s[0]); o.textContent = String(s[1]);
+      selSala.appendChild(o);
+    });
+  }
+  if (selSetor && selSetor.options.length <= 1) {
+    (AppState.colecoes.setores||[]).filter(Boolean).forEach(s => {
+      const o = document.createElement('option');
+      o.value = s; o.textContent = s;
+      selSetor.appendChild(o);
+    });
+  }
+}
+
+function limparFiltrosDiagrama() {
+  const ids = ['diagramaFiltroSala','diagramaFiltroSetor','diagramaFiltroBusca'];
+  ids.forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
+  renderizarModoDiagrama();
+}
+
+function _diagramaCliqueVazio(event, el, salaId) {
+  if (event.target !== el && !event.target.style.background?.includes('rgba')) return;
+  const rect = el.getBoundingClientRect();
+  const x = event.clientX - rect.left;
+  const pctX = x / rect.width;
+  const INICIO = 8*60, FIM = 21*60+30, TOTAL = FIM-INICIO;
+  const minutos = Math.round(INICIO + pctX * TOTAL);
+  const snap = Math.round(minutos/30)*30;
+  const fimSnap = Math.min(snap+60, FIM);
+  const fmtH = m => String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0');
+  const dias = Array.from({length:7},(_,i)=>{ const hoje=new Date(); hoje.setHours(0,0,0,0); const dow=hoje.getDay()===0?6:hoje.getDay()-1; const ini=new Date(hoje); ini.setDate(hoje.getDate()-dow+(window._diagramaSemana||0)*7); const d=new Date(ini); d.setDate(ini.getDate()+i); return d; });
+  const dSel = dias[window._diagramaDia||0];
+  const dataStr = String(dSel.getDate()).padStart(2,'0')+'/'+String(dSel.getMonth()+1).padStart(2,'0')+'/'+dSel.getFullYear();
+  resetarFormulario();
+  mostrarAba('aba-nova-reserva');
+  setTimeout(function() {
+    const selSala = document.getElementById('selectSala');
+    if (selSala) { selSala.value = salaId; selSala.dispatchEvent(new Event('change')); }
+    if (calendarInstance && dataStr) {
+      const p = dataStr.split('/');
+      calendarInstance.setDate(new Date(+p[2],+p[1]-1,+p[0]), true);
+    }
+    const hi = document.getElementById('horaInicio');
+    const hf = document.getElementById('horaTermino');
+    if (hi) hi.value = fmtH(snap);
+    if (hf) hf.value = fmtH(fimSnap);
+    if (typeof validarHorarios === 'function') validarHorarios();
+    if (typeof atualizarTudoTempoReal === 'function') atualizarTudoTempoReal();
+  }, 350);
+}
+
+function _destacarReservaSalva(nomeAcao) {
+  if (!nomeAcao) return;
+  const linhas = document.querySelectorAll('#corpoTabela tr');
+  let alvo = null;
+  linhas.forEach(function(tr) {
+    if (!alvo && (tr.innerText||'').toUpperCase().includes(nomeAcao.toUpperCase())) {
+      alvo = tr;
+    }
+  });
+  if (!alvo) return;
+  alvo.scrollIntoView({ behavior:'smooth', block:'center' });
+  alvo.style.transition = 'background 0.4s';
+  alvo.style.background = '#f3e8ff';
+  alvo.style.boxShadow  = 'inset 0 0 0 2px #7c3aed';
+  setTimeout(function() {
+    alvo.style.background = '';
+    alvo.style.boxShadow  = '';
+  }, 3500);
+}
+
+var _pollSolicitacoesTimer = null;
+var _pollSolicitacoesUltimoPendente = 0;
+
+function _pollSolicitacoes(primeiro) {
+  if (_pollSolicitacoesTimer) clearTimeout(_pollSolicitacoesTimer);
+  try {
+    const fn = (AppState.usuario.isAdmin || AppState.usuario.isSuperadmin || AppState.usuario.isHabilitador)
+      ? 'listarTodasSolicitacoes'
+      : 'listarSolicitacoesPendentes';
+    google.script.run
+      .withSuccessHandler(function(lista) {
+        _solicitacoesCache = lista || [];
+        if (typeof _atualizarBadgeSolicitacoes === 'function') _atualizarBadgeSolicitacoes();
+
+        const pendentes = (lista||[]).filter(function(s){ return s.status==='PENDENTE'; }).length;
+
+        if (!primeiro && pendentes > _pollSolicitacoesUltimoPendente) {
+          // Nova solicitação chegou — toast + som visual
+          Swal.mixin({ toast:true, position:'top-end', showConfirmButton:false, timer:6000, timerProgressBar:true })
+            .fire({ icon:'info', title:'Nova solicitação pendente', text: pendentes+' aguardando aprovação' });
+          // Pulsa o ícone na sidebar
+          const badge = document.getElementById('badgeSolicitacoes');
+          if (badge) {
+            badge.style.transform = 'scale(1.6)';
+            setTimeout(function(){ badge.style.transform=''; }, 600);
+          }
+        }
+
+        _pollSolicitacoesUltimoPendente = pendentes;
+
+        // Rerender se a aba de aprovações estiver aberta
+        const abaAprov = document.getElementById('aba-aprovacoes');
+        if (abaAprov && !abaAprov.classList.contains('hidden')) {
+          if (typeof _renderizarSolicitacoes === 'function') _renderizarSolicitacoes();
+          if (typeof _atualizarStatsSolicitacoes === 'function') _atualizarStatsSolicitacoes();
+        }
+
+        _pollSolicitacoesTimer = setTimeout(function(){ _pollSolicitacoes(false); }, 30000);
+      })
+      .withFailureHandler(function() {
+        _pollSolicitacoesTimer = setTimeout(function(){ _pollSolicitacoes(false); }, 60000);
+      })
+      [fn](AppState.usuario.email);
+  } catch(e) {
+    _pollSolicitacoesTimer = setTimeout(function(){ _pollSolicitacoes(false); }, 60000);
+  }
+}
+
+// ── Relatório CODIP: total automático e barra de execução ──────────────
+function _codipAtualizarTotais() {
+  var pres = parseInt(document.getElementById('codipPubPresencial')?.value||0)||0;
+  var virt = parseInt(document.getElementById('codipPubVirtual')?.value||0)||0;
+  var viz  = parseInt(document.getElementById('codipVisualizacoes')?.value||0)||0;
+  var tot  = document.getElementById('codipTotalAcessos');
+  if (tot) tot.textContent = (pres+virt+viz).toLocaleString('pt-BR');
+
+  var antes = parseFloat(document.getElementById('codipHorasAntes')?.value||0)||0;
+  var mes   = parseFloat(document.getElementById('codipHorasMes')?.value||0)||0;
+  var total = parseFloat(document.getElementById('codipHorasTotal')?.value||0)||0;
+  var bar   = document.getElementById('codipExecucaoBar');
+  if (bar && total>0) {
+    bar.classList.remove('hidden');
+    var pct = Math.min(Math.round((antes+mes)/total*100),100);
+    document.getElementById('codipExecPct').textContent = pct+'%';
+    document.getElementById('codipExecFill').style.width = pct+'%';
+  } else if (bar) { bar.classList.add('hidden'); }
+}
+
+function _codipColetarPayload() {
+  var acess = [];
+  if (document.getElementById('codipAcessFisica')?.checked) acess.push('Física/Arquitetônica');
+  if (document.getElementById('codipAcessComun')?.checked)  acess.push('Comunicacional');
+  if (document.getElementById('codipAcessAtit')?.checked)   acess.push('Atitudinal');
+  if (document.getElementById('codipAcessNenhuma')?.checked) acess.push('Nenhuma');
+  return {
+    codipPrograma:       document.getElementById('codipPrograma')?.value.trim()||'',
+    codipMesRef:         document.getElementById('codipMesRef')?.value||'',
+    codipTipoAcao:       document.getElementById('codipTipoAcao')?.value||'',
+    codipEixo:           document.getElementById('codipEixo')?.value||'',
+    codipSegmento1:      document.getElementById('codipSegmento1')?.value.trim()||'',
+    codipSegmento2:      document.getElementById('codipSegmento2')?.value.trim()||'',
+    codipLinguagem1:     document.getElementById('codipLinguagem1')?.value||'',
+    codipLinguagem2:     document.getElementById('codipLinguagem2')?.value||'',
+    codipModalidade:     document.getElementById('codipModalidade')?.value||'',
+    codipRecursos:       document.getElementById('codipRecursos')?.value||'',
+    codipRede:           (document.querySelector('input[name="codipRede"]:checked')?.value||'NÃO'),
+    codipAcessibilidade: acess.join(', '),
+    codipPubPresencial:  parseInt(document.getElementById('codipPubPresencial')?.value||0)||0,
+    codipPubVirtual:     parseInt(document.getElementById('codipPubVirtual')?.value||0)||0,
+    codipVisualizacoes:  parseInt(document.getElementById('codipVisualizacoes')?.value||0)||0,
+    codipPCD:            parseInt(document.getElementById('codipPCD')?.value||0)||0,
+    codipIdosos:         parseInt(document.getElementById('codipIdosos')?.value||0)||0,
+    codipProfExternos:   parseInt(document.getElementById('codipProfExternos')?.value||0)||0,
+    codipVoluntarios:    parseInt(document.getElementById('codipVoluntarios')?.value||0)||0,
+    codipVulnerabilidade:document.getElementById('codipVulnerabilidade')?.value||'',
+    codipPubEspecifico:  document.getElementById('codipPubEspecifico')?.value.trim()||'',
+    codipHorasAntes:     parseFloat(document.getElementById('codipHorasAntes')?.value||0)||0,
+    codipHorasMes:       parseFloat(document.getElementById('codipHorasMes')?.value||0)||0,
+    codipHorasTotal:     parseFloat(document.getElementById('codipHorasTotal')?.value||0)||0,
+    codipProdutos:       document.getElementById('codipProdutos')?.value.trim()||'',
+    codipDisponibilidade:document.getElementById('codipDisponibilidade')?.value||'',
+    codipAvalSatisfacao: document.getElementById('codipAvalSatisfacao')?.value.trim()||'',
+    codipDesafios:       document.getElementById('codipDesafios')?.value||'',
+    codipObservacoes:    document.getElementById('codipObservacoes')?.value.trim()||'',
+    codipLinkEvidencias: document.getElementById('codipLinkEvidencias')?.value.trim()||'',
+    codipLinkRelatorio:  document.getElementById('codipLinkRelatorio')?.value.trim()||''
+  };
+}
+
+function _atualizarMapaExterno() {
+  const input   = document.getElementById('inputEnderecoExterno');
+  const blocoR  = document.getElementById('blocoRotaExterna');
+  const linkM   = document.getElementById('linkMapaExterno');
+  const linkR   = document.getElementById('linkRotaExterna');
+  const iframe  = document.getElementById('iframeMapaExterno');
+  const endereco = (input?.value||'').trim();
+  if (!endereco || endereco.length < 8) { blocoR?.classList.add('hidden'); return; }
+
+  const CCBJ = 'Rua+3+Corações,+400,+Granja+Lisboa,+Fortaleza,+CE';
+  const destEnc = encodeURIComponent(endereco);
+
+  if (linkM)  linkM.href  = 'https://www.google.com/maps/search/?api=1&query='+destEnc;
+  if (linkR)  linkR.href  = 'https://www.google.com/maps/dir/'+CCBJ+'/'+destEnc;
+  if (iframe) iframe.src  = 'https://maps.google.com/maps?q='+destEnc+'&output=embed&z=15';
+
+  blocoR?.classList.remove('hidden');
+}
+
+function _syncAgendaScroll(el) {
+  const hs = document.getElementById('_agHeaderScroll');
+  const hc = document.getElementById('_agHorasCol');
+  if (hs) hs.scrollLeft = el.scrollLeft;
+  if (hc) hc.style.transform = 'translateY(-'+el.scrollTop+'px)';
+}
+
+function _initMiniCalRece() {
+  const el = document.getElementById('miniCalRece');
+  if (!el) return;
+  if (el._fpInst) { try { el._fpInst.destroy(); } catch(e){} el.innerHTML=''; }
+  el._fpInst = flatpickr(el, {
+    inline: true, locale: 'pt', dateFormat: 'd/m/Y',
+    onChange: function(sel) {
+      if (!sel[0]) return;
+      const hoje=new Date(); hoje.setHours(0,0,0,0);
+      const dowH=hoje.getDay()===0?6:hoje.getDay()-1;
+      const semH=new Date(hoje); semH.setDate(hoje.getDate()-dowH);
+      const ds=new Date(sel[0]); ds.setHours(0,0,0,0);
+      const dowS=ds.getDay()===0?6:ds.getDay()-1;
+      const semS=new Date(ds); semS.setDate(ds.getDate()-dowS);
+      window._agendaReceSemana=Math.round((semS.getTime()-semH.getTime())/(7*864e5));
+      renderizarModoAgendaRece();
+    }
+  });
+}
+
+function _toggleMiniCalAgenda() {
+  const wrapper = document.getElementById('miniCalAgendaWrapper');
+  const lbl     = document.getElementById('lblToggleMiniCal');
+  if (!wrapper) return;
+  const visivel = !wrapper.classList.contains('hidden');
+  wrapper.classList.toggle('hidden', visivel);
+  wrapper.classList.toggle('block',  !visivel);
+  if (lbl) lbl.textContent = visivel ? 'Mostrar calendário' : 'Ocultar calendário';
+}
+
+function _initMiniCalAgenda() {
+  const el = document.getElementById('miniCalAgenda');
+  if (!el) return;
+  if (el._fpInst) { try { el._fpInst.destroy(); } catch(e){} el.innerHTML = ''; }
+  const onMudanca = function(sel) {
+    if (!sel[0]) return;
+    const hoje = new Date(); hoje.setHours(0,0,0,0);
+    const dowH = hoje.getDay()===0?6:hoje.getDay()-1;
+    const semH = new Date(hoje); semH.setDate(hoje.getDate()-dowH);
+    const ds = new Date(sel[0]); ds.setHours(0,0,0,0);
+    const dowS = ds.getDay()===0?6:ds.getDay()-1;
+    const semS = new Date(ds); semS.setDate(ds.getDate()-dowS);
+    window._agendaGoogleSemana = Math.round((semS.getTime()-semH.getTime())/(7*864e5));
+    renderizarModoAgendaGoogle();
+  };
+  el._fpInst = flatpickr(el, { inline:true, locale:'pt', dateFormat:'d/m/Y', onChange: onMudanca });
+}
+
+const _diasNomesEspaco = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+
+function adicionarDono() {
+  window._donosEspaco = window._donosEspaco || [];
+  window._donosEspaco.push({ email: '', dias: [1,2,3,4,5], setor: '' });
+  renderizarContainerDonos();
+}
+
+function removerDono(i) {
+  if (window._donosEspaco) window._donosEspaco.splice(i, 1);
+  renderizarContainerDonos();
+}
+
+function renderizarContainerDonos() {
+  const c = document.getElementById('containerDonos');
+  if (!c) return;
+  const donos = window._donosEspaco || [];
+  if (!donos.length) {
+    c.innerHTML = '<p class="text-[10px] text-slate-400 italic py-2 text-center">Nenhum responsável. Clique em + para adicionar.</p>';
+    return;
+  }
+  c.innerHTML = donos.map((d, i) => `
+    <div class="bg-slate-50 rounded-xl p-3 border border-slate-100 space-y-2">
+      <div class="flex gap-2">
+        <input type="email" value="${escaparHTML(d.email||'')}" placeholder="email@ccbj.org.br"
+          oninput="window._donosEspaco[${i}].email=this.value"
+          class="flex-1 px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs outline-none focus:border-purple-400 font-semibold">
+        <button type="button" onclick="removerDono(${i})" class="w-7 h-7 flex items-center justify-center text-red-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-all"><i class="fas fa-times text-xs"></i></button>
+      </div>
+      <select oninput="window._donosEspaco[${i}].setor=this.value"
+        class="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs outline-none focus:border-purple-400 font-semibold">
+        <option value="">Setor (opcional)</option>
+        ${(AppState.colecoes.setores||[]).filter(Boolean).map(s=>`<option value="${escaparHTML(s)}" ${d.setor===s?'selected':''}>${escaparHTML(s)}</option>`).join('')}
+      </select>
+      <div class="flex flex-wrap gap-1">
+        ${[1,2,3,4,5,6,0].map(n => `<label class="cursor-pointer"><input type="checkbox" class="sr-only peer" ${(d.dias||[]).includes(n)?'checked':''}
+          onchange="const _d=window._donosEspaco[${i}].dias||[];const _x=_d.indexOf(${n});if(this.checked&&_x<0)_d.push(${n});else if(!this.checked&&_x>=0)_d.splice(_x,1);window._donosEspaco[${i}].dias=_d;">
+          <span class="inline-block px-2 py-0.5 text-[9px] font-black rounded-full border bg-white text-slate-500 border-slate-200 peer-checked:bg-purple-600 peer-checked:text-white peer-checked:border-purple-600 transition-all">${_diasNomesEspaco[n]}</span>
+        </label>`).join('')}
+      </div>
+    </div>`).join('');
+}
+
+function resolverNomeLocal(email) {
+  const e = String(email||'').trim().toLowerCase();
+  const nome = AppState.mapaNomes?.[e];
+  return nome ? nome + ' <span class="opacity-50 font-normal">(' + e + ')</span>' : e;
+}
+
+function alternarModoVisualizacao(modo) {
+  const lista      = document.querySelector('#aba-lista-reservas .bg-white.rounded-3xl.shadow-sm.border');
+  const tabelaWrap = document.getElementById('tabelaContainerOuter');
+  const semRes   = document.getElementById('semResultados');
+  const agendaV  = document.getElementById('viewAgendaGoogle');
+  const btnLista = document.getElementById('btnModoLista');
+  const btnAgend = document.getElementById('btnModoAgenda');
+
+  const setAtivo = (btn) => {
+    if (!btn) return;
+    btn.classList.add('bg-slate-900', 'text-white');
+    btn.classList.remove('bg-slate-200', 'text-slate-600');
+  };
+  const setInativo = (btn) => {
+    if (!btn) return;
+    btn.classList.add('bg-slate-200', 'text-slate-600');
+    btn.classList.remove('bg-slate-900', 'text-white');
+  };
+
+  const diagramaV  = document.getElementById('viewDiagrama');
+  const btnDiag    = document.getElementById('btnModoDiagrama');
+
+  const hideAll = () => {
+    lista?.classList.add('hidden');
+    tabelaWrap?.classList.add('hidden');
+    semRes?.classList.add('hidden');
+    agendaV?.classList.add('hidden');
+    diagramaV?.classList.add('hidden');
+    setInativo(btnLista); setInativo(btnAgend); setInativo(btnDiag);
+  };
+
+  if (modo === 'agenda') {
+    hideAll();
+    agendaV?.classList.remove('hidden');
+    setAtivo(btnAgend);
+    window._agendaGoogleSemana = window._agendaGoogleSemana || 0;
+    const selAgenda = document.getElementById('agendaGoogleSala');
+    if (selAgenda && !selAgenda.value && selAgenda.options.length > 1) {
+      selAgenda.value = selAgenda.options[1].value;
+    }
+    _initMiniCalAgenda();
+    renderizarModoAgendaGoogle();
+  } else if (modo === 'diagrama') {
+    hideAll();
+    diagramaV?.classList.remove('hidden');
+    setAtivo(btnDiag);
+    window._diagramaSemana = window._diagramaSemana || 0;
+    window._diagramaDia    = window._diagramaDia    !== undefined ? window._diagramaDia : (new Date().getDay()===0?6:new Date().getDay()-1);
+    renderizarModoDiagrama();
+  } else {
+    hideAll();
+    lista?.classList.remove('hidden');
+    tabelaWrap?.classList.remove('hidden');
+    setAtivo(btnLista);
+    renderizarReservas();
+  }
+}
+
+function abrirDetalheReserva(id) {
+  const r = AppState.colecoes.reservas.find(x => x[0] === id);
+  if (!r) return;
+
+  const salaNome = AppState.mapaSalas?.[r[4]] || r[4];
+  const isCancelado = String(r[13]).toUpperCase() === 'CANCELADO';
+
+  const podeEditar  = AppState.usuario.isAdmin || AppState.usuario.isSuperadmin || AppState.usuario.email === r[8];
+  const podeExcluir = false;
+
+  const mId = 'modalDetalheRes';
+  document.getElementById(mId)?.remove();
+
+  const o = document.createElement('div');
+  o.id = mId;
+  o.className = 'fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[70] flex items-center justify-center p-4';
+
+  o.innerHTML = `
+    <div class="bg-white w-full max-w-xl rounded-3xl shadow-2xl overflow-hidden animate-fadeIn">
+
+      <div class="bg-slate-900 px-6 py-4 flex items-center justify-between">
+        <div class="min-w-0 flex-1 mr-4">
+          <p class="text-white font-black text-sm uppercase truncate">${escaparHTML(r[6])}</p>
+          <p class="text-purple-400 text-[10px] mt-0.5">
+            ${escaparHTML(salaNome)} · ${escaparHTML(r[1])} · ${escaparHTML(r[2])}–${escaparHTML(r[3])}
+          </p>
+        </div>
+        <button onclick="document.getElementById('${mId}').remove()" class="text-slate-400 hover:text-white">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+
+      <div class="p-6 space-y-4">
+
+        <div class="grid grid-cols-2 gap-3">
+          <div class="p-3 bg-slate-50 rounded-xl">
+            <p class="text-[9px] font-black text-slate-400 uppercase">Responsável</p>
+            <p class="font-bold text-slate-700 text-xs truncate">${escaparHTML(r[8])}</p>
+          </div>
+
+          <div class="p-3 bg-slate-50 rounded-xl">
+            <p class="text-[9px] font-black text-slate-400 uppercase">Setor</p>
+            <p class="font-bold text-slate-700 text-xs">${escaparHTML(r[9])}</p>
+          </div>
+
+          <div class="p-3 bg-slate-50 rounded-xl">
+            <p class="text-[9px] font-black text-slate-400 uppercase">Turno</p>
+            <p class="font-bold text-slate-700 text-xs">${escaparHTML(r[5])}</p>
+          </div>
+
+          <div class="p-3 bg-slate-50 rounded-xl">
+            <p class="text-[9px] font-black text-slate-400 uppercase">Status</p>
+            <span class="px-2 py-0.5 rounded-full text-[9px] font-black ${isCancelado ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'}">
+              ${escaparHTML(r[13])}
+            </span>
+          </div>
+        </div>
+
+        ${r[11] && r[11] !== 'Nenhum detalhe técnico informado' ? `
+          <div class="p-3 bg-slate-50 rounded-xl">
+            <p class="text-[9px] font-black text-slate-400 uppercase">Observações</p>
+            <p class="text-slate-600 text-xs">${escaparHTML(r[11])}</p>
+          </div>
+        ` : ''}
+
+        ${r[12] && r[12] !== 'Nenhum' ? `
+          <div class="p-3 bg-slate-50 rounded-xl">
+            <p class="text-[9px] font-black text-slate-400 uppercase">Itens</p>
+            <p class="text-slate-600 text-xs">${escaparHTML(r[12])}</p>
+          </div>
+        ` : ''}
+
+      </div>
+
+      <div class="px-6 pb-6 space-y-2">
+
+        ${(() => {
+          const _s = String(r[13]||'').toUpperCase();
+          const _canHab = _s !== 'CANCELADO' && _s !== 'HABILITADO' &&
+            (AppState.usuario.isAdmin || AppState.usuario.isSuperadmin || AppState.usuario.isHabilitador);
+          return _canHab ? `
+            <button onclick="document.getElementById('${mId}').remove();habilitarReserva('${id}')"
+              class="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black rounded-xl transition-all flex items-center justify-center gap-2">
+              <i class="fas fa-check-circle"></i> Habilitar espaço para uso
+            </button>` : '';
+        })()}
+
+        <div class="flex gap-2">
+          ${podeEditar && !isCancelado ? `
+            <button onclick="document.getElementById('${mId}').remove();prepararEdicao('${id}')"
+              class="flex-1 py-2.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-black rounded-xl">
+              Editar
+            </button>
+          ` : ''}
+
+          ${podeEditar && !isCancelado ? `
+            <button onclick="document.getElementById('${mId}').remove();confirmarCancelamento('${id}','${r[6]}')"
+              class="flex-1 py-2.5 bg-red-100 hover:bg-red-600 text-red-600 hover:text-white text-xs font-black rounded-xl">
+              Cancelar
+            </button>
+          ` : ''}
+        </div>
+
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(o);
+}
+
+
+function abrirDetalheRece(id) {
+  const r = AppState.colecoes.reservasRece?.find(x => x[0] === id);
+  if (!r) return;
+  const isCancelado = String(r[17]).toUpperCase() === 'CANCELADO';
+  const podeEditar  = AppState.usuario.isAdmin || AppState.usuario.isSuperadmin || AppState.usuario.isComunicacao || AppState.usuario.email === r[18];
+  const podeExcluir = AppState.usuario.isAdmin || AppState.usuario.isSuperadmin;
+  const mId = 'modalDetalheRece';
+  document.getElementById(mId)?.remove();
+  const o = document.createElement('div');
+  o.id = mId;
+  o.className = 'fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[70] flex items-center justify-center p-4';
+  o.innerHTML = `
+    <div class="bg-white w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden">
+      <div class="bg-yellow-500 px-6 py-4 flex items-center justify-between">
+        <div class="min-w-0 flex-1 mr-4">
+          <p class="text-white font-black text-sm uppercase leading-tight truncate">${escaparHTML(r[1])}</p>
+          <p class="text-yellow-100 text-[10px] mt-0.5">${escaparHTML(r[6])} · ${escaparHTML(r[2])} · ${escaparHTML(r[4])}–${escaparHTML(r[5])}</p>
+        </div>
+        <button onclick="document.getElementById('${mId}').remove()" class="text-yellow-100 hover:text-white w-8 h-8 flex items-center justify-center hover:bg-white/10 rounded-lg transition-all shrink-0">
+          <i class="fas fa-times text-sm"></i>
+        </button>
+      </div>
+      <div class="p-6 space-y-3">
+        <div class="grid grid-cols-2 gap-3">
+          ${r[7] ? `<div class="p-3 bg-slate-50 rounded-xl"><p class="text-[9px] font-black text-slate-400 uppercase mb-1">Categorias</p><p class="font-bold text-slate-700 text-xs">${escaparHTML(r[7])}</p></div>` : ''}
+          ${r[11] ? `<div class="p-3 bg-slate-50 rounded-xl"><p class="text-[9px] font-black text-slate-400 uppercase mb-1">Público Alvo</p><p class="font-bold text-slate-700 text-xs">${escaparHTML(r[11])}</p></div>` : ''}
+          ${r[14] ? `<div class="p-3 bg-slate-50 rounded-xl"><p class="text-[9px] font-black text-slate-400 uppercase mb-1">Acesso</p><p class="font-bold text-slate-700 text-xs">${escaparHTML(r[14])}</p></div>` : ''}
+          <div class="p-3 bg-slate-50 rounded-xl"><p class="text-[9px] font-black text-slate-400 uppercase mb-1">Status</p><span class="px-2 py-0.5 rounded-full text-[9px] font-black ${isCancelado?'bg-red-100 text-red-600':'bg-green-100 text-green-600'}">${escaparHTML(r[17])}</span></div>
+        </div>
+        ${r[15] ? `<div class="p-3 bg-slate-50 rounded-xl"><p class="text-[9px] font-black text-slate-400 uppercase mb-1">Descrição</p><p class="text-slate-600 text-xs">${escaparHTML(r[15])}</p></div>` : ''}
+      </div>
+      <div class="px-6 pb-6 flex gap-2">
+        ${podeEditar ? `<button onclick="document.getElementById('${mId}').remove();prepararEdicaoRece('${escaparHTML(id)}')" class="flex-1 py-2.5 bg-yellow-500 hover:bg-yellow-600 text-white text-xs font-black rounded-xl transition-all"><i class="fas fa-edit mr-1"></i>Editar</button>` : ''}
+        ${!isCancelado && podeEditar ? `<button onclick="document.getElementById('${mId}').remove();confirmarCancelamentoRece('${escaparHTML(id)}','${escaparHTML(r[1]).replace(/'/g, "\\\\'")}' )" class="flex-1 py-2.5 bg-red-100 hover:bg-red-600 text-red-600 hover:text-white text-xs font-black rounded-xl transition-all"><i class="fas fa-ban mr-1"></i>Cancelar</button>` : ''}
+        ${podeExcluir ? `<button onclick="document.getElementById('${mId}').remove();excluirReceDefinitivo('${escaparHTML(id)}')" class="py-2.5 px-4 bg-red-50 hover:bg-red-700 text-red-400 hover:text-white text-xs font-black rounded-xl transition-all"><i class="fas fa-trash-alt"></i></button>` : ''}
+      </div>
+    </div>`;
+  document.body.appendChild(o);
+}
+
+// ── Agenda Google Calendar View ───────────────────────────────────────────────
+function renderizarModoAgendaGoogle() {
+  const isMobile = window.innerWidth < 1024;
+  const container = isMobile
+    ? document.getElementById('agendaGoogleContainerMobile')
+    : document.getElementById('agendaGoogleContainer');
+  if (!container) return;
+
+  if (!AppState.colecoes.reservas || AppState.colecoes.reservas.length === 0) {
+    container.innerHTML = `<div style="padding:40px;text-align:center;color:#cbd5e1"><i class="fas fa-spinner fa-spin" style="font-size:24px"></i></div>`;
+    google.script.run
+      .withSuccessHandler(r => { AppState.colecoes.reservas = r || []; indexarReservas(); renderizarModoAgendaGoogle(); })
+      .obterReservas();
+    return;
+  }
+
+  const apenasMinhas = window._filtroMinhasAgenda || false;
+  let salaId = document.getElementById('agendaGoogleSala')?.value;
+  if (!salaId && !apenasMinhas && AppState.colecoes.salas?.length) {
+    salaId = String(AppState.colecoes.salas[0][0]);
+  }
+
+  const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+  const dow = hoje.getDay() === 0 ? 6 : hoje.getDay() - 1;
+  window._agendaGoogleSemana = window._agendaGoogleSemana || 0;
+  const inicioSemana = new Date(hoje);
+  inicioSemana.setDate(hoje.getDate() - dow + window._agendaGoogleSemana * 7);
+  const dias = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(inicioSemana); d.setDate(inicioSemana.getDate() + i); return d;
+  });
+
+  const _mA=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  const _lbl=document.getElementById('agendaGoogleSemanaLabel');
+  if(_lbl)_lbl.textContent=dias[0].getDate()+' '+_mA[dias[0].getMonth()]+' – '+dias[6].getDate()+' '+_mA[dias[6].getMonth()]+' '+dias[6].getFullYear();
+
+  const INICIO_MIN = 480, FIM_MIN = 1290, TOTAL_MIN = FIM_MIN - INICIO_MIN;
+  const PX_POR_HORA = 60, TOTAL_PX = (TOTAL_MIN / 60) * PX_POR_HORA;
+
+  const normData = d => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x.getTime(); };
+  const normHora = h => { const p = String(h).split(':'); return parseInt(p[0]) * 60 + parseInt(p[1]); };
+  const fmtMin   = m => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+
+  const parseData = r => {
+    if (r[1] instanceof Date) return new Date(r[1]);
+    const p = String(r[1]).split('/');
+    return p.length === 3 ? new Date(p[2], p[1] - 1, p[0]) : new Date(r[1]);
+  };
+
+  // Paleta por sala (usa índice das salas para cor consistente)
+  const coresSala = [
+    'border-purple-500 bg-purple-50',
+    'border-blue-500 bg-blue-50',
+    'border-emerald-500 bg-emerald-50',
+    'border-amber-500 bg-amber-50',
+    'border-pink-500 bg-pink-50',
+    'border-indigo-500 bg-indigo-50',
+    'border-teal-500 bg-teal-50',
+    'border-orange-500 bg-orange-50',
+  ];
+  const coresSalaTexto = [
+    'text-purple-800', 'text-blue-800', 'text-emerald-800',
+    'text-amber-800',  'text-pink-800', 'text-indigo-800',
+    'text-teal-800',   'text-orange-800',
+  ];
+  const coresSalaBadge = [
+    'bg-purple-100 text-purple-700',
+    'bg-blue-100 text-blue-700',
+    'bg-emerald-100 text-emerald-700',
+    'bg-amber-100 text-amber-700',
+    'bg-pink-100 text-pink-700',
+    'bg-indigo-100 text-indigo-700',
+    'bg-teal-100 text-teal-700',
+    'bg-orange-100 text-orange-700',
+  ];
+
+  // Mapa: salaId → índice de cor estável
+  const todasSalas = AppState.colecoes.salas || [];
+  const mapaCorSala = {};
+  todasSalas.forEach((s, i) => { mapaCorSala[String(s[0])] = i % coresSala.length; });
+
+  const getCorBloco = idSala => coresSala[mapaCorSala[String(idSala)] ?? 0];
+  const getCorTexto = idSala => coresSalaTexto[mapaCorSala[String(idSala)] ?? 0];
+  const getCorBadge = idSala => coresSalaBadge[mapaCorSala[String(idSala)] ?? 0];
+
+  const emailUsuario = String(AppState.usuario.email || '').toLowerCase().trim();
+  const todasReservas = AppState.colecoes.reservas || [];
+
+  // Índice local direto de reservas — não depende do cacheReservasIndex
+  const _parseDK = d => {
+    let dt;
+    if (d instanceof Date) { dt = new Date(d); }
+    else {
+      const s = String(d||'').trim();
+      if (s.includes('/')) { const p=s.split('/'); dt=new Date(+p[2],+p[1]-1,+p[0]); }
+      else if (s.includes('-')) { const p=s.split('-'); dt=new Date(+p[0],+p[1]-1,+p[2]); }
+    }
+    if (!dt||isNaN(dt.getTime())) return null;
+    return dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0');
+  };
+  const _idxAg = {};
+  todasReservas.forEach(r => {
+    const dk = _parseDK(r[1]);
+    const sk = String(r[4]||'').trim();
+    if (!dk||!sk) return;
+    if (!_idxAg[dk]) _idxAg[dk] = {};
+    if (!_idxAg[dk][sk]) _idxAg[dk][sk] = [];
+    _idxAg[dk][sk].push(r);
+  });
+
+  const horas = Array.from({ length: 14 }, (_, i) => 8 + i);
+  const nomesAbrev = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+  const modoMultiSala = apenasMinhas || !salaId;
+
+  // ── Header dos dias ──────────────────────────────────────────────────────
+  const headerDias = dias.map(d => {
+    const ehHoje = normData(d) === normData(new Date());
+    return `<div style="text-align:center;padding:6px 2px;border-left:1px solid #f1f5f9">
+      <div style="font-size:9px;font-weight:700;text-transform:uppercase;color:${ehHoje?'#7c3aed':'#94a3b8'}">${nomesAbrev[d.getDay()]}</div>
+      <div style="margin-top:2px;font-size:12px;font-weight:900;${ehHoje?'width:24px;height:24px;background:#7c3aed;color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:2px auto 0':'color:#334155'}">${d.getDate()}</div>
+    </div>`;
+  }).join('');
+
+  // ── Coluna de horas ──────────────────────────────────────────────────────
+  const colunaHoras = horas.map(h => {
+    const top = ((h * 60 - INICIO_MIN) / TOTAL_MIN) * TOTAL_PX;
+    return `
+      <div style="position:absolute;font-size:9px;color:#cbd5e1;font-weight:700;right:4px;top:${top-7}px;user-select:none">${h}h</div>
+      <div style="position:absolute;left:0;right:0;border-top:1px solid #f1f5f9;top:${top}px"></div>`;
+  }).join('');
+
+  // ── Colunas dos dias ─────────────────────────────────────────────────────
+  const colunasDias = dias.map(d => {
+    const dKey    = normData(d);
+    const ehHoje  = dKey === normData(new Date());
+    const ehPassado = d < hoje;
+    const dataStr = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+
+    const linhasHora = horas.map(h => {
+      const top = ((h * 60 - INICIO_MIN) / TOTAL_MIN) * TOTAL_PX;
+      return `<div style="position:absolute;left:0;right:0;border-top:1px solid #f1f5f9;pointer-events:none;top:${top}px"></div>`;
+    }).join('');
+
+    let nowMarker = '';
+    if (ehHoje) {
+      const agora = new Date();
+      const nowMin = agora.getHours() * 60 + agora.getMinutes();
+      if (nowMin >= INICIO_MIN && nowMin <= FIM_MIN) {
+        const top = ((nowMin - INICIO_MIN) / TOTAL_MIN) * TOTAL_PX;
+        nowMarker = `<div class="absolute left-0 right-0 z-10 pointer-events-none" style="top:${top}px">
+          <div class="border-t-2 border-purple-500 relative">
+            <div class="w-2 h-2 bg-purple-500 rounded-full absolute -top-1 -left-1"></div>
+          </div>
+        </div>`;
+      }
+    }
+
+    const diaKey = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+    const _indexDia = _idxAg[diaKey] || {};
+    let resDodia;
+    if (apenasMinhas) {
+      resDodia = Object.values(_indexDia).flat().filter(r => String(r[8]||'').toLowerCase().trim() === emailUsuario);
+    } else if (salaId) {
+      resDodia = _indexDia[String(salaId)] || [];
+    } else {
+      resDodia = Object.values(_indexDia).flat();
+    }
+
+    // Distribui blocos sobrepostos em colunas visuais
+    const blocos = [];
+    resDodia.filter(r => String(r[13]||'').toUpperCase() !== 'CANCELADO').forEach(r => {
+      const ini = normHora(r[2]);
+      const ter = normHora(r[3]);
+      let col = 0;
+      while (blocos.some(b => b.col === col && b.ini < ter && b.ter > ini)) col++;
+      blocos.push({ r, ini, ter, col });
+    });
+    const maxCol = blocos.length > 0 ? Math.max(...blocos.map(b => b.col)) + 1 : 1;
+
+    const blocosHTML = blocos.filter(({r}) => String(r[13]||'').toUpperCase() !== 'CANCELADO').map(({ r, ini, ter, col }) => {
+      const top    = ((ini - INICIO_MIN) / TOTAL_MIN) * TOTAL_PX;
+      const height = Math.max(((ter - ini) / TOTAL_MIN) * TOTAL_PX, 24);
+      const left   = (col / maxCol) * 100;
+      const width  = (1 / maxCol) * 100;
+      const idSala = String(r[4]);
+      const nomeSala = AppState.mapaSalas?.[idSala] || idSala;
+
+      // No modo multi-sala, cor por sala; no modo sala única, cor por setor
+      const _statusBloco = String(r[13]||'').toUpperCase();
+      const _isHabBloco  = _statusBloco === 'HABILITADO';
+      let corBloco, corTexto;
+      if (_isHabBloco) {
+        corBloco = 'border-emerald-500 bg-emerald-50';
+        corTexto = 'text-emerald-900';
+      } else if (modoMultiSala) {
+        corBloco = getCorBloco(idSala);
+        corTexto = getCorTexto(idSala);
+      } else {
+        const setorCores = {
+          'gestão':      'border-purple-500 bg-purple-50',
+          'comunicação': 'border-pink-500 bg-pink-50',
+          'formação':    'border-blue-500 bg-blue-50',
+          'produção':    'border-amber-500 bg-amber-50',
+          'técnico':     'border-emerald-500 bg-emerald-50',
+        };
+        const setorTextoCores = {
+          'gestão':      'text-purple-900',
+          'comunicação': 'text-pink-900',
+          'formação':    'text-blue-900',
+          'produção':    'text-amber-900',
+          'técnico':     'text-emerald-900',
+        };
+        const s = String(r[9] || '').toLowerCase();
+        const chave = Object.keys(setorCores).find(k => s.includes(k));
+        corBloco = setorCores[chave] || 'border-slate-400 bg-slate-50';
+        corTexto = setorTextoCores[chave] || 'text-slate-800';
+      }
+
+      // Badge de sala — só exibe no modo multi-sala
+      const badgeSala = modoMultiSala ? `
+        <div class="inline-flex items-center gap-1 ${getCorBadge(idSala)} px-1.5 py-0.5 rounded-md mt-0.5" style="font-size:8px; font-weight:800; line-height:1.2; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+          <svg width="6" height="6" viewBox="0 0 6 6" fill="currentColor" style="shrink:0; opacity:0.7">
+            <circle cx="3" cy="3" r="3"/>
+          </svg>
+          ${escaparHTML(nomeSala)}
+        </div>` : '';
+
+      return `
+        <div
+          class="absolute border-l-4 ${corBloco} rounded-r-lg shadow-sm cursor-pointer overflow-hidden
+                 transition-all hover:brightness-95 hover:shadow-md hover:z-20"
+          style="top:${top}px; height:${height}px; left:${left}%; width:calc(${width}% - 3px);"
+          onclick="event.stopPropagation(); abrirDetalheReserva('${escaparHTML(r[0])}')"
+          title="${escaparHTML(r[6])} — ${escaparHTML(nomeSala)} — ${fmtMin(ini)}–${fmtMin(ter)}">
+          <div class="px-1.5 py-1 flex flex-col h-full">
+            <div class="text-[9px] font-black truncate opacity-60 ${corTexto}">${escaparHTML(r[9] || '—')}</div>
+            <div class="text-[10px] font-bold truncate leading-tight ${corTexto}">${escaparHTML(r[6])}</div>
+            ${height > 34 ? `<div class="text-[9px] opacity-50 ${corTexto}">${fmtMin(ini)}–${fmtMin(ter)}</div>` : ''}
+            ${_isHabBloco ? `<span style="font-size:8px;font-weight:900;color:#059669;background:#d1fae5;border-radius:4px;padding:0 3px;width:fit-content">✓ HAB</span>` : `<span style="font-size:7px;font-weight:900;color:#d97706;background:#fef3c7;border-radius:4px;padding:0 3px;width:fit-content">HAB?</span>`}
+            ${badgeSala}
+          </div>
+        </div>`;
+    }).join('');
+
+    // Área clicável para agendar (apenas modo sala específica)
+    const areaClicar = (!apenasMinhas && salaId) ? `
+      <div
+        class="absolute inset-0 cursor-crosshair hover:bg-purple-50/40 transition-colors"
+        onclick="abrirFormularioNoSlot('${salaId}', '${dataStr}', event)"
+        title="Clique para agendar">
+      </div>` : '';
+
+    return `<div style="position:relative;border-left:1px solid #f1f5f9;height:${TOTAL_PX}px;background:${ehPassado?'rgba(248,250,252,0.4)':ehHoje?'rgba(124,58,237,0.03)':'transparent'}">
+        ${linhasHora}${nowMarker}${areaClicar}${blocosHTML}
+      </div>`;
+  }).join('');
+
+  // ── Legenda de salas (modo multi-sala) ───────────────────────────────────
+  const salasPresentes = modoMultiSala
+    ? [...new Set(todasReservas.map(r => r[4]))]
+    : [];
+
+  const legendaHTML = salasPresentes.length > 0 ? `
+    <div class="flex flex-wrap items-center gap-2 px-4 py-2.5 border-t border-slate-100 bg-slate-50/50">
+      <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest shrink-0">Espaços:</span>
+      ${salasPresentes.map(id => {
+        const nome = AppState.mapaSalas?.[id] || id;
+        return `<span class="inline-flex items-center gap-1.5 ${getCorBadge(id)} px-2 py-1 rounded-lg" style="font-size:10px; font-weight:700;">
+          <svg width="7" height="7" viewBox="0 0 7 7" fill="currentColor"><circle cx="3.5" cy="3.5" r="3.5"/></svg>
+          ${escaparHTML(nome)}
+        </span>`;
+      }).join('')}
+    </div>` : '';
+
+  // ── Monta HTML ────────────────────────────────────────────────────────────
+  container.innerHTML = `
+    <div style="background:#fff;border-radius:12px;border:1px solid #e2e8f0;overflow:hidden">
+
+      <!-- Barra de estado integrada -->
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 16px;border-bottom:1px solid #f1f5f9;background:#f8fafc;gap:8px;flex-wrap:wrap">
+        <div class="flex items-center gap-2">
+          <div class="w-1.5 h-1.5 rounded-full ${apenasMinhas ? 'bg-purple-500 animate-pulse' : salaId ? 'bg-slate-300' : 'bg-blue-400'}"></div>
+          <span class="text-[10px] font-black uppercase tracking-widest text-slate-500">
+            ${apenasMinhas
+              ? 'Minhas reservas — todas as salas'
+              : salaId
+                ? escaparHTML(AppState.mapaSalas?.[salaId] || salaId)
+                : 'Todas as salas'}
+          </span>
+        </div>
+        <label class="flex items-center gap-2 cursor-pointer select-none">
+          <span class="text-[10px] font-black uppercase tracking-widest ${apenasMinhas ? 'text-purple-600' : 'text-slate-400'}">
+            Minhas
+          </span>
+          <div class="relative">
+            <input type="checkbox" id="filtroMinhasAgenda" class="sr-only peer" ${apenasMinhas ? 'checked' : ''}>
+            <div class="w-9 h-5 bg-slate-200 rounded-full transition-colors
+              peer-checked:bg-purple-600
+              after:content-[''] after:absolute after:top-0.5 after:left-0.5
+              after:bg-white after:rounded-full after:h-4 after:w-4
+              after:transition-all peer-checked:after:translate-x-4">
+            </div>
+          </div>
+        </label>
+      </div>
+
+      <div style="display:flex;height:100%;overflow:hidden">
+        <!-- Coluna horas fixa -->
+        <div style="width:44px;min-width:44px;flex-shrink:0;overflow:hidden;position:relative;border-right:1px solid #f1f5f9">
+          <div style="height:32px;background:#f8fafc;border-bottom:1px solid #f1f5f9"></div>
+          <div id="_agHorasCol" style="overflow:hidden;position:relative;height:${TOTAL_PX}px">
+            ${colunaHoras}
+          </div>
+        </div>
+        <!-- Grid scroll horizontal + vertical -->
+        <div style="flex:1;overflow-x:auto;overflow-y:hidden;display:flex;flex-direction:column">
+          <!-- Header dias scroll horizontal -->
+          <div id="_agHeaderScroll" style="overflow:hidden;flex-shrink:0">
+            <div style="display:grid;grid-template-columns:repeat(7,minmax(${isMobile?'80':'100'}px,1fr));min-width:${isMobile?560:700}px;border-bottom:1px solid #f1f5f9;background:#fff">
+              ${headerDias}
+            </div>
+          </div>
+          <!-- Grade vertical scroll -->
+          <div id="_agGridScroll" style="flex:1;overflow-y:auto;overflow-x:auto" onscroll="_syncAgendaScroll(this)">
+            <div style="display:grid;grid-template-columns:repeat(7,minmax(${isMobile?'80':'100'}px,1fr));min-width:${isMobile?560:700}px">
+          <div class="border-r border-slate-100 relative bg-white" style="height:${TOTAL_PX}px;">
+            ${colunaHoras}
+          </div>
+          ${colunasDias}
+        </div>
+          </div><!-- fim grid scroll -->
+        </div><!-- fim flex col -->
+      </div><!-- fim flex row -->
+
+      ${legendaHTML}
+    </div>`;
+  // Sincroniza scroll horizontal header ↔ grid
+  setTimeout(function() {
+    const gs = document.getElementById('_agGridScroll');
+    const hs = document.getElementById('_agHeaderScroll');
+    const hc = document.getElementById('_agHorasCol');
+    if (gs && hs) {
+      gs.addEventListener('scroll', function() {
+        hs.scrollLeft = gs.scrollLeft;
+        if (hc) hc.style.marginTop = '-'+gs.scrollTop+'px';
+      });
+    }
+  }, 50);
+
+  // ── Listener toggle ───────────────────────────────────────────────────────
+  document.getElementById('filtroMinhasAgenda')?.addEventListener('change', e => {
+    window._filtroMinhasAgenda = e.target.checked;
+    // Ao ativar "Minhas", limpa seleção de sala para não confundir
+    if (e.target.checked) {
+      const sel = document.getElementById('agendaGoogleSala');
+      if (sel) sel.value = '';
+    }
+    renderizarModoAgendaGoogle();
+  });
+}
+
+function atualizarAgendaAposMudanca() {
+
+  if (typeof AppState !== 'undefined') {
+    AppState.colecoes.reservas = [];
+  }
+
+  google.script.run
+    .withSuccessHandler(function(reservas) {
+
+      AppState.colecoes.reservas = reservas || [];
+      indexarReservas();
+
+      const agendaVisivel = document
+        .getElementById('viewAgendaGoogle')
+        ?.classList.contains('hidden') === false;
+
+      if (agendaVisivel && typeof renderizarModoAgendaGoogle === 'function') {
+        renderizarModoAgendaGoogle();
+      } else if (typeof renderizarReservas === 'function') {
+        renderizarReservas();
+      }
+
+    })
+    .withFailureHandler(function(err) {
+      console.error('Erro ao atualizar agenda:', err);
+    })
+    .obterReservas();
+}
+
+function agendaSemanaAnterior() {
+  window._agendaGoogleSemana--;
+  renderizarModoAgendaGoogle();
+}
+
+function agendaProximaSemana() {
+  window._agendaGoogleSemana++;
+  renderizarModoAgendaGoogle();
+}
+
+function agendaHoje() {
+  window._agendaGoogleSemana = 0;
+  renderizarModoAgendaGoogle();
+}
+
+function abrirFormularioNoSlot(salaId, dataStr, event) {
+  const coluna = event.currentTarget;
+  const rect = coluna.getBoundingClientRect();
+  const y = Math.max(0, event.clientY - rect.top);
+  const INICIO_MIN = 480, FIM_MIN = 1290, TOTAL_MIN = 810;
+  const minutos = Math.round((y / rect.height) * TOTAL_MIN);
+  const minSnapped = Math.round(Math.min(Math.max(INICIO_MIN + minutos, INICIO_MIN), FIM_MIN - 30) / 30) * 30;
+  const fimSnapped = Math.min(minSnapped + 60, FIM_MIN);
+  const horaStr = fmtHoraMin(minSnapped);
+  const fimStr  = fmtHoraMin(fimSnapped);
+
+  resetarFormulario();
+  mostrarAba('aba-nova-reserva');
+
+  setTimeout(() => {
+    const selSala = document.getElementById('selectSala');
+    if (selSala) { selSala.value = salaId; selSala.dispatchEvent(new Event('change')); }
+    if (calendarInstance && dataStr) {
+      const p = dataStr.split('/');
+      calendarInstance.setDate(new Date(Number(p[2]), Number(p[1])-1, Number(p[0])), true);
+    }
+    const horaIniEl = document.getElementById('horaInicio');
+    const horaTerEl = document.getElementById('horaTermino');
+    if (horaIniEl) horaIniEl.value = horaStr;
+    if (horaTerEl) horaTerEl.value = fimStr;
+    if (typeof validarHorarios === 'function') validarHorarios();
+    if (typeof atualizarDisponibilidadeItens === 'function') atualizarDisponibilidadeItens();
+    if (typeof atualizarTudoTempoReal === 'function') atualizarTudoTempoReal();
+  }, 350);
+}
+
+
+function fmtHoraMin(m) {
+  return `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
+}
+
+// ── Convidados Internos ───────────────────────────────────────────────────────
+var convidadosInternos = [];
+
+function adicionarConvidadoInterno() {
+  const input = document.getElementById('inputConvidadoEmail');
+  const emails = input.value.split(/[,;\s]+/).map(e => e.trim().toLowerCase()).filter(e => e.includes('@'));
+  emails.forEach(email => {
+    if (!convidadosInternos.includes(email)) convidadosInternos.push(email);
+  });
+  input.value = '';
+  renderizarChipsConvidados();
+  sincronizarInputConvidados();
+}
+
+function removerConvidadoInterno(email) {
+  convidadosInternos = convidadosInternos.filter(e => e !== email);
+  renderizarChipsConvidados();
+  sincronizarInputConvidados();
+}
+
+function renderizarChipsConvidados() {
+  const container = document.getElementById('chipsConvidados');
+  if (!container) return;
+  container.innerHTML = convidadosInternos.map(email => `
+    <span class="inline-flex items-center gap-1.5 bg-indigo-100 text-indigo-700 px-2.5 py-1 rounded-full text-[10px] font-bold">
+      <i class="fas fa-user text-[8px]"></i>${escaparHTML(email)}
+      <button type="button" onclick="removerConvidadoInterno('${escaparHTML(email)}')"
+        class="text-indigo-400 hover:text-red-500 transition-colors ml-1 font-black">×</button>
+    </span>`).join('');
+}
+
+function sincronizarInputConvidados() {
+  const hidden = document.getElementById('inputOutroResponsavel');
+  if (hidden) hidden.value = convidadosInternos.join(' | ');
+}
+
+// ── Evento Institucional ──────────────────────────────────────────────────────
+function alternarEventoInstitucional(ativado) {
+  const bloco = document.getElementById('blocoEventoInstitucional');
+  if (bloco) ativado ? bloco.classList.remove('hidden') : bloco.classList.add('hidden');
+}
+
+function dispararConviteInstitucional() {
+  const textareaEmails = document.getElementById('inputEmailsExternos');
+  const textareaTexto  = document.getElementById('inputTextoConvite');
+  const nomeAcao = document.getElementById('inputNomeAcao')?.value || '';
+  const datas = calendarInstance?.selectedDates || [];
+  const dataStr = datas.length > 0 ? flatpickr.formatDate(datas[0], 'd/m/Y') : '';
+  const horaStr = document.getElementById('horaInicio')?.value || '';
+  const sala = document.getElementById('selectSala');
+  const espaco = sala ? (AppState.mapaSalas?.[sala.value] || sala.options[sala.selectedIndex]?.text || '') : '';
+
+  if (!textareaEmails?.value.trim()) { Swal.fire('Atenção', 'Informe pelo menos um e-mail externo.', 'warning'); return; }
+  if (!textareaTexto?.value.trim())  { Swal.fire('Atenção', 'Informe o texto do convite.', 'warning'); return; }
+  if (!nomeAcao)                     { Swal.fire('Atenção', 'Preencha o título da ação antes de enviar convites.', 'warning'); return; }
+
+  const emails = textareaEmails.value.split(/[\n,;]+/).map(e => e.trim()).filter(e => e.includes('@'));
+  if (!emails.length) { Swal.fire('Atenção', 'Nenhum e-mail válido encontrado.', 'warning'); return; }
+
+  Swal.fire({
+    title: `Enviar para ${emails.length} destinatário(s)?`,
+    html: `<div class="text-left text-sm"><p class="font-bold mb-1">Ação: ${escaparHTML(nomeAcao)}</p><p class="text-slate-500 text-xs">${emails.map(e => `<span class="bg-slate-100 px-1 rounded">${escaparHTML(e)}</span>`).join(' ')}</p></div>`,
+    icon: 'question',
+    showCancelButton: true,
+    confirmButtonText: '<i class="fas fa-paper-plane mr-1"></i>Enviar',
+    cancelButtonText: 'Cancelar'
+  }).then(res => {
+    if (!res.isConfirmed) return;
+    showLoader(true);
+    google.script.run
+      .withSuccessHandler(r => {
+        showLoader(false);
+        if (r.success) Swal.fire({ icon:'success', title:'Convites enviados!', timer:2500, showConfirmButton:false });
+        else Swal.fire('Erro', r.erro, 'error');
+      })
+      .withFailureHandler(err => { showLoader(false); Swal.fire('Erro', err.message, 'error'); })
+      .enviarConviteEmailInstitucional({ emails, titulo: nomeAcao, texto: textareaTexto.value, dataInicio: dataStr, horaInicio: horaStr, espaco });
+  });
+}
+
+// ── Google Calendar para convidados internos ──────────────────────────────────
+function enviarConvitesCalendarInterno() {
+  if (!convidadosInternos.length) return;
+  const nomeAcao = document.getElementById('inputNomeAcao')?.value || '';
+  const datas = calendarInstance?.selectedDates || [];
+  if (!datas.length || !nomeAcao) return;
+  const dataStr = flatpickr.formatDate(datas[0], 'd/m/Y');
+  const horaIni = document.getElementById('horaInicio')?.value || '';
+  const horaTer = document.getElementById('horaTermino')?.value || '';
+  const sala    = document.getElementById('selectSala');
+  const espaco  = sala ? (AppState.mapaSalas?.[sala.value] || '') : '';
+  const release = document.getElementById('inputRelease')?.value || '';
+
+  google.script.run
+    .withSuccessHandler(r => {
+      if (!r.success) console.warn('Calendar invite falhou:', r.erro);
+    })
+    .withFailureHandler(err => console.warn('Erro calendar:', err.message))
+    .enviarConvitesCalendar({ titulo: nomeAcao, dataInicio: dataStr, horaInicio: horaIni, horaTermino: horaTer, descricao: release, espaco, emails: [...new Set([AppState.usuario.email, ...convidadosInternos].filter(Boolean))] });
+}
+
+// Chame enviarConvitesCalendarInterno dentro de finalizarSucesso, ANTES do reset:
+// (adicione no início de finalizarSucesso)
+// if (document.getElementById('checkConvidarCalendar')?.checked && convidadosInternos.length > 0) {
+//   enviarConvitesCalendarInterno();
+// }
+
+// ── Imagem RECE ───────────────────────────────────────────────────────────────
+function previewImagemRece(input) {
+  const file = input.files?.[0];
+  if (!file) return;
+  if (file.size > 4 * 1024 * 1024) {
+    Swal.fire('Arquivo grande', 'Máximo 4MB.', 'warning');
+    input.value = ''; return;
+  }
+  const reader = new FileReader();
+  reader.onload = e => {
+    const prev = document.getElementById('receImagemPreview');
+    const img  = document.getElementById('receImagemPreviewImg');
+    if (img)  img.src = e.target.result;
+    if (prev) prev.classList.remove('hidden');
+  };
+  reader.readAsDataURL(file);
+}
+
+async function uploadImagemSeNecessario() {
+  const fileInput = document.getElementById('receImagemFile');
+  const urlAtual  = document.getElementById('receImagemUrl')?.value;
+  if (!fileInput?.files?.length) return urlAtual || '';
+
+  const file = fileInput.files[0];
+  return new Promise(resolve => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const b64 = e.target.result.split(',')[1];
+      google.script.run
+        .withSuccessHandler(r => resolve(r.success ? r.url : urlAtual || ''))
+        .withFailureHandler(() => resolve(urlAtual || ''))
+        .uploadImagemRece(b64, file.type, file.name);
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function alternarModoVisualizacaoRece(modo) {
+  const tabelaWrap = document.querySelector('#aba-agenda-rece .bg-white.rounded-3xl.shadow-xl .overflow-x-auto');
+  const semRes   = document.getElementById('semResultadosRece');
+  const agendaV  = document.getElementById('viewAgendaRece');
+  const btnLista = document.getElementById('btnModoListaRece');
+  const btnAgend = document.getElementById('btnModoAgendaRece');
+
+  const setAtivo = (btn) => {
+    if (!btn) return;
+    btn.classList.add('bg-slate-900', 'text-white');
+    btn.classList.remove('bg-slate-200', 'text-slate-600');
+  };
+  const setInativo = (btn) => {
+    if (!btn) return;
+    btn.classList.add('bg-slate-200', 'text-slate-600');
+    btn.classList.remove('bg-slate-900', 'text-white');
+  };
+
+  if (modo === 'agenda') {
+    if (tabelaWrap)  tabelaWrap.classList.add('hidden');
+    if (semRes) semRes.classList.add('hidden');
+    agendaV?.classList.remove('hidden');
+    setInativo(btnLista);
+    setAtivo(btnAgend);
+    window._agendaReceSemana = window._agendaReceSemana || 0;
+    _initMiniCalRece();
+    renderizarModoAgendaRece();
+  } else {
+    if (tabelaWrap)  tabelaWrap.classList.remove('hidden');
+    agendaV?.classList.add('hidden');
+    setInativo(btnAgend);
+    setAtivo(btnLista);
+    renderizarTabelaRece();
+  }
+}
+
+function renderizarModoAgendaRece() {
+  const container = document.getElementById('agendaReceContainer');
+  if (!container) return;
+
+  window._agendaReceSemana = window._agendaReceSemana || 0;
+  const hoje = new Date(); hoje.setHours(0,0,0,0);
+  const dow = hoje.getDay() === 0 ? 6 : hoje.getDay() - 1;
+  const inicioSemana = new Date(hoje);
+  inicioSemana.setDate(hoje.getDate() - dow + window._agendaReceSemana * 7);
+
+  const dias = Array.from({length: 7}, (_, i) => {
+    const d = new Date(inicioSemana); d.setDate(inicioSemana.getDate() + i); return d;
+  });
+
+  const nomeDias = ['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'];
+  const meses    = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+
+  const d0 = dias[0], d6 = dias[6];
+  if (document.getElementById('agendaReceSemanaLabel'))
+    document.getElementById('agendaReceSemanaLabel').textContent =
+      `${d0.getDate()} ${meses[d0.getMonth()]} a ${d6.getDate()} ${meses[d6.getMonth()]} ${d6.getFullYear()}`;
+
+  const normData = d => { const x = new Date(d); x.setHours(0,0,0,0); return x.getTime(); };
+  const normHora = h => { if (!h) return 0; const p = String(h).split(':'); return parseInt(p[0])*60+parseInt(p[1]); };
+  const fmtHoraMin = m => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
+
+  const fimSemana = new Date(dias[6]); fimSemana.setHours(23,59,59,999);
+  if (!AppState.colecoes.reservasRece) {
+    container.innerHTML = '<div class="p-16 text-center text-slate-300"><i class="fas fa-spinner animate-spin text-3xl mb-3"></i><br><span class="text-sm font-bold">Carregando...</span></div>';
+    google.script.run
+      .withSuccessHandler(function(rece) {
+        AppState.colecoes.reservasRece = rece || [];
+        renderizarModoAgendaRece();
+      })
+      .withFailureHandler(function() { container.innerHTML = '<div class="p-10 text-center text-red-400">Erro ao carregar eventos.</div>'; })
+      .obterReservasRece();
+    return;
+  }
+
+  const filtroSalaAgenda = document.getElementById('agendaReceSala')?.value || '';
+  const reservas = (AppState.colecoes.reservasRece || []).filter(r => {
+    if (String(r[17]).toUpperCase() === 'CANCELADO') return false;
+    if (filtroSalaAgenda && String(r[6]).trim() !== filtroSalaAgenda) return false;
+    const p = String(r[2]||'').split('/');
+    if (p.length !== 3) return false;
+    const d = new Date(p[2], p[1]-1, p[0]); d.setHours(0,0,0,0);
+    return d >= inicioSemana && d <= fimSemana;
+  });
+
+  // INDEXAÇÃO LEVE POR DATA
+  const reservasPorData = {};
+
+  reservas.forEach(r => {
+    const p = String(r[2] || '').split('/');
+    if (p.length !== 3) return;
+
+    const key = `${p[2]}-${p[1]}-${p[0]}`; // YYYY-MM-DD
+
+    if (!reservasPorData[key]) reservasPorData[key] = [];
+    reservasPorData[key].push(r);
+  });
+
+  const INICIO_MIN = 480, FIM_MIN = 1290, TOTAL_MIN = 810;
+  const PX_POR_HORA = 64;
+  const TOTAL_PX = (TOTAL_MIN / 60) * PX_POR_HORA;
+  const horasMarkers = Array.from({length:14}, (_,i) => 8+i);
+  const colStyle = '';
+
+  let html = `<div class="bg-white rounded-2xl border border-slate-200 overflow-hidden flex flex-col h-full">
+    <div class="grid border-b border-slate-100" style="${colStyle}">
+      <div class="p-2 border-r border-slate-100"></div>
+      ${dias.map((d,i) => {
+        const ehHoje = normData(d) === normData(new Date());
+        return `<div class="p-2 text-center border-l border-slate-100 ${ehHoje ? 'bg-yellow-50' : ''}">
+          <div class="text-[10px] font-bold ${ehHoje ? 'text-yellow-600' : 'text-slate-400'} uppercase">${nomeDias[i]}</div>
+          <div class="text-sm font-black mt-0.5 ${ehHoje ? 'w-7 h-7 bg-yellow-500 text-white rounded-full flex items-center justify-center mx-auto' : 'text-slate-700'}">${d.getDate()}</div>
+        </div>`;
+      }).join('')}
+    </div>
+    <div class="overflow-y-auto" style="max-height:calc(100vh - 420px);">
+      <div class="grid relative" style="${colStyle}; height:${TOTAL_PX + 24}px;">
+        <div class="border-r border-slate-100 relative">
+          ${horasMarkers.map(h => {
+            const top = ((h*60-INICIO_MIN)/TOTAL_MIN)*TOTAL_PX;
+            return `<div class="absolute right-1 text-[9px] text-slate-300 font-bold" style="top:${top-7}px">${String(h).padStart(2,'0')}h</div>`;
+          }).join('')}
+        </div>
+        ${dias.map((d,di) => {
+          const dKey = normData(d);
+          const ehHoje = dKey === normData(new Date());
+          const ehPassado = d < new Date(normData(new Date()));
+
+          const linhasHora = horasMarkers.map(h => {
+            const top = ((h*60-INICIO_MIN)/TOTAL_MIN)*TOTAL_PX;
+            return `<div class="absolute left-0 right-0 border-t border-slate-100 pointer-events-none" style="top:${top}px"></div>`;
+          }).join('');
+
+          const agora = new Date();
+          let nowMarker = '';
+          if (ehHoje) {
+            const nowMin = agora.getHours()*60+agora.getMinutes();
+            if (nowMin>=INICIO_MIN && nowMin<=FIM_MIN) {
+              const top = ((nowMin-INICIO_MIN)/TOTAL_MIN)*TOTAL_PX;
+              nowMarker = `<div class="absolute left-0 right-0 z-10 pointer-events-none" style="top:${top}px">
+                <div class="border-t-2 border-yellow-400 relative"><div class="w-2 h-2 bg-yellow-400 rounded-full absolute -top-1 -left-1"></div></div>
+              </div>`;
+            }
+          }
+
+          const dataKey = new Date(dKey).toISOString().slice(0, 10);
+          const resDodia = reservasPorData[dataKey] || [];
+
+          const resBlocks = resDodia.map(r => {
+          const ini = normHora(r[4]), ter = normHora(r[5]);
+          const top = Math.max(0, ((ini - INICIO_MIN) / TOTAL_MIN) * TOTAL_PX);
+          const height = Math.max(18, ((ter - ini) / TOTAL_MIN) * TOTAL_PX);
+
+          const podeEditar =
+            AppState.usuario.isAdmin ||
+            AppState.usuario.isSuperadmin ||
+            AppState.usuario.isComunicacao ||
+            AppState.usuario.email === r[18];
+
+          const imagem = (r[20] && String(r[20]).trim())
+          ? `<img src="${escaparHTML(String(r[20]))}" class="w-full h-8 object-cover rounded mt-0.5 opacity-80" onerror="this.remove()">`
+          : '';
+
+          return `
+            <div class="absolute left-1 right-1 border-l-2 border-yellow-400 bg-yellow-50 rounded-r-lg overflow-hidden z-5 shadow-sm ${podeEditar ? 'cursor-pointer hover:brightness-95' : 'cursor-default'} transition-all"
+              style="top:${top}px;height:${height}px;"
+              onclick="event.stopPropagation();abrirDetalheRece('${escaparHTML(r[0])}')"
+              title="${escaparHTML(r[1] || '')} — ${fmtHoraMin(ini)} às ${fmtHoraMin(ter)}">
+
+              <div class="p-1">
+                <p class="text-[9px] font-black text-slate-700 leading-tight truncate">
+                  ${escaparHTML(r[1] || '')}
+                </p>
+
+                ${height > 28 ? `
+                  <p class="text-[8px] text-slate-500">
+                    ${fmtHoraMin(ini)}–${fmtHoraMin(ter)}
+                  </p>
+                ` : ''}
+
+                ${imagem}
+              </div>
+            </div>
+          `;
+        }).join('');
+
+          return `<div class="relative border-l border-slate-100 ${ehPassado?'bg-slate-50/50':ehHoje?'bg-yellow-50/20':''}" style="height:${TOTAL_PX+24}px;">
+            ${linhasHora}${nowMarker}${resBlocks}
+          </div>`;
+        }).join('')}
+      </div>
+    </div>
+  </div>`;
+
+  container.innerHTML = '<div class="p-10 text-center text-slate-300 font-bold">Carregando agenda...</div>';
+
+  requestAnimationFrame(() => {
+    container.innerHTML = html;
+  });
+}
+
+function validarConflitoTempoReal() {
+
+  const horaInicio = document.getElementById('horaInicio');
+  const horaTermino = document.getElementById('horaTermino');
+  const selectSala = document.getElementById('selectSala');
+  const aviso = document.getElementById('avisoHorarioOcupado');
+
+  if (!horaInicio?.value || !horaTermino?.value || !selectSala?.value) return;
+
+  const datas = (typeof calendarInstance !== 'undefined' && calendarInstance?.selectedDates?.length)
+    ? calendarInstance.selectedDates.map(d => flatpickr.formatDate(d, "d/m/Y"))
+    : [];
+
+  if (datas.length === 0) return;
+
+  const dados = {
+    horaInicio: horaInicio.value,
+    horaTermino: horaTermino.value,
+    sala: selectSala.value
+  };
+
+  const c = verificarConflitoFrontend(dados, datas, null);
+
+  horaInicio.classList.remove('border-red-500');
+  horaTermino.classList.remove('border-red-500');
+  aviso.classList.add('hidden');
+  aviso.innerHTML = '';
+
+  const btnSubmit = document.querySelector('#formReserva button[type="submit"]');
+  if (btnSubmit) btnSubmit.disabled = false;
+  if (!c.conflito) return;
+
+  if (c.tipo === 'INICIO') {
+    horaInicio.classList.add('border-red-500');
+    aviso.innerHTML = `⚠️ Conflito no início. Use após ${c.sugestao}`;
+  } else if (c.tipo === 'FIM') {
+    horaTermino.classList.add('border-red-500');
+    aviso.innerHTML = `⚠️ Conflito no término. Termine antes de ${c.reserva[2]}`;
+  } else {
+    horaInicio.classList.add('border-red-500');
+    horaTermino.classList.add('border-red-500');
+    aviso.innerHTML = `⚠️ Período ocupado (${c.reserva[2]}–${c.reserva[3]})`;
+  }
+
+  aviso.classList.remove('hidden');
+  if (btnSubmit) btnSubmit.disabled = c.conflito;
+}
+
+function atualizarSugestoes() {
+
+  const data = calendarInstance?.selectedDates?.[0];
+  if (!data) return;
+
+  
+  mostrarHorariosDisponiveisUI();
+}
+
+function obterHorariosLivresComIntervalo(sala, data) {
+
+  const dataKey = normalizarDataKey(data);
+  const salaKey = String(sala);
+
+  const reservas =
+    AppState.cacheReservasIndex?.[dataKey]?.[salaKey] || [];
+
+  const normHora = h => {
+    const [hh, mm] = String(h).split(':').map(Number);
+    return hh * 60 + mm;
+  };
+
+  const toHora = m => {
+    const h = String(Math.floor(m / 60)).padStart(2,'0');
+    const min = String(m % 60).padStart(2,'0');
+    return `${h}:${min}`;
+  };
+
+  const inicioDia = 8 * 60;
+  const fimDia = 21 * 60 + 30;
+
+  let ocupados = [];
+
+  reservas.forEach(r => {
+    if (String(r[4]) !== String(sala)) return;
+    if ((r[13] || '').toUpperCase() === 'CANCELADO') return;
+
+    ocupados.push({
+      inicio: normHora(r[2]),
+      fim: normHora(r[3])
+    });
+  });
+
+  ocupados.sort((a,b)=>a.inicio-b.inicio);
+
+  let livres = [];
+  let cursor = inicioDia;
+
+  ocupados.forEach(o => {
+    if (cursor < o.inicio) {
+      livres.push({inicio: cursor, fim: o.inicio});
+    }
+    cursor = Math.max(cursor, o.fim);
+  });
+
+  if (cursor < fimDia) {
+    livres.push({inicio: cursor, fim: fimDia});
+  }
+
+  return livres.map(l => ({
+    inicio: toHora(l.inicio),
+    fim: toHora(l.fim)
+  }));
+}
+
+function obterSalasDisponiveisPorData(data, horaInicio, horaTermino) {
+
+  const salas = AppState.colecoes.salas || [];
+
+  const normHora = h => {
+    const p = String(h || '').split(':');
+    return parseInt(p[0]) * 60 + parseInt(p[1]);
+  };
+
+  const inicio = normHora(horaInicio);
+  const termino = normHora(horaTermino);
+
+  const dataKey = normalizarDataKey(data);
+  if (!dataKey) return [];
+
+  return salas.filter(s => {
+
+    const idSala = String(s[0]).trim();
+
+    const reservasSala =
+      AppState.cacheReservasIndex?.[dataKey]?.[idSala] || [];
+
+    const conflito = reservasSala.some(r => {
+
+      if ((r[13] || '').toUpperCase() === 'CANCELADO') return false;
+
+      const ini = normHora(r[2]);
+      const ter = normHora(r[3]);
+
+      return inicio < ter && termino > ini;
+
+    });
+
+    return !conflito;
+
+  }).map(s => ({
+    id: s[0],
+    nome: s[1]
+  }));
+
+}
+
+
+function mostrarSalasDisponiveisUI(data) {
+
+  const container = document.getElementById('salasDisponiveis');
+  if (!container) return;
+
+  const horaIni = document.getElementById('horaInicio')?.value;
+  const horaTer = document.getElementById('horaTermino')?.value;
+
+  if (!horaIni || !horaTer || !data) {
+    container.innerHTML = '';
+    return;
+  }
+
+  const salaAtual = document.getElementById('selectSala')?.value;
+
+  const salasDisponiveis = obterSalasDisponiveisPorData(
+    data,
+    horaIni,
+    horaTer
+  );
+
+  if (!salasDisponiveis.length) {
+    container.innerHTML =
+      '<span class="text-xs text-gray-500">Nenhuma sala disponível nesse horário</span>';
+    return;
+  }
+
+  const html = salasDisponiveis
+    .filter(s => String(s.id) !== String(salaAtual))
+    .map(s => `
+      <button onclick="selecionarSala('${s.id}')"
+        class="px-2 py-1 bg-blue-100 hover:bg-blue-200 rounded text-xs font-bold mr-1 mb-1">
+        ${escaparHTML(s.nome)}
+      </button>
+    `)
+    .join('');
+
+  container.innerHTML = html;
+
+}
+
+function selecionarSala(id) {
+  const select = document.getElementById('selectSala');
+  if (!select) return;
+
+  select.value = id;
+  select.dispatchEvent(new Event('change'));
+
+  atualizarTudoTempoReal();
+}
+
+function mostrarHorariosDisponiveisUI() {
+
+  const container = document.getElementById('horariosDisponiveis');
+  if (!container) return;
+
+  const sala = document.getElementById('selectSala')?.value;
+  const data = calendarInstance?.selectedDates?.[0];
+
+  if (!sala || !data) return;
+
+  const livres = obterHorariosLivresComIntervalo(sala, data);
+
+  if (!livres.length) {
+    container.innerHTML = '<span class="text-xs text-red-500">Sem horários livres</span>';
+    return;
+  }
+
+  container.innerHTML = livres.map(function(h) {
+    return (
+      '<button onclick="aplicarSugestaoHorario(\'' + h.inicio + '\')" ' +
+      'class="px-2 py-1 bg-green-100 hover:bg-green-200 rounded text-xs font-bold mr-1 mb-1">' +
+      (h.inicio || '') + ' - ' + (h.fim || '') +
+      '</button>'
+    );
+  }).join('');
+}
+
+
+
+function salvarPreferenciasUsuario(contexto) {
+
+  try {
+
+    const prefs = JSON.parse(localStorage.getItem('prefsReserva') || '{}');
+
+    // 🔵 SALAS
+    if (contexto.sala) {
+      prefs.salas = prefs.salas || {};
+      prefs.salas[contexto.sala] = (prefs.salas[contexto.sala] || 0) + 1;
+    }
+
+    // 🔵 FAIXA DE HORÁRIO
+    if (contexto.horaInicio) {
+      const hora = parseInt(contexto.horaInicio.split(':')[0]);
+      let faixa = 'noite';
+
+      if (hora < 12) faixa = 'manha';
+      else if (hora < 18) faixa = 'tarde';
+
+      prefs.faixas = prefs.faixas || {};
+      prefs.faixas[faixa] = (prefs.faixas[faixa] || 0) + 1;
+    }
+
+    // 🟣 ITENS (fixos ou volantes)
+    if (contexto.itensVolantes) {
+
+      let itens = [];
+
+      if (Array.isArray(contexto.itensVolantes)) {
+        itens = contexto.itensVolantes;
+      } else if (typeof contexto.itensVolantes === 'string') {
+        itens = contexto.itensVolantes.split(',').map(i => i.trim());
+      }
+
+      prefs.itens = prefs.itens || {};
+
+      itens.forEach(item => {
+        if (!item) return;
+        prefs.itens[item] = (prefs.itens[item] || 0) + 1;
+      });
+    }
+
+    localStorage.setItem('prefsReserva', JSON.stringify(prefs));
+
+  } catch(e) {}
+}
+
+function ordenarSugestoesPorPreferencia(sugestoes, contexto) {
+
+  try {
+
+    const prefs = JSON.parse(localStorage.getItem('prefsReserva') || '{}');
+
+    return sugestoes.sort((a, b) => {
+
+      let scoreA = 0;
+      let scoreB = 0;
+
+      // 🔵 SALA
+      if (prefs.salas) {
+        scoreA += prefs.salas[a.sala] || 0;
+        scoreB += prefs.salas[b.sala] || 0;
+      }
+
+      // 🔵 FAIXA DE HORÁRIO
+      const getFaixa = (h) => {
+        const hora = parseInt(h.split(':')[0]);
+        if (hora < 12) return 'manha';
+        if (hora < 18) return 'tarde';
+        return 'noite';
+      };
+
+      if (prefs.faixas) {
+        scoreA += prefs.faixas[getFaixa(a.horaInicio)] || 0;
+        scoreB += prefs.faixas[getFaixa(b.horaInicio)] || 0;
+      }
+
+      // 🟣 ITENS (PREFERÊNCIA CONTEXTUAL)
+      if (prefs.itens && contexto?.itensVolantes) {
+
+        let itensContexto = [];
+
+        if (Array.isArray(contexto.itensVolantes)) {
+          itensContexto = contexto.itensVolantes;
+        } else if (typeof contexto.itensVolantes === 'string') {
+          itensContexto = contexto.itensVolantes.split(',').map(i => i.trim());
+        }
+
+        itensContexto.forEach(item => {
+          scoreA += prefs.itens[item] || 0;
+          scoreB += prefs.itens[item] || 0;
+        });
+      }
+
+      return scoreB - scoreA;
+
+    });
+
+  } catch(e) {
+    return sugestoes;
+  }
+}
+
+
+async function chamarIAComFallback(prompt) {
+  return new Promise((resolve) => {
+    google.script.run
+      .withSuccessHandler(function(res) {
+        if (res && res.ok) { resolve(res.texto || ''); }
+        else { resolve(interpretarIntencaoLocal(prompt)); }
+      })
+      .withFailureHandler(function() {
+        resolve(interpretarIntencaoLocal(prompt));
+      })
+      .chamarIA(prompt);
+  });
+}
+
+function interpretarIntencaoLocal(texto) {
+
+  texto = texto.toLowerCase();
+
+  if (texto.includes('sugere') || texto.includes('opção')) {
+    return 'SUGESTAO';
+  }
+
+  if (texto.includes('conflito') || texto.includes('disponível')) {
+    return 'ANALISE';
+  }
+
+  return 'ANALISE';
+}
+
+function sugerirItensParaReserva(contexto) {
+  const itens = AppState.colecoes.itens || [];
+  const sala = contexto?.sala;
+
+  if (!sala || !itens.length) return [];
+
+  const fixos = obterItensFixosDaSala(sala) || [];
+  const sugestoes = [];
+
+  fixos.forEach(f => {
+    sugestoes.push({
+      nome: f.nome,
+      qtd: f.qtd,
+      tipo: 'fixo'
+    });
+  });
+
+  itens.forEach(i => {
+    const nome = String(i?.[1] || '').toLowerCase();
+    if (!nome) return;
+
+    if (
+      nome.includes('projetor') ||
+      nome.includes('som') ||
+      nome.includes('microfone') ||
+      nome.includes('cadeira') ||
+      nome.includes('mesa')
+    ) {
+      sugestoes.push({
+        nome: i[1],
+        qtd: 1,
+        tipo: 'volante'
+      });
+    }
+  });
+
+  return sugestoes;
+}
+
+
+function renderizarGraficoIA(dados) {
+
+  const containerId = 'graficoIAContainer';
+
+  let container = document.getElementById(containerId);
+
+  if (!container) {
+    container = document.createElement('div');
+    container.id = containerId;
+    container.style.marginTop = '20px';
+    document.body.appendChild(container);
+  }
+
+  container.innerHTML = `
+    <canvas id="graficoIA" style="max-height:300px;"></canvas>
+  `;
+
+  const ctx = document.getElementById('graficoIA');
+
+  new Chart(ctx, {
+    type: dados.tipo || 'bar',
+    data: {
+      labels: dados.labels,
+      datasets: [{
+        label: dados.titulo || 'Dados',
+        data: dados.valores
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: true }
+      }
+    }
+  });
+}
+
+async function chamarIAUnificada(contexto) {
+
+  const prompt = `
+Você é uma IA de análise de dados de agendamentos.
+
+Gere:
+1. Estrutura de relatório
+2. Conteúdo melhorado
+3. Insights (máx 5)
+
+REGRAS:
+- Não inventar dados
+- Seja direto
+- Linguagem profissional
+
+ENTRADA:
+${JSON.stringify(contexto)}
+
+Responda SOMENTE JSON:
+
+{
+  "titulo": "...",
+  "secoes": [
+    { "titulo": "...", "conteudo": "..." }
+  ],
+  "insights": ["..."]
+}
+`;
+
+  try {
+
+    const resposta = await Promise.race([
+      chamarIAComFallback(prompt),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Timeout IA')), 8000)
+      )
+    ]);
+
+    return parseSeguroJSON(resposta);
+
+  } catch (e) {
+
+    console.warn('IA falhou:', e.message);
+    return null;
+  }
+}
+
+function parseSeguroJSON(resposta) {
+
+  try {
+    return JSON.parse(resposta);
+  } catch {
+
+    const match = resposta.match(/\{[\s\S]*\}/);
+    if (match) {
+      try {
+        return JSON.parse(match[0]);
+      } catch {}
+    }
+
+    return null;
+  }
+}
+// ============================================================
+// 🧠 PREVISÃO AUTOMÁTICA NO FORM (SEM IA / SEM BOTÃO)
+// ============================================================
+
+
+// 🔴 FUNÇÃO PRINCIPAL (CHAMA BACKEND + MOTOR INTELIGENTE)
+function ativarPrevisaoForm() {
+
+  const campos = [
+    'selectSala',
+    'horaInicio',
+    'horaTermino',
+    'inputNomeAcao',
+    'selectSetor'
+  ];
+
+  campos.forEach(id => {
+
+    const el = document.getElementById(id);
+    if (!el) return;
+
+    el.addEventListener('input', debounce(executarPrevisaoContextual, 400));
+    el.addEventListener('change', debounce(executarPrevisaoContextual, 400));
+
+  });
+
+}
+
+// 🔵 UI BASE (MANTIDA)
+function renderizarPrevisaoInline(res) {
+  const el = getOrCreateAvisoPrevisao();
+  if (!res) { el.innerHTML = ''; return; }
+
+  if (res.conflito && res.conflitosDetalhados?.length) {
+    const c = res.conflitosDetalhados[0];
+    const sugestaoLocal = typeof sugerirProximoHorarioLivre === 'function'
+      ? sugerirProximoHorarioLivre(document.getElementById('selectSala')?.value, c.data, c.inicio)
+      : null;
+
+    let html = `
+      <div class="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-xl">
+        <i class="fas fa-triangle-exclamation text-red-500 text-xs shrink-0"></i>
+        <div class="flex-1">
+          <p class="text-[11px] font-black text-red-700">Conflito em <b>${c.data}</b>: ${c.inicio}–${c.fim}</p>`;
+
+    if (sugestaoLocal) {
+      html += `<button onclick="aplicarSugestaoHorario('${sugestaoLocal}')"
+        class="mt-1 text-[10px] font-black text-blue-600 hover:text-blue-800 underline">
+        💡 Usar ${sugestaoLocal}
+      </button>`;
+    }
+    html += `</div></div>`;
+    el.innerHTML = html;
+    return;
+  }
+
+  if (res.sugestoes?.length) {
+    const cenarios = res.sugestoes.slice(0, 3);
+    let html = `
+      <div class="p-3 bg-blue-50 border border-blue-100 rounded-xl">
+        <p class="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-2">
+          <i class="fas fa-lightbulb mr-1"></i>Sugestões baseadas no seu perfil
+        </p>
+        <div class="flex flex-wrap gap-2">`;
+
+    cenarios.forEach(s => {
+      const payload = encodeURIComponent(JSON.stringify(s));
+      html += `
+        <button onclick="aplicarSugestaoCompleta(JSON.parse(decodeURIComponent('${payload}')))"
+          class="px-3 py-1.5 bg-white border border-blue-200 hover:bg-blue-600 hover:text-white hover:border-blue-600 text-blue-700 text-[10px] font-black rounded-xl transition-all">
+          ${s.horaInicio}–${s.horaTermino}
+        </button>`;
+    });
+    html += `</div></div>`;
+    el.innerHTML = html;
+    return;
+  }
+
+  el.innerHTML = `
+    <div class="flex items-center gap-2 p-2 bg-green-50 border border-green-100 rounded-xl">
+      <i class="fas fa-circle-check text-green-500 text-xs"></i>
+      <p class="text-[11px] font-black text-green-700">Horário disponível</p>
+    </div>`;
+}
+
+// 🔵 NOVA UI INTELIGENTE
+function mostrarSugestaoInlineInteligente(cenario) {
+
+  const el = getOrCreateAvisoPrevisao();
+
+  el.innerHTML += `
+    <div style="margin-top:6px;font-size:12px;color:#1d4ed8;">
+      🎯 Melhor cenário:
+      <b>${escaparHTML(cenario.salaNome)}</b>
+      às <b>${cenario.hora}</b>
+    </div>
+  `;
+}
+
+// 🔵 CONTAINER
+function getOrCreateAvisoPrevisao() {
+  let el = document.getElementById('previsaoForm');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'previsaoForm';
+    el.className = 'mt-3 transition-all';
+    // Insere após o bloco de aviso de conflito (avisoHorarioOcupado)
+    const ref = document.getElementById('avisoHorarioOcupado');
+    if (ref?.parentElement) {
+      ref.parentElement.insertBefore(el, ref.nextSibling);
+    }
+  }
+  return el;
+}
+
+// 🔵 LIMPAR
+function limparAvisoPrevisao() {
+  const el = document.getElementById('previsaoForm');
+  if (el) el.innerHTML = '';
+}
+
+// 🔵 DEBOUNCE
+function debounce(fn, delay) {
+  let t;
+  return function () {
+    clearTimeout(t);
+    t = setTimeout(fn, delay);
+  };
+}
+
+
+function gerarHorariosBase() {
+
+  const horarios = [];
+
+  for (let h = 8; h <= 20; h++) {
+
+    const hh = String(h).padStart(2, '0');
+
+    horarios.push(`${hh}:00`);
+
+    // evita 20:30 (fora do limite)
+    if (h < 20) {
+      horarios.push(`${hh}:30`);
+    }
+
+  }
+
+  return horarios;
+}
+function calcularRecorrenciaHorario(nome) { return {}; }
+function calcularPreferenciaUsuario(email) {
+  try {
+    const prefs = JSON.parse(localStorage.getItem('prefsReserva') || '{}');
+    return prefs.faixas || {};
+  } catch(e) { return {}; }
+}
+function detectarTipoAcao(nome) {
+  const n = (nome || '').toLowerCase();
+  if (n.includes('teatro') || n.includes('espetáculo')) return ['teatro'];
+  if (n.includes('dança')) return ['dança', 'sala'];
+  if (n.includes('música') || n.includes('ensaio')) return ['estudio', 'musica'];
+  if (n.includes('oficina') || n.includes('aula')) return ['sala', 'multiuso'];
+  return [];
+}
+function validarRegrasDuras(nomeSala, data, setor) { return true; }
+function pesoHorario(hora) {
+  const h = parseInt((hora || '08').split(':')[0]);
+  if (h >= 9 && h <= 11) return 2;
+  if (h >= 14 && h <= 17) return 2;
+  return 1;
+}
+
+// ============================================================
+// 🧠 MOTOR INTELIGENTE
+// ============================================================
+
+function sugerirCenarioInteligente(contexto) {
+
+  const nome = (contexto.nome || '').toLowerCase();
+  const setor = contexto.setor;
+  const data = contexto.data;
+
+  const salas = AppState.colecoes.salas || [];
+  const horarios = gerarHorariosBase();
+
+  const recHorario = calcularRecorrenciaHorario(nome);
+  const prefUsuario = calcularPreferenciaUsuario(AppState.usuario.email);
+
+  const cenarios = [];
+
+  salas.forEach(sala => {
+
+    const nomeSala = String(sala.nome || sala[1] || sala[0]).toLowerCase();
+
+    if (!validarRegrasDuras(nomeSala, data, setor)) return;
+
+    horarios.forEach(hora => {
+
+      let score = 0;
+
+      if (detectarTipoAcao(nome).some(e => nomeSala.includes(e))) {
+        score += 5;
+      }
+
+      score += (recHorario[hora] || 0) * 1.5;
+      score += (prefUsuario[hora] || 0) * 0.8;
+      score += pesoHorario(hora);
+
+      cenarios.push({
+        salaId: sala.id || sala[0],
+        salaNome: sala.nome || sala[1],
+        hora,
+        score
+      });
+
+    });
+
+  });
+
+  return cenarios.sort((a,b) => b.score - a.score).slice(0,5);
+}
+
+// 🔵 FILTRO DE CONFLITO (REUTILIZA SUA FUNÇÃO EXISTENTE)
+function filtrarCenariosSemConflito(cenarios, contexto) {
+
+  return cenarios.filter(c => {
+
+    const conflito = verificarConflitoFrontend(
+      {
+        sala: c.salaId,
+        horaInicio: c.hora,
+        horaTermino: adicionar1Hora(c.hora)
+      },
+      [contexto.data]
+    );
+
+    return !conflito.conflito;
+  });
+}
+
+function lerContextoForm() {
+
+  const nome = document.getElementById('inputNomeAcao')?.value || '';
+  const setor = document.getElementById('selectSetor')?.value || '';
+  const sala = document.getElementById('selectSala')?.value || '';
+  const inicio = document.getElementById('horaInicio')?.value || '';
+  const fim = document.getElementById('horaTermino')?.value || '';
+
+  const datasSel = calendarInstance?.selectedDates || [];
+  const data = datasSel[0]
+    ? flatpickr.formatDate(datasSel[0], "d/m/Y")
+    : null;
+
+  return {
+    nome,
+    setor,
+    sala,
+    inicio,
+    fim,
+    data
+  };
+}
+
+function executarPrevisaoContextual() {
+
+  const ctx = {
+    nome: document.getElementById('inputNomeAcao')?.value || '',
+    setor: document.getElementById('selectSetor')?.value || '',
+    sala: document.getElementById('selectSala')?.value || '',
+    inicio: document.getElementById('horaInicio')?.value || '',
+    fim: document.getElementById('horaTermino')?.value || ''
+  };
+
+  const datasSel = calendarInstance?.selectedDates || [];
+  ctx.data = datasSel[0]
+    ? flatpickr.formatDate(datasSel[0], "d/m/Y")
+    : null;
+
+  // 🔴 sem data não faz nada
+  if (!ctx.data) return;
+
+  const el = getOrCreateAvisoPrevisao();
+  el.innerHTML = '';
+
+  // =========================================================
+  // 🔴 NÍVEL 1 — USUÁRIO JÁ SABE O QUE QUER (NÃO INTERFERIR)
+  // =========================================================
+  if (ctx.sala && ctx.inicio && ctx.fim) {
+
+    google.script.run
+      .withSuccessHandler(renderizarPrevisaoInline)
+      .withFailureHandler(err => console.warn(err))
+      .analisarDisponibilidadeReal({
+        sala: ctx.sala,
+        horaInicio: ctx.inicio,
+        horaTermino: ctx.fim,
+        datas: [ctx.data]
+      });
+
+    return;
+  }
+
+  // =========================================================
+  // 🟡 NÍVEL 2 — USUÁRIO EXPLORANDO (SUGESTÃO LEVE)
+  // =========================================================
+  if (ctx.nome && !ctx.sala) {
+    try {
+      let cenarios = sugerirCenarioInteligente(ctx);
+      cenarios = filtrarCenariosSemConflito(cenarios, ctx);
+      if (cenarios.length) {
+        const top = cenarios.slice(0, 3);
+        let html = `
+          <div class="p-3 bg-indigo-50 border border-indigo-100 rounded-xl">
+            <p class="text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-2">
+              <i class="fas fa-wand-magic-sparkles mr-1"></i>Sugestões para "${escaparHTML(ctx.nome.slice(0,30))}"
+            </p>
+            <div class="flex flex-wrap gap-2">`;
+        top.forEach(c => {
+          html += `<button type="button"
+            onclick="selecionarSala('${escaparHTML(c.salaId)}'); aplicarSugestaoHorario('${c.hora}')"
+            class="px-3 py-1.5 bg-white border border-indigo-200 hover:bg-indigo-600 hover:text-white text-indigo-700 text-[10px] font-black rounded-xl transition-all">
+            ${escaparHTML(c.salaNome)} · ${c.hora}
+          </button>`;
+        });
+        html += `</div></div>`;
+        el.innerHTML = html;
+      }
+    } catch (e) { console.warn('Erro sugestão:', e); }
+    return;
+  }
+
+  // =========================================================
+  // 🔵 NÍVEL 3 — ESPAÇO ESCOLHIDO, MAS SEM HORÁRIO
+  // =========================================================
+  if (ctx.sala && !ctx.inicio) {
+
+    try {
+
+      const sugestao = sugerirHorarioPorRegras(ctx);
+
+      if (sugestao) {
+        el.innerHTML = `
+          <div style="font-size:12px;color:#334155;">
+            💡 ${sugestao}
+          </div>
+        `;
+      }
+
+    } catch (e) {
+      console.warn(e);
+    }
+
+    return;
+  }
+
+  // =========================================================
+  // 🟣 NÍVEL 4 — SÓ DATA (CONTEXTO GERAL)
+  // =========================================================
+  if (ctx.data && !ctx.nome && !ctx.sala) {
+
+    const sugestao = sugerirPadraoDiaSemana(ctx.data);
+
+    if (sugestao) {
+      el.innerHTML = `
+        <div style="font-size:12px;color:#64748b;">
+          ℹ️ ${sugestao}
+        </div>
+      `;
+    }
+
+  }
+}
+
+function sugerirHorarioPorRegras(ctx) {
+
+  const dia = new Date(ctx.data.split('/').reverse().join('-')).getDay();
+
+  if (ctx.sala.toLowerCase() === 'teatro') {
+
+    if (dia >= 1 && dia <= 3) return 'Prioridade: Escola (manhã/tarde)';
+    if (dia >= 4 && dia <= 6) return 'Prioridade: Ação Cultural (noite)';
+
+  }
+
+  return null;
+}
+
+function sugerirPadraoDiaSemana(data) {
+
+  const dia = new Date(data.split('/').reverse().join('-')).getDay();
+
+  if (dia === 6 || dia === 0) {
+    return 'Alta demanda — priorize horários antecipados';
+  }
+
+  return 'Dia regular — boa disponibilidade';
+}
+
+function mostrarSugestaoSimples(texto) {
+
+  const el = getOrCreateAvisoPrevisao();
+
+  el.innerHTML = `
+    <div style="font-size:12px;color:#334155;">
+      💡 ${texto}
+    </div>
+  `;
+}
+
+
+function editarRece(idReserva) {
+
+  modoEdicao = "RECE";
+
+  carregarReservaParaFormulario(idReserva);
+  alternarModoRece(true);
+
+  aplicarRestricaoEdicaoRece();
+
+}
+
+function aplicarRestricaoEdicaoRece() {
+
+  const bloquear = [
+    'selectSala',
+    'horaInicio',
+    'horaTermino',
+    'selectSetor'
+  ];
+
+  bloquear.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.disabled = true;
+      el.classList.add('opacity-50', 'cursor-not-allowed');
+    }
+  });
+
+}
+
+function atualizarTudoTempoReal() {
+  try {
+    if (typeof validarHorarios === 'function') validarHorarios();
+    if (typeof atualizarDisponibilidadeItens === 'function') atualizarDisponibilidadeItens();
+
+    const data = calendarInstance?.selectedDates?.[0];
+    const inicio = document.getElementById('horaInicio')?.value;
+    const termino = document.getElementById('horaTermino')?.value;
+
+    if (data && inicio && termino) {
+      const dataStr = flatpickr.formatDate(data, "d/m/Y");
+      const salasDisp = obterSalasDisponiveisPorData(dataStr, inicio, termino);
+      const salaAtual = document.getElementById('selectSala')?.value;
+      const container = document.getElementById('salasDisponiveis');
+      if (container) {
+        const filtradas = salasDisp.filter(s => String(s.id) !== String(salaAtual));
+        if (filtradas.length > 0) {
+          container.innerHTML = filtradas.map(s =>
+            `<button type="button" onclick="selecionarSala('${escaparHTML(s.id)}')"
+              class="px-2 py-1 bg-purple-100 hover:bg-purple-600 hover:text-white text-purple-700 text-xs font-black rounded-xl mr-1 mb-1 transition-all">
+              ${escaparHTML(s.nome)}
+            </button>`
+          ).join('');
+        } else {
+          container.innerHTML = '<span class="text-xs text-slate-400 italic">Nenhuma sala disponível neste horário</span>';
+        }
+      }
+    }
+
+    if (typeof mostrarHorariosDisponiveisUI === 'function') mostrarHorariosDisponiveisUI();
+    if (typeof validarConflitoTempoReal === 'function') validarConflitoTempoReal();
+
+  } catch (e) {
+    console.warn('Erro em atualização tempo real:', e);
+  }
+}
+
+function consultarConflitoIA(dados) {
+  return new Promise(function(resolve, reject) {
+    google.script.run
+      .withSuccessHandler(function(res) {
+        resolve({
+          temConflito: res.conflito || false,
+          solicitado: res.solicitado || null,
+          reservaExistente: res.existente || null
+        });
+      })
+      .withFailureHandler(reject)
+      .verificarConflitoEspaco(
+        dados.sala,
+        dados.data,
+        dados.horaInicio,
+        dados.horaTermino,
+        null
+      );
+  });
+}
+
+function aplicarSugestaoCompleta(sugestao) {
+  if (!sugestao) return;
+  Swal.close();
+  if (sugestao.salaId) {
+    const sel = document.getElementById('selectSala');
+    if (sel) {
+      sel.value = sugestao.salaId;
+      sel.dispatchEvent(new Event('change'));
+    }
+  }
+  const horaIni = document.getElementById('horaInicio');
+  const horaTer = document.getElementById('horaTermino');
+  if (horaIni && sugestao.horaInicio) horaIni.value = sugestao.horaInicio;
+  if (horaTer && sugestao.horaTermino) horaTer.value = sugestao.horaTermino;
+  if (sugestao.data && calendarInstance) {
+    const p = String(sugestao.data).split('/');
+    if (p.length === 3) calendarInstance.setDate(new Date(p[2], p[1] - 1, p[0]), true);
+  }
+  if (typeof validarHorarios === 'function') validarHorarios();
+  if (typeof atualizarTudoTempoReal === 'function') atualizarTudoTempoReal();
+}
+
+function alternarModoCodip(ativo) {
+  const bloco = document.getElementById('blocoCodip');
+  if (!bloco) return;
+  bloco.classList.toggle('hidden', !ativo);
+  if (ativo && !_ctrCache.contratos.length) {
+    carregarDadosContratos(codipPopularContratos);
+  }
+}
+
+function _codipColetarPayload() {
+
+  const ativo = document.getElementById('checkCodip')?.checked;
+
+  if (!ativo) return {};
+
+  return {
+    codipDescricaoAcao: document.getElementById('codipDescricaoAcao')?.value.trim() || '',
+    codipPublico: document.getElementById('codipPublico')?.value || '',
+    codipPublicoReal: document.getElementById('codipPublicoReal')?.value || '',
+    codipObs: document.getElementById('codipObs')?.value || '',
+    codipIdContrato: document.getElementById('codipSelectContrato')?.value  || '',
+    codipIdMeta: document.getElementById('codipSelectMeta')?.value  || '',
+    codipIdIndicador: document.getElementById('codipSelectIndicador')?.value  || '',
+  };
+
+}
+
+function carregarMetricasCODIP() {
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+
+      document.getElementById('codipTotalEstimado').innerText = res.totalEstimado;
+      document.getElementById('codipTotalReal').innerText = res.totalReal;
+      document.getElementById('codipTotalRegistros').innerText = res.totalRegistros;
+      document.getElementById('codipTaxa').innerText = res.taxaPresenca + '%';
+
+    })
+    .withFailureHandler(_handleServerError)
+    .obterMetricasCODIP();
+}
+
+function reescreverDescricaoComIA() {
+  const textarea = document.getElementById('codipDescricaoAcao');
+  const setor    = document.getElementById('selectSetor')?.value || '';
+  const texto    = (textarea?.value || '').trim();
+
+  if (!texto || texto.length < 10) {
+    Swal.fire('Atenção', 'Escreva ao menos uma frase na descrição antes de usar a IA.', 'warning');
+    return;
+  }
+
+  const btn = document.getElementById('btnDescricaoIA');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner animate-spin text-[9px]"></i> Processando...'; }
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-brain text-[9px]"></i>Reescrever com IA'; }
+      if (!res || !res.ok) {
+        Swal.fire('IA indisponível', res?.texto || 'Falha ao chamar a IA.', 'error');
+        return;
+      }
+      const textoGerado = (res.texto || '').replace(/^["']|["']$/g, '').trim();
+      const contador    = document.getElementById('codipDescricaoContador');
+      Swal.fire({
+        title: 'Sugestão da IA',
+        html: `
+          <p class="text-xs text-slate-500 mb-2 font-bold">${textoGerado.length} caracteres</p>
+          <div class="p-3 bg-purple-50 rounded-xl text-left text-sm text-slate-700 leading-relaxed border border-purple-200">
+            ${escaparHTML(textoGerado)}
+          </div>`,
+        showCancelButton: true,
+        confirmButtonText: 'Usar este texto',
+        cancelButtonText:  'Manter original',
+        confirmButtonColor: '#7c3aed'
+      }).then(function(result) {
+        if (result.isConfirmed && textarea) {
+          textarea.value = textoGerado;
+          if (contador) contador.textContent = textoGerado.length + '/400';
+        }
+      });
+    })
+    .withFailureHandler(function(err) {
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-brain text-[9px]"></i>Reescrever com IA'; }
+      Swal.fire('Erro', err.message, 'error');
+    })
+    .reescreverDescricaoAcaoIA(texto, setor);
+}
+
+// ── CODIP Tab ────────────────────────────────────────────────────────────────
+var _codipCache = [];
+
+function carregarAbaCODIP() {
+  const corpo = document.getElementById('corpoCODIP');
+  if (!corpo) return;
+  corpo.innerHTML = `<tr><td colspan="10" class="p-10 text-center"><i class="fas fa-spinner animate-spin text-indigo-400 text-xl"></i></td></tr>`;
+
+  if (!_ctrCache.contratos.length) {
+    carregarDadosContratos(() => carregarAbaCODIP());
+    return;
+  }
+
+  google.script.run
+    .withSuccessHandler(function(dados) {
+      _codipCache = dados || [];
+      // Popular filtro de contrato
+      const selCtr = document.getElementById('codipFiltroCtr');
+      if (selCtr && _ctrCache.contratos.length) {
+        selCtr.innerHTML = '<option value="">Todos os contratos</option>'
+          + _ctrCache.contratos.map(c => `<option value="${escaparHTML(c.id)}">${escaparHTML(c.nome)}</option>`).join('');
+      }
+      renderizarTabelaCODIP();
+    })
+    .withFailureHandler(function(err) {
+      Swal.fire('Erro', err.message, 'error');
+    })
+    .obterRelatoriosCODIP();
+}
+
+function renderizarTabelaCODIP() {
+  const corpo   = document.getElementById('corpoCODIP');
+  const semRes  = document.getElementById('semResultadosCODIP');
+  const counter = document.getElementById('codipContador');
+  const kpisEl  = document.getElementById('codipAbaKpis');
+  if (!corpo) return;
+
+  const filtroMes   = (document.getElementById('codipFiltroMes')?.value   || '').toLowerCase().trim();
+  const filtroTipo  = (document.getElementById('codipFiltroTipo')?.value  || '').toLowerCase().trim();
+  const filtroSetor = (document.getElementById('codipFiltroSetor')?.value || '').toLowerCase().trim();
+  const filtroCtr   = (document.getElementById('codipFiltroCtr')?.value   || '').trim();
+
+  const lista = _codipCache.filter(r =>
+    (!filtroMes   || String(r.mesRef    ||'').toLowerCase().includes(filtroMes))  &&
+    (!filtroTipo  || String(r.tipoAcao  ||'').toLowerCase().includes(filtroTipo)) &&
+    (!filtroSetor || String(r.setor     ||'').toLowerCase().includes(filtroSetor))&&
+    (!filtroCtr   || String(r.idContrato||'') === filtroCtr)
+  );
+
+  if (counter) counter.textContent = lista.length + ' registro(s)';
+
+  // KPIs
+  if (kpisEl) {
+    const totPres = lista.reduce((a,r) => a+(Number(r.pubPresencial)||0), 0);
+    const totVirt = lista.reduce((a,r) => a+(Number(r.pubVirtual)   ||0), 0);
+    const totPCD  = lista.reduce((a,r) => a+(Number(r.pcd)          ||0), 0);
+    const totHm   = lista.reduce((a,r) => a+(Number(r.horasMes)     ||0), 0);
+    const _k = (v,l,cor,ic) => `
+      <div class="bg-white border border-indigo-100 rounded-2xl p-4 flex items-center gap-3">
+        <div class="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style="background:${cor}18">
+          <i class="fas ${ic}" style="color:${cor}"></i>
+        </div>
+        <div>
+          <div class="text-xl font-black text-slate-800">${typeof v === 'number' ? v.toLocaleString('pt-BR') : v}</div>
+          <div class="text-[9px] font-black text-slate-400 uppercase tracking-wide">${l}</div>
+        </div>
+      </div>`;
+    kpisEl.innerHTML =
+      _k(lista.length, 'Registros',          '#6366f1','fa-file-lines') +
+      _k(totPres,      'Público Presencial',  '#7c3aed','fa-users') +
+      _k(totVirt,      'Audiência Virtual',   '#0891b2','fa-wifi') +
+      _k(totPCD,       'PCDs',                '#dc2626','fa-universal-access') +
+      _k(Math.round(totHm)+'h', 'Horas no Mês','#059669','fa-clock');
+  }
+
+  if (!lista.length) { corpo.innerHTML=''; semRes?.classList.remove('hidden'); return; }
+  semRes?.classList.add('hidden');
+
+  corpo.innerHTML = lista.map(r => {
+    const linkEv = r.linkEvidencias
+      ? `<a href="${escaparHTML(r.linkEvidencias)}" target="_blank" class="text-indigo-500 hover:text-indigo-700 font-black text-[9px]"><i class="fas fa-link mr-1"></i>Ver</a>`
+      : '<span class="text-slate-300 text-[9px]">—</span>';
+    const ctrBadge = r.nomeContrato
+      ? `<span class="inline-block bg-indigo-100 text-indigo-700 text-[8px] font-black px-1.5 py-0.5 rounded-full truncate max-w-[120px]" title="${escaparHTML(r.nomeContrato)}">${escaparHTML(r.nomeContrato.slice(0,25)+(r.nomeContrato.length>25?'…':''))}</span>`
+      : '<span class="text-slate-300 text-[9px]">—</span>';
+    const metaBadge = r.nomeMeta
+      ? `<span class="text-[9px] text-indigo-600 font-bold">${escaparHTML(r.nomeMeta.slice(0,30)+(r.nomeMeta.length>30?'…':''))}</span>`
+      : '';
+    return `<tr class="hover:bg-slate-50 transition-colors">
+      <td class="p-3">
+        <p class="font-bold text-slate-800 text-xs leading-tight">${escaparHTML(String(r.nomeAcao||'—'))}</p>
+        <p class="text-[9px] text-slate-400 mt-0.5">${escaparHTML(String(r.idReserva||''))}</p>
+      </td>
+      <td class="p-3 text-slate-600 text-xs whitespace-nowrap">${escaparHTML(String(r.mesRef||'—'))}</td>
+      <td class="p-3"><span class="bg-indigo-100 text-indigo-700 text-[9px] font-black px-2 py-0.5 rounded-full">${escaparHTML(String(r.tipoAcao||'—'))}</span></td>
+      <td class="p-3 text-slate-600 text-xs">${escaparHTML(String(r.setor||'—'))}</td>
+      <td class="p-3 text-center font-bold text-slate-700 text-xs">${escaparHTML(String(r.pubPresencial||0))}</td>
+      <td class="p-3 text-center font-bold text-slate-700 text-xs">${escaparHTML(String(r.pubVirtual||0))}</td>
+      <td class="p-3 text-center font-bold text-red-600 text-xs">${escaparHTML(String(r.pcd||0))}</td>
+      <td class="p-3 text-center font-bold text-purple-700 text-xs">${escaparHTML(String(r.horasMes||0))}h</td>
+      <td class="p-3">${ctrBadge}${metaBadge ? '<br>'+metaBadge : ''}</td>
+      <td class="p-3">${linkEv}</td>
+    </tr>`;
+  }).join('');
+}
+
+function exportarCODIPCSV() {
+  const lista = _codipCache;
+  if (!lista.length) { Swal.fire('Sem dados', 'Nenhum registro para exportar.', 'info'); return; }
+  const cab = ['ID Reserva','Nome Ação','Mês Ref','Tipo Ação','Eixo','Segmento I','Linguagem I',
+    'Modalidade','Público Presencial','Público Virtual','Visualizações','PCD','Idosos',
+    'Voluntários','Horas Mês','Horas Total','Setor','Responsável','Descrição da Ação'];
+  const linhas = [cab.join(';')];
+  lista.forEach(r => {
+    linhas.push([r.idReserva,r.nomeAcao,r.mesRef,r.tipoAcao,r.eixo,r.segmento1,r.linguagem1,
+      r.modalidade,r.pubPresencial,r.pubVirtual,r.visualizacoes,r.pcd,r.idosos,
+      r.voluntarios,r.horasMes,r.horasTotal,r.setor,r.responsavel,r.descricaoAcao]
+      .map(v => `"${String(v||'').replace(/"/g,'""')}"`).join(';'));
+  });
+  const blob = new Blob(['\uFEFF'+linhas.join('\n')], { type:'text/csv;charset=utf-8;' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `codip_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+
+</script>

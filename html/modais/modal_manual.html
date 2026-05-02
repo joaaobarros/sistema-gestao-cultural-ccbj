@@ -1,0 +1,116 @@
+  <div id="modalManual" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+    <div class="bg-white w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+
+      <div class="bg-gradient-to-r from-purple-700 to-indigo-700 p-6 flex items-center justify-between shrink-0">
+        <div>
+          <h2 class="text-white font-black text-lg uppercase tracking-tight">Manual de Utilização</h2>
+          <p class="text-purple-200 text-[11px] mt-0.5">Sistema de Gestão de Espaços — CCBJ</p>
+        </div>
+        <button onclick="fecharManual()" class="text-purple-200 hover:text-white transition-colors">
+          <i class="fas fa-times text-xl"></i>
+        </button>
+      </div>
+
+      <div class="flex border-b border-slate-100 overflow-x-auto shrink-0 bg-slate-50">
+        <button onclick="mudarAbaManual('intro')"        id="tab-manual-intro"        class="tab-manual px-4 py-3 text-[10px] font-black uppercase tracking-wider whitespace-nowrap text-purple-600 border-b-2 border-purple-600">Introdução</button>
+        <button onclick="mudarAbaManual('agenda')"       id="tab-manual-agenda"       class="tab-manual px-4 py-3 text-[10px] font-black uppercase tracking-wider whitespace-nowrap text-slate-400 border-b-2 border-transparent">Agenda Geral</button>
+        <button onclick="mudarAbaManual('agendamento')"  id="tab-manual-agendamento"  class="tab-manual px-4 py-3 text-[10px] font-black uppercase tracking-wider whitespace-nowrap text-slate-400 border-b-2 border-transparent">Agendamento</button>
+        <button onclick="mudarAbaManual('rece')"         id="tab-manual-rece"         class="tab-manual px-4 py-3 text-[10px] font-black uppercase tracking-wider whitespace-nowrap text-slate-400 border-b-2 border-transparent">Agenda RECE</button>
+        <button onclick="mudarAbaManual('admin')"        id="tab-manual-admin"        class="tab-manual px-4 py-3 text-[10px] font-black uppercase tracking-wider whitespace-nowrap text-slate-400 border-b-2 border-transparent">Configurações</button>
+        <button onclick="mudarAbaManual('auditoria')"    id="tab-manual-auditoria"    class="tab-manual px-4 py-3 text-[10px] font-black uppercase tracking-wider whitespace-nowrap text-slate-400 border-b-2 border-transparent">Auditoria</button>
+        <button onclick="mudarAbaManual('dashboard')"    id="tab-manual-dashboard"    class="tab-manual px-4 py-3 text-[10px] font-black uppercase tracking-wider whitespace-nowrap text-slate-400 border-b-2 border-transparent">Dashboard</button>
+        <button onclick="mudarAbaManual('ia')"           id="tab-manual-ia"           class="tab-manual px-4 py-3 text-[10px] font-black uppercase tracking-wider whitespace-nowrap text-slate-400 border-b-2 border-transparent">Inteligência</button>
+        <button onclick="mudarAbaManual('aprovacoes')"   id="tab-manual-aprovacoes"   class="tab-manual px-4 py-3 text-[10px] font-black uppercase tracking-wider whitespace-nowrap text-slate-400 border-b-2 border-transparent">Aprovações</button>
+      </div>
+
+      <!-- Área rolável do conteúdo -->
+      <div class="overflow-y-auto flex-1 p-6 space-y-4 text-sm text-slate-700">
+
+        <div id="conteudo-manual-intro" class="conteudo-manual space-y-4">
+          <div class="flex items-center gap-3 p-4 bg-purple-50 rounded-2xl border border-purple-100">
+            <i class="fas fa-hand-wave text-purple-500 text-2xl"></i>
+            <div>
+              <p class="font-black text-purple-800">Bem-vindo ao Sistema de Gestão de Espaços do CCBJ!</p>
+              <p class="text-[11px] text-purple-600 mt-0.5">Este sistema permite reservar espaços, gerenciar itens e acompanhar a agenda institucional.</p>
+            </div>
+          </div>
+          <div id="manual-intro-cards" class="grid grid-cols-1 gap-3"></div>
+          <div class="p-3 bg-amber-50 border border-amber-200 rounded-xl text-[11px] text-amber-700 font-medium">
+            <i class="fas fa-lightbulb mr-1"></i>Use as abas acima para navegar pelo manual de cada seção do sistema.
+          </div>
+        </div>
+
+        <div id="conteudo-manual-agenda" class="conteudo-manual hidden space-y-4">
+          <h3 class="font-black text-slate-800 flex items-center gap-2"><i class="fas fa-calendar-alt text-purple-500"></i> Agenda Geral</h3>
+          <p class="text-[12px] text-slate-600">Exibe todas as reservas cadastradas no sistema, das mais antigas às mais recentes.</p>
+          <div id="manual-agenda-cards" class="space-y-3"></div>
+        </div>
+
+        <div id="conteudo-manual-agendamento" class="conteudo-manual hidden space-y-4">
+          <h3 class="font-black text-slate-800 flex items-center gap-2"><i class="fas fa-plus-circle text-purple-500"></i> Novo Agendamento</h3>
+          <p class="text-[12px] text-slate-600">Permite criar reservas de espaços com ou sem itens do almoxarifado.</p>
+          <div id="manual-agendamento-cards" class="space-y-3"></div>
+          <div class="p-3 bg-blue-50 border border-blue-100 rounded-xl text-[11px] text-blue-700">
+            <i class="fas fa-info-circle mr-1"></i>Reservas em lote criam entradas individuais para cada data selecionada.
+          </div>
+        </div>
+
+        <div id="conteudo-manual-rece" class="conteudo-manual hidden space-y-4">
+          <h3 class="font-black text-slate-800 flex items-center gap-2"><i class="fas fa-star text-yellow-500"></i> Agenda RECE</h3>
+          <p class="text-[12px] text-slate-600">Registro de eventos culturais para divulgação externa.</p>
+          <div id="manual-rece-cards" class="space-y-3"></div>
+        </div>
+
+        <div id="conteudo-manual-admin" class="conteudo-manual hidden space-y-4">
+          <h3 class="font-black text-slate-800 flex items-center gap-2"><i class="fas fa-cog text-purple-500"></i> Configurações</h3>
+          <p class="text-[12px] text-slate-600">Gerenciamento de espaços, itens, setores e usuários.</p>
+          <div id="manual-admin-cards" class="space-y-3"></div>
+        </div>
+
+        <div id="conteudo-manual-auditoria" class="conteudo-manual hidden space-y-4">
+          <h3 class="font-black text-slate-800 flex items-center gap-2"><i class="fas fa-shield-alt text-purple-500"></i> Auditoria</h3>
+          <p class="text-[12px] text-slate-600">Histórico completo de todas as ações realizadas no sistema.</p>
+          <div id="manual-auditoria-cards" class="space-y-3"></div>
+          <div class="p-3 bg-red-50 border border-red-100 rounded-xl text-[11px] text-red-600">
+            <i class="fas fa-triangle-exclamation mr-1"></i>O rollback é irreversível.
+          </div>
+        </div>
+
+        <div id="conteudo-manual-dashboard" class="conteudo-manual hidden space-y-4">
+          <h3 class="font-black text-slate-800 flex items-center gap-2"><i class="fas fa-chart-bar text-purple-500"></i> Dashboard</h3>
+          <p class="text-[12px] text-slate-600">Visão analítica do uso dos espaços e recursos.</p>
+          <div id="manual-dashboard-cards" class="space-y-3"></div>
+        </div>
+
+        <div id="conteudo-manual-ia" class="conteudo-manual hidden space-y-4">
+          <h3 class="font-black text-slate-800 flex items-center gap-2"><i class="fas fa-brain text-purple-500"></i> Inteligência (IA)</h3>
+          <p class="text-[12px] text-slate-600">Assistente de gestão baseado em IA integrado aos dados reais do sistema.</p>
+          <div id="manual-ia-cards" class="space-y-3"></div>
+          <div class="p-3 bg-purple-50 border border-purple-100 rounded-xl text-[11px] text-purple-700">
+            <i class="fas fa-lock mr-1"></i>A IA opera exclusivamente sobre os dados internos do CCBJ. Nenhuma informação é enviada a terceiros além da API de IA configurada.
+          </div>
+        </div>
+
+        <div id="conteudo-manual-aprovacoes" class="conteudo-manual hidden space-y-4">
+          <h3 class="font-black text-slate-800 flex items-center gap-2"><i class="fas fa-check-double text-purple-500"></i> Aprovações</h3>
+          <p class="text-[12px] text-slate-600">Fluxo de solicitações que requerem validação de um administrador antes de serem executadas.</p>
+          <div id="manual-aprovacoes-cards" class="space-y-3"></div>
+          <div class="p-3 bg-amber-50 border border-amber-100 rounded-xl text-[11px] text-amber-700">
+            <i class="fas fa-at mr-1"></i>Configure o e-mail do responsável em Configurações > Espaços para receber notificações automáticas.
+          </div>
+        </div>
+
+      </div>
+      <!-- Fim área rolável -->
+
+      <!-- Rodapé fixo do modal -->
+      <div class="p-4 border-t border-slate-100 flex items-center justify-between bg-slate-50 shrink-0">
+        <label class="flex items-center gap-2 cursor-pointer">
+          <input type="checkbox" id="checkNaoMostrarManual" class="w-4 h-4 accent-purple-600" onchange="salvarPreferenciaManuai(this.checked)">
+          <span class="text-[11px] text-slate-500 font-medium">Não mostrar automaticamente</span>
+        </label>
+        <button onclick="fecharManual()" class="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-black rounded-xl transition-all">Entendido!</button>
+      </div>
+
+    </div>
+  </div>

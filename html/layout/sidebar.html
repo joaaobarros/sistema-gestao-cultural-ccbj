@@ -1,0 +1,243 @@
+
+  <!-- Sidebar -->
+  <aside id="sidebarPrincipal"
+  class="fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 text-white flex flex-col transform -translate-x-full md:translate-x-0 md:static transition-transform duration-300 ease-in-out shadow-2xl">
+
+    
+
+    <div class="md:hidden flex justify-end p-4">
+      <button onclick="toggleSidebar()" class="text-purple-300 hover:text-white">
+        <i class="fas fa-times text-xl"></i>
+      </button>
+    </div>
+
+    <div class="p-8 flex flex-col items-center border-b border-white/5">
+      <img src="https://ccbj.org.br/wp-content/themes/CCBJ/assets/images/logo.png"
+        alt="Logo CCBJ"
+        class="w-32 h-auto mb-2 filter brightness-0 invert opacity-90">
+      <div class="text-center">
+        <span class="text-[10px] font-black tracking-[0.2em] text-purple-400 uppercase">Gestão de Espaços</span>
+      </div>
+    </div>
+
+    <div class="px-3 py-3 border-b border-white/5">
+
+      <div class="flex justify-between items-center mb-2">
+        <span class="text-[9px] font-black text-slate-500 uppercase tracking-widest">
+          Favoritos
+        </span>
+
+        <button onclick="resetarFavoritos()"
+          class="text-[8px] text-slate-500 hover:text-white">
+          resetar
+        </button>
+      </div>
+
+      <div id="favoritosContainer"
+        class="space-y-1 min-h-[24px]"
+        ondragover="onDragOverFavoritos(event)"
+        ondrop="onDropFavoritos(event)">
+      </div>
+
+    </div>
+
+    <nav class="flex-1 px-3 py-4 overflow-y-auto custom-scrollbar space-y-1">
+
+      <!-- ── PESSOAL ──────────────────────────────────────── -->
+      <div class="mb-1">
+        <button onclick="toggleModulo('mod-pessoal')"
+          class="w-full flex items-center justify-between px-3 py-2 text-[9px] font-black text-slate-500 uppercase tracking-widest hover:text-purple-300 transition-colors">
+          <span><i class="fas fa-user mr-2 text-slate-600"></i>Pessoal</span>
+          <i id="icon-mod-pessoal" class="fas fa-chevron-down text-[8px] text-slate-600"></i>
+        </button>
+        <div id="mod-pessoal" class="space-y-0.5 pl-2">
+          <button data-aba="aba-tarefas" class="tab-btn nav-item w-full">
+            <i class="fas fa-list-check w-5 text-center text-xs"></i>
+            <span class="text-xs font-semibold">Tarefas</span>
+            <span class="em-breve-badge">em breve</span>
+          </button>
+          <button data-aba="aba-processos" class="tab-btn nav-item w-full">
+            <i class="fas fa-sitemap w-5 text-center text-xs"></i>
+            <span class="text-xs font-semibold">Processos</span>
+            <span class="em-breve-badge">em breve</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- ── ESPAÇOS ──────────────────────────────────────── -->
+      <div class="mb-1">
+        <button onclick="toggleModulo('mod-espacos')"
+          class="w-full flex items-center justify-between px-3 py-2 text-[9px] font-black text-slate-500 uppercase tracking-widest hover:text-purple-300 transition-colors">
+          <span><i class="fas fa-building mr-2 text-slate-600"></i>Espaços</span>
+          <i id="icon-mod-espacos" class="fas fa-chevron-down text-[8px] text-slate-600"></i>
+        </button>
+        <div id="mod-espacos" class="space-y-0.5 pl-2">
+          <button data-aba="aba-lista-reservas" class="tab-btn nav-item w-full">
+            <i class="fas fa-calendar-alt w-5 text-center text-xs"></i>
+            <span class="text-xs font-semibold">Agenda Geral</span>
+          </button>
+          <button data-aba="aba-nova-reserva" onclick="resetarFormulario()" class="tab-btn nav-item w-full">
+            <i class="fas fa-plus-circle w-5 text-center text-xs"></i>
+            <span class="text-xs font-semibold">Novo Agendamento</span>
+          </button>
+          <button data-aba="aba-aprovacoes" class="tab-btn nav-item w-full">
+            <i class="fas fa-check-double w-5 text-center text-xs"></i>
+            <span class="text-xs font-semibold flex-1 text-left">Aprovações</span>
+            <span id="badgeSolicitacoes" class="hidden min-w-[18px] h-[18px] bg-red-500 text-white text-[9px] font-black rounded-full flex items-center justify-center px-1">0</span>
+          </button>
+          <button data-aba="aba-almoxarifado" class="tab-btn nav-item w-full" id="btn-aba-almoxarifado">
+            <i class="fas fa-boxes-stacked w-5 text-center text-xs"></i>
+            <span class="text-xs font-semibold">Almoxarifado</span>
+            <span class="em-breve-badge">em breve</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- ── COMUNICAÇÃO ──────────────────────────────────── -->
+      <div class="mb-1">
+        <button onclick="toggleModulo('mod-comunicacao')"
+          class="w-full flex items-center justify-between px-3 py-2 text-[9px] font-black text-slate-500 uppercase tracking-widest hover:text-purple-300 transition-colors">
+          <span><i class="fas fa-bullhorn mr-2 text-slate-600"></i>Comunicação</span>
+          <i id="icon-mod-comunicacao" class="fas fa-chevron-down text-[8px] text-slate-600"></i>
+        </button>
+        <div id="mod-comunicacao" class="space-y-0.5 pl-2">
+          <button id="btn-aba-rece" data-aba="aba-agenda-rece" class="tab-btn nav-item w-full">
+            <i class="fas fa-star w-5 text-center text-xs"></i>
+            <span class="text-xs font-semibold">Agenda RECE</span>
+          </button>
+          <button data-aba="aba-balcao" class="tab-btn nav-item w-full">
+            <i class="fas fa-headset w-5 text-center text-xs"></i>
+            <span class="text-xs font-semibold">Balcão</span>
+            <span class="em-breve-badge">em breve</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- ── EQUIPES ──────────────────────────────────────── -->
+      <div class="mb-1">
+        <button onclick="toggleModulo('mod-equipes')"
+          class="w-full flex items-center justify-between px-3 py-2 text-[9px] font-black text-slate-500 uppercase tracking-widest hover:text-purple-300 transition-colors">
+          <span><i class="fas fa-users mr-2 text-slate-600"></i>Equipes</span>
+          <i id="icon-mod-equipes" class="fas fa-chevron-down text-[8px] text-slate-600"></i>
+        </button>
+        <div id="mod-equipes" class="space-y-0.5 pl-2">
+          <button data-aba="aba-rh" class="tab-btn nav-item w-full">
+            <i class="fas fa-id-badge w-5 text-center text-xs"></i>
+            <span class="text-xs font-semibold">Depto. Pessoal</span>
+            <span class="em-breve-badge">em breve</span>
+          </button>
+          <button data-aba="aba-eficiencia" class="tab-btn nav-item w-full">
+            <i class="fas fa-gauge-high w-5 text-center text-xs"></i>
+            <span class="text-xs font-semibold">Eficiência</span>
+            <span class="em-breve-badge">em breve</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- ── FINANCEIRO ────────────────────────────────────── -->
+      <div class="mb-1">
+        <button onclick="toggleModulo('mod-financeiro')"
+          class="w-full flex items-center justify-between px-3 py-2 text-[9px] font-black text-slate-500 uppercase tracking-widest hover:text-purple-300 transition-colors">
+          <span><i class="fas fa-coins mr-2 text-slate-600"></i>Financeiro</span>
+          <i id="icon-mod-financeiro" class="fas fa-chevron-down text-[8px] text-slate-600"></i>
+        </button>
+        <div id="mod-financeiro" class="space-y-0.5 pl-2">
+          <button data-aba="aba-contratos-fin" class="tab-btn nav-item w-full" id="btn-aba-contratos-fin">
+            <i class="fas fa-file-contract w-5 text-center text-xs"></i>
+            <span class="text-xs font-semibold">Contratos / Fontes</span>
+            <span class="em-breve-badge">em breve</span>
+          </button>
+          <button data-aba="aba-contratacoes" class="tab-btn nav-item w-full">
+            <i class="fas fa-handshake w-5 text-center text-xs"></i>
+            <span class="text-xs font-semibold">Contratações</span>
+            <span class="em-breve-badge">em breve</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- ── RELATÓRIOS ────────────────────────────────────── -->
+      <div class="mb-1">
+        <button onclick="toggleModulo('mod-relatorios')"
+          class="w-full flex items-center justify-between px-3 py-2 text-[9px] font-black text-slate-500 uppercase tracking-widest hover:text-purple-300 transition-colors">
+          <span><i class="fas fa-chart-pie mr-2 text-slate-600"></i>Relatórios</span>
+          <i id="icon-mod-relatorios" class="fas fa-chevron-down text-[8px] text-slate-600"></i>
+        </button>
+        <div id="mod-relatorios" class="space-y-0.5 pl-2">
+          <button data-aba="aba-codip" class="tab-btn nav-item w-full">
+            <i class="fas fa-chart-pie w-5 text-center text-xs"></i>
+            <span class="text-xs font-semibold">CODIP</span>
+          </button>
+          <button data-aba="aba-rel-financeiros" class="tab-btn nav-item w-full">
+            <i class="fas fa-file-invoice-dollar w-5 text-center text-xs"></i>
+            <span class="text-xs font-semibold">Relatórios Financeiros</span>
+            <span class="em-breve-badge">em breve</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- ── ESTRATÉGIA ────────────────────────────────────── -->
+      <div class="mb-1">
+        <button onclick="toggleModulo('mod-estrategia')"
+          class="w-full flex items-center justify-between px-3 py-2 text-[9px] font-black text-slate-500 uppercase tracking-widest hover:text-purple-300 transition-colors">
+          <span><i class="fas fa-chess-king mr-2 text-slate-600"></i>Estratégia</span>
+          <i id="icon-mod-estrategia" class="fas fa-chevron-down text-[8px] text-slate-600"></i>
+        </button>
+        <div id="mod-estrategia" class="space-y-0.5 pl-2">
+          <button data-aba="aba-dashboard" class="tab-btn nav-item w-full">
+            <i class="fas fa-chart-bar w-5 text-center text-xs"></i>
+            <span class="text-xs font-semibold">Dashboard Geral</span>
+          </button>
+          <button onclick="abrirPainelIA()" class="nav-item w-full">
+            <div class="w-5 h-5 flex items-center justify-center rounded-md bg-purple-500/10 shrink-0">
+              <i class="fas fa-brain text-purple-400 text-[9px]"></i>
+            </div>
+            <span class="text-xs font-semibold">Inteligência IA</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- ── SISTEMA (superadmin/admin) ───────────────────── -->
+      <div class="mb-1" id="modulo-sistema">
+        <button onclick="toggleModulo('mod-sistema')"
+          class="w-full flex items-center justify-between px-3 py-2 text-[9px] font-black text-slate-500 uppercase tracking-widest hover:text-purple-300 transition-colors">
+          <span><i class="fas fa-server mr-2 text-slate-600"></i>Sistema</span>
+          <i id="icon-mod-sistema" class="fas fa-chevron-down text-[8px] text-slate-600"></i>
+        </button>
+        <div id="mod-sistema" class="space-y-0.5 pl-2">
+          <button id="btn-aba-gestao" data-aba="aba-gestao-admin" class="tab-btn nav-item w-full hidden">
+            <i class="fas fa-cog w-5 text-center text-xs"></i>
+            <span class="text-xs font-semibold">Configurações</span>
+          </button>
+          <button id="btn-aba-auditoria" data-aba="aba-auditoria" class="tab-btn nav-item w-full hidden">
+            <i class="fas fa-shield-alt w-5 text-center text-xs"></i>
+            <span class="text-xs font-semibold">Auditoria</span>
+          </button>
+        </div>
+      </div>
+
+    </nav>
+
+    <div class="text-center"><span class="text-[7px] font-black tracking-[0.1em] text-purple-400 uppercase">Desenvolvido por</span></div>
+    <div class="text-center"><span class="text-[8px] font-black tracking-[0.1em] text-purple-400 uppercase">João Paulo Barros</span></div>
+    <div class="text-center"><span class="text-[7px] font-black tracking-[0.1em] text-purple-400 uppercase">Abril/2026</span></div>
+
+    <div class="p-4 border-t border-white/10 bg-slate-950/50">
+      <div class="flex items-center gap-3 mb-3">
+        <div id="userAvatar" class="w-10 h-10 rounded-full bg-purple-600 flex items-center justify-center text-white font-black text-sm shrink-0 overflow-hidden">
+          <i class="fas fa-user text-xs"></i>
+        </div>
+        <div class="flex flex-col min-w-0">
+          <span id="userNome" class="text-white text-xs font-black truncate animate-pulse">Carregando...</span>
+          <span id="statusUser" class="text-purple-400 text-[10px] truncate"></span>
+        </div>
+      </div>
+      <button onclick="confirmarLogout()"
+        class="w-full flex items-center justify-center gap-2 px-3 py-2 bg-white/5 hover:bg-red-600/20 border border-white/10 hover:border-red-500/30 text-slate-400 hover:text-red-400 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all">
+        <i class="fas fa-right-from-bracket text-xs"></i>
+        Trocar / Sair
+      </button>
+    </div>
+  </aside>
+
+  <div id="sidebarOverlay" onclick="toggleSidebar()" class="fixed inset-0 bg-black/60 z-40 hidden md:hidden"></div>
+

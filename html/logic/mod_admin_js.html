@@ -1,0 +1,3493 @@
+<script>
+function renderizarEspacosAdmin() {
+  const container = document.getElementById('tabelaAdminEspacos');
+  if (!container) return;
+
+  const salas = AppState.colecoes.salas || [];
+  const salasFiltradas = salas.filter(s => {
+    const id = String(s[0] || "").trim().toUpperCase();
+    return id !== "ID" && id !== "" && id !== "UNDEFINED";
+  });
+
+  if (salasFiltradas.length === 0) {
+    container.innerHTML = '<p class="p-8 text-center text-slate-400 text-[10px]">Nenhum espaço cadastrado.</p>';
+    return;
+  }
+
+  container.innerHTML = salasFiltradas.map(s => {
+    const id = s[0];
+    const nomeOriginal = s[1];
+    const nomeEscapado = String(nomeOriginal).replace(/'/g, "\\'");
+    const capacidade = s[2] || 0;
+    const emailEspaco = String(s[4] || '').trim();
+
+    return `
+    <div class="item-renderizado flex items-center justify-between p-4 border-b border-slate-50 hover:bg-slate-50 transition-all">
+      <div class="flex items-center gap-4">
+        <div class="flex flex-col items-center justify-center w-12 h-12 bg-purple-50 text-purple-600 rounded-xl border border-purple-100">
+          <span class="text-[10px] font-black leading-none">${escaparHTML(capacidade)}</span>
+          <span class="text-[7px] uppercase font-black mt-0.5 text-purple-400">Vagas</span>
+        </div>
+        
+        <div>
+          <p class="text-sm font-bold text-slate-800 uppercase leading-tight">${escaparHTML(nomeOriginal)}</p>
+          ${(function(){
+            if (!emailEspaco) return '';
+            let donos = [];
+            try { donos = JSON.parse(emailEspaco); if (!Array.isArray(donos)) throw 0; }
+            catch(e) { donos = emailEspaco.includes('@') ? [{ email: emailEspaco, dias: [], setor: '' }] : []; }
+            const _dn = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+            return donos.map(d => {
+              const diasStr = (d.dias && d.dias.length) ? d.dias.map(n => _dn[n]).join(', ') : 'todos os dias';
+              const nomeExib = (AppState.mapaNomes && AppState.mapaNomes[String(d.email||'').toLowerCase()]) || '';
+              return `<p class="text-[9px] text-slate-400 mt-0.5 leading-tight">
+                <i class="fas fa-at mr-1 text-purple-300"></i>
+                <span class="font-semibold text-slate-600">${nomeExib ? escaparHTML(nomeExib) + ' ' : ''}${escaparHTML(d.email||'')}</span>
+                ${d.setor ? `<span class="bg-purple-50 text-purple-500 px-1 rounded ml-1">${escaparHTML(d.setor)}</span>` : ''}
+                <span class="text-slate-300 ml-1">${escaparHTML(diasStr)}</span>
+              </p>`;
+            }).join('');
+          })()}
+          <div class="flex items-center gap-2 mt-1">
+            <span class="text-[9px] font-bold text-slate-400 uppercase">Itens Fixos:</span>
+            <div id="fixos-admin-${escaparHTML(id)}" class="flex flex-wrap gap-1">
+              <span class="text-[9px] text-slate-300 italic">Carregando...</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex gap-2">
+        <button 
+          data-acao="editar-espaco"
+          data-id="${escaparHTML(id)}"
+          data-nome="${escaparHTML(nomeOriginal)}"
+          data-capacidade="${Number(capacidade)}"
+          data-email="${escaparHTML(emailEspaco)}"
+          class="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-all">
+          <i class="fas fa-edit text-xs"></i>
+        </button>
+
+        <button
+          data-acao="excluir-espaco"
+          data-id="${escaparHTML(id)}"
+          class="w-8 h-8 flex items-center justify-center text-slate-300 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all">
+          <i class="fas fa-trash text-xs"></i>
+        </button>
+      </div>
+    </div>`;
+  }).join('');
+
+  // MAPEAMENTO CORRETO DA QUANTIDADE DE ITENS NA SALA
+  google.script.run.withSuccessHandler(function(todosItens) {
+
+  salasFiltradas.forEach(s => {
+    const idSala = s[0];
+    const divFixos = document.getElementById(`fixos-admin-${escaparHTML(idSala)}`);
+    if (!divFixos) return;
+
+    const itensNestaSala = todosItens.map(item => {
+      let mapaLocalizacao = {};
+
+      try {
+        const rawLocalizacao = String(item[4] || "{}").trim();
+        mapaLocalizacao = JSON.parse(rawLocalizacao.startsWith('{') ? rawLocalizacao : "{}");
+      } catch(e) {
+        mapaLocalizacao = {};
+      }
+
+      return {
+        nome: item[1],
+        qtd: Number(mapaLocalizacao[idSala] || 0)
+      };
+    }).filter(it => it.qtd > 0);
+
+    if (itensNestaSala.length > 0) {
+      divFixos.innerHTML = itensNestaSala.map(it => `
+        <span class="bg-white px-1.5 py-0.5 rounded border border-slate-200 text-slate-600 text-[9px] font-bold shadow-sm">
+          <strong class="text-purple-600">${escaparHTML(it.qtd)}x</strong> ${escaparHTML(it.nome)}
+        </span>
+      `).join('');
+    } else {
+      divFixos.innerHTML = '<span class="text-[9px] text-slate-300 italic">Nenhum</span>';
+    }
+
+  });
+
+}).obterDadosParaConfig('Itens');
+}
+
+function executarRollback() {
+  if (!AppState.usuario.isSuperadmin) {
+    Swal.fire('Acesso Negado', 'Apenas Superadmins podem desfazer ações.', 'error');
+    return;
+  }
+
+  Swal.fire({
+    title: 'Desfazer última ação?',
+    text: 'Reverterá a última alteração registrada no sistema. Esta operação não pode ser desfeita.',
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonColor: '#f59e0b',
+    confirmButtonText: 'Sim, desfazer!',
+    cancelButtonText: 'Cancelar'
+  }).then((result) => {
+    if (!result.isConfirmed) return;
+
+    showLoader(true);
+
+    // Reutiliza rollbackAcaoPorIndice com índice 0 (= última ação)
+    google.script.run
+      .withSuccessHandler(function() {
+        showLoader(false);
+        Swal.fire({
+          title: 'Desfeito!',
+          text: 'Última ação revertida com sucesso.',
+          icon: 'success',
+          timer: 2500,
+          showConfirmButton: false
+        });
+        carregarAuditoria();
+        carregarReservas();
+        if (AppState.colecoes.reservasRece) carregarReservasRece();
+      })
+      .withFailureHandler(function(err) {
+        showLoader(false);
+        Swal.fire('Erro no Rollback', err.message, 'error');
+      })
+      .rollbackAcaoPorIndice(AppState.usuario.email, 0);
+  });
+}
+
+// --- RENDERIZAR ITENS (COM SUPORTE A FILTRO) ---
+/**
+ * RENDERIZAR ITENS (Painel Admin)
+ * Inclui classe 'item-renderizado' para suporte ao filtro de busca.
+ */
+function renderizarItensAdmin(dadosFiltrados = null) {
+  const containerItens = document.getElementById('listaAdminItens');
+  if (!containerItens) return;
+
+  const itensFonte = dadosFiltrados || AppState.colecoes.itens || [];
+
+  const itensParaRenderizar = itensFonte.filter(item => {
+    const id = String(item[0] || "").trim().toUpperCase();
+    const nome = String(item[1] || "").trim();
+    return id !== "" && id !== "ID ITEM" && id !== "UNDEFINED" && nome !== "";
+  });
+
+  if (itensParaRenderizar.length === 0) {
+    containerItens.innerHTML = `
+      <div class="p-12 text-center">
+        <i class="fas fa-box-open text-slate-200 text-2xl mb-2"></i>
+        <p class="text-slate-400 text-xs font-medium">Nenhum recurso encontrado.</p>
+      </div>`;
+    return;
+  }
+
+  containerItens.innerHTML = itensParaRenderizar.map(item => {
+    const id        = item[0];
+    const nome      = item[1];
+    const categoria = item[2] || 'Geral';
+    const qtdDisp   = Number(item[3] || 0);
+    const nomeEscapado = String(nome).replace(/'/g, "\\'");
+
+    // Calcula total fixado nas salas
+    let totalFixado = 0;
+    try {
+      const mapa = JSON.parse(String(item[4] || '{}'));
+      totalFixado = Object.values(mapa).reduce((acc, v) => acc + Number(v), 0);
+    } catch(e) {}
+
+    const qtdTotal = qtdDisp + totalFixado;
+    const pctDisp  = qtdTotal > 0 ? Math.round((qtdDisp / qtdTotal) * 100) : 100;
+    const corBarra = pctDisp > 50 ? 'bg-green-400' : pctDisp > 20 ? 'bg-amber-400' : 'bg-red-400';
+
+    return `
+    <div class="item-renderizado flex items-center justify-between p-4 border-b border-slate-50 hover:bg-slate-50 transition-all cursor-default">
+      <div class="flex items-center gap-4 flex-1 min-w-0">
+        <div class="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center font-black text-xs shrink-0">
+          ${escaparHTML(qtdDisp)}
+        </div>
+        <div class="flex-1 min-w-0">
+          <span class="text-[8px] font-black text-indigo-500 uppercase tracking-widest leading-none">${escaparHTML(categoria)}</span>
+          <h4 class="font-bold text-slate-800 text-sm uppercase leading-tight mt-0.5 truncate">${escaparHTML(nome)}</h4>
+          <div class="flex items-center gap-2 mt-1.5">
+            <div class="flex-1 bg-slate-100 rounded-full h-1.5 max-w-[120px]">
+              <div class="${corBarra} h-1.5 rounded-full transition-all" style="width:${pctDisp}%"></div>
+            </div>
+            <span class="text-[9px] text-slate-400 whitespace-nowrap">
+              <b class="text-slate-600">${qtdDisp}</b> disp. de <b class="text-slate-600">${qtdTotal}</b> total
+              ${totalFixado > 0 ? `<span class="text-purple-500">(${totalFixado} fixados)</span>` : ''}
+            </span>
+          </div>
+        </div>
+      </div>
+      <div class="flex gap-2 ml-3 shrink-0">
+        <button
+          data-acao="editar-item"
+          data-id="${escaparHTML(id)}"
+          data-nome="${escaparHTML(nome)}"
+          data-qtd="${Number(qtdDisp)}"
+          data-categoria="${escaparHTML(categoria)}"
+          class="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-all">
+          <i class="fas fa-edit text-xs"></i>
+        </button>
+        <button
+          data-acao="excluir-item"
+          data-id="${escaparHTML(id)}"
+          class="w-8 h-8 flex items-center justify-center text-slate-300 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all">
+          <i class="fas fa-trash text-xs"></i>
+        </button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// RENDERIZAR SETORES
+function renderizarSetoresAdmin() {
+  const container = document.getElementById('listaAdminSetores');
+  if (!container) return;
+
+  const setores = (AppState.colecoes.setores || []).filter(s => {
+    return s && String(s).trim() !== "" && String(s).toUpperCase() !== "SETORES";
+  });
+
+  if (setores.length === 0) {
+    container.innerHTML = '<p class="p-8 text-center text-slate-400 text-[10px]">Nenhum setor encontrado.</p>';
+    return;
+  }
+
+  container.innerHTML = setores.map(nome => {
+    const nomeSeguro = escaparHTML(nome);
+    return `
+    <div class="item-renderizado flex items-center justify-between p-4 border-b border-slate-50 hover:bg-slate-50">
+      <div class="flex items-center gap-4">
+        <div class="w-10 h-10 bg-emerald-50 text-emerald-500 rounded-xl flex items-center justify-center">
+          <i class="fas fa-tag text-xs"></i>
+        </div>
+        <div>
+          <p class="text-sm font-bold text-slate-700 uppercase leading-none">${nomeSeguro}</p>
+          <span class="text-[10px] text-slate-400 uppercase tracking-wider">Setor Institucional</span>
+        </div>
+      </div>
+      <div class="flex gap-2">
+        <button
+          data-acao="editar-setor"
+          data-id="${escaparHTML(nome)}"
+          data-nome="${escaparHTML(nome)}"
+          class="w-8 h-8 flex items-center justify-center text-slate-400 hover:bg-emerald-50 hover:text-emerald-600 rounded-lg transition-all">
+          <i class="fas fa-edit text-xs"></i>
+        </button>
+        <button
+          data-acao="excluir-setor"
+          data-id="${escaparHTML(nome)}"
+          class="w-8 h-8 flex items-center justify-center text-slate-300 hover:bg-red-50 hover:text-red-600 rounded-lg transition-all">
+          <i class="fas fa-trash text-xs"></i>
+        </button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// RENDERIZAR ADMINISTRADORES
+function renderizarAdmins() {
+  const container = document.getElementById('listaAdminUsuarios');
+  if (!container) return;
+
+  const admins = (AppState.colecoes.administradores || []).filter(a => {
+    const email = Array.isArray(a) ? a[0] : a;
+    return email && String(email).includes('@') && String(email).toLowerCase() !== "email";
+  });
+
+  if (admins.length === 0) {
+    container.innerHTML = '<p class="p-8 text-center text-slate-400 text-[10px]">Nenhum administrador encontrado.</p>';
+    return;
+  }
+
+  container.innerHTML = admins.map(a => {
+    const email = Array.isArray(a) ? String(a[0]).trim() : String(a).trim();
+    const nivel = Array.isArray(a) ? String(a[1] || "Admin").trim() : "Admin";
+    const emailSeguro = escaparHTML(email);
+    const nivelSeguro = escaparHTML(nivel);
+
+    return `
+    <div class="item-renderizado flex items-center justify-between p-4 border-b border-slate-50 hover:bg-slate-50">
+      <div class="flex items-center gap-4">
+        <div class="w-10 h-10 bg-slate-100 text-slate-600 rounded-xl flex items-center justify-center">
+          <i class="fas fa-user-shield text-xs"></i>
+        </div>
+        <div>
+          <p class="text-sm font-bold text-slate-800 leading-none">${emailSeguro}</p>
+          <span class="text-[9px] font-black uppercase text-indigo-500 tracking-tighter">${nivelSeguro}</span>
+        </div>
+      </div>
+      <div class="flex gap-2">
+        <button
+          data-acao="editar-usuario"
+          data-id="${escaparHTML(email)}"
+          data-email="${escaparHTML(email)}"
+          data-nivel="${escaparHTML(nivel)}"
+          class="w-8 h-8 flex items-center justify-center text-slate-400 hover:bg-indigo-50 hover:text-indigo-600 rounded-lg transition-all">
+          <i class="fas fa-edit text-xs"></i>
+        </button>
+        <button
+          data-acao="excluir-usuario"
+          data-id="${escaparHTML(email)}"
+          class="w-8 h-8 flex items-center justify-center text-slate-300 hover:bg-red-50 hover:text-red-600 rounded-lg transition-all">
+          <i class="fas fa-trash text-xs"></i>
+        </button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+
+
+function dispararExclusao(id, tipo) {
+  Swal.fire({
+    title: `Excluir ${escaparHTML(tipo.toUpperCase())}?`,
+    text: 'Esta ação não pode ser desfeita.',
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonColor: '#ef4444',
+    confirmButtonText: 'Sim, excluir!',
+    cancelButtonText: 'Cancelar'
+  }).then((result) => {
+    if (result.isConfirmed) {
+      showLoader(true);
+      google.script.run
+        .withSuccessHandler(function(novosDados) {
+          AppState.colecoes.salas = novosDados.salas || [];
+          AppState.colecoes.itens = novosDados.listaItens || [];
+          AppState.colecoes.setores = novosDados.setores || [];
+          AppState.colecoes.administradores = novosDados.administradores || [];
+          if (typeof popularSelectsIniciais === 'function') popularSelectsIniciais();
+          if (typeof renderizarEspacosAdmin === 'function') renderizarEspacosAdmin();
+          if (typeof renderizarItensAdmin === 'function') renderizarItensAdmin();
+          if (typeof renderizarSetoresAdmin === 'function') renderizarSetoresAdmin();
+          if (typeof renderizarAdmins === 'function') renderizarAdmins();
+          showLoader(false);
+          Swal.fire('Excluído!', 'Registro removido.', 'success');
+        })
+        .withFailureHandler(function(err) {
+          showLoader(false);
+          Swal.fire('Erro no Servidor', err.message, 'error');
+        })
+        .removerRegistroGenerico(id, tipo, AppState.usuario.email);  // ← email passado
+    }
+  });
+}
+
+
+// FUNÇÃO PARA EXPANDIR / RECOLHER CARDS
+function toggleCard(idConteudo, botao) {
+  const conteudo = document.getElementById(idConteudo);
+  const icone = botao.querySelector('i');
+  
+  if (conteudo.style.display === "none") {
+    conteudo.style.display = "block";
+    icone.className = "fas fa-chevron-up";
+  } else {
+    conteudo.style.display = "none";
+    icone.className = "fas fa-chevron-down";
+  }
+}
+
+// FUNÇÃO DE FILTRO RÁPIDO (Funciona para todos os cards)
+function filtrarLista(idContainer, termo) {
+  const busca = termo.toLowerCase().trim();
+  const container = document.getElementById(idContainer);
+  const itens = container.querySelectorAll('.item-renderizado');
+
+  itens.forEach(item => {
+    const texto = item.innerText.toLowerCase();
+    item.style.display = texto.includes(busca) ? "flex" : "none";
+  });
+}
+
+function filtrarItensAdmin(termo) {
+  const busca = termo.toLowerCase().trim();
+  const itensRaw = AppState.colecoes.itens || [];
+  
+  // Filtra ignorando o cabeçalho
+  const filtrados = itensRaw.filter(item => {
+    const id = String(item[0]).toUpperCase();
+    const nome = String(item[1]).toLowerCase();
+    const categoria = String(item[2]).toLowerCase();
+    
+    if (id === "ID ITEM" || id === "") return false;
+    
+    return nome.includes(busca) || categoria.includes(busca);
+  });
+
+  // Chama a renderização passando apenas o que sobrou no filtro
+  renderizarItensAdmin(filtrados);
+}
+
+/**
+ * ABRIR MODAL DE CONFIGURAÇÃO (Expandido para Admins e Setores)
+ */
+function abrirModalConfig(tipo, id = null, nome = '', valor1 = '', valor2 = '') {
+  const modal = document.getElementById('modalConfig');
+  const title = document.getElementById('modalConfigTitle');
+
+  const camposEspaco = document.getElementById('camposEspaco');
+  const camposItem = document.getElementById('camposItem');
+  const camposUsuario = document.getElementById('camposUsuario');
+  const camposSetor = document.getElementById('camposSetor');
+
+  document.getElementById('formConfig').reset();
+  document.getElementById('configId').value = id || '';
+  document.getElementById('configTipo').value = tipo;
+
+  const nomeLimpo = nome.replace(/\\'/g, "'");
+
+  [camposEspaco, camposItem, camposUsuario, camposSetor].forEach(el => el?.classList.add('hidden'));
+
+  if (tipo === 'espaco') {
+    title.innerText = id ? 'EDITAR ESPAÇO' : 'NOVO ESPAÇO';
+    camposEspaco.classList.remove('hidden');
+    if (id) {
+      document.getElementById('configNomeEspaco').value = nomeLimpo;
+      document.getElementById('configCapacidade').value = valor1;
+      let _donos = [];
+      try { _donos = JSON.parse(valor2); if (!Array.isArray(_donos)) throw 0; }
+      catch(e) { _donos = (valor2 && String(valor2).includes('@')) ? [{ email: valor2, dias: [1,2,3,4,5,6,0], setor: '' }] : []; }
+      window._donosEspaco = _donos;
+      renderizarContainerDonos();
+      if (typeof atualizarVisualizacaoPatrimonio === 'function') atualizarVisualizacaoPatrimonio(id);
+    } else {
+      window._donosEspaco = [];
+      renderizarContainerDonos();
+      const container = document.getElementById('container-itens-fixos');
+      if (container) container.innerHTML = '<p class="text-[10px] text-slate-400 text-center py-4 italic">Salve o espaço primeiro para gerenciar itens fixos.</p>';
+    }
+  }
+  else if (tipo === 'item') {
+    title.innerText = id ? 'EDITAR ITEM' : 'NOVO ITEM NO ALMOXARIFADO';
+    camposItem.classList.remove('hidden');
+    if (id) {
+      document.getElementById('configNomeItem').value = nomeLimpo;
+      document.getElementById('configQtd').value = valor1;
+      document.getElementById('configTipoItem').value = valor2;
+    }
+  }
+  else if (tipo === 'usuario') {
+    title.innerText = id ? 'EDITAR ADMINISTRADOR' : 'NOVO ADMINISTRADOR';
+    camposUsuario.classList.remove('hidden');
+    if (id) {
+      // id é o próprio email, valor1 é o nível de acesso
+      document.getElementById('configEmailAdmin').value = id;
+      document.getElementById('configNivelAdmin').value = valor1;
+      document.getElementById('configEmailAdmin').readOnly = true;
+    } else {
+      document.getElementById('configEmailAdmin').readOnly = false;
+    }
+  }
+  else if (tipo === 'setor') {
+    title.innerText = id ? 'EDITAR SETOR' : 'NOVO SETOR INSTITUCIONAL';
+    camposSetor.classList.remove('hidden');
+    if (id) {
+      document.getElementById('configNomeSetor').value = nomeLimpo;
+    }
+  }
+
+  modal.classList.remove('hidden');
+}
+
+/**
+ * CARREGAR AUDITORIA (LOGS)
+ * Busca os logs no servidor e renderiza apenas para Superadmins.
+ */
+function carregarAuditoria() {
+  if (!AppState.usuario.isAdmin) return;
+
+  const corpo = document.getElementById('tabelaLogs');
+  if (corpo) {
+    corpo.innerHTML = `
+      <tr>
+        <td colspan="8" class="p-16 text-center">
+          <i class="fas fa-spinner animate-spin text-purple-400 text-2xl"></i>
+          <p class="text-slate-400 text-xs mt-3 font-bold uppercase tracking-widest">Carregando auditoria...</p>
+        </td>
+      </tr>`;
+  }
+
+  google.script.run
+    .withSuccessHandler(function(jsonLogs) {
+      const logs = JSON.parse(jsonLogs);
+      renderizarLogs(logs);
+    })
+    .withFailureHandler(function(err) {
+      Swal.fire('Erro', err.message, 'error');
+    })
+    .obterLogs(AppState.usuario.email);
+}
+
+function renderizarLogs(logs) {
+  const corpo = document.getElementById('tabelaLogs');
+  if (!corpo) return;
+
+  if (!logs || logs.length === 0) {
+    corpo.innerHTML = `
+      <tr>
+        <td colspan="8" class="p-20 text-center">
+          <i class="fas fa-shield-halved text-slate-100 text-5xl mb-4"></i>
+          <p class="text-slate-300 font-bold text-xs uppercase tracking-widest">Nenhum registro encontrado.</p>
+        </td>
+      </tr>`;
+    return;
+  }
+
+  const coresAcao = {
+    'CRIAÇÃO': 'bg-green-100 text-green-700',
+    'EDIÇÃO': 'bg-blue-100 text-blue-700',
+    'EXCLUSÃO': 'bg-red-100 text-red-600',
+    'EXCLUSÃO DEFINITIVA': 'bg-red-200 text-red-800',
+    'CANCELAMENTO': 'bg-amber-100 text-amber-700',
+    'ROLLBACK': 'bg-purple-100 text-purple-700'
+  };
+
+  // Ações reversíveis
+  const reversíveis = ['CRIAÇÃO', 'EDIÇÃO', 'EXCLUSÃO', 'EXCLUSÃO DEFINITIVA', 'AGENDAMENTO'];
+
+  corpo.innerHTML = logs.map((log, indice) => {
+    const corAcao = coresAcao[log[2]] || 'bg-slate-100 text-slate-600';
+    const antes  = log[6] ? `<span class="text-red-400 line-through text-[9px]">${escaparHTML(log[6])}</span>` : '<span class="text-slate-300 text-[9px]">—</span>';
+    const depois = log[7] ? `<span class="text-green-600 text-[9px]">${escaparHTML(log[7])}</span>`           : '<span class="text-slate-300 text-[9px]">—</span>';
+    const acaoUpper = String(log[2] || '').toUpperCase();
+    const ehReversivel = AppState.usuario.isSuperadmin && reversíveis.some(r => acaoUpper.includes(r));
+
+    // Timestamp da linha usado como identificador imutável para rollback
+    const timestampLog = escaparHTML(String(log[0] || ''));
+
+    return `
+    <tr class="text-[11px] hover:bg-slate-50 transition-colors">
+      <td class="p-4 text-slate-500 font-medium whitespace-nowrap">${timestampLog}</td>
+      <td class="p-4 font-bold text-slate-700">${escaparHTML(log[1] ? log[1].split('@')[0] : '—')}</td>
+      <td class="p-4 text-center">
+        <span class="px-2 py-0.5 rounded ${corAcao} font-black text-[9px] uppercase whitespace-nowrap">${escaparHTML(log[2])}</span>
+      </td>
+      <td class="p-4 text-slate-600 font-medium">${escaparHTML(AppState.mapaSalas?.[log[4]] || log[4])}</td>
+      <td class="p-4 text-slate-500 max-w-[150px] truncate" title="${escaparHTML(log[5])}">${escaparHTML(log[5])}</td>
+      <td class="p-4 max-w-[150px] truncate" title="${escaparHTML(log[6] || '')}">${antes}</td>
+      <td class="p-4 max-w-[150px] truncate" title="${escaparHTML(log[7] || '')}">${depois}</td>
+      <td class="p-4 text-center">
+        ${ehReversivel ? `
+          <button
+            data-acao="rollback-seletivo"
+            data-timestamp="${timestampLog}"
+            aria-label="Desfazer ação de ${escaparHTML(log[2])} em ${timestampLog}"
+            class="px-2 py-1 bg-amber-100 hover:bg-amber-500 text-amber-700 hover:text-white text-[9px] font-black rounded-lg transition-all uppercase">
+            <i class="fas fa-undo mr-1" aria-hidden="true"></i>Desfazer
+          </button>
+        ` : ''}
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+
+
+function fecharModalConfig() {
+  const modal = document.getElementById('modalConfig');
+  if (modal) {
+    modal.classList.add('hidden');
+    // Limpa os containers de itens para a próxima abertura
+    const container = document.getElementById('container-itens-fixos');
+    if (container) container.innerHTML = '';
+  }
+}
+
+
+
+/**
+ * PREPARAR EDIÇÃO DE RESERVA
+ * Localiza os dados no AppState e preenche o formulário de reserva.
+ */
+function prepararEdicao(id) {
+  const reserva = AppState.colecoes.reservas.find(r => r[0] === id);
+  if (!reserva) return;
+
+  AppState.editandoId = id;
+  resetarFormulario();
+
+  document.getElementById('inputReservaId').value = reserva[0];
+  document.getElementById('horaInicio').value = reserva[2];
+  document.getElementById('horaTermino').value = reserva[3];
+  document.getElementById('inputTurnoCalculado').value = reserva[5];
+  document.getElementById('inputNomeAcao').value = reserva[6];
+  document.getElementById('inputOutroResponsavel').value = reserva[10];
+  // CODIP totais automáticos
+  ['codipPubPresencial','codipPubVirtual','codipVisualizacoes',
+   'codipHorasAntes','codipHorasMes','codipHorasTotal'].forEach(function(id){
+    var el = document.getElementById(id);
+    if (el) el.addEventListener('input', _codipAtualizarTotais);
+  });
+  document.getElementById('inputRelease').value = reserva[11];
+
+  const selSala = document.getElementById('selectSala');
+  if (selSala) selSala.value = reserva[4];
+
+  const selSetor = document.getElementById('selectSetor');
+  if (selSetor) selSetor.value = reserva[9];
+
+  if (calendarInstance && reserva[1]) {
+    const partes = String(reserva[1]).split('/');
+    if (partes.length === 3) {
+      const dataObj = new Date(partes[2], partes[1] - 1, partes[0]);
+      calendarInstance.setDate(dataObj, true);
+    }
+  }
+
+  // Processa itens usando ' | ' como separador (mesmo que salvarAgendamento)
+  itensSelecionados = [];
+  if (reserva[12] && reserva[12] !== "Nenhum") {
+    itensSelecionados = reserva[12].split(' | ').map(str => {
+      const partes = str.trim().split('x ');
+      return {
+        qtd: partes[0] ? partes[0].trim() : '1',
+        nome: partes[1] ? partes[1].trim() : str.trim()
+      };
+    }).filter(i => i.nome);
+  }
+  renderizarCarrinhoItens();
+
+  const btn = document.querySelector('#formReserva button[type="submit"]');
+  btn.innerHTML = '<i class="fas fa-save"></i> Atualizar Dados da Reserva';
+  btn.classList.replace('bg-purple-600', 'bg-blue-600');
+
+  mostrarAba('aba-nova-reserva');
+}
+
+
+
+/**
+ * LÓGICA DE INTERFACE (Logic.html)
+ * Dispara o alerta e chama a função do servidor.
+ */
+function excluirDefinitivo(id, tipo) {
+  Swal.fire({
+    title: 'EXCLUSÃO DEFINITIVA!',
+    text: 'Esta ação não pode ser desfeita.',
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonColor: '#d33',
+    confirmButtonText: 'SIM, DELETAR',
+    cancelButtonText: 'CANCELAR'
+  }).then((result) => {
+    if (result.isConfirmed) {
+      if (typeof showLoader === 'function') showLoader(true);
+      google.script.run
+        .withSuccessHandler(() => {
+          showLoader(false);
+          Swal.fire({ title: 'Sucesso!', text: 'Reserva cancelada.', icon: 'success', timer: 2000, showConfirmButton: false });
+          carregarReservas();
+          // Atualiza RECE se já foi carregado
+          if (AppState.colecoes.reservasRece) carregarReservasRece();
+        })
+        .withFailureHandler(err => {
+          if (typeof showLoader === 'function') showLoader(false);
+          Swal.fire('Erro no Servidor', err.message, 'error');
+        })
+        .excluirRegistroPorID(tipo, id, AppState.usuario.email);  // ← email passado
+    }
+  });
+}
+
+/**
+ * FILTRAR LOGS EM TEMPO REAL
+ */
+function filtrarLogs(valor) {
+  const busca = valor.toLowerCase().trim();
+  const linhas = document.querySelectorAll('#tabelaLogs tr');
+
+  linhas.forEach(linha => {
+    // Busca em todas as células da linha, incluindo o atributo title
+    // que contém o texto completo das colunas truncadas (antes/depois)
+    const textoCelulas = Array.from(linha.querySelectorAll('td')).map(td => {
+      const title = td.getAttribute('title') || '';
+      const texto = td.innerText || '';
+      return (texto + ' ' + title).toLowerCase();
+    }).join(' ');
+
+    linha.style.display = textoCelulas.includes(busca) ? '' : 'none';
+  });
+}
+
+
+/**
+ * ENVIA OS DADOS DE CONFIGURAÇÃO PARA O SERVIDOR
+ * Suporta: Espaços, Itens, Usuários e Setores.
+ */
+function salvarConfiguracao() {
+  const btnSalvar = document.querySelector('#formConfig button[type="submit"]');
+  const tipoElement = document.getElementById('configTipo');
+  if (!tipoElement?.value) { Swal.fire('Erro', 'Tipo não identificado.', 'error'); return; }
+
+  const tipo = tipoElement.value.trim().toLowerCase();
+  const id = document.getElementById('configId')?.value || null;
+
+  let dados = {
+    tipo: tipo,
+    id: id,
+    emailAtual: AppState.usuario.email   // ← email injetado aqui
+  };
+
+  if (tipo === 'espaco') {
+    dados.nome = document.getElementById('configNomeEspaco')?.value.trim();
+    dados.capacidade = document.getElementById('configCapacidade')?.value || 0;
+    const _df = (window._donosEspaco || []).filter(d => d.email && String(d.email).includes('@'));
+    dados.emailEspaco = _df.length ? JSON.stringify(_df) : '';
+  } else if (tipo === 'item') {
+    dados.nome = document.getElementById('configNomeItem')?.value.trim();
+    dados.qtd = document.getElementById('configQtd')?.value || 0;
+    dados.categoria = document.getElementById('configTipoItem')?.value || 'Outros';
+  } else if (tipo === 'usuario') {
+    dados.email = document.getElementById('configEmailAdmin')?.value.trim();
+    dados.nivel = document.getElementById('configNivelAdmin')?.value;
+    dados.nome = dados.email;
+  } else if (tipo === 'setor') {
+    dados.nome = document.getElementById('configNomeSetor')?.value.trim();
+  }
+
+  if ((tipo === 'usuario' && !dados.email) || (tipo !== 'usuario' && !dados.nome)) {
+    Swal.fire('Aviso', 'Preencha os campos obrigatórios.', 'warning');
+    return;
+  }
+
+  if (btnSalvar?.disabled) return;
+  if (btnSalvar) { btnSalvar.disabled = true; btnSalvar.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> SALVANDO...'; }
+
+  google.script.run
+    .withSuccessHandler(function(novosDados) {
+      if (btnSalvar) { btnSalvar.disabled = false; btnSalvar.innerHTML = 'SALVAR ALTERAÇÕES'; }
+      fecharModalConfig();
+      AppState.colecoes.salas = novosDados.salas || [];
+      AppState.colecoes.itens = novosDados.listaItens || [];
+      AppState.colecoes.administradores = novosDados.administradores || [];
+      AppState.colecoes.setores = novosDados.setores || [];
+      AppState.mapaSalas = novosDados.mapaSalas || {};
+      setTimeout(() => {
+        if (typeof renderizarEspacosAdmin === 'function') renderizarEspacosAdmin();
+        if (typeof renderizarItensAdmin === 'function') renderizarItensAdmin();
+        if (typeof renderizarAdmins === 'function') renderizarAdmins();
+        if (typeof renderizarSetoresAdmin === 'function') renderizarSetoresAdmin();
+        if (typeof popularSelectsIniciais === 'function') popularSelectsIniciais();
+        if (typeof renderizarReservas === 'function') renderizarReservas();
+      }, 100);
+      Swal.fire({ title: 'Sucesso!', text: 'Dados atualizados.', icon: 'success', timer: 2000, showConfirmButton: false, toast: true, position: 'top-end' });
+    })
+    .withFailureHandler(function(err) {
+      if (btnSalvar) { btnSalvar.disabled = false; btnSalvar.innerHTML = 'SALVAR ALTERAÇÕES'; }
+      Swal.fire('Erro ao Salvar', err.message, 'error');
+    })
+    .processarSalvarConfig(dados);
+}
+
+
+function atualizarVisualizacaoPatrimonio(idSala) {
+  const container = document.getElementById('container-itens-fixos');
+  if (!container) return;
+
+  // Feedback visual de carregamento
+  container.innerHTML = `
+    <div class="flex flex-col items-center justify-center py-8">
+      <div class="w-6 h-6 border-2 border-purple-500 border-t-transparent rounded-full animate-spin mb-2"></div>
+      <p class="text-[10px] text-slate-400 font-medium">Sincronizando patrimônio...</p>
+    </div>
+  `;
+
+  google.script.run
+    .withSuccessHandler(function(todosItens) {
+      // Verifica se há dados além do cabeçalho
+      if (!todosItens || todosItens.length === 0) {
+        container.innerHTML = '<p class="text-[10px] text-slate-400 text-center py-8">Nenhum item disponível no almoxarifado.</p>';
+        return;
+      }
+
+      container.innerHTML = todosItens.map(item => {
+        const idItem = String(item[0]);
+        const nomeItem = String(item[1]).replace(/'/g, "\\'");
+        const categoria = item[2] || "Geral";
+        const qtdDisponivelAlmoxarifado = Number(item[3] || 0);
+        
+        // Lógica de Localização Distribuída (JSON)
+        let mapaLocalizacao = {};
+        try {
+          // Garante que o conteúdo da coluna E seja tratado como string antes do parse
+          const rawLocalizacao = String(item[4] || "{}").trim();
+          mapaLocalizacao = JSON.parse(rawLocalizacao.startsWith('{') ? rawLocalizacao : "{}");
+        } catch(e) { 
+          mapaLocalizacao = {}; 
+        }
+        
+        const qtdNestaSala = Number(mapaLocalizacao[idSala] || 0);
+        const temEstoque = qtdDisponivelAlmoxarifado > 0;
+
+        return `
+          <div class="p-3 bg-white rounded-2xl mb-2 border border-slate-100 hover:shadow-sm transition-all">
+            <div class="flex justify-between items-start mb-2">
+              <div class="flex flex-col overflow-hidden">
+                <span class="text-[11px] font-bold text-slate-700 truncate">${escaparHTML(nomeItem)}</span>
+                <span class="text-[9px] text-slate-400 uppercase tracking-wider">${escaparHTML(categoria)}</span>
+              </div>
+              <div class="text-right shrink-0 ml-2">
+                <span class="block text-[10px] font-black text-purple-600">
+                Na Sala: ${Number(qtdNestaSala)}
+              </span>
+
+              <span class="block text-[9px] ${temEstoque ? 'text-slate-400' : 'text-red-400'} font-medium">
+                ${temEstoque 
+                  ? `Disponível: ${Number(qtdDisponivelAlmoxarifado)}` 
+                  : 'Esgotado'}
+              </span>
+              </div>
+            </div>
+            
+            <div class="flex items-center gap-2 mt-2">
+              <input type="number" 
+              id="input_qtd_${escaparHTML(idItem)}" 
+              min="1" 
+              max="${temEstoque ? Number(qtdDisponivelAlmoxarifado) : 1}" 
+              value="1"
+              class="w-12 p-1 text-center text-xs bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-purple-400 outline-none font-bold text-slate-600">
+              
+              <button type="button" 
+                onclick="executarMobilizacaoEstoque(&quot;${escaparHTML(idItem)}&quot;, &quot;${escaparHTML(idSala)}&quot;, 'fixar')"
+                ${!temEstoque ? 'disabled' : ''}
+                class="flex-1 text-[9px] font-black py-2 rounded-lg transition-all shadow-sm uppercase tracking-tighter ${
+                  !temEstoque 
+                  ? 'bg-slate-100 text-slate-400 cursor-not-allowed' 
+                  : 'bg-purple-600 text-white hover:bg-purple-700 active:scale-95'
+                }">
+                ${temEstoque ? 'Fixar Unit.' : 'Sem Estoque'}
+              </button>
+              
+              ${qtdNestaSala > 0 ? `
+                <button type="button" 
+                  onclick="executarMobilizacaoEstoque(&quot;${escaparHTML(idItem)}&quot;, &quot;${escaparHTML(idSala)}&quot;, 'liberar')"
+                  class="flex-1 bg-red-50 text-red-500 text-[9px] font-black py-2 rounded-lg hover:bg-red-100 active:scale-95 transition-all uppercase tracking-tighter">
+                  Liberar Unit.
+                </button>
+              ` : ''}
+            </div>
+          </div>
+        `;
+      }).join('');
+    })
+    .withFailureHandler(function(err) {
+       container.innerHTML = `<p class="text-[10px] text-red-400 text-center py-4 px-2">Erro ao sincronizar: ${escaparHTML(err.message)}</p>`;
+    })
+    .obterDadosParaConfig('Itens');
+}
+
+/**
+ * Nova função de mobilização que lida com quantidades
+ */
+function executarMobilizacaoEstoque(idItem, idSala, acao) {
+  const inputElement = document.getElementById(`input_qtd_${escaparHTML(idItem)}`);
+  if (!inputElement) return;
+  const qtdMover = parseInt(inputElement.value) || 0;
+  if (qtdMover <= 0) { Swal.fire({ icon: 'warning', title: 'Quantidade Inválida', text: 'Valor maior que zero.', confirmButtonColor: '#9333ea' }); return; }
+  if (typeof showLoader === 'function') showLoader(true);
+  google.script.run
+    .withSuccessHandler(function() {
+      inputElement.value = 1;
+      if (typeof inicializarApp === 'function') inicializarApp();
+      if (typeof atualizarVisualizacaoPatrimonio === 'function') atualizarVisualizacaoPatrimonio(idSala);
+      if (typeof showLoader === 'function') showLoader(false);
+      Swal.mixin({ toast: true, position: 'top-end', showConfirmButton: false, timer: 2500, timerProgressBar: true })
+        .fire({ icon: 'success', title: acao === 'fixar' ? 'Item alocado' : 'Item liberado' });
+    })
+    .withFailureHandler(function(err) {
+      if (typeof showLoader === 'function') showLoader(false);
+      Swal.fire({ icon: 'error', title: 'Operação Recusada', text: err.message, confirmButtonColor: '#ef4444' });
+    })
+    .alternarQuantidadeItem(idItem, idSala, qtdMover, acao, AppState.usuario.email);  // ← email passado
+}
+
+
+
+
+// Atualiza o max do input de quantidade conforme o item selecionado
+function atualizarMaxQuantidade() {
+  const selVolantes = document.getElementById('selectVolantes');
+  const qtdInput = document.getElementById('qtdVolante');
+  if (!selVolantes || !qtdInput) return;
+
+  selVolantes.addEventListener('change', function() {
+    const opcaoSelecionada = this.options[this.selectedIndex];
+    const max = parseInt(opcaoSelecionada?.getAttribute('data-max') || '999');
+
+    qtdInput.max = max;
+
+    if (parseInt(qtdInput.value) > max) {
+      qtdInput.value = max;
+    }
+
+    const btnAdicionar = document.querySelector('button[onclick="adicionarItemVolante()"]');
+    if (btnAdicionar && max > 0) {
+      btnAdicionar.title = `Máximo disponível: ${max}`;
+    }
+  });
+}
+
+function atualizarMaxQuantidade() {
+  const selVolantes = document.getElementById('selectVolantes');
+  const qtdInput = document.getElementById('qtdVolante');
+  if (!selVolantes || !qtdInput) return;
+  const opcaoSelecionada = selVolantes.options[selVolantes.selectedIndex];
+  const max = parseInt(opcaoSelecionada?.getAttribute('data-max') || '999');
+  qtdInput.max = max;
+  if (parseInt(qtdInput.value) > max) qtdInput.value = max;
+}
+
+function atualizarAvisosCarrinho(disponibilidade) {
+  if (!disponibilidade || itensSelecionados.length === 0) return;
+
+  const lista = document.getElementById('carrinhoVolantes');
+  if (!lista) return;
+
+  lista.innerHTML = itensSelecionados.map((item, index) => {
+    const disponivel = disponibilidade[item.nome] ?? 0;
+    const qtd = Number(item.qtd);
+    const temConflito = qtd > disponivel;
+
+    return `
+    <li class="flex justify-between items-center bg-slate-50 p-2 rounded-xl border ${temConflito ? 'border-red-200 bg-red-50' : 'border-slate-100'} group transition-all hover:bg-white hover:shadow-sm">
+      <div class="flex flex-col overflow-hidden">
+        <span class="text-[11px] font-bold text-slate-700 truncate">
+          <b class="${temConflito ? 'text-red-500' : 'text-purple-600'} mr-1">${escaparHTML(String(item.qtd))}x</b>
+          ${escaparHTML(item.nome)}
+        </span>
+        ${temConflito
+          ? `<span class="text-[9px] text-red-500 font-bold">⚠️ Apenas ${disponivel} disponível neste horário</span>`
+          : `<span class="text-[9px] text-green-600 font-bold">✅ Disponível: ${disponivel}</span>`
+        }
+      </div>
+      <button type="button"
+        onclick="removerItemCarrinho(${Number(index)})"
+        class="ml-2 p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
+        title="Remover da lista">
+        <i class="fas fa-trash-alt text-xs"></i>
+      </button>
+    </li>`;
+  }).join('');
+}
+
+
+// ===============================
+// 🔹 VALIDAÇÃO
+// ===============================
+function validarAntesDeSalvar() {
+
+  const btn = document.querySelector('#formReserva button[type="submit"]');
+
+  const data = calendarInstance?.selectedDates?.[0];
+  const inicio = document.getElementById('horaInicio')?.value;
+  const termino = document.getElementById('horaTermino')?.value;
+
+  if (!data || !inicio || !termino) {
+    if (btn) btn.disabled = true;
+    return;
+  }
+
+  google.script.run.withSuccessHandler(function(disponibilidade) {
+
+    const itensSelecionados = window.itensSelecionados || [];
+
+    const erro = itensSelecionados.some(i => {
+      const disp = disponibilidade[i.nome] ?? 0;
+      return i.qtd > disp;
+    });
+
+    if (btn) {
+      btn.disabled = erro;
+
+      if (erro) {
+        btn.innerText = "Itens indisponíveis";
+        btn.classList.add('bg-red-600');
+      } else {
+        btn.innerText = "Confirmar Agendamento";
+        btn.classList.remove('bg-red-600');
+      }
+    }
+
+  }).obterDisponibilidadeItensPorHorario(data, inicio, termino);
+}
+
+
+
+
+function gerarHorariosDisponiveis(sala, data) {
+
+  const horariosBase = [
+    "08:00","09:00","10:00","11:00",
+    "12:00","13:00","14:00","15:00",
+    "16:00","17:00","18:00","19:00",
+    "20:00"
+  ];
+
+  const ocupados = obterHorariosOcupadosFrontend(sala, data);
+
+  const normalizar = (h) => {
+    const p = h.split(':');
+    return parseInt(p[0]) * 60 + parseInt(p[1]);
+  };
+
+  return horariosBase.filter(h => {
+
+    const inicio = normalizar(h);
+    const fim = inicio + 60; // bloco de 1h
+
+    const conflito = ocupados.some(o =>
+      inicio < o.fim && fim > o.inicio
+    );
+
+    return !conflito;
+  });
+}
+
+/*
+function aplicarBloqueioVisual() {
+
+  const sala = document.getElementById('selectSala')?.value;
+  const data = calendarInstance?.selectedDates?.[0];
+
+  const inputInicio = document.getElementById('horaInicio');
+  const inputFim = document.getElementById('horaTermino');
+
+  if (!sala || !data || !inputInicio || !inputFim) return;
+
+  const horariosLivres = gerarHorariosDisponiveis(sala, data);
+
+  // 🔥 se horário atual não for válido → corrige automaticamente
+  if (!horariosLivres.includes(inputInicio.value)) {
+
+    if (horariosLivres.length > 0) {
+      inputInicio.value = horariosLivres[0];
+      inputFim.value = adicionar1Hora(horariosLivres[0]);
+    } else {
+      inputInicio.value = '';
+      inputFim.value = '';
+    }
+  }
+
+  // feedback visual
+  inputInicio.classList.toggle('bg-red-100', horariosLivres.length === 0);
+}
+
+*/
+
+
+
+// ===============================
+// AGENDA RECE
+// ===============================
+
+function coletarDadosRece() {
+  if (!modoRece) return null;
+  return {
+    dataTermino:      document.getElementById('receDataTermino')?.value.trim() || '',
+    categorias:       document.getElementById('receCategorias')?.value.trim() || '',
+    parceiros:        document.getElementById('receParceiros')?.value.trim() || '',
+    acessibilidades:  document.getElementById('receAcessibilidades')?.value.trim() || '',
+    classificacao:    document.getElementById('receClassificacao')?.value || '',
+    publicoAlvo:      document.getElementById('recePublicoAlvo')?.value.trim() || '',
+    artista:          document.getElementById('receArtista')?.value.trim() || '',
+    linkInscricao:    document.getElementById('receiveLinkInscricao')?.value.trim() || '',
+    acesso:           document.getElementById('receAcesso')?.value || '',
+    descricao:        document.getElementById('receDescricao')?.value.trim() || '',
+    observacoes:      document.getElementById('receObservacoes')?.value.trim() || '',
+    imagemUrl:        document.getElementById('receImagemUrl')?.value || '',
+    convidadosInternos: convidadosInternos.join(' | '),
+    eventoInstitucional: document.getElementById('checkEventoInstitucional')?.checked || false,
+    convidadosExternos:  document.getElementById('inputEmailsExternos')?.value.trim() || ''
+  };
+}
+
+
+
+// Atualiza salvarAgendamento para passar dados às finalizações
+// Substitua as chamadas de finalizarSucesso dentro de salvarAgendamento:
+// .withSuccessHandler(res => { finalizarSucesso(`...`, dados, datas); })
+
+function carregarReservasRece() {
+  const corpo = document.getElementById('corpoTabelaRece');
+  if (!corpo) return;
+  corpo.innerHTML = `<tr><td colspan="9" class="p-10 text-center"><i class="fas fa-spinner animate-spin text-yellow-500 text-2xl"></i></td></tr>`;
+
+  google.script.run
+    .withSuccessHandler(function(reservas) {
+      AppState.colecoes.reservasRece = reservas;
+      renderizarTabelaRece();
+    })
+    .withFailureHandler(err => Swal.fire('Erro', err.message, 'error'))
+    .obterReservasRece();
+}
+
+function renderizarTabelaRece() {
+  const corpo = document.getElementById('corpoTabelaRece');
+  if (!corpo) return;
+
+  // Dados ainda não carregados — aguarda sem quebrar
+  if (!AppState.colecoes.reservasRece) {
+    corpo.innerHTML = `
+      <tr>
+        <td colspan="10" class="p-10 text-center">
+          <i class="fas fa-spinner animate-spin text-yellow-500 text-xl"></i>
+          <p class="text-slate-400 text-xs mt-2 font-bold uppercase tracking-widest">Carregando...</p>
+        </td>
+      </tr>`;
+    return;
+  }
+
+  const busca = (document.getElementById('receBusca')?.value || '').toLowerCase().trim();
+  const filtroInicio = document.getElementById('receFiltroInicio')?.value;
+  const filtroFim = document.getElementById('receFiltroFim')?.value;
+
+  let dados = AppState.colecoes.reservasRece || [];
+
+  dados = dados.filter(r => {
+    const texto = [r[1], r[7], r[8], r[12]].join(' ').toLowerCase();
+    if (busca && !texto.includes(busca)) return false;
+
+    if (filtroInicio || filtroFim) {
+      // r[2] = Data Início no formato DD/MM/YYYY
+      const partes = String(r[2] || '').split('/');
+      if (partes.length === 3) {
+        const dataEvento = new Date(partes[2], partes[1]-1, partes[0]);
+        if (filtroInicio && dataEvento < new Date(filtroInicio)) return false;
+        if (filtroFim   && dataEvento > new Date(filtroFim + 'T23:59:59')) return false;
+      }
+    }
+    return true;
+  });
+
+   // ── Ordenação composta RECE: data início → hora início → hora término ──
+  const parseDataRece = (str) => {
+    if (!str) return 0;
+    const s = String(str).trim();
+    if (s.includes('/')) {
+      const p = s.split('/');
+      if (p.length === 3) { const d = new Date(p[2], p[1]-1, p[0]); d.setHours(0,0,0,0); return d.getTime(); }
+    }
+    if (s.includes('-')) { const d = new Date(s); d.setHours(0,0,0,0); return d.getTime(); }
+    return 0;
+  };
+  const parseHoraRece = (h) => {
+    if (!h) return 0;
+    const p = String(h).trim().split(':');
+    if (p.length < 2) return 0;
+    return parseInt(p[0], 10) * 60 + parseInt(p[1], 10);
+  };
+
+  const hojeRece = new Date(); hojeRece.setHours(0,0,0,0);
+  const hojeMsRece = hojeRece.getTime();
+
+  const futurasRece  = dados.filter(r => parseDataRece(r[2]) >= hojeMsRece);
+  const passadasRece = dados.filter(r => parseDataRece(r[2]) <  hojeMsRece);
+
+  const ordenarRece = arr => arr.sort((a, b) => {
+    const dA = parseDataRece(a[2]), dB = parseDataRece(b[2]);
+    if (dA !== dB) return dA - dB;
+    const iA = parseHoraRece(a[4]),  iB = parseHoraRece(b[4]);
+    if (iA !== iB) return iA - iB;
+    return parseHoraRece(a[5]) - parseHoraRece(b[5]);
+  });
+
+  dados = [...ordenarRece(futurasRece), ...ordenarRece(passadasRece)];
+  // ── fim ordenação ──────────────────────────────────────────────────────
+
+  const contador = document.getElementById('receContador');
+
+  if (contador) contador.innerText = `${dados.length} registro(s)`;
+
+  if (dados.length === 0) {
+    corpo.innerHTML = '';
+    document.getElementById('semResultadosRece')?.classList.remove('hidden');
+    return;
+  }
+  document.getElementById('semResultadosRece')?.classList.add('hidden');
+
+  const isCancelado = r => r[17] === 'CANCELADO';
+
+  corpo.innerHTML = (dados || []).map(r => `
+  <tr class="hover:bg-slate-50 transition-colors ${isCancelado(r) ? 'opacity-50 grayscale' : ''}">
+    
+    <td class="p-4">
+      <div class="font-bold text-slate-800 uppercase leading-tight">
+        ${escaparHTML(r[1] || '')}
+      </div>
+      <div class="text-[9px] text-slate-400 mt-0.5">
+        ${escaparHTML(r[18] || '')}
+      </div>
+    </td>
+
+    <td class="p-4 whitespace-nowrap">
+      <div class="font-semibold text-slate-700">
+        ${escaparHTML(r[2] || '')}
+      </div>
+      <div class="text-[9px] text-slate-400">
+        até ${escaparHTML(r[3] || '')}
+      </div>
+    </td>
+
+    <td class="p-4 whitespace-nowrap text-slate-600">
+      ${escaparHTML(r[4] || '')} – ${escaparHTML(r[5] || '')}
+    </td>
+
+    <td class="p-4 text-purple-600 font-bold text-[11px]">
+      ${escaparHTML(r[6] || '—')}
+    </td>
+
+    <td class="p-4 text-slate-600">
+      ${escaparHTML(r[7] || '—')}
+    </td>
+
+    <td class="p-4 text-slate-600">
+      ${escaparHTML(r[12] || '—')}
+    </td>
+
+    <td class="p-4">
+      ${r[20] && String(r[20]).trim() ? `
+        <a href="${escaparHTML(String(r[20]))}" target="_blank" rel="noopener" title="Ver imagem">
+          <img src="${escaparHTML(String(r[20]))}"
+            alt="capa"
+            class="w-14 h-14 rounded-xl object-cover cursor-pointer border border-slate-100 hover:scale-105 hover:shadow-md transition-transform"
+            onerror="this.closest('a').outerHTML='<span class=\\'text-slate-300 text-[10px]\\'>Sem imagem</span>'">
+        </a>
+      ` : '<span class="text-slate-300 text-xs">—</span>'}
+    </td>
+
+    <td class="p-4">
+      <span class="px-2 py-1 rounded-full text-[9px] font-black ${
+        r[14] === 'Gratuito' ? 'bg-green-100 text-green-700' :
+        r[14] === 'Pago' ? 'bg-red-100 text-red-700' :
+        'bg-slate-100 text-slate-600'
+      }">
+        ${escaparHTML(r[14] || '—')}
+      </span>
+    </td>
+
+    <td class="p-4 text-center">
+      <span class="px-2 py-1 rounded-full text-[9px] font-black ${
+        isCancelado(r) ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'
+      }">
+        ${escaparHTML(r[17] || '')}
+      </span>
+    </td>
+
+    <td class="p-4 text-right">
+      <div class="flex justify-end gap-2">
+        
+        ${(AppState.usuario.isAdmin || AppState.usuario.isSuperadmin || AppState.usuario.isComunicacao || AppState.usuario.email === r[18]) ? `
+          <button
+            data-acao="editar-rece"
+            data-id="${escaparHTML(r[0] || '')}"
+            aria-label="Editar evento ${escaparHTML(r[1] || '')}"
+            class="w-8 h-8 rounded-lg bg-slate-100 text-slate-600 hover:bg-yellow-500 hover:text-white transition-all">
+            <i class="fas fa-edit text-xs" aria-hidden="true"></i>
+          </button>
+        ` : ''}
+
+        ${(!isCancelado(r) && (AppState.usuario.isAdmin || AppState.usuario.isSuperadmin || AppState.usuario.email === r[18])) ? `
+          <button
+            data-acao="cancelar-rece"
+            data-id="${escaparHTML(r[0] || '')}"
+            data-nome="${escaparHTML(r[1] || '')}"
+            aria-label="Cancelar evento ${escaparHTML(r[1] || '')}"
+            class="w-8 h-8 rounded-lg bg-slate-100 text-red-500 hover:bg-red-600 hover:text-white transition-all">
+            <i class="fas fa-ban text-xs" aria-hidden="true"></i>
+          </button>
+        ` : ''}
+
+        ${(AppState.usuario.isAdmin || AppState.usuario.isSuperadmin) ? `
+          <button
+            data-acao="excluir-rece"
+            data-id="${escaparHTML(r[0] || '')}"
+            aria-label="Excluir evento ${escaparHTML(r[1] || '')}"
+            class="w-8 h-8 rounded-lg bg-red-50 text-red-400 hover:bg-red-700 hover:text-white transition-all">
+            <i class="fas fa-trash-alt text-xs" aria-hidden="true"></i>
+          </button>
+        ` : ''}
+
+      </div>
+    </td>
+
+  </tr>
+`).join('');
+}
+
+function confirmarCancelamentoRece(id, nome) {
+  Swal.fire({
+    title: 'Cancelar evento RECE?',
+    text: `"${nome}" será marcado como cancelado.`,
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonColor: '#d33',
+    confirmButtonText: 'SIM, CANCELAR',
+    cancelButtonText: 'VOLTAR'
+  }).then(r => {
+    if (!r.isConfirmed) return;
+    showLoader(true);
+    google.script.run
+      .withSuccessHandler(() => {
+        showLoader(false);
+        Swal.fire({ title: 'Sucesso!', text: 'Evento cancelado.', icon: 'success', timer: 2000, showConfirmButton: false });
+        carregarReservasRece();
+      })
+      .withFailureHandler(err => {
+        showLoader(false);
+        Swal.fire('Erro', err.message, 'error');
+      })
+      .cancelarReservaRece(id, AppState.usuario.email);
+  });
+}
+
+function excluirReceDefinitivo(id) {
+  Swal.fire({
+    title: 'Excluir permanentemente?',
+    text: 'Esta ação não pode ser desfeita.',
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonColor: '#d33',
+    confirmButtonText: 'SIM, EXCLUIR'
+  }).then(r => {
+    if (!r.isConfirmed) return;
+    showLoader(true);
+    google.script.run
+      .withSuccessHandler(() => { showLoader(false); carregarReservasRece(); })
+      .withFailureHandler(err => { showLoader(false); Swal.fire('Erro', err.message, 'error'); })
+      .excluirReservaRece(id, AppState.usuario.email);  // ← email passado
+  });
+}
+
+function prepararEdicaoRece(id) {
+  if (!AppState.colecoes.reservasRece || !AppState.colecoes.reservasRece.length) {
+    Swal.fire('Aviso', 'Dados RECE não carregados. Acesse a aba Agenda RECE primeiro.', 'warning');
+    return;
+  }
+
+  const r = AppState.colecoes.reservasRece.find(x => x[0] === id);
+  if (!r) {
+    Swal.fire('Erro', 'Registro RECE não encontrado.', 'error');
+    return;
+  }
+
+  resetarFormulario();
+  AppState.editandoReceId = r[0];
+
+  // mantém ID para ignorar conflito com ele mesmo 
+  document.getElementById('inputReservaId').value = r[0];
+
+  // Campos principais
+  document.getElementById('inputNomeAcao').value = r[1] || '';
+  document.getElementById('horaInicio').value    = r[4] || '';
+  document.getElementById('horaTermino').value   = r[5] || '';
+
+  if (typeof validarHorarios === 'function') validarHorarios();
+
+  // configuracoes
+  const selSala = document.getElementById('selectSala');
+  if (selSala) {
+    const salaEncontrada = (AppState.colecoes.salas || [])
+      .find(s => String(s[1]).trim() === String(r[6]).trim());
+
+    if (salaEncontrada) selSala.value = salaEncontrada[0];
+  }
+
+  // Data
+  if (calendarInstance && r[2]) {
+    const partes = String(r[2]).split('/');
+    if (partes.length === 3) {
+      calendarInstance.setDate(
+        new Date(partes[2], partes[1]-1, partes[0]),
+        true
+      );
+    }
+  }
+
+  // Ativa RECE
+  const checkRece = document.getElementById('checkRece');
+  if (checkRece) {
+    checkRece.checked = true;
+    alternarModoRece(true);
+  }
+
+  // Campos extras
+  const campos = {
+    receDataTermino:     r[3],
+    receCategorias:      r[7],
+    receParceiros:       r[8],
+    receAcessibilidades: r[9],
+    receClassificacao:   r[10],
+    recePublicoAlvo:     r[11],
+    receArtista:         r[12],
+    receiveLinkInscricao:r[13],
+    receAcesso:          r[14],
+    receDescricao:       r[15],
+    receObservacoes:     r[16]
+  };
+
+  Object.entries(campos).forEach(([id, val]) => {
+    const el = document.getElementById(id);
+    if (el) el.value = val || '';
+  });
+
+  // Imagem
+  if (r[20]) {
+    document.getElementById('receImagemUrl').value = r[20];
+
+    const prev = document.getElementById('receImagemPreview');
+    const prevImg = document.getElementById('receImagemPreviewImg');
+
+    if (prev && prevImg) {
+      prevImg.src = r[20];
+      prev.classList.remove('hidden');
+    }
+  }
+
+  // Botão
+  const btn = document.querySelector('#formReserva button[type="submit"]');
+  if (btn) {
+    btn.innerHTML = '<i class="fas fa-save"></i> Atualizar Evento RECE';
+    btn.classList.replace('bg-purple-600', 'bg-yellow-500');
+  }
+
+  window.modoEdicao = "RECE";
+  mostrarAba('aba-nova-reserva');
+
+  // VALIDA APÓS PREENCHER TUDO
+  setTimeout(() => {
+    if (typeof atualizarTudoTempoReal === 'function') {
+      atualizarTudoTempoReal();
+    }
+  }, 100);
+}
+
+// ===============================
+// EXPORTAÇÕES RECE
+// ===============================
+
+function receGetDadosFiltrados() {
+  const busca = (document.getElementById('receBusca')?.value || '').toLowerCase().trim();
+  const filtroInicio = document.getElementById('receFiltroInicio')?.value;
+  const filtroFim = document.getElementById('receFiltroFim')?.value;
+  let dados = AppState.colecoes.reservasRece || [];
+  return dados.filter(r => {
+    const texto = [r[1],r[7],r[8],r[12]].join(' ').toLowerCase();
+    if (busca && !texto.includes(busca)) return false;
+    if (filtroInicio || filtroFim) {
+      const p = String(r[2]||'').split('/');
+      if (p.length===3) {
+        const d = new Date(p[2], p[1]-1, p[0]);
+        if (filtroInicio && d < new Date(filtroInicio)) return false;
+        if (filtroFim   && d > new Date(filtroFim+'T23:59:59')) return false;
+      }
+    }
+    return true;
+  });
+}
+
+const RECE_CABECALHO = ["Título","Data Início","Data Término","Horário Início","Horário Término","Espaço","Categorias","Parceiros/Organizadores","Acessibilidades","Classificação","Público Alvo","Artista","Link Inscrição","Acesso","Descrição","Observações","Status"];
+const RECE_COLUNAS   = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17]; // índices em r[]
+
+function exportarReceCSV() {
+  const dados = receGetDadosFiltrados();
+  if (!dados.length) { Swal.fire('Sem dados','Nenhum registro para exportar.','info'); return; }
+
+  const linhas = [RECE_CABECALHO.join(';')];
+  dados.forEach(r => {
+    linhas.push(RECE_COLUNAS.map(i => `"${String(r[i]||'').replace(/"/g,'""')}"`).join(';'));
+  });
+
+  const blob = new Blob(["\uFEFF" + linhas.join('\n')], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `agenda_rece_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click(); URL.revokeObjectURL(url);
+}
+
+function exportarRecePlanilha() {
+  // Gera HTML table que o Excel abre nativamente
+  const dados = receGetDadosFiltrados();
+  if (!dados.length) { Swal.fire('Sem dados','Nenhum registro para exportar.','info'); return; }
+
+  let html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel">
+  <head><meta charset="UTF-8"></head><body><table border="1">`;
+  html += '<tr>' + RECE_CABECALHO.map(c => `<th style="background:#fbbf24;font-weight:bold;">${c}</th>`).join('') + '</tr>';
+  dados.forEach(r => {
+    html += '<tr>' + RECE_COLUNAS.map(i => `<td>${escaparHTML(String(r[i]||''))}</td>`).join('') + '</tr>';
+  });
+  html += '</table></body></html>';
+
+  const blob = new Blob([html], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `agenda_rece_${new Date().toISOString().slice(0,10)}.xls`;
+  a.click(); URL.revokeObjectURL(url);
+}
+
+function exportarRecePDF() {
+  const dados = receGetDadosFiltrados();
+  if (!dados.length) { Swal.fire('Sem dados','Nenhum registro para exportar.','info'); return; }
+
+  const janela = window.open('', '_blank');
+  janela.document.write(`
+    <html><head><meta charset="UTF-8">
+    <title>Agenda RECE</title>
+    <style>
+      body { font-family: Arial, sans-serif; font-size: 10px; padding: 20px; }
+      h2 { color: #92400e; margin-bottom: 8px; }
+      table { border-collapse: collapse; width: 100%; }
+      th { background: #fbbf24; color: #1c1917; padding: 6px 8px; text-align: left; font-size: 9px; text-transform: uppercase; }
+      td { padding: 5px 8px; border-bottom: 1px solid #f1f5f9; vertical-align: top; }
+      tr:nth-child(even) td { background: #fefce8; }
+      @media print { body { padding: 0; } }
+    </style>
+    </head><body>
+    <h2>Agenda RECE — exportado em ${new Date().toLocaleDateString('pt-BR')}</h2>
+    <table>
+      <thead><tr>${RECE_CABECALHO.map(c=>`<th>${c}</th>`).join('')}</tr></thead>
+      <tbody>
+        ${dados.map(r=>'<tr>'+RECE_COLUNAS.map(i=>`<td>${String(r[i]||'—')}</td>`).join('')+'</tr>').join('')}
+      </tbody>
+    </table>
+    </body></html>
+  `);
+  janela.document.close();
+  setTimeout(() => janela.print(), 500);
+}
+
+function aplicarAtalhoDashboard(valor) {
+  const inicio = document.getElementById('dashDataInicio');
+  const fim    = document.getElementById('dashDataFim');
+  if (!inicio || !fim) return;
+
+  const hoje = new Date();
+  const fmt  = d => d.toISOString().slice(0, 10);
+
+  if (valor === 'todos' || valor === 'custom') {
+    inicio.value = '';
+    fim.value    = '';
+  } else {
+    const dias = parseInt(valor);
+    const de   = new Date(hoje);
+    de.setDate(hoje.getDate() - dias);
+    inicio.value = fmt(de);
+    fim.value    = fmt(hoje);
+  }
+}
+
+function carregarDashboard() {
+  const cont = document.getElementById('dashboardConteudo');
+  if (!cont) return;
+  cont.innerHTML = `<div class="p-20 text-center"><i class="fas fa-spinner animate-spin text-purple-400 text-2xl"></i><p class="text-slate-400 text-xs mt-3 font-bold uppercase tracking-widest">Calculando métricas...</p></div>`;
+
+  const dataInicio  = document.getElementById('dashDataInicio')?.value  || '';
+  const dataFim     = document.getElementById('dashDataFim')?.value     || '';
+  const filtroSala  = document.getElementById('dashFiltroSala')?.value  || '';
+  const filtroSetor = document.getElementById('dashFiltroSetor')?.value || '';
+
+  const labelPeriodo = (() => {
+    if (!dataInicio && !dataFim) return 'Todo o histórico';
+    if (dataInicio && dataFim)   return `${dataInicio.split('-').reverse().join('/')} até ${dataFim.split('-').reverse().join('/')}`;
+    if (dataInicio)              return `A partir de ${dataInicio.split('-').reverse().join('/')}`;
+    return `Até ${dataFim.split('-').reverse().join('/')}`;
+  })();
+
+  google.script.run
+    .withSuccessHandler(function(m) {
+      const elCodip = document.getElementById('dashCodip');
+      if (elCodip) elCodip.classList.remove('hidden');
+      const codip = m.codip || {};
+
+      const _fmtDur = m => { const h=Math.floor(m/60),min=m%60; return h>0?h+'h'+(min>0?min+'min':''):min+'min'; };
+      const _kpi = (val,lbl,icon,cor,sub) => `
+        <div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:18px 20px;display:flex;align-items:center;gap:14px">
+          <div style="width:44px;height:44px;border-radius:12px;background:${cor}18;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+            <i class="fas ${icon}" style="color:${cor};font-size:16px"></i>
+          </div>
+          <div>
+            <div style="font-size:24px;font-weight:900;color:#1e293b;line-height:1">${val}</div>
+            <div style="font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.06em;margin-top:3px">${lbl}</div>
+            ${sub?`<div style="font-size:10px;color:#94a3b8;margin-top:2px">${sub}</div>`:''}
+          </div>
+        </div>`;
+      const _secao = (titulo, icon, cor, html) => `
+        <div style="background:#fff;border:1px solid #e2e8f0;border-radius:16px;overflow:hidden">
+          <div style="padding:16px 20px;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;gap:10px;background:#fafafa">
+            <div style="width:32px;height:32px;border-radius:10px;background:${cor}18;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+              <i class="fas ${icon}" style="color:${cor};font-size:13px"></i>
+            </div>
+            <span style="font-size:12px;font-weight:900;color:#334155;text-transform:uppercase;letter-spacing:0.06em">${titulo}</span>
+          </div>
+          <div style="padding:20px">${html}</div>
+        </div>`;
+      const _maxV = arr => Math.max(...arr.map(function(x){return x[1];}),1);
+      const _barRow = function(label,val,max,cor,sub,numVal) {
+        const _v = (numVal !== undefined) ? numVal : (typeof val === 'number' ? val : parseFloat(val)||0);
+        const pct = max>0?Math.round(_v/max*100):0;
+        const subHtml = sub ? ' <span style="font-size:9px;font-weight:400;color:#94a3b8">'+sub+'</span>' : '';
+        return '<div style="margin-bottom:10px">'
+          +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">'
+          +'<span style="font-size:11px;font-weight:700;color:#334155;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escaparHTML(String(label))+'</span>'
+          +'<span style="font-size:10px;font-weight:900;color:'+cor+';margin-left:8px;flex-shrink:0">'+val+subHtml+'</span>'
+          +'</div>'
+          +'<div style="background:#f1f5f9;border-radius:99px;height:5px">'
+          +'<div style="width:'+pct+'%;background:'+cor+';height:5px;border-radius:99px"></div>'
+          +'</div></div>';
+      };
+
+      // ─── S1: VISÃO GERAL ───────────────────────────────────────────
+      const _s1 = `
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px">
+          ${_kpi(m.total,'Total de reservas','fa-calendar-check','#7c3aed')}
+          ${_kpi(m.confirmadas,'Confirmadas','fa-check-circle','#16a34a',`${m.total>0?Math.round(m.confirmadas/m.total*100):0}% do total`)}
+          ${_kpi(m.habilitadas||0,'Habilitadas','fa-circle-check','#059669')}
+          ${_kpi(m.canceladas,'Canceladas','fa-ban','#dc2626',`Taxa: ${m.taxaCancelamento}%`)}
+          ${_kpi(m.acessosUnicos30d,'Usuários 30d','fa-users','#0891b2')}
+          ${_kpi(m.solPendentes||0,'Aprovações pendentes','fa-hourglass-half','#f59e0b')}
+        </div>`;
+
+      // ─── S2: ESPAÇOS ──────────────────────────────────────────────
+      const _maxSala = _maxV(m.top5Salas.length ? m.top5Salas : [['',0]]);
+      const _s2 = `
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px">
+          <div>
+            <div style="font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:12px">Mais utilizados</div>
+            ${m.top5Salas.map(([s,v])=>_barRow(AppState.mapaSalas?.[s]||s,v,_maxSala,'#7c3aed',v+' reserva'+(v>1?'s':''))).join('')}
+          </div>
+          <div>
+            <div style="font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:12px">Tempo médio por espaço</div>
+            ${(m.mediaOcupacaoPorSala||[]).length
+              ? (() => { const mx=Math.max(...m.mediaOcupacaoPorSala.map(([,v])=>v),1); return m.mediaOcupacaoPorSala.map(([s,media,total])=>_barRow(AppState.mapaSalas?.[s]||s,_fmtDur(media),mx,'#a855f7',total+' uso'+(total>1?'s':''),media)).join(''); })()
+              : '<p style="font-size:11px;color:#cbd5e1;font-style:italic">Sem dados.</p>'}
+          </div>
+        </div>
+        ${m.cancelamentosPorSala && m.cancelamentosPorSala.length ? `
+        <div style="margin-top:20px;padding-top:16px;border-top:1px solid #f1f5f9">
+          <div style="font-size:10px;font-weight:900;color:#dc2626;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:12px">Cancelamentos por espaço</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            ${m.cancelamentosPorSala.map(([s,v])=>{ const tot=(m.porSalaTotal||{})[s]||v; return _barRow(AppState.mapaSalas?.[s]||s,v,tot,'#f87171',`${tot>0?Math.round(v/tot*100):0}% de ${tot}`); }).join('')}
+          </div>
+        </div>` : ''}`;
+
+      // ─── S3: SETORES ──────────────────────────────────────────────
+      const _maxSetor = _maxV(m.top5Setores.length ? m.top5Setores : [['',0]]);
+      const _s3 = `
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px">
+          <div>
+            <div style="font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:12px">Setores mais ativos</div>
+            ${m.top5Setores.map(([s,v])=>_barRow(s,v,_maxSetor,'#6366f1',v+' reserva'+(v>1?'s':''))).join('')}
+          </div>
+          <div>
+            <div style="font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:12px">Cancelamentos por setor</div>
+            ${(m.cancelamentosPorSetor||[]).length
+              ? m.cancelamentosPorSetor.map(([s,v])=>{ const tot=(m.porSetor||{})[s]||v; return _barRow(s,v,tot,'#f87171',`${tot>0?Math.round(v/tot*100):0}%`); }).join('')
+              : '<p style="font-size:11px;color:#cbd5e1;font-style:italic">Nenhum cancelamento.</p>'}
+          </div>
+        </div>
+        <div style="margin-top:20px;padding-top:16px;border-top:1px solid #f1f5f9">
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;text-align:center">
+            ${[['Solicitações aprovadas',m.solAprovadas||0,'#16a34a','fa-thumbs-up'],['Pendentes de aprovação',m.solPendentes||0,'#f59e0b','fa-hourglass-half'],['Recusadas',m.solRecusadas||0,'#dc2626','fa-thumbs-down']].map(([l,v,c,ic])=>`
+              <div style="background:#f8fafc;border-radius:12px;padding:14px;border:1px solid #f1f5f9">
+                <i class="fas ${ic}" style="color:${c};font-size:18px;margin-bottom:6px"></i>
+                <div style="font-size:22px;font-weight:900;color:${c}">${v}</div>
+                <div style="font-size:9px;font-weight:700;color:#94a3b8;text-transform:uppercase">${l}</div>
+              </div>`).join('')}
+          </div>
+        </div>`;
+
+      // ─── S4: TEMPORALIDADE ─────────────────────────────────────────
+      const _maxDia  = _maxV(m.diasSemana.length ? m.diasSemana : [['',0]]);
+      const _turnos  = Object.entries(m.porTurno||{});
+      const _maxTurn = _maxV(_turnos.length ? _turnos : [['',0]]);
+      const _corTurno = t => t==='MANHÃ'?'#f59e0b':t==='TARDE'?'#3b82f6':t==='NOITE'?'#6366f1':'#94a3b8';
+      const _s4 = `
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:24px">
+          <div>
+            <div style="font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:12px">Por turno</div>
+            ${_turnos.map(([t,v])=>_barRow(t,v,_maxTurn,_corTurno(t),`${m.total>0?Math.round(v/m.total*100):0}%`)).join('')}
+          </div>
+          <div>
+            <div style="font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:12px">Dias da semana</div>
+            ${m.diasSemana.map(([d,v])=>_barRow(d,v,_maxDia,'#7c3aed')).join('')}
+          </div>
+          <div>
+            <div style="font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:12px">Meses</div>
+            ${(m.mesesAno||[]).length ? (() => { const mx=_maxV(m.mesesAno); return m.mesesAno.map(([mes,v])=>_barRow(mes.split('/')[0].substring(0,3)+'/'+( mes.split('/')[1]?.slice(-2)||''),v,mx,'#0891b2')).join(''); })() : '<p style="font-size:11px;color:#cbd5e1;font-style:italic">Sem dados.</p>'}
+          </div>
+        </div>
+        <div style="margin-top:20px;padding-top:16px;border-top:1px solid #f1f5f9">
+          <div style="font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:12px">Pico de uso por hora</div>
+          ${(()=>{
+            const mh={};(m.horasPico||[]).forEach(([h,v])=>{mh[h]=v;});
+            const ths=[];for(let h=8;h<=21;h++){const k=String(h).padStart(2,'0')+'h';ths.push([k,mh[k]||0]);}
+            const mx=Math.max(...ths.map(([,v])=>v),1);
+            const hNum=h=>parseInt(h);
+            const cor=h=>hNum(h)<12?'#f59e0b':hNum(h)<18?'#3b82f6':'#6366f1';
+            return '<div style="display:flex;align-items:flex-end;gap:3px;height:60px;padding:0 4px">'
+              +ths.map(([h,v])=>`<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px" title="${h}: ${v}">
+                <div style="width:100%;background:${v>0?cor(h):'#f1f5f9'};border-radius:3px 3px 0 0;height:${Math.max(Math.round(v/mx*48),v>0?4:1)}px;opacity:${v===mx?1:0.6}"></div>
+                <span style="font-size:7px;color:#94a3b8;font-weight:700">${h.replace('h','')}</span>
+              </div>`).join('')
+              +'</div><div style="display:flex;justify-content:space-between;margin-top:4px;padding:0 4px"><span style="font-size:8px;font-weight:900;color:#f59e0b">MANHÃ</span><span style="font-size:8px;font-weight:900;color:#3b82f6">TARDE</span><span style="font-size:8px;font-weight:900;color:#6366f1">NOITE</span></div>';
+          })()}
+        </div>`;
+
+      // ─── S5: RECURSOS ─────────────────────────────────────────────
+      const _s5 = `
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px">
+          <div>
+            <div style="font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:12px">Estoque atual</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
+              ${[['Disponíveis','fa-box-open','#16a34a',m.itensDisponiveis],['Fixados nas salas','fa-thumbtack','#7c3aed',m.itensFixados]].map(([l,ic,c,v])=>`
+                <div style="background:#f8fafc;border-radius:10px;padding:12px;border:1px solid #f1f5f9;text-align:center">
+                  <i class="fas ${ic}" style="color:${c};font-size:16px;margin-bottom:4px"></i>
+                  <div style="font-size:20px;font-weight:900;color:${c}">${v}</div>
+                  <div style="font-size:9px;font-weight:700;color:#94a3b8;text-transform:uppercase">${l}</div>
+                </div>`).join('')}
+            </div>
+            <div style="font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px">Mais solicitados</div>
+            ${(m.topItens||[]).length ? (() => { const mx=_maxV(m.topItens); return m.topItens.map(([n,v])=>_barRow(n,v,mx,'#6366f1',v+' vez'+(v>1?'es':''))).join(''); })() : '<p style="font-size:11px;color:#cbd5e1;font-style:italic">Sem dados.</p>'}
+          </div>
+          <div>
+            <div style="font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:12px">Tempo médio de uso por item</div>
+            ${(m.mediaUsoItens||[]).length ? (() => { const mx=Math.max(...m.mediaUsoItens.map(([,v])=>v),1); return m.mediaUsoItens.map(([n,media,total])=>_barRow(n,_fmtDur(media),mx,'#0891b2',total+' uso'+(total>1?'s':''),media)).join(''); })() : '<p style="font-size:11px;color:#cbd5e1;font-style:italic">Sem dados.</p>'}
+          </div>
+        </div>`;
+
+      // ─── S6: QUALIDADE ─────────────────────────────────────────────
+      const _taxaHab = m.confirmadas > 0 ? Math.round((m.habilitadas||0)/m.confirmadas*100) : 0;
+      const _s6 = `
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:20px">
+          ${[
+            ['Taxa de cancelamento',m.taxaCancelamento+'%','#dc2626','fa-chart-pie'],
+            ['Taxa de habilitação',_taxaHab+'%','#059669','fa-circle-check'],
+            ['Aprovações no período',(m.solAprovadas||0),'#16a34a','fa-thumbs-up'],
+            ['Tempo médio/espaço',(m.mediaOcupacaoPorSala||[]).length?_fmtDur(Math.round(m.mediaOcupacaoPorSala.reduce((a,[,v])=>a+v,0)/m.mediaOcupacaoPorSala.length)):'—','#7c3aed','fa-hourglass-half']
+          ].map(([l,v,c,ic])=>_kpi(v,l,ic,c)).join('')}
+        </div>
+        <div style="padding-top:16px;border-top:1px solid #f1f5f9">
+          <div style="font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:12px">Tendência mensal de reservas</div>
+          ${(m.mesesAno||[]).length ? (() => {
+            const mx=_maxV(m.mesesAno);
+            return '<div style="display:flex;align-items:flex-end;gap:4px;height:80px">'
+              +m.mesesAno.map(([mes,v])=>`<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px">
+                <span style="font-size:8px;font-weight:900;color:#7c3aed">${v>0?v:''}</span>
+                <div style="width:100%;background:${v===mx?'#7c3aed':'#c4b5fd'};border-radius:4px 4px 0 0;height:${Math.max(Math.round(v/mx*60),v>0?4:1)}px"></div>
+                <span style="font-size:7px;color:#94a3b8;font-weight:700;text-align:center;line-height:1.2">${mes.split('/')[0].substring(0,3)}</span>
+              </div>`).join('')
+            +'</div>';
+          })() : '<p style="font-size:11px;color:#cbd5e1;font-style:italic">Sem dados no período.</p>'}
+        </div>`;
+
+      // ─── S7: CODIP ─────────────────────────────────────────────────
+      const _kpiC = (val,lbl,cor,icon) => `
+        <div style="background:#fff;border:1px solid #e0e7ff;border-radius:14px;padding:16px;display:flex;align-items:center;gap:12px">
+          <div style="width:40px;height:40px;border-radius:10px;background:${cor}18;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+            <i class="fas ${icon}" style="color:${cor};font-size:15px"></i>
+          </div>
+          <div>
+            <div style="font-size:22px;font-weight:900;color:#1e293b;line-height:1">${val}</div>
+            <div style="font-size:9px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.06em;margin-top:2px">${lbl}</div>
+          </div>
+        </div>`;
+
+      const _barC = (label,val,max,cor) => {
+        const pct = max>0?Math.round(val/max*100):0;
+        return `<div style="margin-bottom:9px">
+          <div style="display:flex;justify-content:space-between;margin-bottom:3px">
+            <span style="font-size:10px;font-weight:700;color:#334155;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escaparHTML(String(label))}</span>
+            <span style="font-size:10px;font-weight:900;color:${cor};margin-left:8px">${val}</span>
+          </div>
+          <div style="background:#f1f5f9;border-radius:99px;height:5px">
+            <div style="width:${pct}%;background:${cor};height:5px;border-radius:99px"></div>
+          </div></div>`;
+      };
+
+      const _painelBarra = (dados, titulo, cor) => {
+        if (!dados || !dados.length) return `<p style="font-size:11px;color:#cbd5e1;font-style:italic">Sem dados.</p>`;
+        const mx = dados[0]?.[1] || 1;
+        return `<div style="font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:12px">${titulo}</div>`
+          + dados.map(([l,v]) => _barC(l,v,mx,cor)).join('');
+      };
+
+      const _s7kpis = `
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:20px">
+          ${_kpiC(codip.totalRegistros||0,            'Registros CODIP',    '#6366f1','fa-file-lines')}
+          ${_kpiC((codip.totalPubPresencial||0).toLocaleString('pt-BR'), 'Público Presencial','#7c3aed','fa-users')}
+          ${_kpiC((codip.totalPubVirtual||0).toLocaleString('pt-BR'),   'Audiência Virtual',  '#0891b2','fa-wifi')}
+          ${_kpiC((codip.totalAcesso||0).toLocaleString('pt-BR'),       'Total de Acessos',   '#059669','fa-eye')}
+          ${_kpiC(codip.totalPCD||0,        'PCDs Atendidos',    '#dc2626','fa-universal-access')}
+          ${_kpiC(codip.totalIdosos||0,     'Idosos Atendidos',  '#d97706','fa-person-cane')}
+          ${_kpiC(codip.totalVoluntarios||0,'Voluntários',       '#16a34a','fa-handshake')}
+          ${_kpiC(Math.round(codip.totalHorasMes||0)+'h','Horas no Mês','#7c3aed','fa-clock')}
+        </div>`;
+
+      const _s7barras = `
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px">
+          <div>${_painelBarra(codip.topTiposAcao,  'Tipos de Ação',    '#6366f1')}</div>
+          <div>${_painelBarra(codip.topLinguagens, 'Linguagens',        '#7c3aed')}</div>
+          <div>${_painelBarra(codip.topEixos,      'Eixos da Política', '#0891b2')}</div>
+          <div>
+            ${(codip.porMes && codip.porMes.length) ? (() => {
+              const mx = Math.max(...codip.porMes.map(([,v])=>v),1);
+              return `<div style="font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:12px">Ações por Mês Ref.</div>
+                <div style="display:flex;align-items:flex-end;gap:4px;height:72px">
+                  ${codip.porMes.map(([mes,v])=>`
+                    <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px" title="${mes}: ${v}">
+                      <span style="font-size:8px;font-weight:900;color:#6366f1">${v>0?v:''}</span>
+                      <div style="width:100%;background:${v===mx?'#6366f1':'#c7d2fe'};border-radius:3px 3px 0 0;height:${Math.max(Math.round(v/mx*56),v>0?4:1)}px"></div>
+                      <span style="font-size:7px;color:#94a3b8;font-weight:700">${String(mes).slice(0,3)}</span>
+                    </div>`).join('')}
+                </div>`;
+            })() : '<p style="font-size:11px;color:#cbd5e1;font-style:italic">Sem dados.</p>'}
+          </div>
+        </div>`;
+
+      const _s7 = _s7kpis + _s7barras;
+
+      cont.innerHTML = `
+        <div style="display:flex;align-items:center;gap:8px;padding:8px 14px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;width:fit-content;margin-bottom:16px">
+          <i class="fas fa-calendar-alt" style="color:#7c3aed;font-size:11px"></i>
+          <span style="font-size:11px;font-weight:900;color:#7c3aed;text-transform:uppercase;letter-spacing:0.06em">${escaparHTML(labelPeriodo)}</span>
+        </div>
+        ${_secao('Visão Geral',              'fa-chart-bar',       '#7c3aed', _s1)}
+        ${_secao('Espaços',                  'fa-map-marker-alt',  '#7c3aed', _s2)}
+        ${_secao('Setores & Pessoas',        'fa-users',           '#6366f1', _s3)}
+        ${_secao('Temporalidade',            'fa-clock',           '#0891b2', _s4)}
+        ${_secao('Recursos & Almoxarifado',  'fa-boxes-stacked',   '#6366f1', _s5)}
+        ${_secao('Qualidade & Operação',     'fa-shield-alt',      '#059669', _s6)}
+        ${_secao('CODIP — Indicadores Culturais', 'fa-chart-pie',  '#6366f1', _s7)}
+      `;
+    })
+    .withFailureHandler(function(err) {
+      cont.innerHTML = `<div class="p-10 text-center text-red-400 text-sm">${escaparHTML(err.message)}</div>`;
+    })
+    .obterMetricasDashboard(dataInicio, dataFim, filtroSala, filtroSetor);
+}
+
+function confirmarLogout() {
+  Swal.fire({
+    title: 'Sair do sistema?',
+    text: 'Você será redirecionado para trocar de conta.',
+    icon: 'question',
+    showCancelButton: true,
+    confirmButtonColor: '#ef4444',
+    confirmButtonText: '<i class="fas fa-right-from-bracket mr-1"></i> Sair',
+    cancelButtonText: 'Cancelar'
+  }).then(result => {
+    if (!result.isConfirmed) return;
+    showLoader(true);
+    google.script.run
+      .withSuccessHandler(url => { window.top.location.href = url; })
+      .withFailureHandler(() => { window.top.location.href = 'https://accounts.google.com/logout'; })
+      .obterUrlLogout();
+  });
+}
+
+function carregarPerfilUsuario() {
+  google.script.run
+    .withSuccessHandler(function(perfil) {
+      const avatarEl = document.getElementById('userAvatar');
+      const nomeEl   = document.getElementById('userNome');
+      const emailEl  = document.getElementById('statusUser');
+
+      // Nome
+      if (nomeEl) {
+        nomeEl.textContent = perfil.nome;
+        nomeEl.classList.remove('animate-pulse');
+      }
+
+      // Email
+      if (emailEl) emailEl.textContent = perfil.email;
+
+      // Avatar: foto ou iniciais
+      if (avatarEl) {
+        if (perfil.foto) {
+          avatarEl.innerHTML = `<img src="${escaparHTML(perfil.foto)}" alt="foto" class="w-full h-full object-cover">`;
+        } else {
+          const iniciais = perfil.nome
+            .split(' ')
+            .filter(Boolean)
+            .slice(0, 2)
+            .map(p => p[0].toUpperCase())
+            .join('');
+          avatarEl.textContent = iniciais;
+        }
+      }
+
+      // Atualiza AppState
+      AppState.usuario.email = perfil.email;
+      AppState.usuario.nome  = perfil.nome;
+
+      // Atualiza badge de nível
+      const nivelLabel = AppState.usuario.isSuperadmin ? 'SUPERADMIN'
+                       : AppState.usuario.isAdmin ? 'ADMIN'
+                       : 'USUÁRIO';
+      if (emailEl) {
+        emailEl.innerHTML = `
+          <span class="truncate">${escaparHTML(perfil.email)}</span>
+          <span class="text-[8px] font-black text-purple-400 block">${nivelLabel}</span>
+        `;
+      }
+    })
+    .withFailureHandler(function() {
+      const nomeEl = document.getElementById('userNome');
+      if (nomeEl) nomeEl.classList.remove('animate-pulse');
+    })
+    .obterPerfilUsuario();
+}
+
+// ── Manual de Uso ─────────────────────────────────────────────────────────────
+function abrirManual(abaInicial) {
+  const modal = document.getElementById('modalManual');
+  if (modal) modal.classList.remove('hidden');
+
+  renderizarManualCompleto();
+
+  mudarAbaManual(abaInicial || 'intro');
+
+  const check = document.getElementById('checkNaoMostrarManual');
+  if (check) check.checked = localStorage.getItem('ccbj_manual_ocultar') === 'true';
+}
+
+function fecharManual() {
+  const modal = document.getElementById('modalManual');
+  if (modal) modal.classList.add('hidden');
+}
+
+function mudarAbaManual(aba) {
+  document.querySelectorAll('.conteudo-manual').forEach(el => el.classList.add('hidden'));
+  document.querySelectorAll('.tab-manual').forEach(btn => {
+    btn.classList.remove('text-purple-600', 'border-purple-600');
+    btn.classList.add('text-slate-400', 'border-transparent');
+  });
+
+  const conteudo = document.getElementById('conteudo-manual-' + aba);
+  if (conteudo) conteudo.classList.remove('hidden');
+
+  const tabBtn = document.getElementById('tab-manual-' + aba);
+  if (tabBtn) {
+    tabBtn.classList.add('text-purple-600', 'border-purple-600');
+    tabBtn.classList.remove('text-slate-400', 'border-transparent');
+  }
+}
+
+function salvarPreferenciaManuai(ocultar) {
+  localStorage.setItem('ccbj_manual_ocultar', ocultar ? 'true' : 'false');
+}
+
+function verificarExibirManualAutomatico() {
+  const ocultar = localStorage.getItem('ccbj_manual_ocultar') === 'true';
+  if (!ocultar) abrirManual('intro');
+}
+
+function renderizarManualCompleto() {
+
+  const secoes = {
+
+    intro: {
+      el: 'manual-intro-cards',
+      tipo: 'cards',
+      dados: [
+        {
+          icon: 'fa-user',
+          cor: 'blue',
+          titulo: 'Usuário Comum',
+          desc: 'Pode visualizar a agenda, criar e editar suas próprias reservas e cancelá-las.'
+        },
+        {
+          icon: 'fa-user-shield',
+          cor: 'purple',
+          titulo: 'Admin',
+          desc: 'Além das funções de usuário, gerencia espaços, itens, setores e pode cancelar/excluir qualquer reserva.'
+        },
+        {
+          icon: 'fa-crown',
+          cor: 'amber',
+          titulo: 'Superadmin',
+          desc: 'Acesso total: gerencia administradores, acessa auditoria e pode desfazer ações.'
+        }
+      ]
+    },
+
+    agenda: {
+      el: 'manual-agenda-cards',
+      tipo: 'steps',
+      dados: [
+        { titulo: 'Visualização completa', desc: 'Lista todas as reservas cadastradas.' },
+        { titulo: 'Filtros', desc: 'Permite buscar por data, setor ou responsável.' },
+        { titulo: 'Status', desc: 'Acompanhe reservas confirmadas e canceladas.' }
+      ]
+    },
+
+    agendamento: {
+      el: 'manual-agendamento-cards',
+      tipo: 'steps',
+      dados: [
+        {
+          titulo: 'Criar reserva',
+          desc: 'Selecione o espaço, data, horário e responsável pela atividade.'
+        },
+        {
+          titulo: 'Itens e estrutura',
+          desc: 'Adicione equipamentos e recursos necessários para a realização da ação.'
+        },
+        {
+          titulo: 'Ativar Agenda RECE',
+          desc: 'Ao ativar a RECE, a reserva passa a ser tratada como um evento cultural público, com informações para divulgação.'
+        },
+        {
+          titulo: 'Preenchimento RECE',
+          desc: 'Informe descrição, público-alvo, artista, acessibilidade e demais dados do evento.'
+        },
+        {
+          titulo: 'Diferença importante',
+          desc: 'Reservas sem RECE são internas. Com RECE, entram na agenda pública de difusão cultural.'
+        },
+        {
+          titulo: 'Agendamento em lote',
+          desc: 'Permite criar várias reservas de uma vez para diferentes datas.'
+        },
+        {
+        titulo: '⚠️ Quando usar RECE',
+        desc: 'Use RECE apenas para atividades que serão divulgadas ao público. Evite usar em reuniões internas ou uso técnico de espaço.'
+      }
+      ]
+    },
+
+    rece: {
+      el: 'manual-rece-cards',
+      tipo: 'steps',
+      dados: [
+        { titulo: 'Cadastro', desc: 'Registre eventos culturais para divulgação.' },
+        { titulo: 'Informações', desc: 'Inclua descrição, público e acessibilidade.' },
+        { titulo: 'Publicação', desc: 'Eventos podem ser usados para comunicação externa.' }
+      ]
+    },
+
+    admin: {
+      el: 'manual-admin-cards',
+      tipo: 'steps',
+      dados: [
+        { titulo: 'Espaços', desc: 'Gerencie salas e capacidades.' },
+        { titulo: 'Itens', desc: 'Controle equipamentos e disponibilidade.' },
+        { titulo: 'Setores', desc: 'Organize a estrutura institucional.' },
+        { titulo: 'Usuários', desc: 'Controle acessos administrativos.' }
+      ]
+    },
+
+    auditoria: {
+      el: 'manual-auditoria-cards',
+      tipo: 'steps',
+      dados: [
+        { titulo: 'Histórico', desc: 'Todas as ações ficam registradas.' },
+        { titulo: 'Rastreabilidade', desc: 'Identifique quem fez cada alteração.' },
+        { titulo: 'Segurança', desc: 'Permite auditoria e controle institucional.' }
+      ]
+    },
+
+    dashboard: {
+      el: 'manual-dashboard-cards',
+      tipo: 'steps',
+      dados: [
+        { titulo: 'Indicadores', desc: 'Visualize métricas de uso.' },
+        { titulo: 'Análises', desc: 'Acompanhe tendências e padrões.' },
+        { titulo: 'Decisão', desc: 'Apoia planejamento e gestão.' }
+      ]
+    }
+
+    ,
+    aprovacoes: {
+      el: 'manual-aprovacoes-cards',
+      tipo: 'steps',
+      dados: [
+        { titulo: 'O que são solicitações', desc: 'Reservas de espaços que exigem aprovação (ex: Biblioteca) ou solicitações de cancelamento/alteração feitas por usuários comuns geram solicitações pendentes.' },
+        { titulo: 'Quem pode aprovar', desc: 'Apenas administradores e superadmins visualizam e gerenciam solicitações. Usuários comuns veem apenas as suas próprias.' },
+        { titulo: 'Aprovar uma solicitação', desc: 'Clique em Aprovar no card da solicitação. A ação vinculada (criar reserva, cancelar, alterar) é executada imediatamente após a confirmação.' },
+        { titulo: 'Recusar uma solicitação', desc: 'Clique em Recusar e informe o motivo (mínimo 5 caracteres). O solicitante recebe e-mail com o motivo da recusa.' },
+        { titulo: 'Filtros de status', desc: 'Use os botões Pendentes, Aprovadas, Recusadas e Todas para filtrar a lista. Os cards coloridos no topo mostram a contagem por categoria.' },
+        { titulo: 'Badge na sidebar', desc: 'O número vermelho ao lado de "Aprovações" na barra lateral indica solicitações pendentes. É atualizado automaticamente ao carregar o sistema.' },
+        { titulo: 'Dono do espaço', desc: 'O e-mail cadastrado como responsável de cada espaço (em Configurações > Espaços) recebe notificação automática quando uma nova solicitação é gerada para aquele espaço.' }
+      ]
+    },
+
+    ia: {
+      el: 'manual-ia-cards',
+      tipo: 'steps',
+      dados: [
+        { titulo: 'Fazer uma pergunta', desc: 'Consulte a IA sobre reservas, disponibilidade, padrões de uso ou qualquer dado do sistema. A resposta é baseada exclusivamente nos registros internos do CCBJ.' },
+        { titulo: 'Gerar análise', desc: 'Escolha um tipo (uso de espaços, conflitos, recursos, otimização) e um período. A IA gera um relatório interpretado com insights e recomendações práticas.' },
+        { titulo: 'Sugerir reserva', desc: 'Descreva livremente o que precisa (ex: "oficina para 30 pessoas na quinta à tarde com projetor"). A IA verifica conflitos reais e preenche o formulário automaticamente.' },
+        { titulo: 'Analisar Dashboard', desc: 'Gera um resumo executivo das métricas atuais: pontos de atenção, oportunidades identificadas e recomendação prioritária.' },
+        { titulo: 'Modo Lote via IA', desc: 'Se a descrição mencionar múltiplas datas ou repetição, a IA ativa automaticamente o modo lote e preenche todas as datas sugeridas (máx. 8 por vez).' },
+        { titulo: 'Modo RECE via IA', desc: 'Se o pedido indicar evento público ou divulgação, a IA ativa o campo RECE e pré-preenche descrição, público-alvo e acesso.' },
+        { titulo: 'Salas disponíveis em tempo real', desc: 'Ao preencher data e horário no formulário de agendamento, o sistema exibe automaticamente quais espaços estão livres naquele período — sem necessidade de consultar a IA.' },
+        { titulo: 'Horários livres por espaço', desc: 'Ao selecionar um espaço e uma data, o sistema lista os intervalos disponíveis naquele dia com base nas reservas já existentes.' },
+        { titulo: 'Previsão contextual', desc: 'Conforme você preenche o formulário (nome da ação, setor, espaço), o sistema sugere horários e salas com base no histórico de uso e preferências anteriores.' },
+        { titulo: '⚠️ Limitações', desc: 'A IA usa apenas dados internos do sistema. Não acessa a internet nem informações externas ao CCBJ. Sempre revise os campos antes de confirmar o agendamento.' }
+      ]
+    }
+  };
+
+
+
+  Object.values(secoes).forEach(sec => {
+    const container = document.getElementById(sec.el);
+    if (!container) return;
+
+    if (sec.tipo === 'cards') {
+      container.innerHTML = sec.dados.map(n => `
+        <div class="flex items-start gap-3 p-3 bg-slate-50 rounded-xl">
+          <div class="w-8 h-8 ${corBg(n.cor)} ${corTexto(n.cor)} rounded-lg flex items-center justify-center shrink-0">
+            <i class="fas ${n.icon} text-xs"></i>
+          </div>
+          <div>
+            <p class="font-black text-slate-800 text-xs">${n.titulo}</p>
+            <p class="text-[11px] text-slate-500 mt-0.5">${n.desc}</p>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    if (sec.tipo === 'steps') {
+      container.innerHTML = sec.dados.map((n, i) => `
+        <div class="flex gap-3 p-3 bg-slate-50 rounded-xl">
+          <span class="w-6 h-6 bg-purple-600 text-white rounded-full flex items-center justify-center text-[10px] font-black">
+            ${i + 1}
+          </span>
+          <div>
+            <p class="font-black text-slate-800 text-xs">${n.titulo}</p>
+            <p class="text-[11px] text-slate-500 mt-0.5">${n.desc}</p>
+          </div>
+        </div>
+      `).join('');
+    }
+
+  });
+}
+
+// ============================================================
+// PAINEL DE INTELIGÊNCIA ARTIFICIAL — CCBJ
+// ============================================================
+
+// Renderiza markdown simples em HTML seguro
+function renderizarMarkdown(texto) {
+  if (!texto) return '';
+  return texto
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/^#{1,3} (.+)$/gm, '<p class="font-black text-slate-800 mt-3 mb-1">$1</p>')
+    .replace(/^- (.+)$/gm, '<li class="ml-4 list-disc text-slate-700">$1</li>')
+    .replace(/^\d+\. (.+)$/gm, '<li class="ml-4 list-decimal text-slate-700">$1</li>')
+    .replace(/\n\n/g, '</p><p class="mb-2">')
+    .replace(/\n/g, '<br>');
+}
+
+// Modal de resultado da IA — visual integrado ao sistema
+function exibirResultadoIA(titulo, conteudo, icone, corIcone) {
+  const id = 'modalIA_' + Date.now();
+  const overlay = document.createElement('div');
+  overlay.id = id;
+  overlay.className = 'fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[70] flex items-center justify-center p-4';
+  overlay.innerHTML = `
+    <div class="bg-white w-full max-w-2xl rounded-3xl shadow-2xl flex flex-col max-h-[85vh] overflow-hidden">
+      <div class="bg-slate-900 px-6 py-4 flex items-center justify-between shrink-0">
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 rounded-xl bg-purple-500/20 flex items-center justify-center">
+            <i class="fas ${icone || 'fa-brain'} text-purple-400 text-sm"></i>
+          </div>
+          <div>
+            <p class="text-white font-black text-sm uppercase tracking-tight">${titulo}</p>
+            <p class="text-slate-400 text-[10px]">Assistente de IA — CCBJ</p>
+          </div>
+        </div>
+        <button onclick="document.getElementById('${id}').remove()"
+          class="text-slate-400 hover:text-white transition-colors w-8 h-8 flex items-center justify-center hover:bg-white/10 rounded-lg">
+          <i class="fas fa-times text-sm"></i>
+        </button>
+      </div>
+      <div class="overflow-y-auto flex-1 p-6">
+        <div class="prose prose-sm text-slate-700 leading-relaxed space-y-1 text-[13px]">
+          ${renderizarMarkdown(conteudo)}
+        </div>
+      </div>
+      <div class="px-6 py-4 border-t border-slate-100 bg-slate-50/50 flex justify-between items-center shrink-0">
+        <p class="text-[10px] text-slate-400 font-medium">
+          <i class="fas fa-circle-info mr-1"></i>Baseado nos dados reais do sistema
+        </p>
+        <button onclick="document.getElementById('${id}').remove()"
+          class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-black rounded-xl transition-all">
+          Fechar
+        </button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+
+// Loading spinner integrado ao visual
+function mostrarLoadingIA(titulo) {
+  const id = 'loadingIA_' + Date.now();
+  const overlay = document.createElement('div');
+  overlay.id = id;
+  overlay.className = 'fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[70] flex items-center justify-center p-4';
+  overlay.innerHTML = `
+    <div class="bg-white rounded-3xl shadow-2xl p-8 flex flex-col items-center gap-4 max-w-xs w-full">
+      <div class="relative w-16 h-16">
+        <div class="absolute inset-0 border-4 border-purple-100 rounded-full"></div>
+        <div class="absolute inset-0 border-4 border-purple-600 rounded-full border-t-transparent animate-spin"></div>
+        <div class="absolute inset-0 flex items-center justify-center">
+          <i class="fas fa-brain text-purple-400 text-lg"></i>
+        </div>
+      </div>
+      <div class="text-center">
+        <p class="font-black text-slate-800 text-sm uppercase tracking-tight">${titulo || 'Analisando...'}</p>
+        <p class="text-slate-400 text-[11px] mt-1">Consultando IA com dados do sistema</p>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  return id;
+}
+
+function removerLoadingIA(id) {
+  const el = document.getElementById(id);
+  if (el) el.remove();
+}
+
+// Painel principal da IA
+function abrirPainelIA() {
+  const id = 'painelIA_main';
+  if (document.getElementById(id)) { document.getElementById(id).remove(); return; }
+
+  const overlay = document.createElement('div');
+  overlay.id = id;
+  overlay.className = 'fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[70] flex items-center justify-center p-4';
+  overlay.innerHTML = `
+    <div class="bg-white w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden">
+      
+      <!-- Header -->
+      <div class="bg-slate-900 px-6 py-5">
+        <div class="flex items-center justify-between mb-1">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-2xl bg-purple-500/20 border border-purple-500/30 flex items-center justify-center">
+              <i class="fas fa-brain text-purple-400"></i>
+            </div>
+            <div>
+              <p class="text-white font-black text-sm uppercase tracking-tight">Inteligência CCBJ</p>
+              <p class="text-slate-400 text-[10px]">Assistente de gestão de espaços</p>
+            </div>
+          </div>
+          <button onclick="document.getElementById('${id}').remove()"
+            class="text-slate-400 hover:text-white w-8 h-8 flex items-center justify-center hover:bg-white/10 rounded-lg transition-all">
+            <i class="fas fa-times text-sm"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Ações rápidas -->
+      <div class="p-6 space-y-3">
+        <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">O que você quer fazer?</p>
+
+        <button onclick="document.getElementById('${id}').remove(); setTimeout(perguntarIAModal, 100)"
+          class="w-full flex items-center gap-4 p-4 bg-slate-50 hover:bg-purple-50 border border-slate-200 hover:border-purple-200 rounded-2xl transition-all group text-left">
+          <div class="w-10 h-10 bg-purple-100 text-purple-600 rounded-xl flex items-center justify-center shrink-0 group-hover:bg-purple-600 group-hover:text-white transition-all">
+            <i class="fas fa-comments text-sm"></i>
+          </div>
+          <div>
+            <p class="font-black text-slate-800 text-sm">Fazer uma pergunta</p>
+            <p class="text-[11px] text-slate-400">Consulte a IA sobre reservas, disponibilidade e mais</p>
+          </div>
+          <i class="fas fa-chevron-right text-slate-300 ml-auto group-hover:text-purple-400 transition-all"></i>
+        </button>
+
+        <button onclick="document.getElementById('${id}').remove(); setTimeout(gerarRelatorioIAModal, 100)"
+          class="w-full flex items-center gap-4 p-4 bg-slate-50 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-200 rounded-2xl transition-all group text-left">
+          <div class="w-10 h-10 bg-indigo-100 text-indigo-600 rounded-xl flex items-center justify-center shrink-0 group-hover:bg-indigo-600 group-hover:text-white transition-all">
+            <i class="fas fa-chart-line text-sm"></i>
+          </div>
+          <div>
+            <p class="font-black text-slate-800 text-sm">Gerar análise</p>
+            <p class="text-[11px] text-slate-400">Relatório inteligente de uso de espaços e recursos</p>
+          </div>
+          <i class="fas fa-chevron-right text-slate-300 ml-auto group-hover:text-indigo-400 transition-all"></i>
+        </button>
+
+        <button onclick="document.getElementById('${id}').remove(); setTimeout(sugerirReservaIAModal, 100)"
+          class="w-full flex items-center gap-4 p-4 bg-slate-50 hover:bg-emerald-50 border border-slate-200 hover:border-emerald-200 rounded-2xl transition-all group text-left">
+          <div class="w-10 h-10 bg-emerald-100 text-emerald-600 rounded-xl flex items-center justify-center shrink-0 group-hover:bg-emerald-600 group-hover:text-white transition-all">
+            <i class="fas fa-calendar-plus text-sm"></i>
+          </div>
+          <div>
+            <p class="font-black text-slate-800 text-sm">Sugerir reserva</p>
+            <p class="text-[11px] text-slate-400">Descreva o que precisa e a IA sugere sala e horário</p>
+          </div>
+          <i class="fas fa-chevron-right text-slate-300 ml-auto group-hover:text-emerald-400 transition-all"></i>
+        </button>
+
+        <button onclick="document.getElementById('${id}').remove(); setTimeout(analisarDashboardIAModal, 100)"
+          class="w-full flex items-center gap-4 p-4 bg-slate-50 hover:bg-amber-50 border border-slate-200 hover:border-amber-200 rounded-2xl transition-all group text-left">
+          <div class="w-10 h-10 bg-amber-100 text-amber-600 rounded-xl flex items-center justify-center shrink-0 group-hover:bg-amber-600 group-hover:text-white transition-all">
+            <i class="fas fa-magnifying-glass-chart text-sm"></i>
+          </div>
+          <div>
+            <p class="font-black text-slate-800 text-sm">Analisar Dashboard</p>
+            <p class="text-[11px] text-slate-400">Insights executivos sobre as métricas do sistema</p>
+          </div>
+          <i class="fas fa-chevron-right text-slate-300 ml-auto group-hover:text-amber-400 transition-all"></i>
+        </button>
+      </div>
+
+      <div class="px-6 pb-5">
+        <p class="text-[10px] text-slate-300 text-center">
+          <i class="fas fa-lock mr-1"></i>A IA usa somente dados internos do sistema CCBJ
+        </p>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+
+// Modal: Fazer pergunta
+function perguntarIAModal() {
+  const id = 'painelIA_chat';
+  if (document.getElementById(id)) return;
+  historicoChat = []; // reseta histórico ao abrir novo chat
+
+  const overlay = document.createElement('div');
+  overlay.id = id;
+  overlay.className = 'fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[70] flex items-center justify-center p-4';
+
+  overlay.innerHTML = `
+    <div class="bg-white w-full max-w-xl rounded-3xl shadow-2xl flex flex-col" style="height:80vh">
+
+      <div class="bg-slate-900 px-6 py-4 flex items-center justify-between shrink-0 rounded-t-3xl">
+        <div class="flex items-center gap-3">
+          <div class="w-9 h-9 rounded-2xl bg-purple-500/20 border border-purple-500/30 flex items-center justify-center">
+            <i class="fas fa-brain text-purple-400"></i>
+          </div>
+          <div>
+            <p class="text-white font-black text-sm uppercase tracking-tight">Bêjotinha</p>
+            <p class="text-slate-400 text-[10px]">Assistente de agendamento — CCBJ</p>
+          </div>
+        </div>
+        <button onclick="document.getElementById('${id}').remove()"
+          class="text-slate-400 hover:text-white w-8 h-8 flex items-center justify-center hover:bg-white/10 rounded-lg transition-all">
+          <i class="fas fa-times text-sm"></i>
+        </button>
+      </div>
+
+      <div id="chatIA" class="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-50"></div>
+
+      <div class="p-4 border-t border-slate-200 bg-white shrink-0 rounded-b-3xl space-y-2">
+        <div class="flex gap-2">
+          <input id="inputChatIA"
+            class="flex-1 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all"
+            placeholder="Ex: oficina de teatro na quinta à tarde para 30 pessoas..."
+            onkeydown="if(event.key==='Enter' && !event.shiftKey){ event.preventDefault(); enviarMensagemIA(); }">
+          <button onclick="enviarMensagemIA()"
+            class="px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-black rounded-xl transition-all flex items-center gap-2 shrink-0">
+            <i class="fas fa-paper-plane"></i>
+          </button>
+        </div>
+        <button onclick="preencherUltimaSugestaoIA()"
+          class="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black rounded-xl transition-all flex items-center justify-center gap-2">
+          <i class="fas fa-calendar-check text-xs"></i> Usar última sugestão no formulário
+        </button>
+        <p class="text-[10px] text-slate-400 text-center">
+          <i class="fas fa-lock mr-1"></i>Usa apenas dados internos do sistema
+        </p>
+      </div>
+    </div>`;
+
+  document.body.appendChild(overlay);
+
+  const chat = document.getElementById('chatIA');
+  chat.innerHTML = `
+    <div class="flex gap-2">
+      <div class="w-7 h-7 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center shrink-0 mt-0.5">
+        <i class="fas fa-brain text-[10px]"></i>
+      </div>
+      <div class="bg-white border border-slate-200 rounded-2xl rounded-tl-none px-4 py-3 max-w-[85%] shadow-sm text-sm text-slate-700">
+        Oi! Sou a Bêjotinha 👋 Me diz o que precisa — posso verificar disponibilidade, sugerir sala e horário, ou só tirar dúvidas.
+      </div>
+    </div>`;
+
+  setTimeout(() => document.getElementById('inputChatIA')?.focus(), 150);
+}
+
+let historicoIA = [];
+let historicoChat = []; // histórico enviado ao servidor
+let ultimaSugestaoIA = null;
+
+function enviarMensagemIA() {
+  const input = document.getElementById('inputChatIA');
+  const chat  = document.getElementById('chatIA');
+
+  const texto = input.value.trim();
+  if (!texto) return;
+
+  // Adiciona ao histórico antes de enviar
+  historicoChat.push({ role: 'user', content: texto });
+
+  chat.innerHTML += `
+    <div class="flex justify-end">
+      <div class="bg-purple-600 text-white rounded-2xl rounded-tr-none px-4 py-3 max-w-[85%] text-sm">${escaparHTML(texto)}</div>
+    </div>`;
+  input.value = '';
+  chat.scrollTop = chat.scrollHeight;
+
+  const loadingId = 'loadingIA_' + Date.now();
+  chat.innerHTML += `
+    <div class="flex gap-2" id="${loadingId}">
+      <div class="w-7 h-7 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center shrink-0">
+        <i class="fas fa-brain text-[10px]"></i>
+      </div>
+      <div class="bg-white border border-slate-200 rounded-2xl rounded-tl-none px-4 py-3 shadow-sm">
+        <div class="flex gap-1.5 items-center">
+          <div class="w-1.5 h-1.5 bg-purple-400 rounded-full animate-bounce" style="animation-delay:0ms"></div>
+          <div class="w-1.5 h-1.5 bg-purple-400 rounded-full animate-bounce" style="animation-delay:150ms"></div>
+          <div class="w-1.5 h-1.5 bg-purple-400 rounded-full animate-bounce" style="animation-delay:300ms"></div>
+        </div>
+      </div>
+    </div>`;
+  chat.scrollTop = chat.scrollHeight;
+
+  // Envia histórico completo como JSON
+  const payloadHistorico = JSON.stringify(historicoChat);
+
+  google.script.run
+    .withSuccessHandler(res => {
+      document.getElementById(loadingId)?.remove();
+
+      const resposta = res.texto || '';
+
+      // Adiciona resposta ao histórico
+      historicoChat.push({ role: 'assistant', content: resposta });
+
+      // Limita histórico a 20 mensagens para não explodir o contexto
+      if (historicoChat.length > 20) historicoChat = historicoChat.slice(-20);
+
+      let json = null;
+      try {
+        json = parsearJsonIA(resposta);
+      } catch(e) {
+        console.warn('parsearJsonIA falhou:', e.message);
+      }
+      if (json && json.sugestao) {
+        if (!json.datasLote) json.datasLote = [];
+        if (typeof json.modoLote === 'undefined') json.modoLote = false;
+        if (typeof json.modoRece === 'undefined') json.modoRece = false;
+        if (json.datasLote.length > 0 && !json.sugestao.data) {
+          json.sugestao.data = json.datasLote[0];
+        }
+
+        // Resolve sala por ID ou nome
+        const salas = AppState?.colecoes?.salas || [];
+        const salaEncontrada = salas.find(s =>
+          String(s[0]).trim() === String(json.sugestao.salaId || '').trim() ||
+          String(s[1]).trim().toUpperCase() === String(json.sugestao.salaId || '').trim().toUpperCase()
+        );
+        if (salaEncontrada) {
+          json.sugestao.salaId   = String(salaEncontrada[0]);
+          json.sugestao.salaNome = salaEncontrada[1];
+        }
+
+        // Verifica conflito no índice local ANTES de exibir sugestão
+        let temConflitoIA = false;
+        if (json.sugestao.salaId && json.sugestao.data && json.sugestao.horaInicio && json.sugestao.horaTermino) {
+          const datasCheck = (json.datasLote && json.datasLote.length > 0) ? json.datasLote : [json.sugestao.data];
+          const conflitoIA = verificarConflitoFrontend(
+            { sala: json.sugestao.salaId, horaInicio: json.sugestao.horaInicio, horaTermino: json.sugestao.horaTermino },
+            datasCheck, null
+          );
+          if (conflitoIA.conflito) {
+            temConflitoIA = true;
+            json.sugestao._conflito = true;
+            chat.innerHTML += `<div class="flex gap-2">
+              <div class="w-7 h-7 bg-red-100 text-red-600 rounded-full flex items-center justify-center shrink-0 mt-0.5">
+                <i class="fas fa-triangle-exclamation text-[10px]"></i>
+              </div>
+              <div class="bg-red-50 border border-red-200 rounded-2xl px-4 py-3 max-w-[85%] text-sm text-red-700">
+                ⛔ A sugestão da IA tem conflito em <b>${escaparHTML(conflitoIA.data)}</b>:
+                <b>${escaparHTML(json.sugestao.salaNome || json.sugestao.salaId)}</b> já está ocupada neste horário.
+                Peça uma alternativa ou escolha outra data/sala.
+              </div>
+            </div>`;
+            chat.scrollTop = chat.scrollHeight;
+          }
+        }
+
+        // Só salva como ultimaSugestaoIA se não houver conflito
+        if (!temConflitoIA) {
+          ultimaSugestaoIA = json;
+        }
+      }
+
+      // Remove JSON e markdown do texto exibido
+      const textoLimpo = resposta
+        .replace(/```json[\s\S]*?```/g, '')
+        .replace(/```[\s\S]*?```/g, '')
+        .replace(/\*\*JSON:\*\*/gi, '')
+        .replace(/\{[\s\S]*$/, '')   // remove tudo a partir do primeiro {
+        .trim();
+
+      if (textoLimpo) {
+        chat.innerHTML += `
+          <div class="flex gap-2">
+            <div class="w-7 h-7 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center shrink-0 mt-0.5">
+              <i class="fas fa-brain text-[10px]"></i>
+            </div>
+            <div class="bg-white border border-slate-200 rounded-2xl rounded-tl-none px-4 py-3 max-w-[85%] shadow-sm text-sm text-slate-700 leading-relaxed">${formatarTextoIA(textoLimpo)}</div>
+          </div>`;
+      }
+
+      if (json) {
+        // Mesmo que o JSON esteja incompleto, salva o que tiver
+        if (!json.sugestao) json.sugestao = {};
+        const salas = window.AppState?.colecoes?.salas || [];
+        const sala = salas.find(s => String(s[0]) === String(json.sugestao?.salaId));
+        if (sala) json.sugestao.salaNome = sala[1];
+
+        // Se datasLote existir mas sugestao.data não, usa primeira data do lote
+        if (json.datasLote && json.datasLote.length > 0 && !json.sugestao.data) {
+          json.sugestao.data = json.datasLote[0];
+        }
+
+        ultimaSugestaoIA = json;
+
+        const datasInfo = json.datasLote && json.datasLote.length > 1
+          ? `${json.datasLote.length} datas em lote`
+          : (json.sugestao.data || '');
+
+        chat.innerHTML += `
+          <div class="flex gap-2">
+            <div class="w-7 h-7 shrink-0"></div>
+            <div class="bg-emerald-50 border border-emerald-200 rounded-2xl px-4 py-3 max-w-[85%] text-sm w-full">
+              <p class="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-2">
+                <i class="fas fa-wand-magic-sparkles mr-1"></i>Sugestão pronta
+              </p>
+              <p class="font-bold text-slate-800">${escaparHTML(json.sugestao.nomeAcao || '')}</p>
+              <p class="text-slate-600 text-xs mt-0.5">${escaparHTML(json.sugestao.salaNome || json.sugestao.salaId || '')} • ${escaparHTML(datasInfo)}</p>
+              <p class="text-slate-500 text-xs">${escaparHTML(json.sugestao.horaInicio || '')}–${escaparHTML(json.sugestao.horaTermino || '')}</p>
+              ${json.modoLote ? `<span class="mt-1 inline-block text-[9px] bg-purple-100 text-purple-700 font-black px-2 py-0.5 rounded-full uppercase">Lote: ${(json.datasLote||[]).length} datas</span>` : ''}
+              ${json.modoRece ? `<span class="mt-1 ml-1 inline-block text-[9px] bg-yellow-100 text-yellow-700 font-black px-2 py-0.5 rounded-full uppercase">RECE ativado</span>` : ''}
+            </div>
+          </div>`;
+      }
+
+      if (json && json.opcoes && json.opcoes.length) {
+        chat.innerHTML += renderOpcoes(json.opcoes);
+      }
+
+      chat.scrollTop = chat.scrollHeight;
+    })
+    .withFailureHandler(err => {
+      document.getElementById(loadingId)?.remove();
+      chat.innerHTML += `
+        <div class="flex gap-2">
+          <div class="w-7 h-7 bg-red-100 text-red-500 rounded-full flex items-center justify-center shrink-0 mt-0.5">
+            <i class="fas fa-triangle-exclamation text-[10px]"></i>
+          </div>
+          <div class="bg-red-50 border border-red-200 rounded-2xl rounded-tl-none px-4 py-3 max-w-[85%] text-sm text-red-600">${escaparHTML(err.message)}</div>
+        </div>`;
+      chat.scrollTop = chat.scrollHeight;
+    })
+    .perguntarIA(payloadHistorico);
+}
+
+function preencherUltimaSugestaoIA() {
+  if (!ultimaSugestaoIA) {
+    Swal.fire('Atenção', 'Nenhuma sugestão disponível ainda. Peça uma indicação para a IA primeiro.', 'warning');
+    return;
+  }
+  const dadosCompletos = ultimaSugestaoIA;
+  const s = dadosCompletos.sugestao || ultimaSugestaoIA;
+
+  // Verifica conflito atual antes de preencher
+  if (s.salaId && s.data && s.horaInicio && s.horaTermino) {
+    const datasCheck = (dadosCompletos.datasLote && dadosCompletos.datasLote.length > 0)
+      ? dadosCompletos.datasLote : [s.data];
+    const c = verificarConflitoFrontend(
+      { sala: s.salaId, horaInicio: s.horaInicio, horaTermino: s.horaTermino },
+      datasCheck, null
+    );
+    if (c.conflito) {
+      Swal.fire('Conflito', `A sugestão da IA conflita com uma reserva existente em ${c.data}. Peça uma nova sugestão.`, 'error');
+      ultimaSugestaoIA = null;
+      return;
+    }
+  }
+
+  preencherFormularioComSugestaoIA(s, 'painelIA_chat', dadosCompletos.modoLote, dadosCompletos.modoRece, dadosCompletos.datasLote);
+}
+
+function executarPerguntaIA(modalId) {
+  const pergunta = document.getElementById('iaInputPergunta')?.value?.trim();
+  if (!pergunta) return;
+  document.getElementById(modalId)?.remove();
+  const loadId = mostrarLoadingIA('Analisando sua pergunta...');
+  google.script.run
+    .withSuccessHandler(function(res) {
+      removerLoadingIA(loadId);
+      if (res && res.ok) {
+        exibirResultadoIA('Resposta da IA', res.texto, 'fa-comments', 'purple');
+      } else {
+        exibirResultadoIA('Erro', (res && res.texto) || 'Falha ao obter resposta.', 'fa-triangle-exclamation', 'red');
+      }
+    })
+    .withFailureHandler(function(err) {
+      removerLoadingIA(loadId);
+      exibirResultadoIA('Erro', err.message || 'Falha na comunicação com o servidor.', 'fa-triangle-exclamation', 'red');
+    })
+    .perguntarIA(pergunta);
+}
+
+function gerarPreviewSugestao(json) {
+  const s = json.sugestao;
+
+  return `
+    <div style="
+      margin-top:12px;
+      padding:14px;
+      border-radius:12px;
+      background:#f8fafc;
+      border:1px solid #e2e8f0;
+    ">
+      <div style="font-weight:bold; margin-bottom:8px;">
+        Sugestão pronta 👇
+      </div>
+
+      <div><b>Espaço:</b> ${s.salaNome}</div>
+      <div><b>Data:</b> ${s.data}</div>
+      <div><b>Horário:</b> ${s.horaInicio} às ${s.horaTermino}</div>
+
+      <button onclick="preencherUltimaSugestaoIA()"
+        style="
+          margin-top:10px;
+          width:100%;
+          background:#059669;
+          color:white;
+          padding:10px;
+          border-radius:8px;
+          font-weight:bold;
+        ">
+        Preencher formulário
+      </button>
+    </div>
+  `;
+}
+
+function formatarTextoIA(txt) {
+  return txt
+    .replace(/\n/g, '<br>')
+    .replace(/\* /g, '• ');
+}
+
+// Modal: Gerar análise
+function gerarRelatorioIAModal() {
+  const id = 'painelIA_relatorio';
+  const overlay = document.createElement('div');
+  overlay.id = id;
+  overlay.className = 'fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[70] flex items-center justify-center p-4';
+  overlay.innerHTML = `
+    <div class="bg-white w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden">
+      <div class="bg-slate-900 px-6 py-4 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 rounded-xl bg-indigo-500/20 flex items-center justify-center">
+            <i class="fas fa-chart-line text-indigo-400"></i>
+          </div>
+          <div>
+            <p class="text-white font-black text-sm uppercase tracking-tight">Gerar análise inteligente</p>
+            <p class="text-slate-400 text-[10px]">Assistente de IA — CCBJ</p>
+          </div>
+        </div>
+        <button onclick="document.getElementById('${id}').remove()"
+          class="text-slate-400 hover:text-white w-8 h-8 flex items-center justify-center hover:bg-white/10 rounded-lg transition-all">
+          <i class="fas fa-times text-sm"></i>
+        </button>
+      </div>
+      <div class="p-6 space-y-4">
+        <div>
+          <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Tipo de análise</label>
+          <div class="grid grid-cols-2 gap-2">
+            ${[
+              { v:'uso',        l:'Uso de espaços',       i:'fa-map-marker-alt'       },
+              { v:'conflitos',  l:'Conflitos e problemas', i:'fa-triangle-exclamation' },
+              { v:'itens',      l:'Uso de recursos',       i:'fa-boxes-stacked'        },
+              { v:'otimizacao', l:'Otimização geral',      i:'fa-rocket'               }
+            ].map(o => `
+              <label class="flex items-center gap-2 p-3 border border-slate-200 rounded-xl cursor-pointer hover:border-indigo-400 hover:bg-indigo-50 transition-all has-[:checked]:border-indigo-500 has-[:checked]:bg-indigo-50">
+                <input type="radio" name="iaTipo" value="${o.v}" class="accent-indigo-600" ${o.v==='uso'?'checked':''}>
+                <i class="fas ${o.i} text-indigo-400 text-xs w-4"></i>
+                <span class="text-xs font-bold text-slate-700">${o.l}</span>
+              </label>`).join('')}
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Período</label>
+            <select id="iaPeriodo" class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold outline-none focus:border-indigo-500">
+              <option value="todos">Todo o histórico</option>
+              <option value="30dias">Próximos 30 dias</option>
+              <option value="7dias">Próximos 7 dias</option>
+              <option value="hoje">Somente hoje</option>
+            </select>
+          </div>
+          <div>
+            <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Escopo</label>
+            <select id="iaUsuario" class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold outline-none focus:border-indigo-500">
+              <option value="todas">Todas as reservas</option>
+              <option value="minhas">Apenas minhas</option>
+            </select>
+          </div>
+        </div>
+        <div class="flex gap-3">
+          <button onclick="document.getElementById('${id}').remove()"
+            class="flex-1 py-3 text-slate-500 bg-slate-100 hover:bg-slate-200 font-bold text-sm rounded-2xl transition-all">
+            Cancelar
+          </button>
+          <button onclick="executarRelatorioIA('${id}')"
+            class="flex-1 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-sm rounded-2xl transition-all flex items-center justify-center gap-2">
+            <i class="fas fa-chart-line text-xs"></i> Analisar
+          </button>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+
+function executarRelatorioIA(modalId) {
+  const tipo = document.querySelector('input[name="iaTipo"]:checked')?.value || 'uso';
+  const periodo = document.getElementById('iaPeriodo')?.value || 'todos';
+  const usuario = document.getElementById('iaUsuario')?.value || 'todas';
+  document.getElementById(modalId)?.remove();
+  const loadId = mostrarLoadingIA('Gerando análise...');
+  google.script.run
+    .withSuccessHandler(function(res) {
+      removerLoadingIA(loadId);
+      if (res && res.ok) {
+        exibirResultadoIA('Análise Inteligente', res.texto, 'fa-chart-line', 'indigo');
+      } else {
+        exibirResultadoIA('Erro', (res && res.texto) || 'Falha ao gerar análise.', 'fa-triangle-exclamation', 'red');
+      }
+    })
+    .withFailureHandler(function(err) {
+      removerLoadingIA(loadId);
+      exibirResultadoIA('Erro', err.message || 'Falha na comunicação.', 'fa-triangle-exclamation', 'red');
+    })
+    .gerarRelatorioIA({ tipo, periodo, usuario });
+}
+
+// Modal: Sugerir reserva
+function sugerirReservaIAModal() {
+  const id = 'painelIA_sugestao';
+  if (document.getElementById(id)) return;
+  const overlay = document.createElement('div');
+  overlay.id = id;
+  overlay.className = 'fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[70] flex items-center justify-center p-4';
+  overlay.innerHTML = `
+    <div class="bg-white w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden">
+      <div class="bg-slate-900 px-6 py-4 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <i class="fas fa-calendar-plus text-emerald-400"></i>
+          <p class="text-white font-black text-sm uppercase tracking-tight">Criar reserva com IA</p>
+        </div>
+        <button onclick="document.getElementById('${id}').remove()"
+          class="text-slate-400 hover:text-white w-8 h-8 flex items-center justify-center hover:bg-white/10 rounded-lg transition-all">
+          <i class="fas fa-times text-sm"></i>
+        </button>
+      </div>
+      <div class="p-6 space-y-4">
+        <div class="p-3 bg-emerald-50 border border-emerald-100 rounded-xl text-[11px] text-emerald-700 font-medium">
+          <i class="fas fa-wand-magic-sparkles mr-1"></i>
+          Descreva o que precisa. A IA vai sugerir sala, data e horário — e você confirma antes de reservar.
+        </div>
+        <div>
+          <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">
+            Descreva sua necessidade
+          </label>
+          <textarea id="iaInputSugestao" rows="4"
+            placeholder="Ex: Oficina de teatro para 30 pessoas, preciso de microfone e projetor, prefiro tarde de quinta ou sexta da próxima semana"
+            class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 resize-none transition-all"></textarea>
+        </div>
+        <div class="flex gap-3 pt-1">
+          <button onclick="document.getElementById('${id}').remove()"
+            class="flex-1 py-3 text-slate-500 bg-slate-100 hover:bg-slate-200 font-bold text-sm rounded-2xl transition-all">
+            Cancelar
+          </button>
+          <button onclick="_abrirChatComSugestao('${id}')"
+            class="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-sm rounded-2xl transition-all flex items-center justify-center gap-2">
+            <i class="fas fa-comments text-xs"></i> Conversar com IA
+          </button>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  setTimeout(() => document.getElementById('iaInputSugestao')?.focus(), 100);
+}
+
+function _abrirChatComSugestao(modalId) {
+  const texto = document.getElementById('iaInputSugestao')?.value?.trim();
+  if (!texto) { Swal.fire('Atenção','Descreva o que você precisa.','warning'); return; }
+  document.getElementById(modalId)?.remove();
+  perguntarIAModal();
+  setTimeout(() => {
+    const input = document.getElementById('inputChatIA');
+    if (input) { input.value = texto; enviarMensagemIA(); }
+  }, 300);
+}
+
+function parsearJsonIA(texto) {
+  if (!texto) return null;
+
+  // Remove markdown
+  let limpo = texto
+    .replace(/```json\s*/gi, '')
+    .replace(/```\s*/gi, '')
+    .trim();
+
+  // Encontra o início do JSON
+  const inicio = limpo.indexOf('{');
+  if (inicio === -1) return null;
+
+  // Tenta encontrar o JSON completo tentando fechar chaves manualmente
+  let jsonStr = limpo.slice(inicio);
+
+  // Sanitiza quebras de linha brutas dentro do JSON
+  jsonStr = jsonStr
+    .replace(/\r?\n/g, ' ')
+    .replace(/\t/g, ' ');
+
+  // Tenta parsear direto
+  try { return JSON.parse(jsonStr); } catch(e) {}
+
+  // Tenta encontrar o maior bloco JSON válido (fecha chaves manualmente)
+  let depth = 0, end = -1;
+  for (let i = 0; i < jsonStr.length; i++) {
+    if (jsonStr[i] === '{') depth++;
+    else if (jsonStr[i] === '}') { depth--; if (depth === 0) { end = i; break; } }
+  }
+  if (end !== -1) {
+    try { return JSON.parse(jsonStr.slice(0, end + 1)); } catch(e) {}
+  }
+
+  // Última tentativa: remove escapes inválidos
+  const sanitizado = jsonStr
+    .replace(/([^\\])\\([^"\\\/bfnrtu])/g, '$1 $2')
+    .replace(/,\s*([}\]])/g, '$1'); // remove trailing commas
+  try { return JSON.parse(sanitizado); } catch(e) {}
+
+  return null;
+}
+
+function executarSugestaoIAComDados(modalId) {
+  const descricao = document.getElementById('iaInputSugestao')?.value?.trim();
+  if (!descricao) {
+    Swal.fire('Atenção', 'Descreva o que você precisa antes de continuar.', 'warning');
+    return;
+  }
+  document.getElementById(modalId)?.remove();
+  const loadId = mostrarLoadingIA('A IA está buscando a melhor opção...');
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      removerLoadingIA(loadId);
+
+      if (!res || !res.ok) {
+        exibirResultadoIA('Não foi possível sugerir', res?.texto || 'Erro desconhecido.', 'fa-triangle-exclamation', 'red');
+        return;
+      }
+
+      const d = res.dados;
+
+      if (!d.viavel) {
+
+        if (d.alternativas && d.alternativas.length > 0) {
+
+          const lista = d.alternativas.map((a, i) => `
+            <div style="margin-bottom:10px; padding:8px; border:1px solid #eee; border-radius:8px">
+              <b>${i+1}. ${a.salaNome}</b><br>
+              ${a.data} — ${a.inicio} às ${a.fim}
+              <br>
+              <button onclick='usarSugestaoIA(${JSON.stringify(a)})'
+                style="margin-top:6px; background:#10b981; color:white; padding:4px 8px; border-radius:6px">
+                Usar essa opção
+              </button>
+            </div>
+          `).join('');
+
+          exibirResultadoIA(
+            'Conflito de agenda',
+            `A opção solicitada não está disponível.<br><br><b>Alternativas:</b><br>${lista}`,
+            'fa-lightbulb',
+            'amber'
+          );
+
+          return;
+        }
+
+        exibirResultadoIA('Sem disponibilidade', d.motivo, 'fa-calendar-xmark', 'amber');
+        return;
+      }
+
+      const s = d.sugestao;
+      if (!s) {
+        exibirResultadoIA('Erro', 'A IA não retornou dados de sugestão.', 'fa-triangle-exclamation', 'red');
+        return;
+      }
+
+      // Monta painel de confirmação
+      exibirConfirmacaoReservaIA(s, d);
+    })
+    .withFailureHandler(function(err) {
+      removerLoadingIA(loadId);
+      exibirResultadoIA('Erro', err.message || 'Falha na comunicação com o servidor.', 'fa-triangle-exclamation', 'red');
+    })
+    .sugerirReservaIAComDados(descricao);
+}
+
+function exibirConfirmacaoReservaIA(s, dadosCompletos) {
+  const id = 'painelIA_confirmacao';
+  if (document.getElementById(id)) document.getElementById(id).remove();
+
+  const turnoColor = s.turno === 'MANHÃ' ? 'bg-amber-100 text-amber-700'
+    : s.turno === 'TARDE' ? 'bg-blue-100 text-blue-700'
+    : 'bg-indigo-100 text-indigo-700';
+
+  // 🔥 SERIALIZAÇÃO SEGURA
+  const sugestaoSerializada = encodeURIComponent(JSON.stringify(s));
+
+  // 🔥 TRATAMENTO ROBUSTO DOS ITENS
+  const itensHtml = s.itens && s.itens.length > 0
+    ? s.itens.map(i => {
+        let nomeItem = '';
+
+        if (typeof i === 'string') {
+          nomeItem = i;
+        } else if (i && typeof i === 'object') {
+          nomeItem = i.nome || i.label || i.item || JSON.stringify(i);
+        }
+
+        return `<span class="bg-slate-100 text-slate-700 px-2 py-1 rounded-lg text-[10px] font-bold">
+          ${escaparHTML(nomeItem)}
+        </span>`;
+      }).join('')
+    : '<span class="text-slate-400 text-[11px] italic">Nenhum item solicitado</span>';
+
+  const overlay = document.createElement('div');
+  overlay.id = id;
+  overlay.className = 'fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[70] flex items-center justify-center p-4';
+  overlay.innerHTML = `
+    <div class="bg-white w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden">
+
+      <!-- Header -->
+      <div class="bg-emerald-600 px-6 py-4 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center">
+            <i class="fas fa-wand-magic-sparkles text-white text-sm"></i>
+          </div>
+          <div>
+            <p class="text-white font-black text-sm uppercase tracking-tight">Sugestão da IA</p>
+            <p class="text-emerald-100 text-[10px]">Revise e confirme para criar a reserva</p>
+          </div>
+        </div>
+        <button onclick="document.getElementById('${id}').remove()"
+          class="text-emerald-100 hover:text-white w-8 h-8 flex items-center justify-center hover:bg-white/10 rounded-lg transition-all">
+          <i class="fas fa-times text-sm"></i>
+        </button>
+      </div>
+
+      <!-- Dados da sugestão -->
+      <div class="p-6 space-y-4">
+
+        <!-- Nome da ação -->
+        <div class="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+          <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Ação</p>
+          <p class="font-black text-slate-800 text-sm uppercase">${escaparHTML(s.nomeAcao || '')}</p>
+        </div>
+
+        <!-- Data, horário e sala -->
+        <div class="grid grid-cols-2 gap-3">
+          <div class="p-3 bg-slate-50 rounded-2xl border border-slate-100">
+            <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Data</p>
+            <p class="font-black text-slate-800 text-sm">${escaparHTML(s.data || '')}</p>
+          </div>
+          <div class="p-3 bg-slate-50 rounded-2xl border border-slate-100">
+            <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Horário</p>
+            <div class="flex items-center gap-2">
+              <p class="font-black text-slate-800 text-sm">
+                ${escaparHTML(s.horaInicio || '')} – ${escaparHTML(s.horaTermino || '')}
+              </p>
+              <span class="text-[9px] font-black px-1.5 py-0.5 rounded ${turnoColor}">
+                ${escaparHTML(s.turno || '')}
+              </span>
+            </div>
+          </div>
+
+          <div class="col-span-2 p-3 bg-emerald-50 rounded-2xl border border-emerald-100">
+            <p class="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-1">Espaço sugerido</p>
+            <p class="font-black text-emerald-800 text-sm">
+              ${escaparHTML(
+                s.salaNome ||
+                (typeof obterNomeSala === 'function' ? obterNomeSala(s.salaId) : s.salaId) ||
+                ''
+              )}
+            </p>
+          </div>
+        </div>
+
+        <!-- Itens -->
+        <div class="p-3 bg-slate-50 rounded-2xl border border-slate-100">
+          <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
+            Itens solicitados (${Array.isArray(s.itens) ? s.itens.length : 0})
+          </p>
+          <div class="flex flex-wrap gap-1">${itensHtml}</div>
+        </div>
+
+        <!-- Justificativa -->
+        ${s.justificativa ? `
+        <div class="p-3 bg-purple-50 rounded-2xl border border-purple-100">
+          <p class="text-[10px] font-black text-purple-500 uppercase tracking-widest mb-1">
+            <i class="fas fa-brain mr-1"></i>Por que a IA escolheu isto
+          </p>
+          <p class="text-[11px] text-purple-700">${escaparHTML(s.justificativa)}</p>
+        </div>` : ''}
+
+        <!-- Ações -->
+        <div class="flex gap-3 pt-1">
+          <button onclick="document.getElementById('${id}').remove(); setTimeout(sugerirReservaIAModal, 100)"
+            class="flex-1 py-3 text-slate-500 bg-slate-100 hover:bg-slate-200 font-bold text-sm rounded-2xl transition-all">
+            <i class="fas fa-rotate-left text-xs mr-1"></i> Tentar novamente
+          </button>
+
+          ${dadosCompletos && dadosCompletos.modoLote ? `
+          <button onclick="preencherFormularioComSugestaoIA(JSON.parse(decodeURIComponent('${sugestaoSerializada}')), '${id}', true)"
+            class="flex-1 py-3 bg-blue-600 hover:bg-blue-700 text-white font-black text-sm rounded-2xl transition-all flex items-center justify-center gap-2">
+            <i class="fas fa-calendar-week text-xs"></i> Preencher em Lote
+          </button>` : ''}
+
+          ${dadosCompletos && dadosCompletos.modoRece ? `
+          <button onclick="preencherFormularioComSugestaoIA(JSON.parse(decodeURIComponent('${sugestaoSerializada}')), '${id}', false, true)"
+            class="flex-1 py-3 bg-yellow-500 hover:bg-yellow-600 text-white font-black text-sm rounded-2xl transition-all flex items-center justify-center gap-2">
+            <i class="fas fa-star text-xs"></i> Preencher com RECE
+          </button>` : ''}
+
+          <button onclick="preencherFormularioComSugestaoIA(JSON.parse(decodeURIComponent('${sugestaoSerializada}')), '${id}')"
+            class="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-sm rounded-2xl transition-all flex items-center justify-center gap-2">
+            <i class="fas fa-check text-xs"></i> Preencher
+          </button>
+        </div>
+
+        <p class="text-[10px] text-slate-400 text-center">
+          Você ainda poderá revisar todos os campos antes de salvar
+        </p>
+      </div>
+    </div>`;
+    
+  document.body.appendChild(overlay);
+}
+
+
+function preencherFormularioComSugestaoIA(sugestao, modalId, ativarLote = false, ativarRece = false, datasLote = []) {
+  if (modalId) document.getElementById(modalId)?.remove();
+  resetarFormulario();
+  mostrarAba('aba-nova-reserva');
+
+  setTimeout(function() {
+    try {
+      const nomeEl = document.getElementById('inputNomeAcao');
+      if (nomeEl && sugestao.nomeAcao) nomeEl.value = sugestao.nomeAcao;
+
+      const salaEl = document.getElementById('selectSala');
+      if (salaEl && sugestao.salaId) {
+        salaEl.value = sugestao.salaId;
+        salaEl.dispatchEvent(new Event('change'));
+      }
+
+      const horaIniEl = document.getElementById('horaInicio');
+      const horaTerEl = document.getElementById('horaTermino');
+      if (horaIniEl && sugestao.horaInicio) horaIniEl.value = sugestao.horaInicio;
+      if (horaTerEl && sugestao.horaTermino) horaTerEl.value = sugestao.horaTermino;
+      if (horaIniEl || horaTerEl) validarHorarios();
+
+      const turnoEl = document.getElementById('inputTurnoCalculado');
+      if (turnoEl && sugestao.turno) turnoEl.value = sugestao.turno;
+
+      const setorEl = document.getElementById('selectSetor');
+      if (setorEl && sugestao.setor) {
+        const setorUpper = String(sugestao.setor).trim().toUpperCase();
+        const optSetor = Array.from(setorEl.options).find(o => o.value.trim().toUpperCase() === setorUpper);
+        if (optSetor) setorEl.value = optSetor.value;
+      }
+
+      const releaseEl = document.getElementById('inputRelease');
+      if (releaseEl && sugestao.release) releaseEl.value = sugestao.release;
+      else if (releaseEl && sugestao.observacoes) releaseEl.value = sugestao.observacoes;
+
+      // Ativa modo lote
+      if (ativarLote || (datasLote && datasLote.length > 1)) {
+        const checkLote = document.getElementById('checkLote');
+        if (checkLote) { checkLote.checked = true; alternarModoLote(true); }
+        setTimeout(() => {
+          const datas = (datasLote && datasLote.length > 0 ? datasLote : [sugestao.data]).filter(Boolean);
+          aplicarDatasNoCalendario(datas);
+        }, 200);
+      } else if (calendarInstance && sugestao.data) {
+        const partes = sugestao.data.split('/');
+        if (partes.length === 3) {
+          calendarInstance.setDate(new Date(partes[2], partes[1]-1, partes[0]), true);
+        }
+      }
+
+      // Itens
+      if (sugestao.itens && sugestao.itens.length > 0) {
+        itensSelecionados = sugestao.itens.map(nome => ({ nome: String(nome), qtd: 1 }));
+        renderizarCarrinhoItens();
+      }
+
+      // Ativa RECE e preenche campos
+      if (ativarRece || sugestao.receDados) {
+        const checkRece = document.getElementById('checkRece');
+        if (checkRece) { checkRece.checked = true; alternarModoRece(true); }
+        const rd = sugestao.receDados || {};
+        const mapeamentoRece = {
+          receCategorias:      rd.categorias    || sugestao.categorias    || '',
+          receParceiros:       rd.parceiros     || sugestao.parceiros     || '',
+          receAcessibilidades: rd.acessibilidades || sugestao.acessibilidades || '',
+          recePublicoAlvo:     rd.publicoAlvo   || sugestao.publicoAlvo   || '',
+          receArtista:         rd.artista       || sugestao.artista       || '',
+          receiveLinkInscricao:rd.linkInscricao || sugestao.linkInscricao || '',
+          receDescricao:       rd.descricao     || sugestao.descricao     || '',
+          receObservacoes:     rd.observacoes   || ''
+        };
+        Object.entries(mapeamentoRece).forEach(([id, val]) => {
+          const el = document.getElementById(id);
+          if (el && val) el.value = val;
+        });
+        const receClass = document.getElementById('receClassificacao');
+        if (receClass && (rd.classificacao || sugestao.classificacao)) {
+          receClass.value = rd.classificacao || sugestao.classificacao || '';
+        }
+        const receAcesso = document.getElementById('receAcesso');
+        if (receAcesso && (rd.acesso || sugestao.acesso)) {
+          receAcesso.value = rd.acesso || sugestao.acesso || '';
+        }
+        // Data término RECE
+        if (datasLote && datasLote.length > 0) {
+          const receDataTer = document.getElementById('receDataTermino');
+          if (receDataTer) receDataTer.value = datasLote[datasLote.length - 1];
+        }
+      }
+
+      Swal.mixin({
+        toast: true, position: 'top-end',
+        showConfirmButton: false, timer: 3500, timerProgressBar: true
+      }).fire({
+        icon: 'success',
+        title: 'Formulário preenchido pela IA',
+        text: 'Revise os campos e clique em Confirmar Agendamento'
+      });
+
+      const form = document.getElementById('formReserva');
+      if (form) {
+        form.style.transition = 'box-shadow 0.3s';
+        form.style.boxShadow  = '0 0 0 3px rgba(16,185,129,0.4)';
+        setTimeout(() => { form.style.boxShadow = ''; }, 2000);
+      }
+
+    } catch(e) {
+      console.error('Erro ao preencher formulário:', e);
+      Swal.fire('Aviso', 'Não foi possível preencher todos os campos automaticamente.', 'warning');
+    }
+  }, 400);
+}
+
+function renderOpcoes(opcoes) {
+
+  opcoesIA = opcoes;
+
+  return `
+    <div style="
+      margin-top:12px;
+      padding:14px;
+      border-radius:12px;
+      background:#f8fafc;
+      border:1px solid #e2e8f0;
+    ">
+
+      <div style="font-weight:bold; margin-bottom:8px;">
+        Outras opções 👇
+      </div>
+
+      ${opcoes.map((o,i)=>`
+        <div style="
+          padding:10px;
+          border:1px solid #e5e7eb;
+          border-radius:10px;
+          margin-bottom:8px;
+        ">
+
+          <div><b>${o.salaNome}</b></div>
+          <div>${o.data} • ${o.horaInicio} às ${o.horaTermino}</div>
+
+          <button onclick="usarOpcaoIAPorIndice(${i})"
+            style="
+              margin-top:6px;
+              width:100%;
+              background:#059669;
+              color:white;
+              padding:8px;
+              border-radius:8px;
+            ">
+            Usar esta opção
+          </button>
+
+        </div>
+      `).join('')}
+
+    </div>
+  `;
+}
+
+let opcoesIA = [];
+
+function usarOpcaoIAPorIndice(index) {
+  const opcao = opcoesIA[index];
+  if (!opcao) return;
+
+  const sugestao = {
+    salaId: opcao.salaId,
+    salaNome: opcao.salaNome,
+    data: opcao.data,
+    horaInicio: opcao.horaInicio,
+    horaTermino: opcao.horaTermino,
+    turno: '',
+    nomeAcao: '',
+    itens: []
+  };
+
+  preencherFormularioComSugestaoIA(sugestao, null);
+}
+
+function usarOpcaoIA(opcao) {
+
+  const sugestao = {
+    salaId: opcao.salaId,
+    salaNome: opcao.salaNome,
+    data: opcao.data,
+    horaInicio: opcao.horaInicio,
+    horaTermino: opcao.horaTermino,
+    turno: '',
+    nomeAcao: '',
+    itens: []
+  };
+
+  preencherFormularioComSugestaoIA(sugestao, null);
+
+  Swal.fire({
+    icon: 'success',
+    title: 'Opção aplicada',
+    text: 'Revise e confirme o agendamento'
+  });
+}
+
+function usarSugestaoIA(opcao) {
+
+  const sugestao = {
+    salaId: opcao.salaId,
+    salaNome: opcao.salaNome,
+    data: opcao.data,
+    horaInicio: opcao.inicio,
+    horaTermino: opcao.fim,
+    turno: '',
+    nomeAcao: '',
+    itens: []
+  };
+
+  preencherFormularioComSugestaoIA(sugestao, null);
+
+  Swal.fire({
+    icon: 'success',
+    title: 'Opção aplicada',
+    text: 'Revise e confirme o agendamento'
+  });
+}
+
+
+// Modal: Analisar dashboard
+function analisarDashboardIAModal() {
+  const loadId = mostrarLoadingIA('Calculando métricas...');
+  google.script.run
+    .withSuccessHandler(function(metricas) {
+      if (!metricas) {
+        removerLoadingIA(loadId);
+        exibirResultadoIA('Erro', 'Não foi possível obter as métricas.', 'fa-triangle-exclamation', 'red');
+        return;
+      }
+      const ms = AppState.mapaSalas || {};
+      const mapS = id => ms[id] || id;
+      if (metricas.top5Salas) metricas.top5Salas = metricas.top5Salas.map(([id, v]) => [mapS(id), v]);
+      if (metricas.cancelamentosPorSala) metricas.cancelamentosPorSala = metricas.cancelamentosPorSala.map(([id, v]) => [mapS(id), v]);
+      if (metricas.mediaOcupacaoPorSala) metricas.mediaOcupacaoPorSala = metricas.mediaOcupacaoPorSala.map(([id, ...r]) => [mapS(id), ...r]);
+
+      google.script.run
+        .withSuccessHandler(function(res) {
+          removerLoadingIA(loadId);
+          if (res && res.ok) {
+            exibirResultadoIA('Análise do Dashboard', res.texto, 'fa-magnifying-glass-chart', 'amber');
+          } else {
+            exibirResultadoIA('Erro', (res && res.texto) || 'Falha ao gerar análise.', 'fa-triangle-exclamation', 'red');
+          }
+        })
+        .withFailureHandler(function(err) {
+          removerLoadingIA(loadId);
+          exibirResultadoIA('Erro', err.message, 'fa-triangle-exclamation', 'red');
+        })
+        .analisarDashboardIA(metricas);
+    })
+    .withFailureHandler(function(err) {
+      removerLoadingIA(loadId);
+      exibirResultadoIA('Erro', err.message, 'fa-triangle-exclamation', 'red');
+    })
+    .obterMetricasDashboard('', '');
+}
+
+// Manter compatibilidade com chamadas antigas no sidebar
+function gerarRelatorioIAFrontend() { gerarRelatorioIAModal(); }
+
+let SUBABA_AUDITORIA_ATIVA = null;
+
+function mostrarSubAbaAuditoria(aba) {
+
+  SUBABA_AUDITORIA_ATIVA = aba;
+
+  // 🔹 VISIBILIDADE
+  document.getElementById('subaba-logs')
+    .classList.toggle('hidden', aba !== 'logs');
+
+  document.getElementById('subaba-acessos')
+    .classList.toggle('hidden', aba !== 'acessos');
+
+  document.getElementById('subaba-comparativo')
+    .classList.toggle('hidden', aba !== 'comparativo');
+
+
+  // 🔹 ESTILO
+  document.getElementById('tab-audit-logs').className = aba === 'logs'
+    ? 'px-4 py-2 bg-slate-900 text-white text-xs font-black rounded-xl uppercase'
+    : 'px-4 py-2 bg-slate-200 text-slate-600 text-xs font-black rounded-xl uppercase';
+
+  document.getElementById('tab-audit-acessos').className = aba === 'acessos'
+    ? 'px-4 py-2 bg-slate-900 text-white text-xs font-black rounded-xl uppercase'
+    : 'px-4 py-2 bg-slate-200 text-slate-600 text-xs font-black rounded-xl uppercase';
+
+  document.getElementById('tab-audit-comparativo').className = aba === 'comparativo'
+    ? 'px-4 py-2 bg-slate-900 text-white text-xs font-black rounded-xl uppercase'
+    : 'px-4 py-2 bg-slate-200 text-slate-600 text-xs font-black rounded-xl uppercase';
+
+
+  // 🔹 AÇÕES SEGURAS
+
+  if (aba === 'acessos') {
+    carregarLogAcessos();
+  }
+
+  if (aba === 'comparativo') {
+
+    setTimeout(() => {
+
+      // PROTEÇÃO CONTRA VAZAMENTO
+      if (SUBABA_AUDITORIA_ATIVA !== 'comparativo') return;
+
+      if (typeof popularContratosComparativo === 'function') {
+        popularContratosComparativo();
+        const container = document.getElementById('comparativoContrato');
+        if (!container) return;
+      }
+
+    }, 200);
+  }
+}
+
+  // 🔹 VISIBILIDADE
+  document.getElementById('subaba-logs')
+    .classList.toggle('hidden', aba !== 'logs');
+
+  document.getElementById('subaba-acessos')
+    .classList.toggle('hidden', aba !== 'acessos');
+
+  document.getElementById('subaba-comparativo')
+    .classList.toggle('hidden', aba !== 'comparativo');
+
+
+  // 🔹 ESTILO DOS BOTÕES
+  document.getElementById('tab-audit-logs').className = aba === 'logs'
+    ? 'px-4 py-2 bg-slate-900 text-white text-xs font-black rounded-xl uppercase'
+    : 'px-4 py-2 bg-slate-200 text-slate-600 text-xs font-black rounded-xl uppercase';
+
+  document.getElementById('tab-audit-acessos').className = aba === 'acessos'
+    ? 'px-4 py-2 bg-slate-900 text-white text-xs font-black rounded-xl uppercase'
+    : 'px-4 py-2 bg-slate-200 text-slate-600 text-xs font-black rounded-xl uppercase';
+
+  document.getElementById('tab-audit-comparativo').className = aba === 'comparativo'
+    ? 'px-4 py-2 bg-slate-900 text-white text-xs font-black rounded-xl uppercase'
+    : 'px-4 py-2 bg-slate-200 text-slate-600 text-xs font-black rounded-xl uppercase';
+
+
+  // 🔹 AÇÕES AUTOMÁTICAS
+  if (aba === 'acessos') {
+    carregarLogAcessos();
+  }
+
+  if (aba === 'comparativo') {
+    if (typeof popularContratosComparativo === 'function') {
+      setTimeout(popularContratosComparativo, 200);
+    }
+  }
+
+
+function carregarLogAcessos() {
+  const corpo = document.getElementById('tabelaLogAcessos');
+  if (!corpo) return;
+  corpo.innerHTML = `<tr><td colspan="4" class="p-10 text-center"><i class="fas fa-spinner animate-spin text-purple-400"></i></td></tr>`;
+  google.script.run
+    .withSuccessHandler(function(json) {
+      const logs = JSON.parse(json);
+      if (!logs.length) { corpo.innerHTML = '<tr><td colspan="4" class="p-10 text-center text-slate-300">Nenhum acesso registrado.</td></tr>'; return; }
+      corpo.innerHTML = logs.map(l => `
+        <tr class="hover:bg-slate-50 text-[11px]">
+          <td class="p-3 text-slate-500">${escaparHTML(l[0])}</td>
+          <td class="p-3 font-bold text-slate-700">${escaparHTML(l[1])}</td>
+          <td class="p-3 text-slate-600">${escaparHTML(l[2])}</td>
+          <td class="p-3"><span class="px-2 py-0.5 rounded-full text-[9px] font-black bg-purple-100 text-purple-700 uppercase">${escaparHTML(l[3])}</span></td>
+        </tr>`).join('');
+    })
+    .withFailureHandler(err => Swal.fire('Erro', err.message, 'error'))
+    .obterLogAcessos(AppState.usuario.email);
+}
+
+function filtrarLogAcessos(valor) {
+  const busca = valor.toLowerCase();
+  document.querySelectorAll('#tabelaLogAcessos tr').forEach(tr => {
+    tr.style.display = tr.innerText.toLowerCase().includes(busca) ? '' : 'none';
+  });
+}
+
+function redefinirFiltrosDashboard() {
+  document.getElementById('dashFiltroAtalho').value = 'todos';
+  document.getElementById('dashDataInicio').value   = '';
+  document.getElementById('dashDataFim').value      = '';
+  document.getElementById('dashFiltroSala').value   = '';
+  document.getElementById('dashFiltroSetor').value  = '';
+  carregarDashboard();
+}
+
+
+
+</script>

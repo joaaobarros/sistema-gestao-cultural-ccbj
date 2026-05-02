@@ -1,0 +1,226 @@
+      <section id="aba-lista-reservas" class="tab-content animate-fadeIn space-y-6">
+
+        <!-- Seletor de modo de visualização -->
+        <div class="flex items-center gap-2 mb-4">
+          <button id="btnModoLista" onclick="alternarModoVisualizacao('lista')"
+            class="px-4 py-2 bg-slate-900 text-white text-xs font-black rounded-xl uppercase transition-all">
+            <i class="fas fa-list mr-1"></i>Lista
+          </button>
+          <button id="btnModoAgenda" onclick="alternarModoVisualizacao('agenda')"
+            class="px-4 py-2 bg-slate-200 text-slate-600 text-xs font-black rounded-xl uppercase hover:bg-slate-300 transition-all">
+            <i class="fas fa-calendar-week mr-1"></i>Agenda
+          </button>
+          <button id="btnModoDiagrama" onclick="alternarModoVisualizacao('diagrama')"
+            class="px-4 py-2 bg-slate-200 text-slate-600 text-xs font-black rounded-xl uppercase hover:bg-slate-300 transition-all">
+            <i class="fas fa-stream mr-1"></i>Diagrama
+          </button>
+        </div>
+
+        <div class="bg-white rounded-3xl shadow-sm border border-slate-200 p-6">
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div class="relative">
+              <label class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">Busca Rápida</label>
+              <i class="fas fa-search absolute left-3 top-8 text-slate-300"></i>
+              <input type="text" id="filtroBusca" placeholder="Nome da ação, ID ou Responsável..."
+                class="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 transition-all">
+            </div>
+            <div>
+              <label class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">Setor Solicitante</label>
+              <select id="filtroSetor" class="w-full px-4 py-2.5 bg-indigo-50 border border-indigo-100 rounded-xl text-sm text-indigo-700 font-bold outline-none">
+                <option value="">TODOS OS SETORES</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">Espaço / Sala</label>
+              <select id="filtroSala" class="w-full px-4 py-2.5 bg-indigo-50 border border-indigo-100 rounded-xl text-sm text-indigo-700 font-bold outline-none">
+                <option value="">TODAS AS SALAS</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">Status da Reserva</label>
+              <select id="filtroStatus" class="w-full px-4 py-2.5 bg-indigo-50 border border-indigo-100 rounded-xl text-sm text-indigo-700 font-bold outline-none">
+                <option value="">TODOS OS STATUS</option>
+                <option value="CONFIRMADO">✅ CONFIRMADO</option>
+                <option value="HABILITADO">🟢 HABILITADO</option>
+                <option value="CANCELADO">❌ CANCELADO</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">Turno</label>
+              <select id="filtroTurno" class="w-full px-4 py-2.5 bg-indigo-50 border border-indigo-100 rounded-xl text-sm text-indigo-700 font-bold outline-none">
+                <option value="">TODOS OS TURNOS</option>
+                <option value="MANHÃ">MANHÃ</option>
+                <option value="TARDE">TARDE</option>
+                <option value="NOITE">NOITE</option>
+                <option value="MANHÃ/TARDE">MANHÃ/TARDE</option>
+                <option value="TARDE/NOITE">TARDE/NOITE</option>
+                <option value="MULTITURNO">MULTITURNO</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">Período</label>
+              <select id="filtroIntervalo" onchange="aplicarAtalhoPeriodo()" class="w-full px-4 py-2.5 bg-indigo-50 border border-indigo-100 rounded-xl text-sm text-indigo-700 font-bold outline-none">
+                <option value="todos">Todo o histórico</option>
+                <option value="apartir">A partir de hoje</option>
+                <option value="hoje">Somente hoje</option>
+                <option value="7">Próximos 7 dias</option>
+                <option value="30">Próximos 30 dias</option>
+              </select>
+            </div>
+            <div class="flex items-center gap-3 mt-2">
+              <label class="relative inline-flex items-center cursor-pointer">
+                <input type="checkbox" id="filtroMinhas" class="sr-only peer">
+                <div class="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:bg-purple-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full"></div>
+              </label>
+              <span id="labelMinhas" class="text-xs font-black uppercase tracking-wide text-slate-400">Minhas reservas</span>
+            </div>
+            <div class="flex items-end gap-2">
+              <button onclick="limparFiltros()" class="w-full px-4 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-sm font-bold transition-all">
+                Redefinir filtros
+              </button>
+              <button onclick="exportarAgendaCSV()" class="w-full px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black rounded-xl uppercase transition-all">
+                <i class="fas fa-file-csv mr-1"></i> Exportar CSV
+              </button>
+            </div>
+            <input type="date" id="filtroDataInicio" class="hidden">
+            <input type="date" id="filtroDataFim" class="hidden">
+          </div>
+        </div>
+
+        <div id="tabelaContainerOuter" class="bg-white rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-200 overflow-hidden">
+          <div class="overflow-x-auto">
+            <table class="w-full min-w-[640px] text-left border-collapse">
+              <thead>
+                <tr class="bg-slate-50/50 border-b border-slate-100">
+                  <th class="p-4 text-[10px] font-black text-slate-400 uppercase tracking-widest w-36">Data e Horário</th>
+                  <th class="p-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Informações da Ação</th>
+                  <th class="p-4 text-[10px] font-black text-slate-400 uppercase tracking-widest max-w-[240px]">Recursos/Release</th>
+                  <th class="p-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center w-28">Status</th>
+                  <th class="p-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right w-28">Ações</th>
+                </tr>
+              </thead>
+              <tbody id="corpoTabela" class="divide-y divide-slate-50"></tbody>
+            </table>
+          </div>
+          <div id="semResultados" class="hidden p-20 text-center">
+            <div class="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
+              <i class="fas fa-calendar-times text-slate-200 text-3xl"></i>
+            </div>
+            <p class="text-slate-400 font-medium">Nenhuma reserva encontrada para os filtros aplicados.</p>
+          </div>
+        </div>
+
+        <!-- View Agenda Google Calendar -->
+        <div id="viewAgendaGoogle" class="hidden space-y-4">
+          <div class="bg-white rounded-3xl shadow-sm border border-slate-200 p-5">
+            <div class="flex flex-wrap items-end gap-4">
+              <div class="flex-1 min-w-[200px]">
+                <label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Espaço visualizado</label>
+                <select id="agendaGoogleSala"
+                  onchange="window._agendaGoogleSemana=0; renderizarModoAgendaGoogle()"
+                  class="w-full px-4 py-2.5 bg-purple-50 border border-purple-100 rounded-xl text-sm text-purple-700 font-bold outline-none">
+                  <option value="">Selecione um espaço...</option>
+                </select>
+              </div>
+              <div class="flex gap-2 shrink-0">
+                <button
+                  onclick="window._agendaGoogleSemana=(window._agendaGoogleSemana||0)-1; renderizarModoAgendaGoogle()"
+                  class="w-9 h-9 flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-all">
+                  <i class="fas fa-chevron-left text-xs"></i>
+                </button>
+                <button
+                  onclick="window._agendaGoogleSemana=0; renderizarModoAgendaGoogle()"
+                  class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-black rounded-xl uppercase transition-all">
+                  Hoje
+                </button>
+                <button
+                  onclick="window._agendaGoogleSemana=(window._agendaGoogleSemana||0)+1; renderizarModoAgendaGoogle()"
+                  class="w-9 h-9 flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-all">
+                  <i class="fas fa-chevron-right text-xs"></i>
+                </button>
+              </div>
+              <span id="agendaGoogleSemanaLabel" class="text-sm font-black text-slate-600 self-center"></span>
+            </div>
+          </div>
+          <!-- Toggle mini cal mobile -->
+          <div class="flex items-center gap-2 mb-2 lg:hidden">
+            <button onclick="_toggleMiniCalAgenda()" id="btnToggleMiniCal"
+              class="flex items-center gap-2 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-black rounded-xl uppercase transition-all">
+              <i class="fas fa-calendar-alt text-xs"></i>
+              <span id="lblToggleMiniCal">Mostrar calendário</span>
+            </button>
+          </div>
+          <!-- Mini cal colapsado no mobile -->
+          <div id="miniCalAgendaWrapper" class="hidden lg:block mb-0">
+            <div class="flex gap-2 items-start">
+              <div id="miniCalAgenda" class="shrink-0 self-start" style="width:196px;min-width:196px"></div>
+              <div id="agendaGoogleContainer" class="flex-1 min-w-0" style="height:calc(100vh - 260px);overflow:hidden">
+                <div class="p-16 text-center text-slate-300">
+                  <i class="fas fa-calendar-week text-4xl mb-3"></i><br>
+                  <span class="text-sm font-bold">Selecione um espaço para visualizar</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- Agenda sem mini cal no mobile -->
+          <div id="agendaGoogleContainerMobile" class="lg:hidden" style="height:calc(100vh - 220px);overflow:hidden">
+            <div class="p-16 text-center text-slate-300">
+              <i class="fas fa-calendar-week text-4xl mb-3"></i>
+            </div>
+          </div>
+        </div>
+      <!-- View Diagrama / Gantt por espaço -->
+      <div id="viewDiagrama" class="hidden space-y-4 mt-4">
+        <div class="bg-white rounded-3xl shadow-sm border border-slate-200 p-5">
+          <div class="flex flex-wrap items-center gap-3">
+            <div class="flex gap-2">
+              <button onclick="window._diagramaSemana=(window._diagramaSemana||0)-1;renderizarModoDiagrama()"
+                class="w-9 h-9 flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-all">
+                <i class="fas fa-chevron-left text-xs"></i>
+              </button>
+              <button onclick="window._diagramaSemana=0;renderizarModoDiagrama()"
+                class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-black rounded-xl uppercase transition-all">Hoje</button>
+              <button onclick="window._diagramaSemana=(window._diagramaSemana||0)+1;renderizarModoDiagrama()"
+                class="w-9 h-9 flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-all">
+                <i class="fas fa-chevron-right text-xs"></i>
+              </button>
+            </div>
+            <span id="diagramaSemanaLabel" class="text-sm font-black text-slate-600"></span>
+          </div>
+        </div>
+        <div class="bg-white rounded-3xl shadow-sm border border-slate-200 p-4 flex flex-wrap gap-3 items-end">
+          <div class="flex-1 min-w-[160px]">
+            <label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Espaço</label>
+            <select id="diagramaFiltroSala" class="w-full px-3 py-2 bg-indigo-50 border border-indigo-100 rounded-xl text-sm text-indigo-700 font-bold outline-none">
+              <option value="">Todos os espaços</option>
+            </select>
+          </div>
+          <div class="flex-1 min-w-[160px]">
+            <label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Setor</label>
+            <select id="diagramaFiltroSetor" class="w-full px-3 py-2 bg-indigo-50 border border-indigo-100 rounded-xl text-sm text-indigo-700 font-bold outline-none">
+              <option value="">Todos os setores</option>
+            </select>
+          </div>
+          <div class="flex-1 min-w-[160px]">
+            <label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Busca</label>
+            <input type="text" id="diagramaFiltroBusca" placeholder="Nome da ação..." class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-purple-400">
+          </div>
+          <div class="flex gap-2 shrink-0">
+            <button onclick="renderizarModoDiagrama()" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-black rounded-xl uppercase transition-all">
+              <i class="fas fa-filter mr-1"></i>Filtrar
+            </button>
+            <button onclick="limparFiltrosDiagrama()" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-600 text-xs font-black rounded-xl uppercase transition-all">
+              <i class="fas fa-rotate-left mr-1"></i>Redefinir
+            </button>
+          </div>
+          <div class="w-full flex items-center gap-4 pt-1 border-t border-slate-100">
+            <span class="text-[9px] font-black text-slate-400 uppercase">Legenda:</span>
+            <span class="flex items-center gap-1 text-[9px] font-bold text-slate-600"><span class="w-3 h-3 rounded inline-block border-2 border-dashed border-amber-400"></span>Pendente habilitação</span>
+            <span class="flex items-center gap-1 text-[9px] font-bold text-emerald-700"><span class="w-3 h-3 rounded inline-block bg-emerald-600"></span>Habilitado</span>
+            <span class="flex items-center gap-1 text-[9px] font-bold text-slate-400 italic">Espaços: azul/roxo/rosa — nunca verde ou âmbar</span>
+          </div>
+        </div>
+        <div id="diagramaContainer" class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden mt-2"></div>
+      </div>
+
+      </section>

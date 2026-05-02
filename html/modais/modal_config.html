@@ -1,0 +1,85 @@
+  <div id="modalConfig" class="hidden fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden">
+      <div class="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+        <h3 id="modalConfigTitle" class="text-lg font-black text-slate-800 uppercase tracking-tighter">CONFIGURAR</h3>
+        <button onclick="fecharModalConfig()" class="text-slate-400 hover:text-slate-600 transition-colors">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <form id="formConfig" onsubmit="event.preventDefault(); salvarConfiguracao();">
+        <input type="hidden" id="configId">
+        <input type="hidden" id="configTipo">
+        <div class="p-6 space-y-4">
+          <div id="camposEspaco" class="hidden space-y-4">
+            <div>
+              <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1 ml-1">Nome do Espaço</label>
+              <input type="text" id="configNomeEspaco" class="w-full bg-slate-50 border-none rounded-2xl p-3 text-sm focus:ring-2 focus:ring-purple-500 transition-all" placeholder="Ex: Teatro Marcus Miranda">
+            </div>
+            <div>
+              <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1 ml-1">Capacidade Máxima</label>
+              <input type="number" id="configCapacidade" class="w-full bg-slate-50 border-none rounded-2xl p-3 text-sm focus:ring-2 focus:ring-purple-500 transition-all" placeholder="Ex: 80">
+            </div>
+            <div>
+              <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1 ml-1">Responsáveis por dias da semana</label>
+              <div id="containerDonos" class="space-y-2 max-h-52 overflow-y-auto pr-1 custom-scrollbar mb-2"></div>
+              <button type="button" onclick="adicionarDono()" class="w-full py-2 bg-purple-50 hover:bg-purple-100 border border-dashed border-purple-300 text-purple-600 text-[10px] font-black rounded-xl transition-all uppercase tracking-widest">
+                <i class="fas fa-plus mr-1"></i>Adicionar responsável
+              </button>
+              <input type="hidden" id="configEmailEspaco">
+              <p class="text-[9px] text-slate-400 mt-1"><i class="fas fa-bell mr-1 text-purple-400"></i>Notificações enviadas conforme os dias configurados.</p>
+            </div>
+            <div class="pt-4 border-t border-slate-100">
+              <label class="block text-[10px] font-bold text-purple-600 uppercase mb-2 ml-1">Itens Fixos no Espaço</label>
+              <div id="container-itens-fixos" class="space-y-2 max-h-40 overflow-y-auto pr-2 custom-scrollbar"></div>
+            </div>
+          </div>
+          <div id="camposItem" class="hidden space-y-4">
+            <div>
+              <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1 ml-1">Nome do Recurso</label>
+              <input type="text" id="configNomeItem" class="w-full bg-slate-50 border-none rounded-2xl p-3 text-sm focus:ring-2 focus:ring-blue-500 transition-all" placeholder="Ex: Projetor Epson">
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+              <div>
+                <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1 ml-1">Qtd Total</label>
+                <input type="number" id="configQtd" class="w-full bg-slate-50 border-none rounded-2xl p-3 text-sm focus:ring-2 focus:ring-blue-500 transition-all" placeholder="0">
+              </div>
+              <div>
+                <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1 ml-1">Categoria</label>
+                <select id="configTipoItem" class="w-full bg-slate-50 border-none rounded-2xl p-3 text-sm focus:ring-2 focus:ring-blue-500 transition-all">
+                  <option value="Mobiliário">Mobiliário</option>
+                  <option value="Audiovisual">Audiovisual</option>
+                  <option value="Informática">Informática</option>
+                  <option value="Outros">Outros</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          <div id="camposUsuario" class="hidden space-y-4">
+            <div>
+              <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1 ml-1">E-mail do Administrador</label>
+              <input type="email" id="configEmailAdmin" class="w-full bg-slate-50 border-none rounded-2xl p-3 text-sm focus:ring-2 focus:ring-slate-800 transition-all" placeholder="usuario@email.com">
+            </div>
+            <div>
+              <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1 ml-1">Nível de Acesso</label>
+              <select id="configNivelAdmin" class="w-full bg-slate-50 border-none rounded-2xl p-3 text-sm focus:ring-2 focus:ring-slate-800 transition-all">
+                <option value="Admin">Admin (Gestor)</option>
+                <option value="Superadmin">Superadmin (TI/Direção)</option>
+                <option value="Habilitador">Habilitador (Espaços)</option>
+                <option value="Comunicação">Comunicação (RECE)</option>
+              </select>
+            </div>
+          </div>
+          <div id="camposSetor" class="hidden space-y-4">
+            <div>
+              <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1 ml-1">Nome do Setor Institucional</label>
+              <input type="text" id="configNomeSetor" class="w-full bg-slate-50 border-none rounded-2xl p-3 text-sm focus:ring-2 focus:ring-emerald-500 transition-all" placeholder="Ex: Comunicação / Financeiro">
+            </div>
+          </div>
+        </div>
+        <div class="p-6 bg-slate-50/50 border-t border-slate-100 flex gap-3">
+          <button type="button" onclick="fecharModalConfig()" class="flex-1 py-3 text-sm font-bold text-slate-500 hover:bg-slate-100 rounded-2xl transition-all">CANCELAR</button>
+          <button type="submit" class="flex-1 py-3 text-sm font-bold text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 rounded-2xl shadow-lg shadow-purple-200 transition-all">SALVAR ALTERAÇÕES</button>
+        </div>
+      </form>
+    </div>
+  </div>

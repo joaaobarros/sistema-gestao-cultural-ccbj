@@ -1,0 +1,94 @@
+    <section id="aba-dashboard" class="tab-content animate-fadeIn hidden pb-20">
+
+      <!-- FILTROS -->
+      <div class="bg-white rounded-3xl shadow-sm border border-slate-200 p-4 mb-6">
+        <div class="flex flex-wrap gap-3 items-end">
+
+          <div class="flex-1 min-w-[120px]">
+            <label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Período</label>
+            <select id="dashFiltroAtalho" onchange="aplicarAtalhoDashboard(this.value)"
+              class="w-full px-3 py-2.5 bg-indigo-50 border border-indigo-100 rounded-xl text-sm text-indigo-700 font-bold outline-none">
+              <option value="todos">Todo o histórico</option>
+              <option value="30">Últimos 30 dias</option>
+              <option value="90">Últimos 90 dias</option>
+              <option value="180">Últimos 6 meses</option>
+              <option value="365">Último ano</option>
+              <option value="custom">Personalizado</option>
+            </select>
+          </div>
+
+          <div class="flex-1 min-w-[130px]">
+            <label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Data início</label>
+            <input type="date" id="dashDataInicio" class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-purple-500">
+          </div>
+
+          <div class="flex-1 min-w-[130px]">
+            <label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Data fim</label>
+            <input type="date" id="dashDataFim" class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-purple-500">
+          </div>
+
+          <div class="flex-1 min-w-[130px]">
+            <label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Espaço</label>
+            <select id="dashFiltroSala" class="w-full px-3 py-2.5 bg-indigo-50 border border-indigo-100 rounded-xl text-sm text-indigo-700 font-bold outline-none">
+              <option value="">Todos</option>
+            </select>
+          </div>
+
+          <div class="flex-1 min-w-[130px]">
+            <label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Setor</label>
+            <select id="dashFiltroSetor" class="w-full px-3 py-2.5 bg-indigo-50 border border-indigo-100 rounded-xl text-sm text-indigo-700 font-bold outline-none">
+              <option value="">Todos</option>
+            </select>
+          </div>
+
+          <div class="flex gap-2 shrink-0">
+            <button onclick="carregarDashboard()"
+              class="px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white text-sm font-black rounded-xl uppercase transition-all shadow-lg shadow-purple-200 whitespace-nowrap">
+              <i class="fas fa-chart-bar mr-1"></i>Atualizar
+            </button>
+            <button onclick="redefinirFiltrosDashboard()" title="Redefinir filtros"
+              class="px-3 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-600 rounded-xl transition-all">
+              <i class="fas fa-rotate-left"></i>
+            </button>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- CONTEÚDO -->
+      <div id="dashboardConteudo" class="space-y-8">
+
+        <!-- LOADER -->
+        <div id="dashLoader" class="p-20 text-center">
+          <i class="fas fa-spinner animate-spin text-purple-400 text-2xl"></i>
+        </div>
+
+        <!-- SEÇÃO 1 — RESERVAS -->
+        <div id="dashReservas" class="hidden">
+          <!-- JS injeta KPIs principais -->
+        </div>
+
+        <!-- SEÇÃO 2 — USO / OPERAÇÃO -->
+        <div id="dashOperacional" class="hidden">
+          <!-- gráficos e listas -->
+        </div>
+
+        <!-- SEÇÃO 3 — ITENS -->
+        <div id="dashItens" class="hidden">
+          <!-- uso de itens -->
+        </div>
+
+        <!-- SEÇÃO FINAL — CODIP -->
+        <div id="dashCodip" class="hidden space-y-4">
+          <div id="dashCodipKpis" class="grid grid-cols-2 md:grid-cols-4 gap-3"></div>
+          <!-- Barras -->
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div id="dashCodipTipos"  class="bg-white border border-indigo-100 rounded-2xl p-4"></div>
+            <div id="dashCodipLing"   class="bg-white border border-indigo-100 rounded-2xl p-4"></div>
+            <div id="dashCodipEixos"  class="bg-white border border-indigo-100 rounded-2xl p-4"></div>
+            <div id="dashCodipMes"    class="bg-white border border-indigo-100 rounded-2xl p-4"></div>
+          </div>
+        </div>
+
+      </div>
+    </section>

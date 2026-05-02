@@ -1,0 +1,115 @@
+      <section id="aba-agenda-rece" class="tab-content animate-fadeIn hidden pb-20">
+        <div class="bg-white rounded-3xl shadow-sm border border-slate-200 p-6 mb-6">
+          <div class="flex items-center gap-2 mb-4">
+            <button id="btnModoListaRece" onclick="alternarModoVisualizacaoRece('lista')"
+              class="px-4 py-2 bg-slate-900 text-white text-xs font-black rounded-xl uppercase transition-all">
+              <i class="fas fa-list mr-1"></i>Lista
+            </button>
+            <button id="btnModoAgendaRece" onclick="alternarModoVisualizacaoRece('agenda')"
+              class="px-4 py-2 bg-slate-200 text-slate-600 text-xs font-black rounded-xl uppercase hover:bg-slate-300 transition-all">
+              <i class="fas fa-calendar-week mr-1"></i>Agenda
+            </button>
+          </div>
+          <div id="filtrosRece">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div class="relative">
+                <label class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">Busca</label>
+                <i class="fas fa-search absolute left-3 top-8 text-slate-300"></i>
+                <input type="text" id="receBusca" placeholder="Título, artista, categoria..."
+                  class="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-yellow-400/30 focus:border-yellow-400 transition-all">
+              </div>
+              <div>
+                <label class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">Data Início</label>
+                <input type="date" id="receFiltroInicio" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-yellow-400">
+              </div>
+              <div>
+                <label class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">Data Fim</label>
+                <input type="date" id="receFiltroFim" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-yellow-400">
+              </div>
+            </div>
+            <div class="flex flex-wrap gap-3 mt-4">
+              <button onclick="renderizarTabelaRece()" class="px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-white text-xs font-black rounded-xl uppercase transition-all">
+                <i class="fas fa-filter mr-1"></i> Filtrar
+              </button>
+              <button onclick="exportarReceCSV()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black rounded-xl uppercase transition-all">
+                <i class="fas fa-file-csv mr-1"></i> CSV
+              </button>
+              <button onclick="exportarRecePlanilha()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-black rounded-xl uppercase transition-all">
+                <i class="fas fa-file-excel mr-1"></i> Planilha
+              </button>
+              <button onclick="exportarRecePDF()" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-black rounded-xl uppercase transition-all">
+                <i class="fas fa-file-pdf mr-1"></i> PDF
+              </button>
+              <button onclick="limparFiltrosRece()" class="px-4 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-sm font-bold transition-all">
+                Redefinir filtros
+              </button>
+              <span id="receContador" class="ml-auto self-center text-[10px] font-black text-slate-400 uppercase"></span>
+            </div>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-200 overflow-hidden">
+          <div class="overflow-x-auto">
+            <table class="w-full min-w-[860px] text-left border-collapse text-xs">
+              <thead>
+                <tr class="bg-yellow-50 border-b border-yellow-100">
+                  <th class="p-4 text-[9px] font-black text-yellow-700 uppercase tracking-widest min-w-[160px]">Título</th>
+                  <th class="p-4 text-[9px] font-black text-yellow-700 uppercase tracking-widest w-28">Datas</th>
+                  <th class="p-4 text-[9px] font-black text-yellow-700 uppercase tracking-widest w-28">Horários</th>
+                  <th class="p-4 text-[9px] font-black text-yellow-700 uppercase tracking-widest w-32">Espaço</th>
+                  <th class="p-4 text-[9px] font-black text-yellow-700 uppercase tracking-widest w-28">Categorias</th>
+                  <th class="p-4 text-[9px] font-black text-yellow-700 uppercase tracking-widest w-28">Artista</th>
+                  <th class="p-4 text-[9px] font-black text-yellow-700 uppercase tracking-widest w-24">Imagem</th>
+                  <th class="p-4 text-[9px] font-black text-yellow-700 uppercase tracking-widest w-24">Acesso</th>
+                  <th class="p-4 text-[9px] font-black text-yellow-700 uppercase tracking-widest text-center w-24">Status</th>
+                  <th class="p-4 text-[9px] font-black text-yellow-700 uppercase tracking-widest text-right w-24">Ações</th>
+                </tr>
+              </thead>
+              <tbody id="corpoTabelaRece" class="divide-y divide-slate-50"></tbody>
+            </table>
+          </div>
+          <div id="semResultadosRece" class="hidden p-20 text-center">
+            <i class="fas fa-star text-slate-200 text-3xl mb-4"></i>
+            <p class="text-slate-400 font-medium">Nenhum evento RECE encontrado.</p>
+          </div>
+
+          <!-- View Agenda RECE -->
+          <div id="viewAgendaRece" class="hidden space-y-4">
+            <div class="bg-white rounded-3xl shadow-sm border border-slate-200 p-5">
+              <div class="flex flex-wrap items-end gap-4">
+                <div class="flex gap-2 shrink-0">
+                  <button onclick="window._agendaReceSemana=(window._agendaReceSemana||0)-1; renderizarModoAgendaRece()"
+                    class="w-9 h-9 flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-all">
+                    <i class="fas fa-chevron-left text-xs"></i>
+                  </button>
+                  <button onclick="window._agendaReceSemana=0; renderizarModoAgendaRece()"
+                    class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-black rounded-xl uppercase transition-all">
+                    Hoje
+                  </button>
+                  <button onclick="window._agendaReceSemana=(window._agendaReceSemana||0)+1; renderizarModoAgendaRece()"
+                    class="w-9 h-9 flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-all">
+                    <i class="fas fa-chevron-right text-xs"></i>
+                  </button>
+                </div>
+                <span id="agendaReceSemanaLabel" class="text-sm font-black text-slate-600 self-center"></span>
+              </div>
+            </div>
+            <div class="flex items-center gap-2 mb-2">
+              <label class="text-xs text-slate-500">Espaço:</label>
+              <select id="agendaReceSala" onchange="renderizarModoAgendaRece()" class="px-3 py-2 border rounded-lg text-sm">
+                <option value="">Todas as salas</option>
+              </select>
+            </div>
+            <div class="flex gap-3 items-start">
+              <div id="miniCalRece" class="shrink-0 self-start sticky top-4 overflow-hidden" style="width:196px"></div>
+              <div id="agendaReceContainer" class="flex-1 min-h-[500px]">
+                <div class="p-16 text-center text-slate-300">
+                  <i class="fas fa-calendar-week text-4xl mb-3"></i><br>
+                  <span class="text-sm font-bold">Carregando eventos...</span>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>  
+      </section>
