@@ -50,13 +50,17 @@
           <span><i class="fas fa-user mr-2 text-slate-600"></i>Pessoal</span>
           <i id="icon-mod-pessoal" class="fas fa-chevron-down text-[8px] text-slate-600"></i>
         </button>
-        <div id="mod-pessoal" class="space-y-0.5 pl-2">
-          <button data-aba="aba-tarefas" class="tab-btn nav-item w-full">
+        <div id="mod-pessoal" class="space-y-0.5 pl-2 hidden">
+          <button data-aba="aba-tarefas" class="tab-btn nav-item w-full"
+            draggable="true"
+            ondragstart="iniciarDrag(event)">
             <i class="fas fa-list-check w-5 text-center text-xs"></i>
             <span class="text-xs font-semibold">Tarefas</span>
             <span class="em-breve-badge">em breve</span>
           </button>
-          <button data-aba="aba-processos" class="tab-btn nav-item w-full">
+          <button data-aba="aba-processos" class="tab-btn nav-item w-full"
+            draggable="true"
+            ondragstart="iniciarDrag(event)">
             <i class="fas fa-sitemap w-5 text-center text-xs"></i>
             <span class="text-xs font-semibold">Processos</span>
             <span class="em-breve-badge">em breve</span>
@@ -72,20 +76,28 @@
           <i id="icon-mod-espacos" class="fas fa-chevron-down text-[8px] text-slate-600"></i>
         </button>
         <div id="mod-espacos" class="space-y-0.5 pl-2">
-          <button data-aba="aba-lista-reservas" class="tab-btn nav-item w-full">
+          <button data-aba="aba-lista-reservas" class="tab-btn nav-item w-full"
+            draggable="true"
+            ondragstart="iniciarDrag(event)">
             <i class="fas fa-calendar-alt w-5 text-center text-xs"></i>
             <span class="text-xs font-semibold">Agenda Geral</span>
           </button>
-          <button data-aba="aba-nova-reserva" onclick="resetarFormulario()" class="tab-btn nav-item w-full">
+          <button data-aba="aba-nova-reserva" onclick="resetarFormulario()" class="tab-btn nav-item w-full"
+            draggable="true"
+            ondragstart="iniciarDrag(event)">
             <i class="fas fa-plus-circle w-5 text-center text-xs"></i>
             <span class="text-xs font-semibold">Novo Agendamento</span>
           </button>
-          <button data-aba="aba-aprovacoes" class="tab-btn nav-item w-full">
+          <button data-aba="aba-aprovacoes" class="tab-btn nav-item w-full"
+            draggable="true"
+            ondragstart="iniciarDrag(event)">
             <i class="fas fa-check-double w-5 text-center text-xs"></i>
             <span class="text-xs font-semibold flex-1 text-left">Aprovações</span>
             <span id="badgeSolicitacoes" class="hidden min-w-[18px] h-[18px] bg-red-500 text-white text-[9px] font-black rounded-full flex items-center justify-center px-1">0</span>
           </button>
-          <button data-aba="aba-almoxarifado" class="tab-btn nav-item w-full" id="btn-aba-almoxarifado">
+          <button data-aba="aba-almoxarifado" class="tab-btn nav-item w-full" id="btn-aba-almoxarifado"
+            draggable="true"
+            ondragstart="iniciarDrag(event)">
             <i class="fas fa-boxes-stacked w-5 text-center text-xs"></i>
             <span class="text-xs font-semibold">Almoxarifado</span>
             <span class="em-breve-badge">em breve</span>
@@ -101,11 +113,15 @@
           <i id="icon-mod-comunicacao" class="fas fa-chevron-down text-[8px] text-slate-600"></i>
         </button>
         <div id="mod-comunicacao" class="space-y-0.5 pl-2">
-          <button id="btn-aba-rece" data-aba="aba-agenda-rece" class="tab-btn nav-item w-full">
+          <button id="btn-aba-rece" data-aba="aba-agenda-rece" class="tab-btn nav-item w-full"
+            draggable="true"
+            ondragstart="iniciarDrag(event)">
             <i class="fas fa-star w-5 text-center text-xs"></i>
             <span class="text-xs font-semibold">Agenda RECE</span>
           </button>
-          <button data-aba="aba-balcao" class="tab-btn nav-item w-full">
+          <button data-aba="aba-balcao" class="tab-btn nav-item w-full"
+            draggable="true"
+            ondragstart="iniciarDrag(event)">
             <i class="fas fa-headset w-5 text-center text-xs"></i>
             <span class="text-xs font-semibold">Balcão</span>
             <span class="em-breve-badge">em breve</span>
@@ -121,12 +137,16 @@
           <i id="icon-mod-equipes" class="fas fa-chevron-down text-[8px] text-slate-600"></i>
         </button>
         <div id="mod-equipes" class="space-y-0.5 pl-2">
-          <button data-aba="aba-rh" class="tab-btn nav-item w-full">
+          <button data-aba="aba-rh" class="tab-btn nav-item w-full"
+            draggable="true"
+            ondragstart="iniciarDrag(event)">
             <i class="fas fa-id-badge w-5 text-center text-xs"></i>
             <span class="text-xs font-semibold">Depto. Pessoal</span>
             <span class="em-breve-badge">em breve</span>
           </button>
-          <button data-aba="aba-eficiencia" class="tab-btn nav-item w-full">
+          <button data-aba="aba-eficiencia" class="tab-btn nav-item w-full"
+            draggable="true"
+            ondragstart="iniciarDrag(event)">
             <i class="fas fa-gauge-high w-5 text-center text-xs"></i>
             <span class="text-xs font-semibold">Eficiência</span>
             <span class="em-breve-badge">em breve</span>
@@ -142,12 +162,16 @@
           <i id="icon-mod-financeiro" class="fas fa-chevron-down text-[8px] text-slate-600"></i>
         </button>
         <div id="mod-financeiro" class="space-y-0.5 pl-2">
-          <button data-aba="aba-contratos-fin" class="tab-btn nav-item w-full" id="btn-aba-contratos-fin">
+          <button data-aba="aba-contratos-fin" class="tab-btn nav-item w-full" id="btn-aba-contratos-fin"
+            draggable="true"
+            ondragstart="iniciarDrag(event)">
             <i class="fas fa-file-contract w-5 text-center text-xs"></i>
             <span class="text-xs font-semibold">Contratos / Fontes</span>
             <span class="em-breve-badge">em breve</span>
           </button>
-          <button data-aba="aba-contratacoes" class="tab-btn nav-item w-full">
+          <button data-aba="aba-contratacoes" class="tab-btn nav-item w-full"
+            draggable="true"
+            ondragstart="iniciarDrag(event)">
             <i class="fas fa-handshake w-5 text-center text-xs"></i>
             <span class="text-xs font-semibold">Contratações</span>
             <span class="em-breve-badge">em breve</span>
@@ -163,11 +187,15 @@
           <i id="icon-mod-relatorios" class="fas fa-chevron-down text-[8px] text-slate-600"></i>
         </button>
         <div id="mod-relatorios" class="space-y-0.5 pl-2">
-          <button data-aba="aba-codip" class="tab-btn nav-item w-full">
+          <button data-aba="aba-codip" class="tab-btn nav-item w-full"
+            draggable="true"
+            ondragstart="iniciarDrag(event)">
             <i class="fas fa-chart-pie w-5 text-center text-xs"></i>
             <span class="text-xs font-semibold">CODIP</span>
           </button>
-          <button data-aba="aba-rel-financeiros" class="tab-btn nav-item w-full">
+          <button data-aba="aba-rel-financeiros" class="tab-btn nav-item w-full"
+            draggable="true"
+            ondragstart="iniciarDrag(event)">
             <i class="fas fa-file-invoice-dollar w-5 text-center text-xs"></i>
             <span class="text-xs font-semibold">Relatórios Financeiros</span>
             <span class="em-breve-badge">em breve</span>
@@ -183,11 +211,15 @@
           <i id="icon-mod-estrategia" class="fas fa-chevron-down text-[8px] text-slate-600"></i>
         </button>
         <div id="mod-estrategia" class="space-y-0.5 pl-2">
-          <button data-aba="aba-dashboard" class="tab-btn nav-item w-full">
+          <button data-aba="aba-dashboard" class="tab-btn nav-item w-full"
+            draggable="true"
+            ondragstart="iniciarDrag(event)">
             <i class="fas fa-chart-bar w-5 text-center text-xs"></i>
             <span class="text-xs font-semibold">Dashboard Geral</span>
           </button>
-          <button onclick="abrirPainelIA()" class="nav-item w-full">
+          <button onclick="abrirPainelIA()" class="nav-item w-full"
+            draggable="true"
+            ondragstart="iniciarDrag(event)">
             <div class="w-5 h-5 flex items-center justify-center rounded-md bg-purple-500/10 shrink-0">
               <i class="fas fa-brain text-purple-400 text-[9px]"></i>
             </div>

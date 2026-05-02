@@ -227,16 +227,22 @@
       }
 
       // ── 5. data-aba listeners + setTimeout (conteúdo original) ───────────
-      document.querySelectorAll('[data-aba]').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-          var aba = this.getAttribute('data-aba');
-          var sidebar = document.getElementById('sidebarPrincipal');
-          var overlay = document.getElementById('sidebarOverlay');
-          if (sidebar && window.innerWidth < 768) {
-            sidebar.classList.add('-translate-x-full');
-            if (overlay) overlay.classList.add('hidden');
+      document.querySelectorAll('[data-aba]').forEach(function(btn) {
+        // Remove draggable dos botões em breve
+        const emBreve = btn.querySelector('.em-breve-badge');
+        if (!emBreve) {
+          btn.setAttribute('draggable', 'true');
+          btn.addEventListener('dragstart', iniciarDrag);
+        }
+        
+        btn.addEventListener('click', function() {
+          const aba = this.getAttribute('data-aba');
+          if (typeof mostrarAba !== 'function') return;
+          if (window.innerWidth < 768) {
+            document.getElementById('sidebarPrincipal')?.classList.add('-translate-x-full');
+            document.getElementById('sidebarOverlay')?.classList.add('hidden');
           }
-          if (typeof mostrarAba === 'function') mostrarAba(aba);
+          mostrarAba(aba);
         });
       });
 

@@ -2300,10 +2300,12 @@ function toggleModulo(id) {
   const el   = document.getElementById(id);
   const icon = document.getElementById('icon-' + id);
   if (!el) return;
-  const aberto = !el.classList.contains('hidden');
-  el.classList.toggle('hidden', aberto);
+  
+  const estaAberto = !el.classList.contains('hidden');
+  el.classList.toggle('hidden', estaAberto);
+  
   if (icon) {
-    icon.className = aberto
+    icon.className = estaAberto
       ? 'fas fa-chevron-down text-[8px] text-slate-600'
       : 'fas fa-chevron-up text-[8px] text-slate-600';
   }
