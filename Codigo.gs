@@ -53,6 +53,39 @@ function _getSheet(nomeAba) {
   return _abrirAba(conf[0], conf[1]);
 }
 
+function _getMapaPlanilhas() {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("CONFIG");
+  const dados = sheet.getDataRange().getValues();
+
+  const mapa = {};
+  for (let i = 1; i < dados.length; i++) {
+    const tipo = String(dados[i][0]).trim();
+    const id = String(dados[i][1]).trim();
+    if (tipo && id) mapa[tipo] = id;
+  }
+
+  return mapa;
+}
+
+function _abrirAba(tipo, nomeAba) {
+  const MAPA_PLANILHAS = _getMapaPlanilhas();
+
+  const id = MAPA_PLANILHAS[tipo];
+
+  if (!id) {
+    throw new Error("Planilha não mapeada: " + tipo);
+  }
+
+  const ss = SpreadsheetApp.openById(id);
+  const aba = ss.getSheetByName(nomeAba);
+
+  if (!aba) {
+    throw new Error("Aba não encontrada: " + nomeAba);
+  }
+
+  return aba;
+}
+
 // ==============================
 // HELPERS GLOBAIS
 // ==============================

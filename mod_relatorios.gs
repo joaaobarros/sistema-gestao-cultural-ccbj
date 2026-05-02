@@ -848,39 +848,54 @@ function obterRubricaPorId(id) {
 function salvarRubrica(dados, email) {
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
+
   try {
     const aba = _getSheet("Rubricas");
-    const id = String(dados.id || "").trim();
+
+    const idFinal = String(dados.id || gerarId("RUB")).trim();
+
     const linha = [
-      id || gerarId("RUB"),
+      idFinal,
       String(dados.idMeta || ""),
       String(dados.nome || ""),
       Number(dados.valor) || 0,
       String(dados.obs || ""),
     ];
-    if (!id) {
+
+    let isEdicao = false;
+
+    if (!dados.id) {
       aba.appendRow(linha);
     } else {
       const rows = aba.getDataRange().getValues();
       let found = false;
+
       for (let i = 1; i < rows.length; i++) {
-        if (String(rows[i][0]).trim() === id) {
+        if (String(rows[i][0]).trim() === idFinal) {
           aba.getRange(i + 1, 1, 1, linha.length).setValues([linha]);
           found = true;
+          isEdicao = true;
           break;
         }
       }
-      if (!found) aba.appendRow(linha);
+
+      if (!found) {
+        aba.appendRow(linha);
+      }
     }
+
     registrarLog(
       "SALVAR",
       "RUBRICA",
-      linha[0],
+      idFinal,
       JSON.stringify(dados),
       "",
       "",
       String(email || ""),
     );
+
+    atualizarValorRubrica(idFinal);
+
     return true;
   } catch (e) {
     console.error("salvarRubrica:", e.message);
@@ -888,6 +903,89 @@ function salvarRubrica(dados, email) {
   } finally {
     lock.releaseLock();
   }
+}
+
+function adicionarItemMemoriaRubrica(dados, emailUsuario) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+
+  try {
+    if (!dados.idRubrica) throw new Error("Rubrica obrigatória");
+
+    const quantidade = Number(dados.quantidade || 0);
+    const valorUnitario = Number(dados.valorUnitario || 0);
+
+    if (quantidade <= 0 || valorUnitario < 0) {
+      throw new Error("Valores inválidos");
+    }
+
+    const subtotal = quantidade * valorUnitario;
+
+    const aba = _getSheet("RubricasMemoria");
+
+    aba.appendRow([
+      gerarId("MEM"),
+      dados.idRubrica,
+      sanitizarTexto(dados.descricao),
+      dados.metrica || "UN",
+      quantidade,
+      valorUnitario,
+      subtotal,
+      new Date(),
+      emailUsuario,
+      true,
+    ]);
+
+    atualizarValorRubrica(dados.idRubrica);
+
+    return true;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function calcularValorRubrica(idRubrica) {
+  const aba = _getSheet("RubricasMemoria");
+  if (!aba || aba.getLastRow() < 2) return 0;
+
+  const dados = aba.getRange(2, 1, aba.getLastRow() - 1, 10).getValues();
+
+  let total = 0;
+
+  for (let i = 0; i < dados.length; i++) {
+    if (String(dados[i][1]) === String(idRubrica) && dados[i][9] === true) {
+      total += Number(dados[i][6] || 0);
+    }
+  }
+
+  return total;
+}
+
+function atualizarValorRubrica(idRubrica) {
+  const valor = calcularValorRubrica(idRubrica);
+
+  const aba = _getSheet("Rubricas");
+  const dados = aba.getDataRange().getValues();
+
+  for (let i = 1; i < dados.length; i++) {
+    if (String(dados[i][0]) === String(idRubrica)) {
+      aba.getRange(i + 1, 4).setValue(valor);
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function listarMemoriaRubrica(idRubrica) {
+  const aba = _getSheet("RubricasMemoria");
+  if (!aba || aba.getLastRow() < 2) return [];
+
+  const dados = aba.getRange(2, 1, aba.getLastRow() - 1, 10).getValues();
+
+  return dados.filter(
+    (r) => String(r[1]) === String(idRubrica) && r[9] === true,
+  );
 }
 
 function excluirRubrica(id, email) {

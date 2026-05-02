@@ -94,6 +94,7 @@ const MODULOS = {
       'Metas':       ['ID','ID Contrato','Número','Título','Descrição','TipoMeta'],
       'Indicadores': ['ID','ID Meta','ID Contrato','Ano','Texto do Indicador','Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez','TipoIndicador','Número'],
       'Rubricas':    ['ID','ID Meta','Nome','Valor','Obs'],
+      'RubricasMemoria': [ 'ID','ID_RUBRICA','DESCRICAO','METRICA','QUANTIDADE','VALOR_UNITARIO','SUBTOTAL','CRIADO_EM','CRIADO_POR','ATIVO'], 
     }
   },
 
