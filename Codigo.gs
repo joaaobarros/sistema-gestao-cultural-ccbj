@@ -19,6 +19,16 @@ function getBaseUrl() {
   }
 }
 
+function _getSheet(nomeAba) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const aba = ss.getSheetByName(nomeAba);
+
+  if (!aba) {
+    throw new Error("Aba não encontrada: " + nomeAba);
+  }
+
+  return aba;
+}
 
 // ==============================
 // HELPERS GLOBAIS
