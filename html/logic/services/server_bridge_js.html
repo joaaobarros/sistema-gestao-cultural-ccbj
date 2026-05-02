@@ -53,11 +53,14 @@ const GAS = {
     cancelar: function(id, email, cb, err) {
       GAS._call('cancelarReserva', [id, email], cb, err);
     },
-    habilitar: function(id, obs, email, cb, err) {
-      GAS._call('habilitarEspaco', [id, obs, email], cb, err);
+    cancelarComJustificativa: function(id, email, justificativa, cb, err) {
+      GAS._call('cancelarReservaComJustificativa', [id, email, justificativa], cb, err);
     },
-    excluir: function(id, email, cb, err) {
-      GAS._call('excluirReserva', [id, email], cb, err);
+    habilitar: function(id, email, obs, cb, err) {
+      GAS._call('habilitarReservaStatus', [id, email, obs], cb, err);
+    },
+    verificarConflito: function(dados, cb, err) {
+      GAS._call('verificarConflitoEspaco', [dados], cb, err);
     },
     analisarDisponibilidade: function(payload, cb, err) {
       GAS._call('analisarDisponibilidadeReal', [payload], cb, err);
@@ -79,37 +82,67 @@ const GAS = {
       GAS._call('obterDadosIniciais', [], cb, err);
     },
     salvarConfig: function(dados, cb, err) {
-      GAS._call('salvarConfiguracao', [dados], cb, err);
+      GAS._call('processarSalvarConfig', [dados], cb, err);
     },
-    excluirRegistro: function(id, tipo, email, cb, err) {
-      GAS._call('excluirRegistro', [id, tipo, email], cb, err);
+    excluirPorId: function(tipo, id, email, cb, err) {
+      GAS._call('excluirRegistroPorID', [tipo, id, email], cb, err);
+    },
+    removerRegistro: function(id, tipo, email, cb, err) {
+      GAS._call('removerRegistroGenerico', [id, tipo, email], cb, err);
     },
     obterItensFixosPorSala: function(id, cb, err) {
       GAS._call('obterItensFixosPorSala', [id], cb, err);
     },
-    obterDadosParaConfig: function(cb, err) {
-      GAS._call('obterDadosParaConfig', [], cb, err);
+    obterDadosParaConfig: function(nomeAba, cb, err) {
+      GAS._call('obterDadosParaConfig', nomeAba ? [nomeAba] : [], cb, err);
     },
-    obterLogs: function(cb, err) {
-      GAS._call('obterLogsAuditoria', [], cb, err);
+    obterPerfil: function(cb, err) {
+      GAS._call('obterPerfilUsuario', [], cb, err);
     },
-    obterLogAcessos: function(cb, err) {
-      GAS._call('obterLogAcessos', [], cb, err);
+    sugerirReservaIA: function(descricao, cb, err) {
+      GAS._call('sugerirReservaIAComDados', [descricao], cb, err);
+    },
+    obterLogs: function(email, cb, err) {
+      GAS._call('obterLogs', [email], cb, err);
+    },
+    obterLogAcessos: function(email, cb, err) {
+      GAS._call('obterLogAcessos', [email], cb, err);
     },
     rollback: function(email, ts, cb, err) {
       GAS._call('rollbackAcaoPorTimestamp', [email, ts], cb, err);
     },
+    rollbackPorIndice: function(email, idx, cb, err) {
+      GAS._call('rollbackAcaoPorIndice', [email, idx], cb, err);
+    },
     obterMetricas: function(ini, fim, sala, setor, cb, err) {
       GAS._call('obterMetricasDashboard', [ini, fim, sala, setor], cb, err);
     },
-    mobilizarEstoque: function(idItem, idSala, acao, qtd, cb, err) {
-      GAS._call('movimentarEstoqueItem', [idItem, idSala, acao, qtd], cb, err);
+    alternarItemQtd: function(idItem, idSala, qtd, acao, email, cb, err) {
+      GAS._call('alternarQuantidadeItem', [idItem, idSala, qtd, acao, email], cb, err);
     },
     obterEmailsSistema: function(cb, err) {
       GAS._call('obterEmailsSistema', [], cb, err);
     },
     obterDadosGrafico: function(cb, err) {
       GAS._call('obterDadosGraficoReservas', [], cb, err);
+    },
+    obterUrlLogout: function(cb, err) {
+      GAS._call('obterUrlLogout', [], cb, err);
+    },
+    perguntarIA: function(pergunta, cb, err) {
+      GAS._call('perguntarIA', [pergunta], cb, err);
+    },
+    gerarRelatorioIA: function(filtros, cb, err) {
+      GAS._call('gerarRelatorioIA', [filtros], cb, err);
+    },
+    analisarDashboardIA: function(metricas, cb, err) {
+      GAS._call('analisarDashboardIA', [metricas], cb, err);
+    },
+    obterMetricasCODIP: function(cb, err) {
+      GAS._call('obterMetricasCODIP', [], cb, err);
+    },
+    obterRelatoriosCODIP: function(cb, err) {
+      GAS._call('obterRelatoriosCODIP', [], cb, err);
     }
   },
 
@@ -202,6 +235,9 @@ const GAS = {
     logout: function(cb, err) {
       GAS._call('fazerLogout', [], cb, err);
     },
+    obterUrlLogout: function(cb, err) {
+      GAS._call('obterUrlLogout', [], cb, err);
+    },
     salvarPreferencia: function(chave, valor, cb, err) {
       GAS._call('salvarPreferenciasUsuario', [chave, valor], cb, err);
     },
@@ -220,15 +256,24 @@ const GAS = {
     },
     listarPendentes: function(cb, err) {
       GAS._call('listarSolicitacoesPendentes', [], cb, err);
+    },
+    criar: function(tipo, subtipo, dados, usuario, justificativa, cb, err) {
+      GAS._call('chat_criarSolicitacao', [tipo, subtipo, dados, usuario, justificativa], cb, err);
     }
   },
 
   /**
-   * BLOCO: Serviços de calendário e convites
-   * @context Google Calendar — criação de eventos e convites internos.
+   * BLOCO: Serviços de calendário e comunicação
+   * @context Google Calendar, convites e e-mails institucionais.
    */
-  calendario: {
-    criarConvites: function(dados, cb, err) {
+  comunicacao: {
+    criarConvitesCalendar: function(dados, cb, err) {
+      GAS._call('enviarConvitesCalendar', [dados], cb, err);
+    },
+    enviarConviteEmail: function(dados, cb, err) {
+      GAS._call('enviarConviteEmailInstitucional', [dados], cb, err);
+    },
+    criarEventosCalendar: function(dados, cb, err) {
       GAS._call('criarEventosCalendarConvidados', [dados], cb, err);
     }
   },

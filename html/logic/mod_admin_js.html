@@ -103,7 +103,7 @@ function renderizarEspacosAdmin() {
   }).join('');
 
   // MAPEAMENTO CORRETO DA QUANTIDADE DE ITENS NA SALA
-  google.script.run.withSuccessHandler(function(todosItens) {
+  GAS.admin.obterDadosParaConfig('Itens', function(todosItens) {
 
   salasFiltradas.forEach(s => {
     const idSala = s[0];
@@ -138,7 +138,7 @@ function renderizarEspacosAdmin() {
 
   });
 
-}).obterDadosParaConfig('Itens');
+});
 }
 
 /**
@@ -171,8 +171,7 @@ function executarRollback() {
     showLoader(true);
 
     // Reutiliza rollbackAcaoPorIndice com índice 0 (= última ação)
-    google.script.run
-      .withSuccessHandler(function() {
+    GAS.admin.rollbackPorIndice(AppState.usuario.email, 0, function() {
         showLoader(false);
         Swal.fire({
           title: 'Desfeito!',
@@ -184,12 +183,10 @@ function executarRollback() {
         carregarAuditoria();
         carregarReservas();
         if (AppState.colecoes.reservasRece) carregarReservasRece();
-      })
-      .withFailureHandler(function(err) {
+      }, function(err) {
         showLoader(false);
         Swal.fire('Erro no Rollback', err.message, 'error');
-      })
-      .rollbackAcaoPorIndice(AppState.usuario.email, 0);
+      });
   });
 }
 
@@ -417,8 +414,7 @@ function dispararExclusao(id, tipo) {
   }).then((result) => {
     if (result.isConfirmed) {
       showLoader(true);
-      google.script.run
-        .withSuccessHandler(function(novosDados) {
+      GAS.admin.removerRegistro(id, tipo, AppState.usuario.email, function(novosDados) {
           AppState.colecoes.salas = novosDados.salas || [];
           AppState.colecoes.itens = novosDados.listaItens || [];
           AppState.colecoes.setores = novosDados.setores || [];
@@ -430,12 +426,10 @@ function dispararExclusao(id, tipo) {
           if (typeof renderizarAdmins === 'function') renderizarAdmins();
           showLoader(false);
           Swal.fire('Excluído!', 'Registro removido.', 'success');
-        })
-        .withFailureHandler(function(err) {
+        }, function(err) {
           showLoader(false);
           Swal.fire('Erro no Servidor', err.message, 'error');
-        })
-        .removerRegistroGenerico(id, tipo, AppState.usuario.email);  // ← email passado
+        });
     }
   });
 }
@@ -594,15 +588,12 @@ function carregarAuditoria() {
       </tr>`;
   }
 
-  google.script.run
-    .withSuccessHandler(function(jsonLogs) {
+  GAS.admin.obterLogs(AppState.usuario.email, function(jsonLogs) {
       const logs = JSON.parse(jsonLogs);
       renderizarLogs(logs);
-    })
-    .withFailureHandler(function(err) {
+    }, function(err) {
       Swal.fire('Erro', err.message, 'error');
-    })
-    .obterLogs(AppState.usuario.email);
+    });
 }
 
 function renderizarLogs(logs) {
@@ -772,19 +763,16 @@ function excluirDefinitivo(id, tipo) {
   }).then((result) => {
     if (result.isConfirmed) {
       if (typeof showLoader === 'function') showLoader(true);
-      google.script.run
-        .withSuccessHandler(() => {
+      GAS.admin.excluirPorId(tipo, id, AppState.usuario.email, () => {
           showLoader(false);
           Swal.fire({ title: 'Sucesso!', text: 'Reserva cancelada.', icon: 'success', timer: 2000, showConfirmButton: false });
           carregarReservas();
           // Atualiza RECE se já foi carregado
           if (AppState.colecoes.reservasRece) carregarReservasRece();
-        })
-        .withFailureHandler(err => {
+        }, err => {
           if (typeof showLoader === 'function') showLoader(false);
           Swal.fire('Erro no Servidor', err.message, 'error');
-        })
-        .excluirRegistroPorID(tipo, id, AppState.usuario.email);  // ← email passado
+        });
     }
   });
 }
@@ -857,8 +845,7 @@ function salvarConfiguracao() {
   if (btnSalvar?.disabled) return;
   if (btnSalvar) { btnSalvar.disabled = true; btnSalvar.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> SALVANDO...'; }
 
-  google.script.run
-    .withSuccessHandler(function(novosDados) {
+  GAS.admin.salvarConfig(dados, function(novosDados) {
       if (btnSalvar) { btnSalvar.disabled = false; btnSalvar.innerHTML = 'SALVAR ALTERAÇÕES'; }
       fecharModalConfig();
       AppState.colecoes.salas = novosDados.salas || [];
@@ -875,12 +862,10 @@ function salvarConfiguracao() {
         if (typeof renderizarReservas === 'function') renderizarReservas();
       }, 100);
       Swal.fire({ title: 'Sucesso!', text: 'Dados atualizados.', icon: 'success', timer: 2000, showConfirmButton: false, toast: true, position: 'top-end' });
-    })
-    .withFailureHandler(function(err) {
+    }, function(err) {
       if (btnSalvar) { btnSalvar.disabled = false; btnSalvar.innerHTML = 'SALVAR ALTERAÇÕES'; }
       Swal.fire('Erro ao Salvar', err.message, 'error');
-    })
-    .processarSalvarConfig(dados);
+    });
 }
 
 
@@ -904,8 +889,7 @@ function atualizarVisualizacaoPatrimonio(idSala) {
     </div>
   `;
 
-  google.script.run
-    .withSuccessHandler(function(todosItens) {
+  GAS.admin.obterDadosParaConfig('Itens', function(todosItens) {
       // Verifica se há dados além do cabeçalho
       if (!todosItens || todosItens.length === 0) {
         container.innerHTML = '<p class="text-[10px] text-slate-400 text-center py-8">Nenhum item disponível no almoxarifado.</p>';
@@ -981,11 +965,9 @@ function atualizarVisualizacaoPatrimonio(idSala) {
           </div>
         `;
       }).join('');
-    })
-    .withFailureHandler(function(err) {
+  }, function(err) {
        container.innerHTML = `<p class="text-[10px] text-red-400 text-center py-4 px-2">Erro ao sincronizar: ${escaparHTML(err.message)}</p>`;
-    })
-    .obterDadosParaConfig('Itens');
+    });
 }
 
 /**
@@ -997,20 +979,17 @@ function executarMobilizacaoEstoque(idItem, idSala, acao) {
   const qtdMover = parseInt(inputElement.value) || 0;
   if (qtdMover <= 0) { Swal.fire({ icon: 'warning', title: 'Quantidade Inválida', text: 'Valor maior que zero.', confirmButtonColor: '#9333ea' }); return; }
   if (typeof showLoader === 'function') showLoader(true);
-  google.script.run
-    .withSuccessHandler(function() {
+  GAS.admin.alternarItemQtd(idItem, idSala, qtdMover, acao, AppState.usuario.email, function() {
       inputElement.value = 1;
       if (typeof inicializarApp === 'function') inicializarApp();
       if (typeof atualizarVisualizacaoPatrimonio === 'function') atualizarVisualizacaoPatrimonio(idSala);
       if (typeof showLoader === 'function') showLoader(false);
       Swal.mixin({ toast: true, position: 'top-end', showConfirmButton: false, timer: 2500, timerProgressBar: true })
         .fire({ icon: 'success', title: acao === 'fixar' ? 'Item alocado' : 'Item liberado' });
-    })
-    .withFailureHandler(function(err) {
+    }, function(err) {
       if (typeof showLoader === 'function') showLoader(false);
       Swal.fire({ icon: 'error', title: 'Operação Recusada', text: err.message, confirmButtonColor: '#ef4444' });
-    })
-    .alternarQuantidadeItem(idItem, idSala, qtdMover, acao, AppState.usuario.email);  // ← email passado
+    });
 }
 
 
@@ -1098,7 +1077,7 @@ function validarAntesDeSalvar() {
     return;
   }
 
-  google.script.run.withSuccessHandler(function(disponibilidade) {
+  GAS.reservas.obterDisponibilidadeItens(data, inicio, termino, null, function(disponibilidade) {
 
     const itensSelecionados = window.itensSelecionados || [];
 
@@ -1119,7 +1098,7 @@ function validarAntesDeSalvar() {
       }
     }
 
-  }).obterDisponibilidadeItensPorHorario(data, inicio, termino);
+  });
 }
 
 
@@ -1231,13 +1210,10 @@ function carregarReservasRece() {
   if (!corpo) return;
   corpo.innerHTML = `<tr><td colspan="9" class="p-10 text-center"><i class="fas fa-spinner animate-spin text-yellow-500 text-2xl"></i></td></tr>`;
 
-  google.script.run
-    .withSuccessHandler(function(reservas) {
+  GAS.rece.obter(function(reservas) {
       AppState.colecoes.reservasRece = reservas;
       renderizarTabelaRece();
-    })
-    .withFailureHandler(err => Swal.fire('Erro', err.message, 'error'))
-    .obterReservasRece();
+    }, err => Swal.fire('Erro', err.message, 'error'));
 }
 
 function renderizarTabelaRece() {
@@ -1445,17 +1421,14 @@ function confirmarCancelamentoRece(id, nome) {
   }).then(r => {
     if (!r.isConfirmed) return;
     showLoader(true);
-    google.script.run
-      .withSuccessHandler(() => {
+    GAS.rece.cancelar(id, AppState.usuario.email, () => {
         showLoader(false);
         Swal.fire({ title: 'Sucesso!', text: 'Evento cancelado.', icon: 'success', timer: 2000, showConfirmButton: false });
         carregarReservasRece();
-      })
-      .withFailureHandler(err => {
+      }, err => {
         showLoader(false);
         Swal.fire('Erro', err.message, 'error');
-      })
-      .cancelarReservaRece(id, AppState.usuario.email);
+      });
   });
 }
 
@@ -1470,10 +1443,9 @@ function excluirReceDefinitivo(id) {
   }).then(r => {
     if (!r.isConfirmed) return;
     showLoader(true);
-    google.script.run
-      .withSuccessHandler(() => { showLoader(false); carregarReservasRece(); })
-      .withFailureHandler(err => { showLoader(false); Swal.fire('Erro', err.message, 'error'); })
-      .excluirReservaRece(id, AppState.usuario.email);  // ← email passado
+    GAS.rece.excluir(id, AppState.usuario.email,
+      () => { showLoader(false); carregarReservasRece(); },
+      err => { showLoader(false); Swal.fire('Erro', err.message, 'error'); });
   });
 }
 
@@ -1726,8 +1698,7 @@ function carregarDashboard() {
     return `Até ${dataFim.split('-').reverse().join('/')}`;
   })();
 
-  google.script.run
-    .withSuccessHandler(function(m) {
+  GAS.admin.obterMetricas(dataInicio, dataFim, filtroSala, filtroSetor, function(m) {
       const elCodip = document.getElementById('dashCodip');
       if (elCodip) elCodip.classList.remove('hidden');
       const codip = m.codip || {};
@@ -1992,11 +1963,9 @@ function carregarDashboard() {
         ${_secao('Qualidade & Operação',     'fa-shield-alt',      '#059669', _s6)}
         ${_secao('CODIP — Indicadores Culturais', 'fa-chart-pie',  '#6366f1', _s7)}
       `;
-    })
-    .withFailureHandler(function(err) {
+  }, function(err) {
       cont.innerHTML = `<div class="p-10 text-center text-red-400 text-sm">${escaparHTML(err.message)}</div>`;
-    })
-    .obterMetricasDashboard(dataInicio, dataFim, filtroSala, filtroSetor);
+    });
 }
 
 /**
@@ -2019,16 +1988,14 @@ function confirmarLogout() {
   }).then(result => {
     if (!result.isConfirmed) return;
     showLoader(true);
-    google.script.run
-      .withSuccessHandler(url => { window.top.location.href = url; })
-      .withFailureHandler(() => { window.top.location.href = 'https://accounts.google.com/logout'; })
-      .obterUrlLogout();
+    GAS.admin.obterUrlLogout(
+      url => { window.top.location.href = url; },
+      () => { window.top.location.href = 'https://accounts.google.com/logout'; });
   });
 }
 
 function carregarPerfilUsuario() {
-  google.script.run
-    .withSuccessHandler(function(perfil) {
+  GAS.admin.obterPerfil(function(perfil) {
       const avatarEl = document.getElementById('userAvatar');
       const nomeEl   = document.getElementById('userNome');
       const emailEl  = document.getElementById('statusUser');
@@ -2071,12 +2038,10 @@ function carregarPerfilUsuario() {
           <span class="text-[8px] font-black text-purple-400 block">${nivelLabel}</span>
         `;
       }
-    })
-    .withFailureHandler(function() {
+  }, function() {
       const nomeEl = document.getElementById('userNome');
       if (nomeEl) nomeEl.classList.remove('animate-pulse');
-    })
-    .obterPerfilUsuario();
+    });
 }
 
 /**
@@ -2620,8 +2585,7 @@ function enviarMensagemIA() {
   // Envia histórico completo como JSON
   const payloadHistorico = JSON.stringify(historicoChat);
 
-  google.script.run
-    .withSuccessHandler(res => {
+  GAS.admin.perguntarIA(payloadHistorico, res => {
       document.getElementById(loadingId)?.remove();
 
       const resposta = res.texto || '';
@@ -2745,8 +2709,7 @@ function enviarMensagemIA() {
       }
 
       chat.scrollTop = chat.scrollHeight;
-    })
-    .withFailureHandler(err => {
+  }, err => {
       document.getElementById(loadingId)?.remove();
       chat.innerHTML += `
         <div class="flex gap-2">
@@ -2756,8 +2719,7 @@ function enviarMensagemIA() {
           <div class="bg-red-50 border border-red-200 rounded-2xl rounded-tl-none px-4 py-3 max-w-[85%] text-sm text-red-600">${escaparHTML(err.message)}</div>
         </div>`;
       chat.scrollTop = chat.scrollHeight;
-    })
-    .perguntarIA(payloadHistorico);
+    });
 }
 
 function preencherUltimaSugestaoIA() {
@@ -2791,20 +2753,17 @@ function executarPerguntaIA(modalId) {
   if (!pergunta) return;
   document.getElementById(modalId)?.remove();
   const loadId = mostrarLoadingIA('Analisando sua pergunta...');
-  google.script.run
-    .withSuccessHandler(function(res) {
+  GAS.admin.perguntarIA(pergunta, function(res) {
       removerLoadingIA(loadId);
       if (res && res.ok) {
         exibirResultadoIA('Resposta da IA', res.texto, 'fa-comments', 'purple');
       } else {
         exibirResultadoIA('Erro', (res && res.texto) || 'Falha ao obter resposta.', 'fa-triangle-exclamation', 'red');
       }
-    })
-    .withFailureHandler(function(err) {
+    }, function(err) {
       removerLoadingIA(loadId);
       exibirResultadoIA('Erro', err.message || 'Falha na comunicação com o servidor.', 'fa-triangle-exclamation', 'red');
-    })
-    .perguntarIA(pergunta);
+    });
 }
 
 function gerarPreviewSugestao(json) {
@@ -2927,20 +2886,17 @@ function executarRelatorioIA(modalId) {
   const usuario = document.getElementById('iaUsuario')?.value || 'todas';
   document.getElementById(modalId)?.remove();
   const loadId = mostrarLoadingIA('Gerando análise...');
-  google.script.run
-    .withSuccessHandler(function(res) {
+  GAS.admin.gerarRelatorioIA({ tipo, periodo, usuario }, function(res) {
       removerLoadingIA(loadId);
       if (res && res.ok) {
         exibirResultadoIA('Análise Inteligente', res.texto, 'fa-chart-line', 'indigo');
       } else {
         exibirResultadoIA('Erro', (res && res.texto) || 'Falha ao gerar análise.', 'fa-triangle-exclamation', 'red');
       }
-    })
-    .withFailureHandler(function(err) {
+    }, function(err) {
       removerLoadingIA(loadId);
       exibirResultadoIA('Erro', err.message || 'Falha na comunicação.', 'fa-triangle-exclamation', 'red');
-    })
-    .gerarRelatorioIA({ tipo, periodo, usuario });
+    });
 }
 
 // Modal: Sugerir reserva
@@ -3054,8 +3010,7 @@ function executarSugestaoIAComDados(modalId) {
   document.getElementById(modalId)?.remove();
   const loadId = mostrarLoadingIA('A IA está buscando a melhor opção...');
 
-  google.script.run
-    .withSuccessHandler(function(res) {
+  GAS.admin.sugerirReservaIA(descricao, function(res) {
       removerLoadingIA(loadId);
 
       if (!res || !res.ok) {
@@ -3103,12 +3058,10 @@ function executarSugestaoIAComDados(modalId) {
 
       // Monta painel de confirmação
       exibirConfirmacaoReservaIA(s, d);
-    })
-    .withFailureHandler(function(err) {
+  }, function(err) {
       removerLoadingIA(loadId);
       exibirResultadoIA('Erro', err.message || 'Falha na comunicação com o servidor.', 'fa-triangle-exclamation', 'red');
-    })
-    .sugerirReservaIAComDados(descricao);
+    });
 }
 
 function exibirConfirmacaoReservaIA(s, dadosCompletos) {
@@ -3482,8 +3435,7 @@ function usarSugestaoIA(opcao) {
 // Modal: Analisar dashboard
 function analisarDashboardIAModal() {
   const loadId = mostrarLoadingIA('Calculando métricas...');
-  google.script.run
-    .withSuccessHandler(function(metricas) {
+  GAS.admin.obterMetricas('', '', null, null, function(metricas) {
       if (!metricas) {
         removerLoadingIA(loadId);
         exibirResultadoIA('Erro', 'Não foi possível obter as métricas.', 'fa-triangle-exclamation', 'red');
@@ -3495,26 +3447,21 @@ function analisarDashboardIAModal() {
       if (metricas.cancelamentosPorSala) metricas.cancelamentosPorSala = metricas.cancelamentosPorSala.map(([id, v]) => [mapS(id), v]);
       if (metricas.mediaOcupacaoPorSala) metricas.mediaOcupacaoPorSala = metricas.mediaOcupacaoPorSala.map(([id, ...r]) => [mapS(id), ...r]);
 
-      google.script.run
-        .withSuccessHandler(function(res) {
+      GAS.admin.analisarDashboardIA(metricas, function(res) {
           removerLoadingIA(loadId);
           if (res && res.ok) {
             exibirResultadoIA('Análise do Dashboard', res.texto, 'fa-magnifying-glass-chart', 'amber');
           } else {
-            exibirResultadoIA('Erro', (res && res.texto) || 'Falha ao gerar análise.', 'fa-triangle-exclamation', 'red');
+            exibirResultadoIA('Erro', (res && res.texto) || 'Falha ao gerar análise.', 'fa-triangle-exclavante', 'red');
           }
-        })
-        .withFailureHandler(function(err) {
+        }, function(err) {
           removerLoadingIA(loadId);
           exibirResultadoIA('Erro', err.message, 'fa-triangle-exclamation', 'red');
-        })
-        .analisarDashboardIA(metricas);
-    })
-    .withFailureHandler(function(err) {
+        });
+    }, function(err) {
       removerLoadingIA(loadId);
       exibirResultadoIA('Erro', err.message, 'fa-triangle-exclamation', 'red');
-    })
-    .obterMetricasDashboard('', '');
+    });
 }
 
 // Manter compatibilidade com chamadas antigas no sidebar
@@ -3624,8 +3571,7 @@ function carregarLogAcessos() {
   const corpo = document.getElementById('tabelaLogAcessos');
   if (!corpo) return;
   corpo.innerHTML = `<tr><td colspan="4" class="p-10 text-center"><i class="fas fa-spinner animate-spin text-purple-400"></i></td></tr>`;
-  google.script.run
-    .withSuccessHandler(function(json) {
+  GAS.admin.obterLogAcessos(AppState.usuario.email, function(json) {
       const logs = JSON.parse(json);
       if (!logs.length) { corpo.innerHTML = '<tr><td colspan="4" class="p-10 text-center text-slate-300">Nenhum acesso registrado.</td></tr>'; return; }
       corpo.innerHTML = logs.map(l => `
@@ -3635,9 +3581,7 @@ function carregarLogAcessos() {
           <td class="p-3 text-slate-600">${escaparHTML(l[2])}</td>
           <td class="p-3"><span class="px-2 py-0.5 rounded-full text-[9px] font-black bg-purple-100 text-purple-700 uppercase">${escaparHTML(l[3])}</span></td>
         </tr>`).join('');
-    })
-    .withFailureHandler(err => Swal.fire('Erro', err.message, 'error'))
-    .obterLogAcessos(AppState.usuario.email);
+    }, err => Swal.fire('Erro', err.message, 'error'));
 }
 
 function filtrarLogAcessos(valor) {
