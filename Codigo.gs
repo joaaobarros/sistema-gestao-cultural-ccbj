@@ -42,6 +42,7 @@ function _getSheet(nomeAba) {
     Metas: ["RELATORIOS", "Metas"],
     Indicadores: ["RELATORIOS", "Indicadores"],
     Rubricas: ["RELATORIOS", "Rubricas"],
+    RubricasMemoria: ["RELATORIOS", "RubricasMemoria"],
   };
 
   const conf = mapa[nomeAba];
