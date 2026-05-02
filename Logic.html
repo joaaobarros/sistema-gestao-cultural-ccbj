@@ -56,19 +56,34 @@ function escaparHTML(str) {
     .replace(/'/g, "&#039;");
 }
 
-let memoriaCalculo = [];
 
 function carregarMemoriaRubrica(idRubrica) {
 
   google.script.run
     .withSuccessHandler(function(lista) {
 
-      memoriaCalculo = lista.map(item => ({
-        descricao: item[2],
-        qtd: item[4],
-        valor: item[5]
-      }));
+      if (!Array.isArray(lista) || lista.length === 0) {
 
+        memoriaCalculo = [{ descricao:'', qtd:1, valor:0 }];
+
+      } else {
+
+        memoriaCalculo = lista.map(item => ({
+          descricao: String(item[2] || ''),
+          qtd: Number(item[4]) || 0,
+          valor: Number(item[5]) || 0
+        }));
+
+      }
+
+      renderizarMemoria();
+
+    })
+    .withFailureHandler(function(err) {
+
+      console.warn('Erro ao carregar memória:', err);
+
+      memoriaCalculo = [{ descricao:'', qtd:1, valor:0 }];
       renderizarMemoria();
 
     })
@@ -10858,6 +10873,7 @@ function abrirModalRubrica(idMeta, dados) {
   Swal.fire({
     title: dados.id ? 'Editar Rubrica' : 'Nova Rubrica',
     width: Math.min(500, window.innerWidth - 32),
+
     html: `
       <div class="text-left space-y-4">
 
@@ -10879,7 +10895,7 @@ function abrirModalRubrica(idMeta, dados) {
         </div>
 
         <!-- MEMÓRIA -->
-        <div class="mt-2">
+        <div>
           <label class="text-xs font-bold text-slate-500 uppercase">
             Memória de cálculo
           </label>
@@ -10893,7 +10909,7 @@ function abrirModalRubrica(idMeta, dados) {
           </button>
         </div>
 
-        <!-- VALOR AUTOMÁTICO -->
+        <!-- VALOR -->
         <div>
           <label class="ctr-label">Valor calculado</label>
           <div class="flex items-center gap-2 mt-1">
@@ -10907,12 +10923,9 @@ function abrirModalRubrica(idMeta, dados) {
 
         <!-- OBS -->
         <div>
-          <label class="ctr-label">Observação
-            <span class="font-normal normal-case text-slate-300">(opcional)</span>
-          </label>
+          <label class="ctr-label">Observação</label>
           <textarea id="rubObs" class="ctr-input"
-            style="min-height:56px;resize:vertical"
-            placeholder="Fonte, restrições de uso...">${escaparHTML(dados.obs||'')}</textarea>
+            style="min-height:56px;resize:vertical">${escaparHTML(dados.obs||'')}</textarea>
         </div>
 
       </div>`,
@@ -10921,35 +10934,23 @@ function abrirModalRubrica(idMeta, dados) {
     confirmButtonText: '<i class="fas fa-save mr-1"></i>Salvar',
     cancelButtonText: 'Cancelar',
     confirmButtonColor: '#059669',
-    customClass: {
-      popup:'rounded-3xl',
-      confirmButton:'rounded-xl font-black text-sm',
-      cancelButton:'rounded-xl font-bold text-sm'
-    },
 
-    didOpen: function() {
+    didOpen: function () {
 
-      // 🔹 reset memória
       memoriaCalculo = [];
 
-      // 🔹 edição → carregar memória do GAS
-      if (dados.id) {
-
+      if (dados && dados.id) {
         carregarMemoriaRubrica(dados.id);
-
       } else {
-
-        // nova → inicia com 1 linha
         memoriaCalculo = [{ descricao:'', qtd:1, valor:0 }];
         renderizarMemoria();
-
       }
 
     },
 
-    preConfirm: function() {
+    preConfirm: function () {
 
-      var nome = document.getElementById('rubNome')?.value.trim();
+      const nome = document.getElementById('rubNome')?.value.trim();
 
       if (!nome){
         Swal.showValidationMessage('Nome da rubrica obrigatório.');
@@ -10995,31 +10996,53 @@ function abrirModalRubrica(idMeta, dados) {
 let memoriaCalculo = [];
 
 function adicionarItemMemoria() {
-  memoriaCalculo.push({ descricao: '', qtd: 1, valor: 0 });
+  memoriaCalculo.push({
+    descricao: '',
+    qtd: 1,
+    valor: 0
+  });
+
+  renderizarMemoria();
+}
+
+function removerItemMemoria(index) {
+  memoriaCalculo.splice(index, 1);
   renderizarMemoria();
 }
 
 function renderizarMemoria() {
 
-  const el = document.getElementById('memoriaCalculoContainer');
+  const container = document.getElementById('memoriaCalculoContainer');
+  if (!container) return;
 
-  el.innerHTML = memoriaCalculo.map((m, i) => `
-    <div class="grid grid-cols-3 gap-2">
+  container.innerHTML = memoriaCalculo.map((item, i) => `
+    <div class="flex gap-2 items-center">
 
-      <input placeholder="Descrição"
-        value="${m.descricao}"
-        onchange="memoriaCalculo[${i}].descricao=this.value"
-        class="border px-2 py-1 text-xs rounded">
+      <input
+        class="ctr-input flex-1"
+        placeholder="Descrição"
+        value="${item.descricao || ''}"
+        onchange="memoriaCalculo[${i}].descricao=this.value">
 
-      <input type="number"
-        value="${m.qtd}"
-        onchange="memoriaCalculo[${i}].qtd=this.value; atualizarTotalMemoria();"
-        class="border px-2 py-1 text-xs rounded">
+      <input
+        type="number"
+        class="ctr-input w-20"
+        value="${item.qtd || 0}"
+        min="0"
+        onchange="memoriaCalculo[${i}].qtd=this.value; atualizarTotalMemoria()">
 
-      <input type="number"
-        value="${m.valor}"
-        onchange="memoriaCalculo[${i}].valor=this.value; atualizarTotalMemoria();"
-        class="border px-2 py-1 text-xs rounded">
+      <input
+        type="number"
+        class="ctr-input w-28"
+        value="${item.valor || 0}"
+        min="0"
+        onchange="memoriaCalculo[${i}].valor=this.value; atualizarTotalMemoria()">
+
+      <button
+        onclick="removerItemMemoria(${i})"
+        class="text-red-500 font-bold px-2">
+        ✕
+      </button>
 
     </div>
   `).join('');
@@ -11030,11 +11053,17 @@ function renderizarMemoria() {
 function atualizarTotalMemoria() {
 
   const total = memoriaCalculo.reduce((s, i) => {
-    return s + (Number(i.qtd) * Number(i.valor));
+    return s + (Number(i.qtd || 0) * Number(i.valor || 0));
   }, 0);
 
-  const input = document.getElementById('rubricaValor');
-  if (input) input.value = total.toFixed(2);
+  const input = document.getElementById('rubValor');
+
+  if (input) {
+    input.value = total.toLocaleString('pt-BR', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    });
+  }
 }
 
 function editarRubrica(id) {
