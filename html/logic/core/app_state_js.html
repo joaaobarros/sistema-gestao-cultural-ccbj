@@ -1,0 +1,74 @@
+<!--
+@file core/app_state_js.html
+@layer frontend/core
+@description Singleton de estado global (AppState) e variáveis de estado do formulário de reserva.
+             Deve ser o PRIMEIRO script carregado — todos os outros módulos dependem de AppState.
+@responsibility Definir AppState; declarar variáveis de formulário (itensSelecionados etc.).
+@dependencies Nenhuma — este módulo não depende de nenhum outro.
+-->
+<script>
+
+/**
+ * ========================================
+ * BLOCO: Variáveis de estado do formulário
+ * ========================================
+ * @description Estado transitório do formulário de reserva — resetadas por resetarFormulario().
+ *              Não fazem parte do AppState pois têm ciclo de vida vinculado ao formulário.
+ * @context Lidas/escritas por carrinho, calendário, modo RECE e salvarAgendamento.
+ * @sideEffects Mutadas ao longo do preenchimento do formulário.
+ */
+var itensSelecionados      = [];
+var itensFixosSelecionados = [];
+var modoRece               = false;
+var calendarInstance       = null;
+
+let ultimoEstadoAtualizacao = {
+  data: null,
+  sala: null,
+  horaIni: null,
+  horaTer: null
+};
+
+/**
+ * ========================================
+ * BLOCO: AppState — estado global da aplicação
+ * ========================================
+ * @description Objeto singleton que centraliza todo o estado compartilhado do frontend.
+ *              Evita consultas repetidas ao backend e serve como fonte de verdade local.
+ *              Estrutura:
+ *               - usuario: email, nível de acesso
+ *               - colecoes: arrays carregados do backend (reservas, salas, setores, itens)
+ *               - filtros: estado dos filtros da agenda
+ *               - mapaSalas/mapaNomes: lookups rápidos id→nome
+ *               - cacheReservasIndex: índice { 'YYYY-MM-DD': { salaId: [reservas] } }
+ *               - editandoId / editandoReceId: controle de modo de edição
+ *               - modoLote: seleção múltipla no calendário
+ * @context Inicializado em inicializarApp(); lido por praticamente todos os módulos frontend.
+ * @sideEffects Mutado por indexarReservas, popularSelectsIniciais e pelos módulos de render.
+ */
+const AppState = {
+  usuario: {
+    email: '',
+    isAdmin: false,
+    isSuperadmin: false
+  },
+  colecoes: {
+    reservas: [],
+    salas: [],
+    setores: [],
+    itens: []
+  },
+  filtros: {
+    busca: '',
+    setor: '',
+    status: '',
+    dataInicio: '',
+    dataFim: ''
+  },
+  editandoId: null,
+  modoLote: false
+};
+
+AppState.cacheReservasIndex = {};
+
+</script>

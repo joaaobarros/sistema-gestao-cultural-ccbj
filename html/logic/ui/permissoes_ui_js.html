@@ -1,0 +1,54 @@
+<!--
+@file ui/permissoes_ui_js.html
+@layer frontend/ui
+@description Controla a visibilidade de elementos de UI com base no nível de acesso do usuário.
+@responsibility Exibir/ocultar botões de admin/superadmin; redirecionar usuários sem permissão.
+@dependencies core/app_state_js (AppState.usuario), ui/navegacao_ui_js (mostrarAba)
+-->
+<script>
+
+/**
+ * ========================================
+ * BLOCO: Interface por permissão de acesso
+ * ========================================
+ * @description Exibe/esconde elementos da UI conforme nível de acesso:
+ *              - Admin/Superadmin: mostra botões de gestão e auditoria.
+ *              - Superadmin: mostra também itens marcados como "em breve".
+ *              - Usuários sem permissão em abas restritas são redirecionados para a agenda.
+ * @context Chamado por inicializarApp() após confirmar o perfil do usuário no backend.
+ * @inputs AppState.usuario.isAdmin, AppState.usuario.isSuperadmin.
+ * @outputs DOM: esconde/exibe #btn-aba-gestao, #btn-aba-auditoria, #modulo-sistema.
+ * @sideEffects Pode chamar mostrarAba('aba-lista-reservas') para redirecionar.
+ */
+function configurarInterfacePorPermissao() {
+  const isAdmin      = AppState.usuario.isAdmin;
+  const isSuperadmin = AppState.usuario.isSuperadmin;
+
+  const btnGestao    = document.getElementById('btn-aba-gestao');
+  const btnAuditoria = document.getElementById('btn-aba-auditoria');
+  const modSistema   = document.getElementById('modulo-sistema');
+
+  if (isAdmin || isSuperadmin) {
+    if (btnGestao)    btnGestao.classList.remove('hidden');
+    if (btnAuditoria) btnAuditoria.classList.remove('hidden');
+    if (modSistema)   modSistema.classList.remove('hidden');
+  } else {
+    if (modSistema)   modSistema.classList.add('hidden');
+  }
+
+  // Abas "em breve" ocultas para não-superadmin
+  document.querySelectorAll('.em-breve-badge').forEach(function(badge) {
+    const btn = badge.closest('button');
+    if (!btn) return;
+    if (!isSuperadmin) btn.style.display = 'none';
+  });
+
+  if (!isAdmin && !isSuperadmin) {
+    const abaAtual = document.querySelector('.tab-content:not(.hidden)')?.id;
+    if (abaAtual === 'aba-gestao-admin' || abaAtual === 'aba-auditoria') {
+      mostrarAba('aba-lista-reservas');
+    }
+  }
+}
+
+</script>

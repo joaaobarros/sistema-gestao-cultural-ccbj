@@ -1,0 +1,191 @@
+<!--
+@file ui/navegacao_ui_js.html
+@layer frontend/ui
+@description Controla a navegação entre abas, sidebar e módulos colapsáveis.
+             Todas as funções aqui manipulam DOM — nenhuma regra de negócio reside aqui.
+@responsibility Exibir/ocultar seções, gerenciar estado ativo de navegação,
+                disparar carregamento lazy de dados por aba.
+@dependencies core/app_state_js (AppState)
+-->
+<script>
+
+/**
+ * ========================================
+ * BLOCO: Sidebar — toggle de visibilidade
+ * ========================================
+ * @description Alterna a visibilidade da sidebar no mobile via classList.
+ * @context Chamado pelo botão hamburger e pelo overlay de fechamento.
+ * @inputs Nenhum.
+ * @outputs DOM: toggle de -translate-x-full e hidden em #sidebarPrincipal/#sidebarOverlay.
+ * @sideEffects Nenhum além da mutação do DOM.
+ */
+function toggleSidebar() {
+  const sidebar = document.getElementById('sidebarPrincipal');
+  const overlay = document.getElementById('sidebarOverlay');
+  if (sidebar) sidebar.classList.toggle('-translate-x-full');
+  if (overlay) overlay.classList.toggle('hidden');
+}
+
+/**
+ * ========================================
+ * BLOCO: Navegação entre abas
+ * ========================================
+ * @description Ponto central de troca de contexto: esconde todas as .tab-content,
+ *              exibe a aba solicitada, atualiza o título e o botão ativo na sidebar,
+ *              aplica proteção de acesso e dispara carregamento lazy por aba.
+ * @context Chamado pelos botões data-aba, pelos módulos ao concluir ações e recursivamente
+ *          ao redirecionar usuários sem permissão.
+ * @inputs idAba: string ID do elemento HTML da aba a exibir.
+ * @outputs DOM: visibilidade das abas, #tituloAba, botão ativo na sidebar.
+ * @sideEffects Dispara carregarDashboard(), carregarAuditoria() etc. ao entrar nas abas.
+ */
+function mostrarAba(idAba) {
+  document.querySelectorAll('.tab-content').forEach(a => a.classList.add('hidden'));
+  document.querySelectorAll('.tab-btn').forEach(b => {
+    b.classList.remove('bg-white/10', 'text-white', 'border-purple-500');
+    b.classList.add('text-purple-200', 'border-transparent');
+  });
+
+  const abaAlvo = document.getElementById(idAba);
+  if (abaAlvo) {
+    abaAlvo.classList.remove('hidden');
+    const titulos = {
+      'aba-lista-reservas': 'Agenda Geral',
+      'aba-nova-reserva':   (typeof AppState !== 'undefined' && (AppState.editandoId || AppState.editandoReceId))
+                              ? 'Editar Reserva' : 'Novo Agendamento',
+      'aba-agenda-rece':    'Agenda RECE',
+      'aba-codip':          'Relatórios CODIP',
+      'aba-gestao-admin':   'Configurações do Sistema',
+      'aba-auditoria':      'Painel de Auditoria',
+      'aba-dashboard':      'Dashboard'
+    };
+    const titulo = document.getElementById('tituloAba');
+    if (titulo) titulo.innerText = titulos[idAba] || 'Sistema CCBJ';
+  }
+
+  const botaoAtivo =
+    document.querySelector(`button[data-aba="${idAba}"]`) ||
+    document.querySelector(`button[onclick="mostrarAba('${idAba}')"]`);
+  if (botaoAtivo) {
+    botaoAtivo.classList.add('bg-white/10', 'text-white', 'border-purple-500');
+    botaoAtivo.classList.remove('text-purple-200', 'border-transparent');
+  }
+
+  // Proteção de acesso
+  if (typeof AppState !== 'undefined' && !AppState.usuario.isAdmin && !AppState.usuario.isSuperadmin) {
+    if (idAba === 'aba-gestao-admin' || idAba === 'aba-auditoria') {
+      mostrarAba('aba-lista-reservas');
+      return;
+    }
+  }
+
+  /**
+   * ========================================
+   * BLOCO: Carregamento lazy por aba
+   * ========================================
+   * @description Dispara a carga de dados específicos ao entrar em cada aba.
+   * @context Chamado toda vez que mostrarAba() troca a visualização ativa.
+   * @sideEffects Pode chamar o backend, atualizar AppState e re-renderizar componentes.
+   */
+  if (idAba === 'aba-gestao-admin') {
+    if (typeof renderizarEspacosAdmin === 'function') renderizarEspacosAdmin();
+    if (typeof renderizarItensAdmin   === 'function') renderizarItensAdmin();
+    if (typeof renderizarSetoresAdmin === 'function') renderizarSetoresAdmin();
+    if (typeof renderizarAdmins       === 'function') renderizarAdmins();
+
+    if (typeof _ctrCache === 'undefined' || !_ctrCache || !_ctrCache.contratos || !_ctrCache.contratos.length) {
+      if (typeof carregarDadosContratos === 'function') carregarDadosContratos(renderizarContratos);
+    } else {
+      if (typeof renderizarContratos === 'function') renderizarContratos();
+    }
+  }
+
+  if (idAba === 'aba-contratos-fin') {
+    if (typeof carregarDadosContratos === 'function') carregarDadosContratos(renderizarContratos);
+  }
+
+  if (idAba === 'aba-auditoria') {
+    if (typeof carregarAuditoria === 'function') carregarAuditoria();
+  }
+
+  if (idAba === 'aba-agenda-rece') {
+    if (typeof carregarReservasRece === 'function') carregarReservasRece();
+  }
+
+  if (idAba === 'aba-codip') {
+    if (typeof carregarAbaCODIP === 'function') carregarAbaCODIP();
+  }
+
+  if (idAba === 'aba-dashboard') {
+    if (typeof carregarDashboard === 'function') carregarDashboard();
+  }
+
+  if (idAba === 'aba-aprovacoes') {
+    if (typeof carregarSolicitacoes === 'function') carregarSolicitacoes();
+  }
+
+  if (window.innerWidth < 768) {
+    const sb = document.getElementById('sidebarPrincipal');
+    if (sb && !sb.classList.contains('-translate-x-full')) {
+      sb.classList.add('-translate-x-full');
+    }
+  }
+
+  window.scrollTo(0, 0);
+}
+
+/**
+ * ========================================
+ * BLOCO: Módulos colapsáveis e placeholders de módulo em breve
+ * ========================================
+ * @description toggleModulo: abre/fecha seções colapsáveis da sidebar.
+ *              _mostrarPlaceholderEmBreve: exibe tela "Em Desenvolvimento" para abas não implementadas;
+ *              cria o elemento placeholder se não existir.
+ * @context toggleModulo: botões de expandir grupos; _mostrarPlaceholderEmBreve: abas stub.
+ * @inputs id: string ID / aba: string nome da aba.
+ * @outputs DOM: classList toggle de hidden; placeholder dinâmico criado no container.
+ * @sideEffects Nenhum além da mutação do DOM.
+ */
+function toggleModulo(id) {
+  const el   = document.getElementById(id);
+  const icon = document.getElementById('icon-' + id);
+  if (!el) return;
+  const estaAberto = !el.classList.contains('hidden');
+  el.classList.toggle('hidden', estaAberto);
+  if (icon) {
+    icon.className = estaAberto
+      ? 'fas fa-chevron-down text-[8px] text-slate-600'
+      : 'fas fa-chevron-up text-[8px] text-slate-600';
+  }
+}
+
+function _mostrarPlaceholderEmBreve(aba) {
+  document.querySelectorAll('.tab-content').forEach(a => a.classList.add('hidden'));
+  let ph = document.getElementById('aba-placeholder-embreve');
+  if (!ph) {
+    ph = document.createElement('section');
+    ph.id = 'aba-placeholder-embreve';
+    ph.className = 'tab-content animate-fadeIn';
+    document.querySelector('.flex-1.overflow-y-auto').appendChild(ph);
+  }
+  ph.innerHTML = `
+    <div class="flex flex-col items-center justify-center min-h-[60vh] gap-6 text-center p-8">
+      <div class="w-24 h-24 bg-purple-50 rounded-full flex items-center justify-center">
+        <i class="fas fa-hard-hat text-purple-300 text-4xl"></i>
+      </div>
+      <div>
+        <h2 class="text-2xl font-black text-slate-700 uppercase tracking-tight">Em Desenvolvimento</h2>
+        <p class="text-slate-400 text-sm mt-2">O módulo <b class="text-purple-500">${aba.replace('aba-','').replace(/-/g,' ')}</b> será entregue em breve.</p>
+        <p class="text-[10px] text-slate-300 mt-1 font-mono">${aba}</p>
+      </div>
+      <button onclick="mostrarAba('aba-lista-reservas')"
+        class="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-black text-sm rounded-2xl transition-all">
+        Voltar para Agenda Geral
+      </button>
+    </div>`;
+  ph.classList.remove('hidden');
+  const titulo = document.getElementById('tituloAba');
+  if (titulo) titulo.innerText = 'Em Breve';
+}
+
+</script>

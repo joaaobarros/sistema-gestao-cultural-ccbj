@@ -1,0 +1,205 @@
+<!--
+@file services/server_bridge_js.html
+@layer frontend/services
+@description Camada de serviço: encapsula todas as chamadas google.script.run em um objeto
+             único (GAS) com namespaces por domínio.
+             REGRA: todo código novo deve usar GAS.* em vez de google.script.run diretamente.
+             Código legado pode continuar usando google.script.run diretamente até ser migrado.
+@responsibility Centralizar chamadas backend; padronizar tratamento de erro; expor API tipada.
+@dependencies mod_ui_componentes_js (_handleServerError) — deve ser carregado APÓS mod_ui_componentes_js.
+-->
+<script>
+
+/**
+ * ========================================
+ * BLOCO: GAS — bridge de chamadas ao backend
+ * ========================================
+ * @description Objeto com namespaces por domínio (reservas, admin, rece, ia, contratos, sessao, etc.).
+ *              Cada método encapsula google.script.run com tratamento de erro padrão.
+ *              Uso: GAS.reservas.obter(onSuccess, onError)
+ * @context Todo código novo deve usar GAS.* em vez de google.script.run diretamente.
+ * @inputs onSuccess: callback; onError: callback opcional (padrão: _handleServerError).
+ * @outputs Resultado assíncrono via callbacks.
+ * @sideEffects Chamadas HTTP ao servidor GAS.
+ */
+const GAS = {
+
+  _call: function(fnName, args, onSuccess, onError) {
+    const fallbackError = typeof _handleServerError === 'function'
+      ? _handleServerError
+      : function(e) { console.error('[GAS]', fnName, e); };
+
+    const runner = google.script.run
+      .withSuccessHandler(onSuccess || function() {})
+      .withFailureHandler(onError || fallbackError);
+
+    runner[fnName].apply(runner, Array.isArray(args) ? args : (args !== undefined ? [args] : []));
+  },
+
+  /**
+   * BLOCO: Serviços de reserva
+   * @context CRUD e disponibilidade de reservas.
+   */
+  reservas: {
+    obter: function(cb, err) {
+      GAS._call('obterReservas', [], cb, err);
+    },
+    salvar: function(dados, cb, err) {
+      GAS._call('salvarAgendamento', [dados], cb, err);
+    },
+    cancelar: function(id, email, cb, err) {
+      GAS._call('cancelarReserva', [id, email], cb, err);
+    },
+    habilitar: function(id, obs, email, cb, err) {
+      GAS._call('habilitarEspaco', [id, obs, email], cb, err);
+    },
+    excluir: function(id, email, cb, err) {
+      GAS._call('excluirReserva', [id, email], cb, err);
+    },
+    analisarDisponibilidade: function(payload, cb, err) {
+      GAS._call('analisarDisponibilidadeReal', [payload], cb, err);
+    },
+    obterDisponibilidadeItens: function(payload, cb, err) {
+      GAS._call('obterDisponibilidadeItensPorHorario', [payload], cb, err);
+    },
+    verificarPermissaoCancelamento: function(id, email, cb, err) {
+      GAS._call('verificarPermissaoCancelamento', [id, email], cb, err);
+    }
+  },
+
+  /**
+   * BLOCO: Serviços de administração
+   * @context Configurações, auditoria, dashboard, estoque.
+   */
+  admin: {
+    obterDados: function(cb, err) {
+      GAS._call('obterDadosIniciais', [], cb, err);
+    },
+    salvarConfig: function(dados, cb, err) {
+      GAS._call('salvarConfiguracao', [dados], cb, err);
+    },
+    excluirRegistro: function(id, tipo, email, cb, err) {
+      GAS._call('excluirRegistro', [id, tipo, email], cb, err);
+    },
+    obterItensFixosPorSala: function(id, cb, err) {
+      GAS._call('obterItensFixosPorSala', [id], cb, err);
+    },
+    obterDadosParaConfig: function(cb, err) {
+      GAS._call('obterDadosParaConfig', [], cb, err);
+    },
+    obterLogs: function(cb, err) {
+      GAS._call('obterLogsAuditoria', [], cb, err);
+    },
+    obterLogAcessos: function(cb, err) {
+      GAS._call('obterLogAcessos', [], cb, err);
+    },
+    rollback: function(email, ts, cb, err) {
+      GAS._call('rollbackAcaoPorTimestamp', [email, ts], cb, err);
+    },
+    obterMetricas: function(ini, fim, sala, setor, cb, err) {
+      GAS._call('obterMetricasDashboard', [ini, fim, sala, setor], cb, err);
+    },
+    mobilizarEstoque: function(idItem, idSala, acao, qtd, cb, err) {
+      GAS._call('movimentarEstoqueItem', [idItem, idSala, acao, qtd], cb, err);
+    }
+  },
+
+  /**
+   * BLOCO: Serviços RECE
+   * @context Agenda RECE, exportações e upload de imagem.
+   */
+  rece: {
+    obter: function(cb, err) {
+      GAS._call('obterReservasRece', [], cb, err);
+    },
+    cancelar: function(id, email, cb, err) {
+      GAS._call('cancelarReservaRece', [id, email], cb, err);
+    },
+    excluir: function(id, email, cb, err) {
+      GAS._call('excluirReservaRece', [id, email], cb, err);
+    },
+    exportarPlanilha: function(dados, cb, err) {
+      GAS._call('exportarAgendaRecePlanilha', [dados], cb, err);
+    },
+    uploadImagem: function(b64, nome, cb, err) {
+      GAS._call('uploadImagemRece', [b64, nome], cb, err);
+    }
+  },
+
+  /**
+   * BLOCO: Serviços de IA
+   * @context Chamadas ao modelo de linguagem para chat, análise e sugestões.
+   */
+  ia: {
+    chamar: function(prompt, ctx, cb, err) {
+      GAS._call('chamarIA', [prompt, ctx], cb, err);
+    },
+    chat: function(mensagens, ctx, cb, err) {
+      GAS._call('chamarIAChat', [mensagens, ctx], cb, err);
+    }
+  },
+
+  /**
+   * BLOCO: Serviços de contratos
+   * @context CRUD de contratos, metas, rubricas e indicadores.
+   */
+  contratos: {
+    obter: function(cb, err) {
+      GAS._call('obterContratos', [], cb, err);
+    },
+    salvar: function(dados, cb, err) {
+      GAS._call('salvarContrato', [dados], cb, err);
+    },
+    excluir: function(id, cb, err) {
+      GAS._call('excluirContrato', [id], cb, err);
+    },
+    obterMemorias: function(idRubrica, cb, err) {
+      GAS._call('obterMemoriaRubrica', [idRubrica], cb, err);
+    },
+    comparativo: function(idCtr, v1, v2, cb, err) {
+      GAS._call('obterComparativoContrato', [idCtr, v1, v2], cb, err);
+    }
+  },
+
+  /**
+   * BLOCO: Serviços de sessão e preferências
+   * @context Logout, preferências do usuário e sidebar.
+   */
+  sessao: {
+    logout: function(cb, err) {
+      GAS._call('fazerLogout', [], cb, err);
+    },
+    salvarPreferencia: function(prefs, cb, err) {
+      GAS._call('salvarPreferenciaUsuario', [prefs], cb, err);
+    },
+    carregarPreferencias: function(cb, err) {
+      GAS._call('carregarPreferenciasUsuario', [], cb, err);
+    }
+  },
+
+  /**
+   * BLOCO: Serviços de solicitações externas
+   * @context Polling e listagem de solicitações CODIP/aprovações.
+   */
+  solicitacoes: {
+    listarTodas: function(cb, err) {
+      GAS._call('listarTodasSolicitacoes', [], cb, err);
+    },
+    listarPendentes: function(cb, err) {
+      GAS._call('listarSolicitacoesPendentes', [], cb, err);
+    }
+  },
+
+  /**
+   * BLOCO: Serviços de calendário e convites
+   * @context Google Calendar — criação de eventos e convites internos.
+   */
+  calendario: {
+    criarConvites: function(dados, cb, err) {
+      GAS._call('criarEventosCalendarConvidados', [dados], cb, err);
+    }
+  }
+
+};
+
+</script>
