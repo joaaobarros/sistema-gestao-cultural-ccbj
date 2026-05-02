@@ -7123,7 +7123,59 @@ function analisarDashboardIAModal() {
 // Manter compatibilidade com chamadas antigas no sidebar
 function gerarRelatorioIAFrontend() { gerarRelatorioIAModal(); }
 
+let SUBABA_AUDITORIA_ATIVA = null;
+
 function mostrarSubAbaAuditoria(aba) {
+
+  SUBABA_AUDITORIA_ATIVA = aba;
+
+  // 🔹 VISIBILIDADE
+  document.getElementById('subaba-logs')
+    .classList.toggle('hidden', aba !== 'logs');
+
+  document.getElementById('subaba-acessos')
+    .classList.toggle('hidden', aba !== 'acessos');
+
+  document.getElementById('subaba-comparativo')
+    .classList.toggle('hidden', aba !== 'comparativo');
+
+
+  // 🔹 ESTILO
+  document.getElementById('tab-audit-logs').className = aba === 'logs'
+    ? 'px-4 py-2 bg-slate-900 text-white text-xs font-black rounded-xl uppercase'
+    : 'px-4 py-2 bg-slate-200 text-slate-600 text-xs font-black rounded-xl uppercase';
+
+  document.getElementById('tab-audit-acessos').className = aba === 'acessos'
+    ? 'px-4 py-2 bg-slate-900 text-white text-xs font-black rounded-xl uppercase'
+    : 'px-4 py-2 bg-slate-200 text-slate-600 text-xs font-black rounded-xl uppercase';
+
+  document.getElementById('tab-audit-comparativo').className = aba === 'comparativo'
+    ? 'px-4 py-2 bg-slate-900 text-white text-xs font-black rounded-xl uppercase'
+    : 'px-4 py-2 bg-slate-200 text-slate-600 text-xs font-black rounded-xl uppercase';
+
+
+  // 🔹 AÇÕES SEGURAS
+
+  if (aba === 'acessos') {
+    carregarLogAcessos();
+  }
+
+  if (aba === 'comparativo') {
+
+    setTimeout(() => {
+
+      // PROTEÇÃO CONTRA VAZAMENTO
+      if (SUBABA_AUDITORIA_ATIVA !== 'comparativo') return;
+
+      if (typeof popularContratosComparativo === 'function') {
+        popularContratosComparativo();
+        const container = document.getElementById('comparativoContrato');
+        if (!container) return;
+      }
+
+    }, 200);
+  }
+}
 
   // 🔹 VISIBILIDADE
   document.getElementById('subaba-logs')
@@ -7160,7 +7212,7 @@ function mostrarSubAbaAuditoria(aba) {
       setTimeout(popularContratosComparativo, 200);
     }
   }
-}
+
 
 function carregarLogAcessos() {
   const corpo = document.getElementById('tabelaLogAcessos');
