@@ -107,19 +107,21 @@ document.addEventListener('DOMContentLoaded', function () {
         }).then(function (result) {
           if (!result.isConfirmed) return;
           showLoader(true);
-          google.script.run
-            .withSuccessHandler(function () {
+          GAS.admin.rollback(
+            AppState.usuario.email,
+            timestamp,
+            function () {
               showLoader(false);
               Swal.fire({ title: 'Desfeito!', text: 'Ação revertida com sucesso.', icon: 'success', timer: 2500, showConfirmButton: false });
               carregarAuditoria();
               carregarReservas();
               if (AppState.colecoes.reservasRece) carregarReservasRece();
-            })
-            .withFailureHandler(function (err) {
+            },
+            function (err) {
               showLoader(false);
               Swal.fire('Erro no Rollback', err.message, 'error');
-            })
-            .rollbackAcaoPorTimestamp(AppState.usuario.email, timestamp);
+            }
+          );
         });
       }
     };
@@ -203,9 +205,7 @@ document.addEventListener('DOMContentLoaded', function () {
   const favContainer = document.getElementById('favoritosContainer');
   if (favContainer) {
     favContainer.addEventListener('dragover', e => e.preventDefault());
-    google.script.run
-      .withSuccessHandler(function (prefs) { iniciarPreferencias(prefs); })
-      .carregarPreferenciasUsuario();
+    GAS.sessao.carregarPreferencias(function(prefs) { iniciarPreferencias(prefs); });
   }
 
   /**

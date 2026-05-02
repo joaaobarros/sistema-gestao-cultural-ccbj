@@ -44,8 +44,11 @@ const GAS = {
     obter: function(cb, err) {
       GAS._call('obterReservas', [], cb, err);
     },
-    salvar: function(dados, cb, err) {
-      GAS._call('salvarAgendamento', [dados], cb, err);
+    criar: function(dados, datas, cb, err) {
+      GAS._call('criarReservaController', [dados, datas], cb, err);
+    },
+    atualizar: function(dados, cb, err) {
+      GAS._call('atualizarReservaController', [dados], cb, err);
     },
     cancelar: function(id, email, cb, err) {
       GAS._call('cancelarReserva', [id, email], cb, err);
@@ -59,8 +62,8 @@ const GAS = {
     analisarDisponibilidade: function(payload, cb, err) {
       GAS._call('analisarDisponibilidadeReal', [payload], cb, err);
     },
-    obterDisponibilidadeItens: function(payload, cb, err) {
-      GAS._call('obterDisponibilidadeItensPorHorario', [payload], cb, err);
+    obterDisponibilidadeItens: function(data, inicio, termino, idSala, cb, err) {
+      GAS._call('obterDisponibilidadeItensPorHorario', [data, inicio, termino, idSala], cb, err);
     },
     verificarPermissaoCancelamento: function(id, email, cb, err) {
       GAS._call('verificarPermissaoCancelamento', [id, email], cb, err);
@@ -101,6 +104,12 @@ const GAS = {
     },
     mobilizarEstoque: function(idItem, idSala, acao, qtd, cb, err) {
       GAS._call('movimentarEstoqueItem', [idItem, idSala, acao, qtd], cb, err);
+    },
+    obterEmailsSistema: function(cb, err) {
+      GAS._call('obterEmailsSistema', [], cb, err);
+    },
+    obterDadosGrafico: function(cb, err) {
+      GAS._call('obterDadosGraficoReservas', [], cb, err);
     }
   },
 
@@ -111,6 +120,9 @@ const GAS = {
   rece: {
     obter: function(cb, err) {
       GAS._call('obterReservasRece', [], cb, err);
+    },
+    salvar: function(dados, cb, err) {
+      GAS._call('salvarReservaRece', [dados], cb, err);
     },
     cancelar: function(id, email, cb, err) {
       GAS._call('cancelarReservaRece', [id, email], cb, err);
@@ -197,6 +209,19 @@ const GAS = {
   calendario: {
     criarConvites: function(dados, cb, err) {
       GAS._call('criarEventosCalendarConvidados', [dados], cb, err);
+    }
+  },
+
+  /**
+   * BLOCO: Serviços de documentos / relatórios
+   * @context Geração de documentos no Google Drive ou download PDF.
+   */
+  documentos: {
+    gerarDrive: function(conteudo, cb, err) {
+      GAS._call('gerarDocumentoDrive', [conteudo], cb, err);
+    },
+    gerarDownload: function(conteudo, cb, err) {
+      GAS._call('gerarDocumentoDownload', [conteudo], cb, err);
     }
   }
 
