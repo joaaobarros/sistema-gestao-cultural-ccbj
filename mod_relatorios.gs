@@ -179,7 +179,7 @@ Responda SOMENTE JSON no formato:
 }
 
 // ==============================
-// 🔥 VERSIONAMENTO / COMPARAÇÃO
+// VERSIONAMENTO / COMPARAÇÃO
 // ==============================
 
 function compararVersoesContrato(idContrato, v1, v2) {
