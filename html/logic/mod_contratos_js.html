@@ -15,14 +15,11 @@ var _ctrCache = { contratos:[], metas:[], indicadores:[], rubricas:[] };
 var _ctrColapsados = {}; // { [idContrato]: true/false }
 
 function carregarDadosContratos(cb) {
-  google.script.run
-    .withSuccessHandler(function(d) {
-      _ctrCache = d || { contratos:[], metas:[], indicadores:[], rubricas:[] };
-      if (!_ctrCache.rubricas) _ctrCache.rubricas = [];
-      if (typeof cb === 'function') cb();
-    })
-    .withFailureHandler(function(err) { console.warn('Contratos:', err.message); })
-    .obterDadosContratos();
+  GAS.contratos.obterDados(function(d) {
+    _ctrCache = d || { contratos:[], metas:[], indicadores:[], rubricas:[] };
+    if (!_ctrCache.rubricas) _ctrCache.rubricas = [];
+    if (typeof cb === 'function') cb();
+  }, function(err) { console.warn('Contratos:', err.message); });
 }
 
 // ── UTILITÁRIOS ───────────────────────────────────────────────
@@ -480,10 +477,9 @@ function abrirModalContrato(dados) {
   }).then(function(r) {
     if (!r.isConfirmed) return;
     showLoader(true);
-    google.script.run
-      .withSuccessHandler(function(){ showLoader(false); carregarDadosContratos(renderizarContratos); codipPopularContratos(); })
-      .withFailureHandler(_handleServerError)
-      .salvarContrato(r.value, AppState.usuario.email);
+    GAS.contratos.salvar(r.value, AppState.usuario.email,
+      function(){ showLoader(false); carregarDadosContratos(renderizarContratos); codipPopularContratos(); },
+      _handleServerError);
   });
 }
 
@@ -503,10 +499,9 @@ function excluirContratoUI(id) {
   }).then(function(r){
     if (!r.isConfirmed) return;
     showLoader(true);
-    google.script.run
-      .withSuccessHandler(function(){ showLoader(false); carregarDadosContratos(renderizarContratos); })
-      .withFailureHandler(_handleServerError)
-      .excluirContrato(id, AppState.usuario.email);
+    GAS.contratos.excluir(id, AppState.usuario.email,
+      function(){ showLoader(false); carregarDadosContratos(renderizarContratos); },
+      _handleServerError);
   });
 }
 
@@ -556,10 +551,9 @@ function abrirModalMeta(idContrato, dados) {
   }).then(function(r){
     if (!r.isConfirmed) return;
     showLoader(true);
-    google.script.run
-      .withSuccessHandler(function(){ showLoader(false); carregarDadosContratos(renderizarContratos); })
-      .withFailureHandler(_handleServerError)
-      .salvarMeta(r.value, AppState.usuario.email);
+    GAS.contratos.salvarMeta(r.value, AppState.usuario.email,
+      function(){ showLoader(false); carregarDadosContratos(renderizarContratos); },
+      _handleServerError);
   });
 }
 
@@ -579,10 +573,9 @@ function excluirMetaUI(id) {
   }).then(function(r){
     if (!r.isConfirmed) return;
     showLoader(true);
-    google.script.run
-      .withSuccessHandler(function(){ showLoader(false); carregarDadosContratos(renderizarContratos); })
-      .withFailureHandler(_handleServerError)
-      .excluirMeta(id, AppState.usuario.email);
+    GAS.contratos.excluirMeta(id, AppState.usuario.email,
+      function(){ showLoader(false); carregarDadosContratos(renderizarContratos); },
+      _handleServerError);
   });
 }
 
@@ -692,8 +685,7 @@ function abrirModalRubrica(idMeta, dados) {
 
       if (dados.id) {
 
-        google.script.run
-          .withSuccessHandler(function(lista){
+        GAS.contratos.obterMemorias(dados.id, function(lista) {
 
             memoriaCalculo = Array.isArray(lista)
               ? lista.map(item=>({
@@ -709,8 +701,7 @@ function abrirModalRubrica(idMeta, dados) {
 
             renderizarMemoria();
 
-          })
-          .obterMemoriaRubrica(dados.id);
+          });
 
       } else {
 
@@ -755,19 +746,41 @@ function abrirModalRubrica(idMeta, dados) {
 
     showLoader(true);
 
-    google.script.run
-      .withSuccessHandler(function(){
-        showLoader(false);
-        carregarDadosContratos(renderizarContratos);
-      })
-      .withFailureHandler(_handleServerError)
-      .salvarRubrica(r.value, AppState.usuario.email);
+    GAS.contratos.salvarRubrica(r.value, AppState.usuario.email,
+      function(){ showLoader(false); carregarDadosContratos(renderizarContratos); },
+      _handleServerError);
 
   });
 
 }
 
 let memoriaCalculo = [];
+
+/**
+ * BLOCO: Carregamento de memória de cálculo de rubrica
+ * @context Chamado por editarRubrica após abrir o modal; popula memoriaCalculo via backend.
+ * @inputs idRubrica: string ID da rubrica.
+ * @outputs memoriaCalculo global atualizado; renderizarMemoria() chamado para atualizar UI.
+ * @sideEffects GAS.contratos.obterMemorias — leitura da planilha de contratos.
+ */
+function carregarMemoriaRubrica(idRubrica) {
+  GAS.contratos.obterMemorias(idRubrica, function(lista) {
+    if (!Array.isArray(lista) || lista.length === 0) {
+      memoriaCalculo = [{ descricao: '', qtd: 1, valor: 0 }];
+    } else {
+      memoriaCalculo = lista.map(item => ({
+        descricao: String(item[2] || ''),
+        qtd:       Number(item[4]) || 0,
+        valor:     Number(item[5]) || 0
+      }));
+    }
+    renderizarMemoria();
+  }, function(err) {
+    console.warn('Erro ao carregar memória:', err);
+    memoriaCalculo = [{ descricao: '', qtd: 1, valor: 0 }];
+    renderizarMemoria();
+  });
+}
 
 function adicionarItemMemoria() {
   memoriaCalculo.push({
@@ -863,10 +876,9 @@ function excluirRubricaUI(id) {
   }).then(function(r){
     if (!r.isConfirmed) return;
     showLoader(true);
-    google.script.run
-      .withSuccessHandler(function(){ showLoader(false); carregarDadosContratos(renderizarContratos); })
-      .withFailureHandler(_handleServerError)
-      .excluirRubrica(id, AppState.usuario.email);
+    GAS.contratos.excluirRubrica(id, AppState.usuario.email,
+      function(){ showLoader(false); carregarDadosContratos(renderizarContratos); },
+      _handleServerError);
   });
 }
 
@@ -973,10 +985,9 @@ function abrirModalIndicador(idMeta, idContrato, dados) {
   }).then(function(r){
     if (!r.isConfirmed) return;
     showLoader(true);
-    google.script.run
-      .withSuccessHandler(function(){ showLoader(false); carregarDadosContratos(function(){ renderizarContratos(); codipPopularContratos(); }); })
-      .withFailureHandler(_handleServerError)
-      .salvarIndicador(r.value, AppState.usuario.email);
+    GAS.contratos.salvarIndicador(r.value, AppState.usuario.email,
+      function(){ showLoader(false); carregarDadosContratos(function(){ renderizarContratos(); codipPopularContratos(); }); },
+      _handleServerError);
   });
 }
 
@@ -994,10 +1005,9 @@ function excluirIndicadorUI(id) {
   }).then(function(r){
     if (!r.isConfirmed) return;
     showLoader(true);
-    google.script.run
-      .withSuccessHandler(function(){ showLoader(false); carregarDadosContratos(renderizarContratos); })
-      .withFailureHandler(_handleServerError)
-      .excluirIndicador(id, AppState.usuario.email);
+    GAS.contratos.excluirIndicador(id, AppState.usuario.email,
+      function(){ showLoader(false); carregarDadosContratos(renderizarContratos); },
+      _handleServerError);
   });
 }
 
@@ -1058,16 +1068,15 @@ function carregarComparativoContratoUI() {
 
   showLoader(true);
 
-  google.script.run
-    .withSuccessHandler(function(data) {
+  GAS.contratos.comparativo(idContrato, Number(v1), Number(v2),
+    function(data) {
       showLoader(false);
       renderizarComparativoContrato(data);
-    })
-    .withFailureHandler(function(err) {
+    },
+    function(err) {
       showLoader(false);
       Swal.fire('Erro', err.message, 'error');
-    })
-    .obterDashboardComparativoContrato(idContrato, Number(v1), Number(v2));
+    });
 }
 
 function renderizarComparativoContrato(data) {

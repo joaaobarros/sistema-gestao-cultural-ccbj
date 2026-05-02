@@ -27,9 +27,8 @@ let favoritos  = [];
  * @sideEffects Chama google.script.run.salvarPreferenciasUsuario
  */
 function salvarFavoritos() {
-  google.script.run
-    .withFailureHandler(err => console.error('Erro ao salvar favoritos:', err))
-    .salvarPreferenciasUsuario('favoritos', favoritos);
+  GAS.sessao.salvarPreferencia('favoritos', favoritos, null,
+    err => console.error('Erro ao salvar favoritos:', err));
 }
 
 /**
