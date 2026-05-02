@@ -2,7 +2,6 @@
 // ================================
 // 🔧 CONFIG
 // ================================
-const BASE_URL_FALLBACK = "https://script.google.com/macros/s/SEU_ID_AQUI/exec";
 
 function getBaseUrl() {
   try {
