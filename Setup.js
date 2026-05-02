@@ -106,7 +106,7 @@ const MODULOS = {
     prop:  PROP.FINANCEIRO,
     abas: {
       'Contratacoes': ['ID','Tipo','Nome','CPF/CNPJ','Valor','Data Início','Data Fim','Status','ID Contrato','Observações'],
-      'Rubricas':     ['ID','ID Meta','Nome','Valor','Obs'],
+      'RubricasFinanceiro':     ['ID','ID Meta','Nome','Valor','Obs'],
       'Pagamentos':   ['ID','ID Contratacao','Competência','Valor','Data Pagamento','Status','Comprovante URL'],
       'FluxoCaixa':   ['ID','Data','Tipo','Categoria','Valor','Descrição','ID Referência','Saldo Acumulado'],
     }

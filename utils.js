@@ -5,6 +5,132 @@
  * OBJETIVO: Eliminar duplicação de código e melhorar maintainability
  */
 
+// Utils_GetSheet.gs
+
+// ══════════════════════════════════════════════════════
+// MAPA: nome da aba → módulo (chaves definidas em Setup.gs)
+// ══════════════════════════════════════════════════════
+
+const ABA_PARA_MODULO = {
+  // MASTER
+  'Administradores':      'MASTER',
+  'Configuracoes':        'MASTER',
+  'Listas':               'MASTER',
+  'Logs':                 'MASTER',
+  'LogAcessos':           'MASTER',
+  'PreferenciasUsuarios': 'MASTER',
+
+  // ESPACOS
+  'Reservas':             'ESPACOS',
+  'Itens':                'ESPACOS',
+  'Solicitacoes':         'ESPACOS',
+
+  // COMUNICACAO
+  'ReservasRECE':         'COMUNICACAO',
+
+  // RELATORIOS
+  'RelatoriosCODIP':      'RELATORIOS',
+  'Contratos':            'RELATORIOS',
+  'Metas':                'RELATORIOS',
+  'Indicadores':          'RELATORIOS',
+  'Rubricas':             'RELATORIOS',
+  'RubricasMemoria':      'RELATORIOS',
+  'ContratosVersoes':     'RELATORIOS',
+
+  // FINANCEIRO
+  'Contratacoes':         'FINANCEIRO',
+  'Pagamentos':           'FINANCEIRO',
+  'FluxoCaixa':           'FINANCEIRO',
+  'RubricasFinanceiro':   'FINANCEIRO',
+
+  // EQUIPES
+  'Funcionarios':         'EQUIPES',
+  'Escalas':              'EQUIPES',
+  'Avaliacoes':           'EQUIPES',
+  'Ferias':               'EQUIPES',
+
+  // PESSOAL
+  'Tarefas':              'PESSOAL',
+  'Processos':            'PESSOAL',
+  'Demandas':             'PESSOAL',
+};
+
+// ══════════════════════════════════════════════════════
+// _getSheet — ponto único de acesso a abas
+// ══════════════════════════════════════════════════════
+
+/**
+ * Retorna a Sheet correta, roteando para o módulo certo.
+ * Nunca lança exceção: retorna null em caso de falha (compatível
+ * com o padrão já usado em todo o código legado).
+ *
+ * @param {string} nomeAba - Nome exato da aba
+ * @returns {GoogleAppsScript.Spreadsheet.Sheet|null}
+ */
+function _getSheet(nomeAba) {
+  try {
+    const modulo = ABA_PARA_MODULO[nomeAba];
+
+    if (!modulo) {
+      // Aba não mapeada: tenta planilha ativa (útil em desenvolvimento)
+      console.warn('_getSheet: "' + nomeAba + '" sem módulo mapeado. Tentando planilha ativa.');
+      const ss = SpreadsheetApp.getActiveSpreadsheet();
+      return ss ? ss.getSheetByName(nomeAba) : null;
+    }
+
+    const ss = _abrirModulo(modulo);
+    if (!ss) {
+      console.error('_getSheet: módulo "' + modulo + '" retornou null. Execute inicializarSistema().');
+      return null;
+    }
+
+    const aba = ss.getSheetByName(nomeAba);
+    if (!aba) {
+      console.error('_getSheet: aba "' + nomeAba + '" não encontrada em ' + modulo + '. Execute recriarEstrutura().');
+    }
+    return aba;
+
+  } catch (e) {
+    console.error('_getSheet("' + nomeAba + '"): ' + e.message);
+    return null;
+  }
+}
+
+// ══════════════════════════════════════════════════════
+// DIAGNÓSTICO — rode manualmente no editor se tiver dúvida
+// ══════════════════════════════════════════════════════
+
+/**
+ * Testa se todas as abas mapeadas são acessíveis.
+ * Execute no editor: verificarTodasAbas()
+ */
+function verificarTodasAbas() {
+  const resultados = [];
+
+  Object.keys(ABA_PARA_MODULO).forEach(function(nomeAba) {
+    const aba = _getSheet(nomeAba);
+    resultados.push({
+      aba:    nomeAba,
+      modulo: ABA_PARA_MODULO[nomeAba],
+      ok:     aba !== null,
+    });
+  });
+
+  const falhas = resultados.filter(function(r) { return !r.ok; });
+
+  if (falhas.length === 0) {
+    console.log('✅ Todas as ' + resultados.length + ' abas acessíveis.');
+  } else {
+    console.warn('⚠️ ' + falhas.length + ' aba(s) inacessível(is):');
+    falhas.forEach(function(f) {
+      console.warn('  • [' + f.modulo + '] ' + f.aba);
+    });
+    console.log('\nSolução: execute inicializarSistema() ou recriarEstrutura()');
+  }
+
+  return resultados;
+}
+
 /**
  * ====== PARSING E NORMALIZAÇÃO ======
  */
