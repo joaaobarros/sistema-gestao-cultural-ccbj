@@ -1662,3 +1662,7 @@ function salvarVersaoContrato(idContrato, email) {
 
   return true;
 }
+
+function obterMemoriaRubrica(idRubrica) {
+  return listarMemoriaRubrica(idRubrica);
+}
