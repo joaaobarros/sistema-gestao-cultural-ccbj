@@ -1,3 +1,13 @@
+<!--
+@file mod_nova_reserva.html
+@type module
+@description Formulário completo de criação e edição de reservas: dados básicos,
+             seleção de sala/horário/setor, modo lote, carrinho de itens (fixos e volantes),
+             campos RECE, campos CODIP e upload de imagem.
+@responsibility Estrutura HTML do formulário de agendamento (#aba-nova-reserva).
+@dependencies salvarAgendamento, resetarFormulario, alternarModoLote, alternarModoRece,
+              adicionarItemVolante, configurarCalendario (mod_reservas_js + mod_ui_estado_js)
+-->
       <section id="aba-nova-reserva" class="tab-content animate-fadeIn hidden pb-20">
         <form id="formReserva" onsubmit="event.preventDefault(); salvarAgendamento();">
           <input type="hidden" id="inputReservaId">

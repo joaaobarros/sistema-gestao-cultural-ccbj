@@ -1,32 +1,65 @@
+<!--
+@file mod_favoritos_js.html
+@type logic
+@description Gerenciamento de favoritos (atalhos rápidos) na sidebar via drag-and-drop.
+@responsibility Manter, persistir e renderizar a lista de abas favoritadas pelo usuário.
+@dependencies google.script.run.salvarPreferenciasUsuario, mostrarAba (mod_ui_estado_js)
+-->
 <script>
-
-let dragItem = null;
+/**
+ * ========================================
+ * BLOCO: Estado local de favoritos e drag
+ * ========================================
+ * @description Variáveis de controle para arrastar itens de menu e reordenar favoritos
+ * @context Inicializado em iniciarPreferencias() após carregamento das preferências do usuário
+ */
+let dragItem   = null;
 let dragOrigem = null;
-let dragIndex = null;
-let favoritos = [];
+let dragIndex  = null;
+let favoritos  = [];
 
+/**
+ * ========================================
+ * BLOCO: Persistência de favoritos
+ * ========================================
+ * @description Salva a lista de favoritos no backend (planilha PreferenciasUsuarios)
+ * @context Chamado após qualquer alteração na lista (adicionar, remover, reordenar)
+ * @sideEffects Chama google.script.run.salvarPreferenciasUsuario
+ */
 function salvarFavoritos() {
   google.script.run
-    .withFailureHandler(err => {
-      console.error('Erro ao salvar favoritos:', err);
-    })
+    .withFailureHandler(err => console.error('Erro ao salvar favoritos:', err))
     .salvarPreferenciasUsuario('favoritos', favoritos);
 }
 
+/**
+ * ========================================
+ * BLOCO: Drag-and-drop — arrastar do menu
+ * ========================================
+ * @description Captura o início do arraste de um item de menu para a área de favoritos
+ * @context Ativado pelo atributo draggable nos botões da sidebar com data-aba
+ */
 function iniciarDrag(e) {
   const el = e.currentTarget;
   dragOrigem = 'menu';
   dragItem = {
-    aba: el.dataset.aba,
+    aba:  el.dataset.aba,
     nome: el.querySelector('span')?.innerText.trim() || '',
     icon: el.querySelector('i')?.className || ''
   };
   e.dataTransfer.setData('text/plain', dragItem.aba);
 }
 
+/**
+ * ========================================
+ * BLOCO: Drag-and-drop — reordenar favoritos
+ * ========================================
+ * @description Permite reordenar favoritos já existentes arrastando-os entre si
+ * @context Ativado pelos elementos renderizados em renderizarFavoritos()
+ */
 function iniciarDragFavorito(e, index) {
   dragOrigem = 'favorito';
-  dragIndex = index;
+  dragIndex  = index;
   e.dataTransfer.setData('text/plain', index);
 }
 
@@ -36,11 +69,10 @@ function onDragOverItem(e, index) {
 
 function onDropReorder(e, index) {
   e.preventDefault();
-  if (dragOrigem !== 'favorito') return;
-  if (dragIndex === null) return;
+  if (dragOrigem !== 'favorito' || dragIndex === null) return;
   const item = favoritos.splice(dragIndex, 1)[0];
   favoritos.splice(index, 0, item);
-  dragIndex = null;
+  dragIndex  = null;
   dragOrigem = null;
   salvarFavoritos();
   renderizarFavoritos();
@@ -49,10 +81,9 @@ function onDropReorder(e, index) {
 function onDropFavoritos(e) {
   e.preventDefault();
   if (!dragItem || dragOrigem !== 'menu') return;
-  const jaExiste = favoritos.some(f => f.aba === dragItem.aba);
-  if (jaExiste) return;
+  if (favoritos.some(f => f.aba === dragItem.aba)) return;
   favoritos.push(dragItem);
-  dragItem = null;
+  dragItem   = null;
   dragOrigem = null;
   salvarFavoritos();
   renderizarFavoritos();
@@ -62,6 +93,13 @@ function onDragOverFavoritos(e) {
   e.preventDefault();
 }
 
+/**
+ * ========================================
+ * BLOCO: Inicialização e gerenciamento
+ * ========================================
+ * @description Carrega as preferências do backend e gerencia adição/remoção
+ * @context iniciarPreferencias é chamado no bootstrap após carregarPreferenciasUsuario
+ */
 function iniciarPreferencias(preferencias) {
   favoritos = preferencias?.favoritos || [];
   renderizarFavoritos();
@@ -73,6 +111,22 @@ function resetarFavoritos() {
   renderizarFavoritos();
 }
 
+function removerFavorito(index) {
+  favoritos.splice(index, 1);
+  salvarFavoritos();
+  renderizarFavoritos();
+}
+
+/**
+ * ========================================
+ * BLOCO: Renderização dos favoritos
+ * ========================================
+ * @description Gera o HTML da lista de favoritos no container da sidebar
+ * @context Chamado após qualquer mudança na lista ou no carregamento inicial
+ * @inputs Array `favoritos` (estado local)
+ * @outputs HTML injetado em #favoritosContainer
+ * @sideEffects Modifica o DOM de #favoritosContainer
+ */
 function renderizarFavoritos() {
   const container = document.getElementById('favoritosContainer');
   if (!container) return;
@@ -107,12 +161,4 @@ function renderizarFavoritos() {
     </div>
   `).join('');
 }
-
-function removerFavorito(index) {
-  favoritos.splice(index, 1);
-  salvarFavoritos();
-  renderizarFavoritos();
-}
-
-
 </script>

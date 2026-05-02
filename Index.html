@@ -1,4 +1,24 @@
-<!-- Index.html -->
+<!--
+@file Index.html
+@type layout
+@description Template raiz do webapp. Compõe o HTML final via include() do GAS,
+             define estilos globais e declara a ordem de carregamento dos módulos JS.
+@responsibility Estrutura da página, includes de fragmentos HTML, ordem de scripts.
+@dependencies Todos os fragmentos em html/layout/, html/modulos/, html/modais/, html/logic/
+
+ORDEM DE CARREGAMENTO DOS SCRIPTS (obrigatória):
+  1. mod_ui_estado_js     — AppState, estado, navegação, IA, inicialização
+  2. mod_ui_componentes_js — escaparHTML, showLoader, helpers de cor
+  3. mod_reservas_js       — popularSelects, calendário, render de reservas
+  4. mod_admin_js          — painéis de configuração admin
+  5. mod_favoritos_js      — drag-and-drop de favoritos
+  6. bootstrap_js          — DOMContentLoaded, event listeners (SEMPRE POR ÚLTIMO)
+
+MÓDULOS INLINE (incluídos fora da tag logic/):
+  - PainelSolicitacoes, GestaoContratos — módulos de feature com JS próprio,
+    carregados após o bootstrap para não bloquear a inicialização principal.
+  - modal_manual — modal de ajuda carregado por último para não interferir no boot.
+-->
 
 <!DOCTYPE html>
 <html lang="pt-BR">

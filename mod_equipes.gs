@@ -1,3 +1,9 @@
+/**
+ * @file mod_equipes.gs
+ * @layer backend/modules
+ * @description Módulo de gestão de equipes — STUB. Todas as funções lançam "EM_BREVE".
+ *              Previsto: funcionários, escalas, avaliações e férias (planilha EQUIPES).
+ */
 // mod_equipes.gs
 // Módulo Equipes — Em desenvolvimento
 function obterFuncionarios() {

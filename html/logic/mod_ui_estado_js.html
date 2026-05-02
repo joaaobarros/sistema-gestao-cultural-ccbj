@@ -1,13 +1,24 @@
+<!--
+@file mod_ui_estado_js.html
+@type logic
+@description Núcleo do frontend: estado global, navegação, validações de negócio,
+             disponibilidade de recursos, lógica de IA e inicialização da aplicação.
+@layer frontend
+@responsibility Estado global (AppState), orquestração de inicialização,
+                validação de horários/conflitos, navegação entre abas, cálculo de disponibilidade.
+@dependencies mod_ui_componentes_js (escaparHTML, showLoader), google.script.run (backend),
+               Flatpickr (calendarInstance), SweetAlert2 (Swal)
+-->
 <script>
-  /**
- * ARQUIVO: Logic.html
- * PARTE 1: Gestão de Estado Global e Inicialização do Sistema.
- * DESCRIÇÃO: Define as variáveis que controlam o que o usuário vê e
- * como o sistema se comporta ao ser aberto pela primeira vez.
+
+/**
+ * ========================================
+ * BLOCO: Estado local do formulário
+ * ========================================
+ * @description Variáveis mutáveis que representam o estado do formulário de reserva.
+ *              Não fazem parte do AppState pois são transitórias e resetadas em resetarFormulario().
+ * @sideEffects Lidas/escritas por funções de carrinho, calendário e salvarAgendamento
  */
-
-
-// ── Variáveis de estado que as funções abaixo referenciam ──────────────────
 var itensSelecionados      = [];
 var itensFixosSelecionados = [];
 var modoRece               = false;
@@ -54,7 +65,17 @@ function carregarMemoriaRubrica(idRubrica) {
     .obterMemoriaRubrica(idRubrica);
 }
 
-// ── NORMALIZAÇÃO PADRÃO DE DATA       ───────────────────────────────
+/**
+ * ========================================
+ * BLOCO: Normalização de datas (frontend)
+ * ========================================
+ * @description Converte qualquer representação de data para o formato YYYY-MM-DD,
+ *              usado como chave no AppState.cacheReservasIndex.
+ * @context Chamado por verificarConflitoFrontend, indexarReservas e obterHorariosOcupadosFrontend
+ * @inputs Date object, string DD/MM/YYYY ou YYYY-MM-DD
+ * @outputs String 'YYYY-MM-DD' ou null se inválido
+ * @sideEffects Nenhum
+ */
 function normalizarDataKey(data) {
   if (!data) return null;
   try {
@@ -91,7 +112,19 @@ function normalizarDataKey(data) {
   return null;
 }
 
-// ── Navegação ───────────────────────────────────────────────────────────────
+/**
+ * ========================================
+ * BLOCO: Navegação entre abas e sidebar
+ * ========================================
+ * @description Controla a visibilidade das seções da aplicação e o estado ativo da navegação.
+ *              mostrarAba é o ponto central de troca de contexto: esconde tudo, exibe a aba
+ *              solicitada, atualiza título, botão ativo, aplica proteção de acesso e
+ *              dispara o carregamento lazy dos dados de cada módulo.
+ * @context Chamado pelos botões da sidebar (data-aba), pelos módulos ao concluir ações,
+ *          e por mostrarAba() recursivamente na proteção de acesso.
+ * @inputs idAba — ID do elemento HTML da aba a exibir
+ * @sideEffects DOM, título da página, carregamento de dados por aba
+ */
 function toggleSidebar() {
   const sidebar = document.getElementById('sidebarPrincipal');
   const overlay = document.getElementById('sidebarOverlay');
@@ -142,65 +175,93 @@ function mostrarAba(idAba) {
       return;
     }
   }
-}
 
-if (idAba === 'aba-gestao-admin') {
-  if (typeof renderizarEspacosAdmin === 'function') renderizarEspacosAdmin();
-  if (typeof renderizarItensAdmin   === 'function') renderizarItensAdmin();
-  if (typeof renderizarSetoresAdmin === 'function') renderizarSetoresAdmin();
-  if (typeof renderizarAdmins       === 'function') renderizarAdmins();
+  /**
+   * ========================================
+   * BLOCO: Carregamento por aba
+   * ========================================
+   * @description Dispara a carga de dados específicos ao entrar em cada aba
+   * @context Chamado toda vez que mostrarAba() troca a visualização ativa
+   * @sideEffects Pode chamar o backend, atualizar AppState e re-renderizar componentes
+   */
+  if (idAba === 'aba-gestao-admin') {
+    if (typeof renderizarEspacosAdmin === 'function') renderizarEspacosAdmin();
+    if (typeof renderizarItensAdmin   === 'function') renderizarItensAdmin();
+    if (typeof renderizarSetoresAdmin === 'function') renderizarSetoresAdmin();
+    if (typeof renderizarAdmins       === 'function') renderizarAdmins();
 
-  if (
-    typeof _ctrCache === 'undefined' ||
-    !_ctrCache ||
-    !_ctrCache.contratos ||
-    !_ctrCache.contratos.length
-  ) {
-    carregarDadosContratos(renderizarContratos);
-  } else {
-    renderizarContratos();
+    if (
+      typeof _ctrCache === 'undefined' ||
+      !_ctrCache ||
+      !_ctrCache.contratos ||
+      !_ctrCache.contratos.length
+    ) {
+      carregarDadosContratos(renderizarContratos);
+    } else {
+      renderizarContratos();
+    }
   }
-}
 
-if (idAba === 'aba-auditoria') {
-  if (typeof carregarAuditoria === 'function') carregarAuditoria();
-}
-
-if (idAba === 'aba-agenda-rece') {
-  if (typeof carregarReservasRece === 'function') carregarReservasRece();
-}
-
-if (idAba === 'aba-codip') {
-  if (typeof carregarAbaCODIP === 'function') carregarAbaCODIP();
-}
-
-if (idAba === 'aba-dashboard') {
-  if (typeof carregarDashboard === 'function') carregarDashboard();
-}
-
-if (idAba === 'aba-aprovacoes') {
-  if (typeof carregarSolicitacoes === 'function') carregarSolicitacoes();
-}
-
-// Fecha sidebar no mobile
-if (window.innerWidth < 768) {
-  const sb = document.getElementById('sidebarPrincipal');
-  if (sb && !sb.classList.contains('-translate-x-full')) {
-    sb.classList.add('-translate-x-full');
+  if (idAba === 'aba-auditoria') {
+    if (typeof carregarAuditoria === 'function') carregarAuditoria();
   }
+
+  if (idAba === 'aba-agenda-rece') {
+    if (typeof carregarReservasRece === 'function') carregarReservasRece();
+  }
+
+  if (idAba === 'aba-codip') {
+    if (typeof carregarAbaCODIP === 'function') carregarAbaCODIP();
+  }
+
+  if (idAba === 'aba-dashboard') {
+    if (typeof carregarDashboard === 'function') carregarDashboard();
+  }
+
+  if (idAba === 'aba-aprovacoes') {
+    if (typeof carregarSolicitacoes === 'function') carregarSolicitacoes();
+  }
+
+  if (window.innerWidth < 768) {
+    const sb = document.getElementById('sidebarPrincipal');
+    if (sb && !sb.classList.contains('-translate-x-full')) {
+      sb.classList.add('-translate-x-full');
+    }
+  }
+
+  window.scrollTo(0, 0);
 }
 
-window.scrollTo(0, 0);
 
-
-// ── Modo RECE ────────────────────────────────────────────────────────────────
+/**
+ * ========================================
+ * BLOCO: Modo RECE — toggle de campos extras
+ * ========================================
+ * @description Exibe/esconde o bloco de campos específicos da Agenda RECE no formulário
+ * @context Ativado pelo checkbox #checkRece no formulário de nova reserva
+ * @inputs Boolean ativado
+ * @sideEffects Atualiza variável modoRece, manipula classList de #blocoRece
+ */
 function alternarModoRece(ativado) {
   modoRece = ativado;
   const bloco = document.getElementById('blocoRece');
   if (bloco) ativado ? bloco.classList.remove('hidden') : bloco.classList.add('hidden');
 }
 
-// ── Horários ─────────────────────────────────────────────────────────────────
+/**
+ * ========================================
+ * BLOCO: Validação e cálculo de horários
+ * ========================================
+ * @description Valida os horários do formulário (limites 08:00–21:30), calcula o turno
+ *              automaticamente e oferece sugestão de horário livre.
+ *              NOTA: os limites de horário (08:00, 21:30) estão hardcoded aqui; se mudarem
+ *              nas regras de negócio, precisam ser atualizados neste bloco.
+ * @context validarHorarios: listener de change em #horaInicio e #horaTermino
+ *          adicionar1Hora: usada por aplicarSugestaoHorario
+ * @inputs Valores dos inputs #horaInicio e #horaTermino
+ * @outputs Preenche #inputTurnoCalculado; exibe alertas de erro via Swal
+ * @sideEffects Pode limpar os campos de horário se inválidos
+ */
 function validarHorarios() {
   const inputInicio  = document.getElementById('horaInicio');
   const inputTermino = document.getElementById('horaTermino');
@@ -236,6 +297,19 @@ function adicionar1Hora(horario) {
   return String((parseInt(p[0], 10) + 1) % 24).padStart(2, '0') + ':' + p[1];
 }
 
+/**
+ * ========================================
+ * BLOCO: Consulta de disponibilidade — frontend
+ * ========================================
+ * @description Verifica conflitos e disponibilidade diretamente no cache local (AppState.cacheReservasIndex),
+ *              evitando round-trips ao backend para verificações em tempo real.
+ *              obterSalasDisponiveisBackend consulta o backend para cada sala — usada apenas
+ *              na exibição de sugestões após um conflito confirmado.
+ * @context Chamados por verificarConflitoFrontend, analisarDisponibilidadeIA e atualizarTudoTempoReal
+ * @inputs sala (ID), data (qualquer formato), idIgnorar (para edição)
+ * @outputs Lista de blocos de horário ocupados ou resultado de conflito
+ * @sideEffects obterSalasDisponiveisBackend dispara N chamadas ao backend (uma por sala)
+ */
 function obterHorariosOcupadosFrontend(sala, data, idIgnorar) {
   const index = AppState.cacheReservasIndex || {};
   const normData = d => {
@@ -326,6 +400,18 @@ function obterSalasDisponiveisBackend(dados, data, callback) {
 
 
 
+/**
+ * ========================================
+ * BLOCO: Disponibilidade de itens do almoxarifado
+ * ========================================
+ * @description Atualiza o select de itens volantes com disponibilidade real para o horário selecionado,
+ *              consultando o backend. Tem timeout de 10s com fallback para estoque total.
+ *              popularSelectVolantesComEstoque é o fallback simples (sem disponibilidade por horário).
+ * @context Chamado ao alterar data, hora ou sala no formulário de reserva
+ * @inputs calendarInstance.selectedDates, #horaInicio, #horaTermino, #selectSala
+ * @outputs Atualiza opções de #selectVolantes com disponibilidade por horário
+ * @sideEffects Chama google.script.run.obterDisponibilidadeItensPorHorario
+ */
 function atualizarDisponibilidadeItens() {
   const selVolantes = document.getElementById('selectVolantes');
   const avisoDisp   = document.getElementById('avisoDisponibilidade');
@@ -433,6 +519,19 @@ function obterItensFixosDaSala(idSala) {
   }).filter(i => i.qtd > 0);
 }
 
+/**
+ * ========================================
+ * BLOCO: Verificação de conflito no frontend
+ * ========================================
+ * @description Detecta sobreposição de horário usando o cache local AppState.cacheReservasIndex,
+ *              sem chamar o backend. Retorna tipo de conflito (INICIO, FIM, TOTAL) e sugestão de horário.
+ *              IMPORTANTE: esta é uma verificação otimista. A fonte de verdade é o backend.
+ *              salvarAgendamento() sempre confirma no servidor antes de persistir.
+ * @context Chamado em tempo real durante preenchimento do formulário
+ * @inputs { sala, horaInicio, horaTermino }, array de datas, idIgnorar (para edição)
+ * @outputs { conflito: boolean, tipo, data, reserva, sugestao }
+ * @sideEffects Nenhum
+ */
 function verificarConflitoFrontend(dados, datas, idIgnorar) {
 
   const normHora = h => {
@@ -538,6 +637,17 @@ function aplicarSugestaoHorario(horario) {
   }
 }
 
+/**
+ * ========================================
+ * BLOCO: Exportação da agenda
+ * ========================================
+ * @description Gera e dispara download de CSV com todas as reservas da view atual.
+ *              Usa BOM UTF-8 para compatibilidade com Excel brasileiro.
+ * @context Botão "Exportar CSV" na Agenda Geral
+ * @inputs AppState.colecoes.reservas, AppState.mapaSalas
+ * @outputs Download de arquivo .csv no navegador
+ * @sideEffects Cria e revoga URL temporária no navegador
+ */
 function exportarAgendaCSV() {
   const reservas = AppState.colecoes.reservas || [];
   if (!reservas.length) { Swal.fire('Sem dados', 'Nenhuma reserva para exportar.', 'info'); return; }
@@ -561,7 +671,16 @@ function exportarAgendaCSV() {
   URL.revokeObjectURL(url);
 }
 
-// ── Filtros ──────────────────────────────────────────────────────────────────
+/**
+ * ========================================
+ * BLOCO: Filtros da agenda
+ * ========================================
+ * @description Limpa os campos de filtro e re-renderiza a lista de reservas.
+ *              limparFiltros: para a Agenda Geral.
+ *              limparFiltrosRece: para a Agenda RECE.
+ * @context Botão "Limpar filtros" nas abas de agenda
+ * @sideEffects Chama renderizarReservas ou renderizarTabelaRece
+ */
 function limparFiltros() {
   const ids = ['filtroBusca','filtroSetor','filtroStatus','filtroSala','filtroTurno'];
   ids.forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
@@ -593,7 +712,19 @@ if (!window.limparFiltrosRece) {
   };
 }
 
-// ── Carrinho de itens fixos (chamado pelo listener de troca de sala) ──────────
+/**
+ * ========================================
+ * BLOCO: Carrinho de itens (fixos e volantes)
+ * ========================================
+ * @description Gerencia os arrays itensSelecionados e itensFixosSelecionados e
+ *              renderiza os carrinhos visuais no formulário de reserva.
+ *              Itens fixos: vinculados à sala, adicionados ao trocar o espaço.
+ *              Itens volantes: do almoxarifado, adicionados manualmente.
+ * @context Formulário de nova reserva — #carrinhoFixos e #carrinhoVolantes
+ * @inputs Arrays de estado local (itensSelecionados, itensFixosSelecionados)
+ * @outputs HTML injetado nos containers de carrinho
+ * @sideEffects Modifica DOM; arrays modificados por adicionarItemVolante/removerItemFixoCarrinho
+ */
 function renderizarCarrinhoFixos() {
   const lista = document.getElementById('carrinhoFixos');
   if (!lista) return;
@@ -669,7 +800,20 @@ function adicionarItemVolante() {
   select.value   = '';
 }
 
-// ── Salvar agendamento ────────────────────────────────────────────────────────
+/**
+ * ========================================
+ * BLOCO: Salvar agendamento
+ * ========================================
+ * @description Ponto de entrada para criação e edição de reservas.
+ *              Coleta todos os dados do formulário, valida campos obrigatórios,
+ *              trata o fluxo de edição RECE separadamente do fluxo padrão,
+ *              e chama o backend. Após sucesso, reseta o formulário e recarrega reservas.
+ * @context Botão "Confirmar Agendamento" / "Salvar" do #formReserva
+ * @inputs DOM: #inputNomeAcao, #selectSala, #horaInicio, #horaTermino, #selectSetor,
+ *              calendarInstance.selectedDates, itensSelecionados, itensFixosSelecionados
+ * @outputs Chama criarReservaController() ou salvarReservaRece() no backend
+ * @sideEffects showLoader, resetarFormulario, mostrarAba, renderizarReservas
+ */
 async function salvarAgendamento() {
 
   if (typeof calendarInstance === 'undefined' || !calendarInstance) {
@@ -857,7 +1001,10 @@ async function salvarAgendamento() {
     .criarReservaController(dados, datas);
 }
 
-/*
+/* REMOVIDO: processarMensagemIA, melhorarConteudoRelatorio, abrirEditorApresentacao,
+   gerarInsightsAutomaticos — funcionalidades de IA/relatório removidas por não estarem
+   integradas ao fluxo atual e dependerem de funções inexistentes (chamarIAUnificada,
+   chamarIAComFallback). Ver histórico git para o código original.
 
 async function processarMensagemIA(textoUsuario) {
 
@@ -1366,8 +1513,19 @@ function gerarDocumentoDownload(conteudo) {
 }
 
 /**
- * CHAMA BACKEND (FONTE DE VERDADE)
- * Analisa disponibilidade real antes de qualquer sugestão
+ * ========================================
+ * BLOCO: Análise de disponibilidade com sugestões (IA)
+ * ========================================
+ * @description Consulta o backend para verificar conflitos e exibir sugestões inteligentes
+ *              de horário e sala ao usuário. Não modifica dados — apenas analisa e sugere.
+ *              analisarDisponibilidadeIA: verificação pontual (botão na UI).
+ *              processarIntencaoIA: orquestra a lógica de análise/sugestão.
+ *              inferirModoIA: detecta a intenção do usuário pelo texto e estado do formulário.
+ *              executarIAReserva: ponto de entrada principal — decide o comportamento final.
+ * @context Chamado pelo botão de análise no formulário de reserva e por processarIntencaoIA
+ * @inputs Valores de sala, horários e datas do formulário ativo
+ * @outputs Modal Swal com conflitos, sugestões ou confirmação de disponibilidade
+ * @sideEffects Chama google.script.run.analisarDisponibilidadeReal
  */
 function analisarDisponibilidadeIA() {
 
@@ -1915,8 +2073,23 @@ function obterNomeSala(idSala) {
   return idSala;
 }
 
-// 1. ESTADO GLOBAL DA APLICAÇÃO (AppState)
-// Centraliza todas as informações importantes para evitar consultas repetitivas ao servidor.
+/**
+ * ========================================
+ * BLOCO: AppState — estado global da aplicação
+ * ========================================
+ * @description Objeto singleton que centraliza todo o estado compartilhado do frontend.
+ *              Evita consultas repetidas ao backend e serve como fonte de verdade local.
+ *              Estrutura:
+ *               - usuario: email, nível de acesso
+ *               - colecoes: arrays carregados do backend (reservas, salas, setores, itens)
+ *               - filtros: estado dos filtros da agenda
+ *               - mapaSalas/mapaNomes: lookups rápidos id→nome
+ *               - cacheReservasIndex: índice { 'YYYY-MM-DD': { salaId: [reservas] } }
+ *               - editandoId / editandoReceId: controle de modo de edição
+ *               - modoLote: seleção múltipla no calendário
+ * @context Inicializado em inicializarApp(); lido por praticamente todos os módulos frontend
+ * @sideEffects Mutado por indexarReservas, popularSelectsIniciais e pelos módulos de render
+ */
 const AppState = {
   usuario: {
     email: '',
@@ -1960,8 +2133,18 @@ function trocarSalaSugestao(idSala) {
 
 
 /**
- * FUNÇÃO MESTRE DE INICIALIZAÇÃO
- * Faz a ponte com Código.gs para trazer os dados de configuração.
+ * ========================================
+ * BLOCO: Inicialização da aplicação
+ * ========================================
+ * @description Orquestra o boot completo do sistema em duas fases:
+ *              1. obterDadosIniciais: usuário, salas, setores, itens, admins → libera UI
+ *              2. obterReservas: dados principais → indexa cache, renderiza agenda
+ *              Antes da fase 1, tenta carregar reservas do localStorage (cache de 5min)
+ *              para exibição imediata enquanto o backend responde.
+ * @context Chamado uma única vez em bootstrap_js (DOMContentLoaded)
+ * @inputs Email do usuário (fallback para obterDadosIniciais)
+ * @outputs Popula AppState, renderiza a agenda inicial, ativa polling de solicitações
+ * @sideEffects showLoader, google.script.run (duas chamadas encadeadas), localStorage
  */
 function inicializarApp() {
   if (typeof showLoader === 'function') showLoader(true);
@@ -2135,6 +2318,19 @@ function inicializarApp() {
 }
 
 
+/**
+ * ========================================
+ * BLOCO: Indexação do cache de reservas
+ * ========================================
+ * @description Constrói AppState.cacheReservasIndex a partir de AppState.colecoes.reservas.
+ *              Estrutura: { 'YYYY-MM-DD': { 'SALA-ID': [ [reserva], ... ] } }
+ *              Ignora reservas CANCELADAS para não bloquear horários incorretamente.
+ *              Também atualiza o badge "X hoje" no header e o localStorage.
+ * @context Chamado após cada carga ou atualização de AppState.colecoes.reservas
+ * @inputs AppState.colecoes.reservas
+ * @outputs AppState.cacheReservasIndex atualizado
+ * @sideEffects localStorage (cacheReservas), DOM (#badgeHoje)
+ */
 function indexarReservas() {
   const reservas = AppState.colecoes.reservas || [];
   if (!window.AppState || !AppState.colecoes) return;
@@ -2177,7 +2373,16 @@ function indexarReservas() {
 }
 
 /**
- * CONFIGURAR INTERFACE POR PERMISSÃO
+ * ========================================
+ * BLOCO: Controle de interface por permissão
+ * ========================================
+ * @description Exibe/esconde elementos da UI de acordo com o nível de acesso do usuário.
+ *              Admin/Superadmin: vê botões de gestão e auditoria.
+ *              Superadmin: vê também itens marcados como "em breve".
+ *              Garante que usuários sem permissão não fiquem em abas restritas.
+ * @context Chamado em inicializarApp() após confirmar o perfil do usuário
+ * @inputs AppState.usuario.isAdmin, AppState.usuario.isSuperadmin
+ * @sideEffects DOM: esconde/exibe #btn-aba-gestao, #btn-aba-auditoria, #modulo-sistema
  */
 function configurarInterfacePorPermissao() {
   const isAdmin      = AppState.usuario.isAdmin;

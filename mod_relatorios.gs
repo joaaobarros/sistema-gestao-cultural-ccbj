@@ -1,3 +1,12 @@
+/**
+ * @file mod_relatorios.gs
+ * @layer backend/modules
+ * @description Geração e exportação de relatórios: contratos, metas, indicadores, rubricas financeiras,
+ *              relatórios CODIP e documentos institucionais.
+ * @responsibility Entrypoints: obterContratos, salvarContrato, exportarAgendaRecePlanilha,
+ *                obterComparativoContrato, gerarDocumentoContrato.
+ * @dependencies utils.js (_getSheet, gerarId), planilhas RELATORIOS e FINANCEIRO.
+ */
 // ============================================================
 // mod_relatorios.gs
 // Contratos, Metas, Indicadores, Rubricas, CODIP e Documentos

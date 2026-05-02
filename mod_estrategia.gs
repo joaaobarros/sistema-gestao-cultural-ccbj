@@ -1,3 +1,9 @@
+/**
+ * @file mod_estrategia.gs
+ * @layer backend/modules
+ * @description Módulo de estratégia institucional — STUB. Todas as funções lançam "EM_BREVE".
+ *              Previsto: relatórios estratégicos, indicadores e mapeamento estratégico.
+ */
 // mod_estrategia.gs
 // Módulo Estratégia — Em desenvolvimento
 function gerarRelatorioEstrategico() {

@@ -1,3 +1,10 @@
+/**
+ * @file mod_preferencias.gs
+ * @layer backend/modules
+ * @description Persistência de preferências de usuário: ordem dos favoritos na sidebar e configurações de exibição.
+ * @responsibility Entrypoints: salvarPreferenciaUsuario, carregarPreferenciasUsuario.
+ * @dependencies PropertiesService (ScriptProperties por email), utils.js (obterEmailUsuario).
+ */
 // ============================================================
 // mod_preferencias.gs
 // Personalização Sidebar

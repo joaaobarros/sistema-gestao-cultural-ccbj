@@ -1,3 +1,13 @@
+<!--
+@file mod_agenda_geral.html
+@type module
+@description Aba principal do sistema: tabela de reservas com filtros, mini-calendário
+             lateral, seletor de modo de visualização (lista/diagrama/agenda Google)
+             e exportação CSV.
+@responsibility Estrutura HTML da Agenda Geral (#aba-lista-reservas).
+@dependencies renderizarReservas, aplicarAtalhoPeriodo, exportarAgendaCSV,
+              renderizarModoDiagrama (mod_reservas_js)
+-->
       <section id="aba-lista-reservas" class="tab-content animate-fadeIn space-y-6">
 
         <!-- Seletor de modo de visualização -->

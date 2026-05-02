@@ -1,4 +1,25 @@
+<!--
+@file mod_reservas_js.html
+@type logic
+@description Módulo frontend de reservas: sincronização de dados, calendário (Flatpickr),
+             seleção de salas/setores/itens, renderização da agenda e operações CRUD do usuário.
+@layer frontend
+@responsibility Preencher selects iniciais; configurar calendário; renderizar lista de reservas;
+               preparar edição; confirmar cancelamento; controle do formulário de nova reserva.
+@dependencies AppState (mod_ui_estado_js), escaparHTML/showLoader (mod_ui_componentes_js),
+              google.script.run (backend), Flatpickr (calendarInstance), SweetAlert2
+-->
 <script>
+
+/**
+ * ========================================
+ * BLOCO: Sincronização manual de dados
+ * ========================================
+ * @description Recarrega todos os dados base do backend (salas, itens, setores, admins)
+ *              e re-renderiza os componentes afetados. Disparado pelo botão de sync no header.
+ * @context Botão de refresh no header (sincronizarAbaAtual)
+ * @sideEffects Atualiza AppState.colecoes, re-renderiza tabelas de admin e agenda
+ */
 function sincronizarAbaAtual() {
   if (typeof showLoader === "function") showLoader(true);
   const btnSync = document.querySelector('.fa-sync-alt')?.parentElement;
@@ -35,8 +56,17 @@ function sincronizarAbaAtual() {
 
 
 /**
- * POPULAR SELECTS INICIAIS
- * Preenche os dropdowns de Sala, Setor e Itens Volantes no carregamento.
+ * ========================================
+ * BLOCO: Preenchimento de selects iniciais
+ * ========================================
+ * @description Popula todos os dropdowns do formulário e dos filtros com dados
+ *              carregados em AppState.colecoes na inicialização.
+ *              Também configura o calendário Flatpickr e os filtros do dashboard.
+ * @context Chamado em inicializarApp() após obterDadosIniciais() e em sincronizarAbaAtual()
+ * @inputs AppState.colecoes.salas, setores, itens
+ * @outputs HTML de opções nos selects: #selectSala, #selectSetor, #filtroSetor, #filtroSala,
+ *          #selectVolantes, #dashFiltroSala, #dashFiltroSetor, #agendaGoogleSala, #agendaReceSala
+ * @sideEffects Chama configurarCalendario()
  */
 function popularSelectsIniciais() {
   const selSala = document.getElementById('selectSala');
@@ -157,8 +187,17 @@ function popularSelectsIniciais() {
 }
 
 /**
- * CONFIGURAR CALENDÁRIO (FLATPICKR)
- * @param {boolean} modoLote Ativa ou desativa a seleção múltipla.
+ * ========================================
+ * BLOCO: Calendário — configuração e modo lote
+ * ========================================
+ * @description Inicializa/reinicializa o Flatpickr em #inputData.
+ *              Modo simples: seleção de uma data. Modo lote: seleção múltipla.
+ *              Ao selecionar datas, auto-preenche data término RECE, ajusta min de horário
+ *              para o dia atual e dispara atualizarTudoTempoReal().
+ * @context Chamado em popularSelectsIniciais() e alternarModoLote()
+ * @inputs modoLote: boolean
+ * @outputs calendarInstance (variável global) atualizada
+ * @sideEffects Destrói instância anterior; configura #receDataTermino como Flatpickr separado
  */
 function configurarCalendario(modoLote) {
   if (calendarInstance) calendarInstance.destroy();
@@ -171,8 +210,6 @@ function configurarCalendario(modoLote) {
     disableMobile: "true",
     inline: false,
     onChange: function(selectedDates, dateStr) {
-
-      console.log("Datas selecionadas:", dateStr);
 
       // Auto-preenche data término RECE com a última data selecionada
       if (selectedDates.length > 0) {
@@ -252,8 +289,16 @@ function configurarCalendario(modoLote) {
 }
 
 /**
- * RESETAR FORMULÁRIO
- * Limpa todos os campos e volta para o estado inicial.
+ * ========================================
+ * BLOCO: Reset do formulário de reserva
+ * ========================================
+ * @description Limpa todos os campos, estados e arrays do formulário de nova reserva,
+ *              resetando o sistema para o estado inicial de criação.
+ *              Também zera modoEdicao, modoRece, CODIP, convidados e imagem.
+ * @context Chamado após salvar/cancelar uma reserva e ao clicar em "Nova Reserva"
+ * @sideEffects Modifica DOM (todos os campos do form), reseta variáveis globais
+ *              (itensSelecionados, itensFixosSelecionados, modoRece, convidadosInternos),
+ *              atualiza AppState.editandoId e window.modoEdicao
  */
 function resetarFormulario() {
   document.getElementById('formReserva').reset();
@@ -337,8 +382,16 @@ function resetarFormulario() {
 
 
 /**
- * RENDERIZAR CARRINHO DE ITENS
- * Atualiza a lista visual (ul) no formulário.
+ * ========================================
+ * BLOCO: Carrinho de itens volantes
+ * ========================================
+ * @description Renderiza a lista de itens volantes selecionados (#carrinhoVolantes).
+ *              removerItemCarrinho: remove um item pelo índice.
+ *              adicionarItemFixoCarrinho: adiciona item fixo com quantidade do input.
+ * @context Formulário de nova reserva — interação do usuário com o almoxarifado
+ * @inputs Array itensSelecionados (estado local, definido em mod_ui_estado_js)
+ * @outputs HTML injetado em #carrinhoVolantes
+ * @sideEffects Modifica itensSelecionados e itensFixosSelecionados
  */
 function renderizarCarrinhoItens() {
   const lista = document.getElementById('carrinhoVolantes');
@@ -396,6 +449,15 @@ function adicionarItemFixoCarrinho(nome, maxQtd) {
 
 
 
+/**
+ * BLOCO: Finalização de agendamento — sucesso e erro
+ * @context finalizarSucesso: chamado pelo withSuccessHandler de salvarAgendamento;
+ *          atualiza o cache, dispara convites de calendário se marcado, e mostra Swal de confirmação.
+ *          finalizarErro: chamado pelo withFailureHandler; exibe mensagem de erro sem limpar o formulário.
+ * @inputs finalizarSucesso(msg, dadosOriginais, datasAgendadas); finalizarErro(err).
+ * @outputs Swal de sucesso ou erro; recarrega reservas e reseta formulário em caso de sucesso.
+ * @sideEffects Atualiza AppState.cacheReservasIndex; chama enviarConvitesCalendarInterno se habilitado.
+ */
 function finalizarSucesso(msg, dadosOriginais, datasAgendadas) {
   showLoader(false);
 
@@ -512,8 +574,12 @@ function finalizarErro(err) {
 
 
 /**
- * CARREGAR RESERVAS
- * Solicita ao Code.gs a lista atualizada de todas as reservas (Coluna A-P).
+ * BLOCO: Carregamento de reservas do servidor
+ * @context Chamado na inicialização e após qualquer operação de escrita (criar/editar/cancelar).
+ *          Popula AppState.colecoes.reservas e reconstrói AppState.cacheReservasIndex para conflitos.
+ * @inputs Nenhum — lê AppState.usuario para determinar escopo de dados.
+ * @outputs AppState.colecoes.reservas atualizado; renderizarReservas() chamado; cache reconstruído.
+ * @sideEffects google.script.run.obterReservas — leitura da planilha de reservas.
  */
 function carregarReservas() {
   const corpoTabela = document.getElementById('corpoTabela');
@@ -559,6 +625,16 @@ function carregarReservas() {
 }
 
 
+/**
+ * BLOCO: Helpers de renderização de linha na tabela de reservas
+ * @context _badgeRece: retorna badge HTML se houver um registro RECE vinculado (por ID col 24 ou título+data).
+ *          _parseDataMs: normaliza string de data para milissegundos para ordenação robusta.
+ *          _gerarLinhaReserva: gera o HTML completo de uma linha <tr> com todos os campos e ações.
+ *          abrirItemRece: abre detalhe Swal de um item RECE a partir de ID de reserva geral.
+ * @inputs r: array de reserva (linha da planilha); ids e strings de apoio.
+ * @outputs Strings HTML de badge, linha de tabela; não muta o DOM diretamente.
+ * @sideEffects Nenhum.
+ */
 function _badgeRece(titulo, data, idReservaGeral) {
   const rece = AppState.colecoes.reservasRece || [];
   const t = String(titulo || '').trim().toUpperCase();
@@ -785,8 +861,18 @@ function _gerarLinhaReserva(r) {
 }
 
 /**
- * RENDERIZAR RESERVAS
- * Aplica os filtros do AppState e gera o HTML das linhas da tabela.
+ * ========================================
+ * BLOCO: Renderização da agenda geral
+ * ========================================
+ * @description Aplica filtros (busca, setor, status, sala, turno, período) sobre
+ *              AppState.colecoes.reservas e gera o HTML das linhas da tabela.
+ *              _gerarLinhaReserva: helper que monta o HTML de uma linha (funções inline
+ *              para eficiência — evita múltiplas chamadas de função por linha).
+ *              _parseDataMs: converte strings de data para timestamp de comparação.
+ * @context Chamado após qualquer mudança nos dados ou filtros da agenda
+ * @inputs AppState.colecoes.reservas, AppState.mapaSalas, AppState.filtros, valores dos filtros DOM
+ * @outputs HTML injetado em #corpoTabela; texto em #contadorResultados
+ * @sideEffects Modifica DOM; pode chamar _initMiniCalAgenda para o mini calendário lateral
  */
 function renderizarReservas() {
 
@@ -928,6 +1014,16 @@ function renderizarReservas() {
   corpoTabela.innerHTML = linhas.join('');
 }
 
+/**
+ * BLOCO: Ações sobre reservas — habilitação e cancelamento
+ * @context habilitarReserva: permite que um habilitador confirme o espaço como pronto para uso,
+ *          com campo de observação opcional; requer permissão habilitador/admin.
+ *          confirmarCancelamento: verifica permissão no servidor antes de exibir Swal;
+ *          se autorizado, chama cancelarReserva; caso contrário, exibe motivo da recusa.
+ * @inputs id: ID da reserva; nome: string para exibição no Swal.
+ * @outputs Swal de confirmação; em caso de confirmação, chama servidor e recarrega reservas.
+ * @sideEffects google.script.run.habilitarEspaco / verificarPermissaoCancelamento / cancelarReserva.
+ */
 async function habilitarReserva(id) {
   const result = await Swal.fire({
     title: 'Habilitar espaço para uso?',
@@ -1140,6 +1236,15 @@ async function confirmarCancelamento(id, nome) {
     .verificarPermissaoCancelamento(id, email);
 }
 
+/**
+ * BLOCO: Filtros e atalhos de período na lista de reservas
+ * @context aplicarAtalhoPeriodo: lê #filtroIntervalo e preenche #filtroDataInicio/#filtroDataFim,
+ *          depois chama renderizarReservas para aplicar o filtro.
+ *          debounce: utilitário genérico de debounce usado nos inputs de busca em tempo real.
+ * @inputs valor: string do select de intervalo ('hoje','semana','mes','ano','custom').
+ * @outputs DOM: preenche campos de data e re-renderiza a tabela de reservas.
+ * @sideEffects Nenhum além da mutação do DOM e chamada a renderizarReservas.
+ */
 function aplicarAtalhoPeriodo() {
 
   const valor = document.getElementById('filtroIntervalo').value;
@@ -1254,7 +1359,16 @@ document.getElementById('receFiltroFim')
 var _loteSubModo = 'manual';
 var _loteSubModoMensal = 'diaFixo';
 
-// ── Substitui alternarModoLote ────────────────────────────────────────────
+/**
+ * BLOCO: Modo lote — alternância, seleção e geração de datas
+ * @context alternarModoLote: ativa/desativa o painel de lote avançado; limpa datas quando desativado.
+ *          selecionarModoLote: alterna entre sub-modos 'manual'/'semanal'/'mensal'.
+ *          selecionarSubModoMensal: alterna entre 'diaFixo' (mesmo dia de semana) e 'diaNum' (dia do mês).
+ *          gerarDatasLote: gera array de datas com base no modo selecionado e aplica no flatpickr.
+ * @inputs ativado: boolean; modo: 'manual'|'semanal'|'mensal'; sub: 'diaFixo'|'diaNum'; inputs DOM.
+ * @outputs AppState.datasLote atualizado; flatpickr atualizado; preview de datas renderizado.
+ * @sideEffects Muta variáveis globais _loteSubModoMensal, AppState.datasLote; chama aplicarDatasNoCalendario.
+ */
 function alternarModoLote(ativado) {
   AppState.modoLote = ativado;
   const painel = document.getElementById('painelLoteAvancado');
@@ -1487,7 +1601,16 @@ function gerarDatasLote(tipo) {
   aplicarDatasNoCalendario(datas);
 }
 
-// ── Aplica array de strings DD/MM/YYYY no flatpickr ──────────────────────
+/**
+ * BLOCO: Aplicação e gerenciamento de datas no calendário (modo lote)
+ * @context aplicarDatasNoCalendario: converte DD/MM/YYYY → Date e define no flatpickr via setDate.
+ *          renderizarPreviewDatas: exibe chips de datas selecionadas abaixo do calendário.
+ *          removerDataLote / limparDatasLote: removem uma data ou todas do array AppState.datasLote.
+ *          atualizarContadorLote: atualiza o badge de contagem de datas no botão do lote.
+ * @inputs datas: string[] no formato DD/MM/YYYY; index: número para remoção individual.
+ * @outputs AppState.datasLote sincronizado; flatpickr e DOM de preview atualizados.
+ * @sideEffects Muta AppState.datasLote e chama calendarInstance.setDate.
+ */
 function aplicarDatasNoCalendario(datas) {
   if (!calendarInstance) return;
 
@@ -1579,7 +1702,17 @@ function atualizarContadorLote() {
 
 
 
-// ── Modo de visualização ─────────────────────────────────────────────────────
+/**
+ * BLOCO: Modo diagrama — visualização semanal por sala
+ * @context renderizarModoDiagrama: renderiza grade semanal com reservas dispostas em colunas por sala.
+ *          _popularFiltrosDiagrama: preenche os selects de filtro (sala/setor) do diagrama.
+ *          limparFiltrosDiagrama: limpa os filtros e re-renderiza o diagrama.
+ *          _diagramaCliqueVazio: abre formulário de nova reserva ao clicar em slot vazio do diagrama.
+ *          _destacarReservaSalva: anima visualmente a reserva recém-salva no diagrama.
+ * @inputs AppState.colecoes.reservas filtrado; semana atual de AppState.diagramaSemana.
+ * @outputs DOM: preenche #diagramaContainer com grade de salas × dias × reservas.
+ * @sideEffects Lê e escreve AppState.diagramaSemana para navegação de semana.
+ */
 function renderizarModoDiagrama() {
   const container = document.getElementById('diagramaContainer');
   const labelEl   = document.getElementById('diagramaSemanaLabel');
@@ -1860,6 +1993,17 @@ function _destacarReservaSalva(nomeAcao) {
   }, 3500);
 }
 
+/**
+ * BLOCO: Polling de solicitações e módulo CODIP
+ * @context _pollSolicitacoes: loop de polling (setTimeout 30s) para verificar solicitações pendentes;
+ *          atualiza o badge de notificação e dispara alerta visual quando há novos pendentes.
+ *          _codipAtualizarTotais: recalcula o total de público (presencial + virtual + visualizações).
+ *          _codipColetarPayload: coleta todos os campos do formulário CODIP em um objeto estruturado.
+ *          _atualizarMapaExterno / _syncAgendaScroll / _initMiniCalRece / _initMiniCalAgenda: utilitários de UI menores.
+ * @inputs AppState.usuario.isAdmin/isSuperadmin/isHabilitador para determinar endpoint de listagem.
+ * @outputs Badge de notificação atualizado; alerta Swal para novas solicitações; payload CODIP estruturado.
+ * @sideEffects google.script.run.listarTodasSolicitacoes / listarSolicitacoesPendentes — polling periódico.
+ */
 var _pollSolicitacoesTimer = null;
 var _pollSolicitacoesUltimoPendente = 0;
 
@@ -2043,6 +2187,15 @@ function _initMiniCalAgenda() {
   el._fpInst = flatpickr(el, { inline:true, locale:'pt', dateFormat:'d/m/Y', onChange: onMudanca });
 }
 
+/**
+ * BLOCO: Gestão de donos/responsáveis por espaço
+ * @context adicionarDono / removerDono / renderizarContainerDonos: gerenciam o array window._donosEspaco,
+ *          que define quais usuários são responsáveis por determinado espaço e em quais dias da semana.
+ *          resolverNomeLocal: resolve email para nome de exibição usando AppState.colecoes.administradores.
+ * @inputs window._donosEspaco: [{email, dias: number[], setor}]; inputs DOM de email/dias/setor por dono.
+ * @outputs DOM: renderiza chips de donos com seletor de dias; sincroniza estado em window._donosEspaco.
+ * @sideEffects Muta window._donosEspaco; não persiste — o save ocorre via salvarConfiguracao.
+ */
 const _diasNomesEspaco = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
 
 function adicionarDono() {
@@ -2092,6 +2245,15 @@ function resolverNomeLocal(email) {
   return nome ? nome + ' <span class="opacity-50 font-normal">(' + e + ')</span>' : e;
 }
 
+/**
+ * BLOCO: Alternância de modo de visualização e detalhes de reservas
+ * @context alternarModoVisualizacao: alterna entre modo 'lista' (tabela) e 'agenda' (Google Calendar view).
+ *          abrirDetalheReserva: exibe Swal com todos os campos de uma reserva, incluindo ações contextuais.
+ *          abrirDetalheRece: exibe Swal de detalhe de um evento RECE a partir do ID de reserva geral.
+ * @inputs modo: 'lista'|'agenda'; id: string ID de reserva.
+ * @outputs DOM: alterna visibilidade de divs de visualização; Swal de detalhe.
+ * @sideEffects renderizarModoAgendaGoogle chamado ao entrar no modo agenda.
+ */
 function alternarModoVisualizacao(modo) {
   const lista      = document.querySelector('#aba-lista-reservas .bg-white.rounded-3xl.shadow-sm.border');
   const tabelaWrap = document.getElementById('tabelaContainerOuter');
@@ -2301,7 +2463,17 @@ function abrirDetalheRece(id) {
   document.body.appendChild(o);
 }
 
-// ── Agenda Google Calendar View ───────────────────────────────────────────────
+/**
+ * BLOCO: Agenda estilo Google Calendar — visualização semanal geral
+ * @context renderizarModoAgendaGoogle: renderiza grade semana × sala com reservas posicionadas por horário.
+ *          atualizarAgendaAposMudanca: força recarregamento das reservas e re-renderiza a agenda.
+ *          agendaSemanaAnterior / agendaProximaSemana / agendaHoje: navegação de semana.
+ *          abrirFormularioNoSlot: captura clique em célula vazia e pré-preenche o formulário.
+ *          fmtHoraMin: formata minutos absolutos (ex: 540) para string HH:MM.
+ * @inputs AppState.colecoes.reservas; semana atual de AppState.agendaSemana; filtros de sala/setor.
+ * @outputs DOM: preenche #agendaGoogleContainer com grade responsiva de reservas por dia e sala.
+ * @sideEffects Lê/escreve AppState.agendaSemana; mobile usa #agendaGoogleContainerMobile.
+ */
 function renderizarModoAgendaGoogle() {
   const isMobile = window.innerWidth < 1024;
   const container = isMobile
@@ -2741,7 +2913,17 @@ function fmtHoraMin(m) {
   return `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
 }
 
-// ── Convidados Internos ───────────────────────────────────────────────────────
+/**
+ * BLOCO: Convidados internos e convite por Google Calendar
+ * @context adicionarConvidadoInterno: adiciona emails ao array convidadosInternos (multi-parse por vírgula/espaço).
+ *          removerConvidadoInterno / renderizarChipsConvidados / sincronizarInputConvidados: gerenciam chips de UI.
+ *          alternarEventoInstitucional: mostra/oculta campos de evento institucional no formulário RECE.
+ *          dispararConviteInstitucional: abre Swal de seleção de destinatários e aciona envio.
+ *          enviarConvitesCalendarInterno: envia convites Google Calendar via servidor para os emails selecionados.
+ * @inputs convidadosInternos: string[]; inputs DOM de email; AppState para dados da reserva.
+ * @outputs DOM: chips visuais de convidados; Swal de confirmação; chamada ao servidor para criar eventos.
+ * @sideEffects google.script.run.criarEventosCalendarConvidados — cria eventos no Google Calendar.
+ */
 var convidadosInternos = [];
 
 function adicionarConvidadoInterno() {
@@ -2848,7 +3030,16 @@ function enviarConvitesCalendarInterno() {
 //   enviarConvitesCalendarInterno();
 // }
 
-// ── Imagem RECE ───────────────────────────────────────────────────────────────
+/**
+ * BLOCO: Upload de imagem RECE e agenda visual RECE
+ * @context previewImagemRece: valida tamanho (máx 4MB) e exibe preview antes do upload.
+ *          uploadImagemSeNecessario: lê o File do input, converte para base64 e envia ao servidor.
+ *          alternarModoVisualizacaoRece: alterna entre 'lista' (tabela) e 'agenda' (semanal).
+ *          renderizarModoAgendaRece: renderiza grade semanal exclusiva para eventos RECE.
+ * @inputs input: HTMLInputElement com arquivo de imagem; modo: 'lista'|'agenda'.
+ * @outputs DOM: preview de imagem; modo de visualização alternado; grade semanal RECE preenchida.
+ * @sideEffects google.script.run.uploadImagemRece — salva arquivo no Drive e retorna URL.
+ */
 function previewImagemRece(input) {
   const file = input.files?.[0];
   if (!file) return;
@@ -3086,6 +3277,19 @@ function renderizarModoAgendaRece() {
   });
 }
 
+/**
+ * BLOCO: Validação de conflito em tempo real e sugestões de horário/sala
+ * @context validarConflitoTempoReal: chamado nos inputs de hora e select de sala; usa AppState.cacheReservasIndex
+ *          para detecção de conflito O(1) sem roundtrip ao servidor.
+ *          atualizarSugestoes: atualiza lista de sugestões de horário livre para a data/sala selecionada.
+ *          obterHorariosLivresComIntervalo: retorna array de slots livres como strings HH:MM.
+ *          obterSalasDisponiveisPorData / mostrarSalasDisponiveisUI: calcula e exibe salas livres para o período.
+ *          mostrarHorariosDisponiveisUI: renderiza os slots sugeridos como chips clicáveis no formulário.
+ *          selecionarSala: preenche o select de sala e atualiza conflito e itens fixos.
+ * @inputs Campos DOM do formulário; AppState.cacheReservasIndex para lookup direto.
+ * @outputs DOM: aviso #avisoHorarioOcupado; chips de sugestão; lista de salas disponíveis.
+ * @sideEffects Nenhum além da mutação do DOM; não faz chamadas ao servidor.
+ */
 function validarConflitoTempoReal() {
 
   const horaInicio = document.getElementById('horaInicio');
@@ -3322,6 +3526,15 @@ function mostrarHorariosDisponiveisUI() {
 
 
 
+/**
+ * BLOCO: Preferências de usuário e ordenação de sugestões
+ * @context salvarPreferenciasUsuario: persiste em localStorage as salas e setores mais usados pelo usuário
+ *          para que futuras sugestões priorizem as preferências históricas.
+ *          ordenarSugestoesPorPreferencia: reordena a lista de sugestões colocando salas/setores preferidos no topo.
+ * @inputs contexto: objeto com { sala, setor, dataStr } após agendamento bem-sucedido.
+ * @outputs localStorage['prefsReserva'] atualizado; sugestões reordenadas in-place.
+ * @sideEffects Escrita em localStorage; sem chamadas ao servidor.
+ */
 function salvarPreferenciasUsuario(contexto) {
 
   try {
@@ -3427,6 +3640,18 @@ function ordenarSugestoesPorPreferencia(sugestoes, contexto) {
 }
 
 
+/**
+ * BLOCO: Integração IA — chamada unificada e fallback local
+ * @context chamarIAComFallback: tenta chamar o servidor; em caso de falha ou resposta vazia,
+ *          cai no interpretador local interpretarIntencaoLocal para resposta mínima sem IA.
+ *          chamarIAUnificada: versão com contexto rico (reservas, salas, perfil) para sugestões completas.
+ *          interpretarIntencaoLocal: parser de texto simples para detectar intenção sem IA.
+ *          sugerirItensParaReserva: retorna lista de itens sugeridos com base no tipo de evento.
+ *          renderizarGraficoIA: renderiza um gráfico de barras inline com dados retornados pela IA.
+ * @inputs prompt: string; contexto: objeto com dados do AppState para enriquecimento do prompt.
+ * @outputs Promise<string> com resposta da IA ou fallback local; DOM de gráfico quando aplicável.
+ * @sideEffects google.script.run.chamarIA — chamada ao modelo de linguagem via servidor GAS.
+ */
 async function chamarIAComFallback(prompt) {
   return new Promise((resolve) => {
     google.script.run

@@ -1,267 +1,271 @@
-  <script>
-    if (typeof toggleSidebar === 'undefined') {
-      function toggleSidebar() {
-        var sidebar = document.getElementById('sidebarPrincipal');
-        var overlay = document.getElementById('sidebarOverlay');
-        if (sidebar) sidebar.classList.toggle('-translate-x-full');
-        if (overlay) overlay.classList.toggle('hidden');
-      }
-    }
+<!--
+@file bootstrap_js.html
+@type logic
+@description Ponto de inicialização da aplicação após o DOM estar pronto.
+@responsibility Disparar inicializarApp(), registrar event listeners globais e configurar delegação de eventos.
+@dependencies Todos os módulos de lógica anteriores (estado, componentes, reservas, admin, favoritos).
+-->
+<script>
 
-    document.addEventListener('DOMContentLoaded', function () {
+/**
+ * ========================================
+ * BLOCO: Fallback de toggleSidebar
+ * ========================================
+ * @description Garante que toggleSidebar existe mesmo que mod_ui_estado_js carregue depois
+ * @context Proteção contra ordem de carregamento
+ */
+if (typeof toggleSidebar === 'undefined') {
+  function toggleSidebar() {
+    var sidebar = document.getElementById('sidebarPrincipal');
+    var overlay = document.getElementById('sidebarOverlay');
+    if (sidebar) sidebar.classList.toggle('-translate-x-full');
+    if (overlay) overlay.classList.toggle('hidden');
+  }
+}
 
-      // ── 1. inicializarApp + change listeners de horário/sala ──────────────
-      console.log("Iniciando Sistema CCBJ...");
-      inicializarApp();
+/**
+ * ========================================
+ * BLOCO: Inicialização — DOMContentLoaded
+ * ========================================
+ * @description Orquestra toda a sequência de boot da aplicação
+ * @context Executado uma única vez após o DOM ser completamente carregado
+ * @sideEffects Chama inicializarApp(), registra listeners, carrega preferências
+ */
+document.addEventListener('DOMContentLoaded', function () {
 
-      const inicio = document.getElementById('horaInicio');
-      const termino = document.getElementById('horaTermino');
-      const sala = document.getElementById('selectSala');
+  console.log('Iniciando Sistema CCBJ...');
+  inicializarApp();
 
-      if (inicio) inicio.addEventListener('change', atualizarTudoTempoReal);
-      if (termino) termino.addEventListener('change', atualizarTudoTempoReal);
-      if (sala) sala.addEventListener('change', atualizarTudoTempoReal);
+  /**
+   * ========================================
+   * BLOCO: Listeners de formulário em tempo real
+   * ========================================
+   * @description Dispara atualizarTudoTempoReal ao alterar sala, início ou término
+   * @context Formulário de nova reserva (#formReserva)
+   * @sideEffects Atualiza disponibilidade de itens e indicadores visuais
+   */
+  const inicio  = document.getElementById('horaInicio');
+  const termino = document.getElementById('horaTermino');
+  const sala    = document.getElementById('selectSala');
 
-      // ── 2. click delegation para botões com data-acao ────────────────────
-      document.body.addEventListener('click', function(e) {
+  if (inicio)  inicio.addEventListener('change', atualizarTudoTempoReal);
+  if (termino) termino.addEventListener('change', atualizarTudoTempoReal);
+  if (sala)    sala.addEventListener('change', atualizarTudoTempoReal);
 
-        const btn = e.target.closest('[data-acao]');
-        if (!btn) return;
+  /**
+   * ========================================
+   * BLOCO: Delegação de eventos — data-acao
+   * ========================================
+   * @description Gerencia todas as ações de botões via atributo data-acao no body
+   * @context Permite que elementos criados dinamicamente (cards de reserva, tabelas de admin)
+   *          disparem ações sem precisar de listeners individuais
+   * @inputs btn.dataset.acao, btn.dataset.id e atributos de dados adicionais
+   * @sideEffects Chama funções dos módulos de reservas, admin e auditoria
+   */
+  document.body.addEventListener('click', function (e) {
+    const btn = e.target.closest('[data-acao]');
+    if (!btn) return;
 
-        var acao = btn.dataset.acao;
-        var id   = btn.dataset.id || null;
+    var acao = btn.dataset.acao;
+    var id   = btn.dataset.id || null;
 
-        var acoes = {
+    var acoes = {
+      'editar-espaco':  function() { abrirModalConfig('espaco', id, btn.dataset.nome, btn.dataset.capacidade, btn.dataset.email || ''); },
+      'excluir-espaco': function() { dispararExclusao(id, 'espaco'); },
+      'editar-item':    function() { abrirModalConfig('item', id, btn.dataset.nome, btn.dataset.qtd, btn.dataset.categoria); },
+      'excluir-item':   function() { dispararExclusao(id, 'item'); },
+      'editar-setor':   function() { abrirModalConfig('setor', id, btn.dataset.nome); },
+      'excluir-setor':  function() { dispararExclusao(id, 'setor'); },
+      'editar-usuario': function() { abrirModalConfig('usuario', id, btn.dataset.email, btn.dataset.nivel); },
+      'excluir-usuario':function() { dispararExclusao(id, 'usuario'); },
+      'habilitar-reserva': function() { habilitarReserva(id); },
+      'editar-reserva':    function() { prepararEdicao(id); },
+      'cancelar-reserva':  function() { confirmarCancelamento(id, btn.dataset.nome); },
+      'excluir-reserva':   function() { excluirDefinitivo(id, 'reserva'); },
+      'editar-rece':       function() { prepararEdicaoRece(id); },
+      'cancelar-rece':     function() { confirmarCancelamentoRece(id, btn.dataset.nome); },
+      'excluir-rece':      function() { excluirReceDefinitivo(id); },
 
-          'editar-espaco': function() {
-            abrirModalConfig('espaco', id, btn.dataset.nome, btn.dataset.capacidade, btn.dataset.email || '');
-          },
-
-          'excluir-espaco': function() {
-            dispararExclusao(id, 'espaco');
-          },
-
-          'editar-item': function() {
-            abrirModalConfig('item', id, btn.dataset.nome, btn.dataset.qtd, btn.dataset.categoria);
-          },
-
-          'excluir-item': function() {
-            dispararExclusao(id, 'item');
-          },
-
-          'editar-setor': function() {
-            abrirModalConfig('setor', id, btn.dataset.nome);
-          },
-
-          'excluir-setor': function() {
-            dispararExclusao(id, 'setor');
-          },
-
-          'editar-usuario': function() {
-            abrirModalConfig('usuario', id, btn.dataset.email, btn.dataset.nivel);
-          },
-
-          'excluir-usuario': function() {
-            dispararExclusao(id, 'usuario');
-          },
-
-          'habilitar-reserva': function() {
-            habilitarReserva(id);
-          },
-
-          'editar-reserva': function() {
-            prepararEdicao(id);
-          },
-
-          'cancelar-reserva': function() {
-            confirmarCancelamento(id, btn.dataset.nome);
-          },
-
-          'excluir-reserva': function() {
-            excluirDefinitivo(id, 'reserva');
-          },
-
-          'editar-rece': function() {
-            prepararEdicaoRece(id);
-          },
-
-          'cancelar-rece': function() {
-            confirmarCancelamentoRece(id, btn.dataset.nome);
-          },
-
-          'excluir-rece': function() {
-            excluirReceDefinitivo(id);
-          },
-
-          'rollback-seletivo': function() {
-
-            if (!AppState.usuario.isSuperadmin) {
-              Swal.fire('Acesso Negado', 'Apenas Superadmins podem desfazer ações.', 'error');
-              return;
-            }
-
-            var timestamp = btn.dataset.timestamp;
-
-            Swal.fire({
-              title: 'Desfazer esta ação?',
-              text: 'Esta operação reverterá a alteração selecionada. Não pode ser desfeita.',
-              icon: 'warning',
-              showCancelButton: true,
-              confirmButtonColor: '#f59e0b',
-              confirmButtonText: 'Sim, desfazer!',
-              cancelButtonText: 'Cancelar'
-            }).then(function(result) {
-
-              if (!result.isConfirmed) return;
-
-              showLoader(true);
-
-              google.script.run
-                .withSuccessHandler(function() {
-                  showLoader(false);
-
-                  Swal.fire({
-                    title: 'Desfeito!',
-                    text: 'Ação revertida com sucesso.',
-                    icon: 'success',
-                    timer: 2500,
-                    showConfirmButton: false
-                  });
-
-                  carregarAuditoria();
-                  carregarReservas();
-                  if (AppState.colecoes.reservasRece) carregarReservasRece();
-
-                })
-                .withFailureHandler(function(err) {
-                  showLoader(false);
-                  Swal.fire('Erro no Rollback', err.message, 'error');
-                })
-                .rollbackAcaoPorTimestamp(AppState.usuario.email, timestamp);
-
-            });
-
-          }
-
-        };
-
-        if (acoes[acao]) {
-          acoes[acao]();
+      /**
+       * Rollback seletivo — apenas Superadmin.
+       * Reverte uma entrada específica do log de auditoria pelo timestamp.
+       */
+      'rollback-seletivo': function() {
+        if (!AppState.usuario.isSuperadmin) {
+          Swal.fire('Acesso Negado', 'Apenas Superadmins podem desfazer ações.', 'error');
+          return;
         }
-
-      });
-
-      // ── 3. ATUALIZA ITENS FIXOS AO TROCAR SALA ───────────────────────────
-      const select = document.getElementById('selectSala');
-      if (select) {
-
-        document.getElementById('selectVolantes')?.addEventListener('change', atualizarMaxQuantidade);
-
-        select.addEventListener('change', function() {
-
-          const idSala = this.value;
-
-          // Bloco externo
-          const blocoExt = document.getElementById('blocoExterno');
-          if (blocoExt) {
-            if (idSala === 'EXTERNO') {
-              blocoExt.classList.remove('hidden');
-            } else {
-              blocoExt.classList.add('hidden');
-              const inp = document.getElementById('inputEnderecoExterno');
-              if (inp) inp.value = '';
-              document.getElementById('blocoRotaExterna')?.classList.add('hidden');
-            }
-          }
-
-          itensFixosSelecionados = [];
-          renderizarCarrinhoFixos();
-
-          const container = document.getElementById('itensFixosSala');
-          const bloco = document.getElementById('blocoItensFixos');
-          if (!container || !bloco) return;
-
-          const itens = obterItensFixosDaSala(idSala);
-
-          if (itens.length === 0) {
-            bloco.classList.add('hidden');
-            container.innerHTML = '';
-            return;
-          }
-
-          bloco.classList.remove('hidden');
-          container.innerHTML = itens.map(i => `
-            <div class="flex items-center justify-between bg-white/10 rounded-xl px-3 py-2 border border-white/20 mb-2">
-              <div class="flex flex-col">
-                <span class="text-[11px] font-bold text-white">
-                  <b class="text-purple-300">${i.qtd}x</b> ${escaparHTML(i.nome)}
-                  <span class="text-[9px] text-slate-400 ml-1">(fixo)</span>
-                </span>
-              </div>
-              <div class="flex items-center gap-2">
-                <input type="number" min="1" max="${i.qtd}" value="1"
-                  id="qtd_fixo_${escaparHTML(i.nome.replace(/\s/g,'_'))}"
-                  class="w-12 text-center text-xs bg-white/10 border border-white/20 rounded-lg py-1 text-white font-bold outline-none">
-                <button type="button"
-                  onclick="adicionarItemFixoCarrinho('${escaparHTML(i.nome)}', ${i.qtd})"
-                  class="text-[9px] font-black bg-purple-600 hover:bg-purple-500 text-white px-2 py-1 rounded-lg transition-all uppercase">
-                  + Usar
-                </button>
-              </div>
-            </div>
-          `).join('');
-
+        var timestamp = btn.dataset.timestamp;
+        Swal.fire({
+          title: 'Desfazer esta ação?',
+          text: 'Esta operação reverterá a alteração selecionada. Não pode ser desfeita.',
+          icon: 'warning',
+          showCancelButton: true,
+          confirmButtonColor: '#f59e0b',
+          confirmButtonText: 'Sim, desfazer!',
+          cancelButtonText: 'Cancelar'
+        }).then(function (result) {
+          if (!result.isConfirmed) return;
+          showLoader(true);
+          google.script.run
+            .withSuccessHandler(function () {
+              showLoader(false);
+              Swal.fire({ title: 'Desfeito!', text: 'Ação revertida com sucesso.', icon: 'success', timer: 2500, showConfirmButton: false });
+              carregarAuditoria();
+              carregarReservas();
+              if (AppState.colecoes.reservasRece) carregarReservasRece();
+            })
+            .withFailureHandler(function (err) {
+              showLoader(false);
+              Swal.fire('Erro no Rollback', err.message, 'error');
+            })
+            .rollbackAcaoPorTimestamp(AppState.usuario.email, timestamp);
         });
+      }
+    };
 
+    if (acoes[acao]) acoes[acao]();
+  });
+
+  /**
+   * ========================================
+   * BLOCO: Listener de troca de sala — itens fixos
+   * ========================================
+   * @description Ao trocar o espaço, recarrega os itens fixos disponíveis para aquela sala
+   * @context Formulário de nova reserva
+   * @sideEffects Atualiza #itensFixosSala, limpa itensFixosSelecionados
+   */
+  const select = document.getElementById('selectSala');
+  if (select) {
+    document.getElementById('selectVolantes')?.addEventListener('change', atualizarMaxQuantidade);
+
+    select.addEventListener('change', function () {
+      const idSala   = this.value;
+      const blocoExt = document.getElementById('blocoExterno');
+
+      if (blocoExt) {
+        if (idSala === 'EXTERNO') {
+          blocoExt.classList.remove('hidden');
+        } else {
+          blocoExt.classList.add('hidden');
+          const inp = document.getElementById('inputEnderecoExterno');
+          if (inp) inp.value = '';
+          document.getElementById('blocoRotaExterna')?.classList.add('hidden');
+        }
       }
 
-      // ── 4. Favoritos dragover + carregarPreferenciasUsuario ───────────────
-      const favContainer = document.getElementById('favoritosContainer');
-      if (favContainer) {
-        favContainer.addEventListener('dragover', e => { e.preventDefault(); });
-        google.script.run
-          .withSuccessHandler(function(prefs) {
-            iniciarPreferencias(prefs);
-          })
-          .carregarPreferenciasUsuario();
+      itensFixosSelecionados = [];
+      renderizarCarrinhoFixos();
+
+      const container = document.getElementById('itensFixosSala');
+      const bloco     = document.getElementById('blocoItensFixos');
+      if (!container || !bloco) return;
+
+      const itens = obterItensFixosDaSala(idSala);
+
+      if (itens.length === 0) {
+        bloco.classList.add('hidden');
+        container.innerHTML = '';
+        return;
       }
 
-      // ── 5. data-aba listeners + setTimeout (conteúdo original) ───────────
-      document.querySelectorAll('[data-aba]').forEach(function(btn) {
-        // Remove draggable dos botões em breve
-        const emBreve = btn.querySelector('.em-breve-badge');
-        if (!emBreve) {
-          btn.setAttribute('draggable', 'true');
-          btn.addEventListener('dragstart', iniciarDrag);
-        }
-        
-        btn.addEventListener('click', function() {
-          const aba = this.getAttribute('data-aba');
-          if (typeof mostrarAba !== 'function') return;
-          if (window.innerWidth < 768) {
-            document.getElementById('sidebarPrincipal')?.classList.add('-translate-x-full');
-            document.getElementById('sidebarOverlay')?.classList.add('hidden');
-          }
-          mostrarAba(aba);
-        });
-      });
-
-      setTimeout(function () {
-        var inicio  = document.getElementById('horaInicio');
-        var termino = document.getElementById('horaTermino');
-        var sala    = document.getElementById('selectSala');
-        if (inicio)  inicio.addEventListener('change',  function () { if (typeof atualizarDisponibilidadeItens === 'function') atualizarDisponibilidadeItens(); if (typeof bloquearHorariosVisualmente === 'function') bloquearHorariosVisualmente(); });
-        if (termino) termino.addEventListener('change', function () { if (typeof atualizarDisponibilidadeItens === 'function') atualizarDisponibilidadeItens(); if (typeof bloquearHorariosVisualmente === 'function') bloquearHorariosVisualmente(); });
-        if (sala)    sala.addEventListener('change',    function () { if (typeof bloquearHorariosVisualmente === 'function') bloquearHorariosVisualmente(); });
-        if (typeof calendarInstance !== 'undefined' && calendarInstance && calendarInstance.config) {
-          calendarInstance.config.onChange.push(function () {
-            if (typeof atualizarDisponibilidadeItens === 'function') atualizarDisponibilidadeItens();
-            if (typeof bloquearHorariosVisualmente   === 'function') bloquearHorariosVisualmente();
-            if (typeof renderizarPreviewDatas        === 'function') renderizarPreviewDatas();
-            if (typeof atualizarContadorLote         === 'function') atualizarContadorLote();
-          });
-        }
-      }, 800);
-
+      bloco.classList.remove('hidden');
+      container.innerHTML = itens.map(i => `
+        <div class="flex items-center justify-between bg-white/10 rounded-xl px-3 py-2 border border-white/20 mb-2">
+          <div class="flex flex-col">
+            <span class="text-[11px] font-bold text-white">
+              <b class="text-purple-300">${i.qtd}x</b> ${escaparHTML(i.nome)}
+              <span class="text-[9px] text-slate-400 ml-1">(fixo)</span>
+            </span>
+          </div>
+          <div class="flex items-center gap-2">
+            <input type="number" min="1" max="${i.qtd}" value="1"
+              id="qtd_fixo_${escaparHTML(i.nome.replace(/\s/g,'_'))}"
+              class="w-12 text-center text-xs bg-white/10 border border-white/20 rounded-lg py-1 text-white font-bold outline-none">
+            <button type="button"
+              onclick="adicionarItemFixoCarrinho('${escaparHTML(i.nome)}', ${i.qtd})"
+              class="text-[9px] font-black bg-purple-600 hover:bg-purple-500 text-white px-2 py-1 rounded-lg transition-all uppercase">
+              + Usar
+            </button>
+          </div>
+        </div>
+      `).join('');
     });
-  </script>
+  }
+
+  /**
+   * ========================================
+   * BLOCO: Favoritos — drag-and-drop e carregamento
+   * ========================================
+   * @description Registra o dropzone dos favoritos e dispara carregamento das preferências
+   * @context Sidebar — container #favoritosContainer
+   */
+  const favContainer = document.getElementById('favoritosContainer');
+  if (favContainer) {
+    favContainer.addEventListener('dragover', e => e.preventDefault());
+    google.script.run
+      .withSuccessHandler(function (prefs) { iniciarPreferencias(prefs); })
+      .carregarPreferenciasUsuario();
+  }
+
+  /**
+   * ========================================
+   * BLOCO: Navegação — botões data-aba
+   * ========================================
+   * @description Registra click handler para todos os botões de navegação da sidebar
+   * @context Sidebar e header — botões com atributo data-aba
+   * @sideEffects Chama mostrarAba(), fecha sidebar no mobile
+   */
+  document.querySelectorAll('[data-aba]').forEach(function (btn) {
+    const emBreve = btn.querySelector('.em-breve-badge');
+    if (!emBreve) {
+      btn.setAttribute('draggable', 'true');
+      btn.addEventListener('dragstart', iniciarDrag);
+    }
+    btn.addEventListener('click', function () {
+      const aba = this.getAttribute('data-aba');
+      if (typeof mostrarAba !== 'function') return;
+      if (window.innerWidth < 768) {
+        document.getElementById('sidebarPrincipal')?.classList.add('-translate-x-full');
+        document.getElementById('sidebarOverlay')?.classList.add('hidden');
+      }
+      mostrarAba(aba);
+    });
+  });
+
+  /**
+   * ========================================
+   * BLOCO: Listeners adicionais de disponibilidade (diferidos)
+   * ========================================
+   * @description Registra listeners de calendário após o Flatpickr estar inicializado
+   * @context Formulário de nova reserva — depende de calendarInstance
+   */
+  setTimeout(function () {
+    var inicio  = document.getElementById('horaInicio');
+    var termino = document.getElementById('horaTermino');
+    var sala    = document.getElementById('selectSala');
+
+    if (inicio)  inicio.addEventListener('change',  function () {
+      if (typeof atualizarDisponibilidadeItens === 'function') atualizarDisponibilidadeItens();
+      if (typeof bloquearHorariosVisualmente   === 'function') bloquearHorariosVisualmente();
+    });
+    if (termino) termino.addEventListener('change', function () {
+      if (typeof atualizarDisponibilidadeItens === 'function') atualizarDisponibilidadeItens();
+      if (typeof bloquearHorariosVisualmente   === 'function') bloquearHorariosVisualmente();
+    });
+    if (sala)    sala.addEventListener('change',    function () {
+      if (typeof bloquearHorariosVisualmente === 'function') bloquearHorariosVisualmente();
+    });
+
+    if (typeof calendarInstance !== 'undefined' && calendarInstance && calendarInstance.config) {
+      calendarInstance.config.onChange.push(function () {
+        if (typeof atualizarDisponibilidadeItens === 'function') atualizarDisponibilidadeItens();
+        if (typeof bloquearHorariosVisualmente   === 'function') bloquearHorariosVisualmente();
+        if (typeof renderizarPreviewDatas        === 'function') renderizarPreviewDatas();
+        if (typeof atualizarContadorLote         === 'function') atualizarContadorLote();
+      });
+    }
+  }, 800);
+
+});
+</script>

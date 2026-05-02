@@ -1,3 +1,11 @@
+/**
+ * @file mod_metrics.gs
+ * @layer backend/modules
+ * @description Cálculo de métricas de ocupação e KPIs do dashboard; integração com modelo de IA para
+ *              análise e sugestões contextuais (chamarIA, relatórios, sugestão de reserva).
+ * @responsibility Entrypoints: obterMetricasDashboard, chamarIA, chamarIAChat.
+ * @dependencies utils.js (_getSheet), ChatService.js (se presente), planilha MASTER/ESPACOS.
+ */
 // ============================================================
 // mod_metrics.gs
 // Dashboard, métricas, IA

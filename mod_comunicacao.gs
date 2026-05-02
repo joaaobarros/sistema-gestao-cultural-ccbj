@@ -1,3 +1,11 @@
+/**
+ * @file mod_comunicacao.gs
+ * @layer backend/modules
+ * @description Serviços de comunicação: agenda RECE, envio de convites Google Calendar e upload de imagens para o Drive.
+ * @responsibility Entrypoints: obterReservasRece, cancelarReservaRece, excluirReservaRece,
+ *                criarEventosCalendarConvidados, uploadImagemRece.
+ * @dependencies utils.js (_getSheet, gerarId), DataLayer.js (uploadDrive), Google Calendar API.
+ */
 // ============================================================
 // mod_comunicacao.gs
 // Agenda RECE, convites, upload de imagem

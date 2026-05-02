@@ -1,15 +1,27 @@
 /**
- * MÓDULO: Utilitários Centralizados
- * Funções reutilizáveis para parsing, validação e operações comuns
- * 
- * OBJETIVO: Eliminar duplicação de código e melhorar maintainability
+ * @file utils.js
+ * @description Utilitários centralizados do backend: acesso a planilhas, parsing,
+ *              validação, sanitização, índices de lookup e controle de concorrência.
+ * @layer backend
+ * @responsibility Funções puras reutilizáveis por todos os módulos GAS.
+ *                 Nenhuma lógica de negócio aqui — apenas infraestrutura.
+ * @dependencies Setup.js (_abrirModulo), PropertiesService (via Setup)
  */
 
-// Utils_GetSheet.gs
-
-// ══════════════════════════════════════════════════════
-// MAPA: nome da aba → módulo (chaves definidas em Setup.gs)
-// ══════════════════════════════════════════════════════
+/**
+ * ========================================
+ * BLOCO: Roteamento de planilhas — _getSheet
+ * ========================================
+ * @description Ponto único de acesso a qualquer aba do sistema multi-planilha.
+ *              ABA_PARA_MODULO mapeia nome da aba → chave do módulo (definida em Setup.js).
+ *              _getSheet roteia para a planilha correta via _abrirModulo() e retorna null
+ *              em caso de falha (nunca lança exceção) para manter compatibilidade com o padrão
+ *              de checagem `if (!aba || aba.getLastRow() < 2)` usado em todo o código.
+ * @context Chamado por todos os módulos backend que precisam acessar uma aba
+ * @inputs nomeAba — nome exato da aba conforme definido em MODULOS (Setup.js)
+ * @outputs GoogleAppsScript.Spreadsheet.Sheet ou null
+ * @sideEffects Abre planilha via SpreadsheetApp.openById (1 acesso por execução, cacheado)
+ */
 
 const ABA_PARA_MODULO = {
   // MASTER
@@ -132,7 +144,16 @@ function verificarTodasAbas() {
 }
 
 /**
- * ====== PARSING E NORMALIZAÇÃO ======
+ * ========================================
+ * BLOCO: Parsing e normalização de datas e horas
+ * ========================================
+ * @description Converte representações de data e hora para formatos internos consistentes.
+ *              normalizarData: Date|string → timestamp ms (para comparação)
+ *              formatarData: any → string DD/MM/YYYY (para exibição)
+ *              normalizarHora: Date|string → minutos desde 00:00 (para aritmética)
+ *              formatarHora: minutos → string HH:MM (para exibição)
+ * @context Usados em toda a camada de serviço e repositório do backend
+ * @sideEffects Nenhum — funções puras
  */
 
 /**
@@ -282,7 +303,14 @@ function formatarHora(minutos) {
 }
 
 /**
- * ====== VALIDAÇÃO ======
+ * ========================================
+ * BLOCO: Validação de entradas
+ * ========================================
+ * @description Valida e normaliza emails, IDs e formatos de horário.
+ *              Funções de validação retornam boolean; funções de normalização
+ *              retornam o valor tratado ou lançam Error se inválido.
+ * @context Usados nos entrypoints expostos ao frontend (validação de boundary)
+ * @sideEffects Nenhum — funções puras (exceto normalizarEmail que lança Error)
  */
 
 /**
@@ -370,7 +398,13 @@ function validarFormatoHora(hora) {
 }
 
 /**
- * ====== COMPARAÇÕES E VERIFICAÇÕES ======
+ * ========================================
+ * BLOCO: Comparações e verificações de horários
+ * ========================================
+ * @description Funções para detectar sobreposição de horários e calcular durações.
+ *              horariosSobrepostos: usa o algoritmo clássico ini1 < ter2 && ter1 > ini2.
+ * @context Usados principalmente em mod_reservas.gs para detecção de conflito
+ * @sideEffects Nenhum — funções puras
  */
 
 /**
@@ -414,7 +448,13 @@ function calcularDuracaoMinutos(inicio, fim) {
 }
 
 /**
- * ====== CRIAÇÃO DE ÍNDICES E MAPAS ======
+ * ========================================
+ * BLOCO: Índices de lookup por ID e coluna
+ * ========================================
+ * @description Constrói dicionários para lookup O(1) a partir de arrays 2D de planilha,
+ *              evitando iterações lineares repetidas nos módulos de serviço.
+ * @context Usados em módulos que precisam de lookups frequentes por ID ou chave
+ * @sideEffects Nenhum — funções puras (recebem arrays, retornam objetos)
  */
 
 /**
@@ -470,7 +510,14 @@ function criarIndiceColuna(dados, coluna) {
 }
 
 /**
- * ====== SANITIZAÇÃO ======
+ * ========================================
+ * BLOCO: Sanitização de entradas
+ * ========================================
+ * @description Proteção contra injection em textos livres e números recebidos do frontend.
+ *              sanitizarTexto: remove `<>` e limita tamanho.
+ *              sanitizarNumero: garante range válido.
+ * @context Aplicados em entrypoints que recebem dados não confiáveis do frontend
+ * @sideEffects Nenhum — funções puras
  */
 
 /**
@@ -513,7 +560,14 @@ function sanitizarNumero(valor, min = -Infinity, max = Infinity) {
 }
 
 /**
- * ====== LOCK COM RETRY ======
+ * ========================================
+ * BLOCO: Controle de concorrência — Lock com retry
+ * ========================================
+ * @description Obtém um LockService.getUserLock() com backoff exponencial.
+ *              Necessário porque múltiplos usuários podem salvar reservas simultaneamente
+ *              e o GAS não tem transações — o lock garante consistência na planilha.
+ * @context Usado em processarAgendamentoLote e excluirRegistroPorID
+ * @sideEffects Bloqueia execução por até timeoutMs ms por tentativa
  */
 
 /**
@@ -542,7 +596,12 @@ function obterLockComRetry(nome, timeoutMs = 10000, maxTentativas = 3) {
 }
 
 /**
- * ====== CONVERSÃO DE UNIDADES ======
+ * ========================================
+ * BLOCO: Formatação legível de durações e comparação de strings
+ * ========================================
+ * @description formatarDuracao: converte minutos para string "Xh Ymin" (exibição em relatórios).
+ *              compararStrings: comparação tolerante para dados de planilha (trim + lowercase).
+ * @sideEffects Nenhum — funções puras
  */
 
 /**
@@ -592,7 +651,13 @@ function compararStrings(str1, str2) {
 }
 
 /**
- * ====== TRATAMENTO DE ERRO ======
+ * ========================================
+ * BLOCO: Logging seguro de erros
+ * ========================================
+ * @description Centraliza o registro de erros sem expor stack traces sensíveis ao usuário.
+ *              Preparado para integração futura com serviço externo de logging.
+ * @context Usado em catch blocks dos módulos de serviço
+ * @sideEffects console.error
  */
 
 /**
@@ -614,7 +679,16 @@ function logarErroSeguro(contexto, erro, contextoAdicional = {}) {
 }
 
 /**
- * ====== ÍNDICES PARA PERFORMANCE ======
+ * ========================================
+ * BLOCO: Índices especializados por domínio
+ * ========================================
+ * @description Construtores de índice para os principais domínios do sistema.
+ *              Usados quando o módulo precisa fazer lookups frequentes em um dataset
+ *              carregado uma única vez da planilha.
+ *              criarIndiceAdmins: email → { nivel, indice }
+ *              criarIndiceSalas:  salaId → { nome, capacidade, email }
+ *              criarIndiceItens:  itemId → { nome, categoria, qtd, alocacao }
+ * @sideEffects Nenhum — funções puras
  */
 
 /**

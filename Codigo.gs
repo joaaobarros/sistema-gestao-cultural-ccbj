@@ -1,12 +1,26 @@
-// ============================================================
-// Codigo.gs — Controller principal
-// ============================================================
+/**
+ * @file Codigo.gs
+ * @description Ponto de entrada do servidor GAS. Define doGet/doPost,
+ *              a função include() para composição de templates HTML,
+ *              e helpers globais usados por múltiplos módulos backend.
+ * @layer backend
+ * @responsibility Roteamento HTTP, helpers de ID/data, notificações de cancelamento,
+ *                 stubs para funcionalidades em desenvolvimento.
+ * @dependencies mod_admin.gs (aprovarSolicitacao, recusarSolicitacao),
+ *               mod_reservas.gs (via helpers), utils.js (_getSheet, obterMapaSalas)
+ */
 
 const BASE_URL_FALLBACK =
   "https://script.google.com/macros/s/AKfycbzw2Gum2jte37SUmkEvbHUkwkxD_BRg51s_E7p3VUeODP2pIZUyO76yL5E2JuiuMUp1wg/exec";
 
-// ── Config ──────────────────────────────────────────────────
-
+/**
+ * ========================================
+ * BLOCO: URL base e configuração de deployment
+ * ========================================
+ * @description Resolve a URL pública do webapp. Usa a URL dinâmica do ScriptApp quando
+ *              disponível, ou cai no fallback hardcoded para ambientes de teste local.
+ * @sideEffects Nenhum
+ */
 function getBaseUrl() {
   try {
     return ScriptApp.getService().getUrl() || BASE_URL_FALLBACK;
@@ -15,8 +29,17 @@ function getBaseUrl() {
   }
 }
 
-// ── Helpers globais ─────────────────────────────────────────
-
+/**
+ * ========================================
+ * BLOCO: Helpers globais do servidor
+ * ========================================
+ * @description Funções utilitárias usadas por múltiplos módulos backend.
+ *              include(): injeção de fragmentos HTML no template (usado por Index.html).
+ *              gerarId(): cria IDs únicos no padrão PREFIXO-TIMESTAMP-RANDOM.
+ *              isMesmoDia(): verifica se uma data é hoje (usado para alertas de cancelamento).
+ *              obterMapaSalas(): constrói mapa id→nome a partir da aba Configuracoes.
+ * @sideEffects obterMapaSalas acessa a planilha (1 leitura)
+ */
 function include(filename) {
   return HtmlService.createHtmlOutputFromFile(filename).getContent();
 }
@@ -88,8 +111,19 @@ function testeVSCode() {
   Logger.log("funcionando");
 }
 
-// ── doGet / doPost ──────────────────────────────────────────
-
+/**
+ * ========================================
+ * BLOCO: Roteamento HTTP — doGet / doPost
+ * ========================================
+ * @description Ponto de entrada HTTP do webapp.
+ *              doGet: se receber ?acao=aprovar&id=X → processa aprovação inline (email);
+ *                     se receber ?acao=recusar&id=X → exibe formulário de justificativa;
+ *                     sem parâmetros → renderiza o app principal (Index.html).
+ *              doPost: processa o formulário de recusa enviado pelo doGet anterior.
+ * @context Chamado pelo Google Apps Script a cada request HTTP externo
+ * @sideEffects doGet(aprovar): chama aprovarSolicitacao, envia email
+ *              doPost: chama recusarSolicitacao
+ */
 function doGet(e) {
   const acao = e && e.parameter && e.parameter.acao;
   const id   = e && e.parameter && e.parameter.id;

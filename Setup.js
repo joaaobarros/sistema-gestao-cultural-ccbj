@@ -1,10 +1,37 @@
 /**
- * ARQUIVO: Setup.gs
- * Inicializa toda a estrutura multi-planilha do sistema CCBJ.
- * Execute inicializarSistema() uma única vez como Superadmin.
+ * @file Setup.js
+ * @description Provisionamento e manutenção da infraestrutura de planilhas do sistema CCBJ.
+ *              Cria 7 planilhas independentes (módulos) organizadas em subpastas no Drive,
+ *              registra seus IDs em PropertiesService e fornece helpers de acesso cacheados.
+ * @layer backend
+ * @responsibility Setup único do sistema multi-planilha; manutenção de estrutura de abas;
+ *                 registro de superadmin; helpers _abrirModulo/_abrirAba usados por utils.js.
+ * @dependencies DriveApp, SpreadsheetApp, PropertiesService, Session (Google Services)
+ *
+ * IMPACTO NO SISTEMA:
+ *   - inicializarSistema() cria pastas e planilhas — executar apenas uma vez como Superadmin.
+ *   - recriarEstrutura() é segura para reexecutar — recria abas sem apagar dados.
+ *   - MODULOS define a estrutura canônica de abas; alterações aqui afetam o schema do sistema.
+ *
+ * RISCOS:
+ *   - Executar inicializarSistema() novamente em ambiente produtivo pode criar planilhas duplicadas
+ *     se os IDs em PropertiesService forem perdidos.
+ *   - Alterar nomes de abas em MODULOS sem migrar dados quebrará _getSheet para a aba renomeada.
  */
 
-// ── IDs das planilhas (persistidos em PropertiesService) ─────────────────
+/**
+ * ========================================
+ * BLOCO: Configuração dos módulos e schema
+ * ========================================
+ * @description PROP: chaves usadas no PropertiesService para persistir IDs das planilhas.
+ *              MODULOS: estrutura canônica — define nome, pasta, prop e abas (com cabeçalhos)
+ *                       de cada módulo do sistema.
+ *              COR_MODULO: cor do cabeçalho de cada planilha para identificação visual.
+ *
+ *              Para adicionar um novo módulo: incluir entrada em PROP, MODULOS e COR_MODULO,
+ *              adicionar o mapeamento de abas em ABA_PARA_MODULO (utils.js) e
+ *              executar recriarEstrutura() em produção.
+ */
 const PROP = {
   MASTER:       'SHEET_ID_MASTER',
   ESPACOS:      'SHEET_ID_ESPACOS',
@@ -148,9 +175,19 @@ const COR_MODULO = {
   PESSOAL:     '#3B0764',
 };
 
-// ════════════════════════════════════════════════════════════════════════
-// INICIALIZAR SISTEMA
-// ════════════════════════════════════════════════════════════════════════
+/**
+ * ========================================
+ * BLOCO: Provisionamento inicial
+ * ========================================
+ * @description inicializarSistema(): cria toda a infraestrutura de pastas e planilhas.
+ *              Exibe confirmação via UI quando executada no editor; silenciosa quando
+ *              chamada programaticamente (sem UI disponível).
+ *              autorizarDrive(): helper de autorização — executar antes de inicializarSistema()
+ *              se for a primeira execução do script no ambiente.
+ * @context Execução manual única pelo Superadmin no Google Apps Script Editor
+ * @sideEffects Cria pastas no Drive, cria planilhas, salva IDs em PropertiesService,
+ *              registra o email do executor como Superadmin
+ */
 function inicializarSistema() {
 
   let usarUI = true;
@@ -301,10 +338,17 @@ function _registrarSuperadmin() {
   if (!jaExiste) aba.appendRow([email, 'Superadmin']);
 }
 
-// ════════════════════════════════════════════════════════════════════════
-// HELPERS DE ACESSO
-// ════════════════════════════════════════════════════════════════════════
-
+/**
+ * ========================================
+ * BLOCO: Helpers de acesso às planilhas
+ * ========================================
+ * @description _ssCache: cache em memória por execução GAS — evita abrir a mesma planilha
+ *              múltiplas vezes em uma única requisição (SpreadsheetApp.openById é custoso).
+ *              _abrirModulo(chave): retorna o Spreadsheet do módulo, usando cache.
+ *              _abrirAba(chave, nomeAba): atalho para obter uma aba específica com erro claro.
+ * @context Usados por _getSheet (utils.js) e pelos helpers de manutenção abaixo
+ * @sideEffects _abrirModulo popula _ssCache; lê PropertiesService na primeira chamada
+ */
 // Cache em memória para evitar openById repetido na mesma execução
 const _ssCache = {};
 
@@ -330,9 +374,18 @@ function _abrirAba(chave, nomeAba) {
   return aba;
 }
 
-// ════════════════════════════════════════════════════════════════════════
-// UTILITÁRIOS DE MANUTENÇÃO
-// ════════════════════════════════════════════════════════════════════════
+/**
+ * ========================================
+ * BLOCO: Utilitários de manutenção e diagnóstico
+ * ========================================
+ * @description Funções de uso exclusivamente manual (executar no editor GAS):
+ *              listarIdsModulos(): exibe IDs salvos no PropertiesService — diagnóstico.
+ *              recriarEstrutura(): recria abas sem apagar dados — atualiza schema.
+ *              liberarItensOrfaos(): quando uma sala é excluída, devolve ao estoque do almoxarifado
+ *                                    os itens que estavam alocados nela.
+ *              debugProps(): lista todas as propriedades salvas — diagnóstico.
+ *              processarFilasAutomaticamente(): placeholder para trigger agendado futuro.
+ */
 
 /** Lista todos os IDs salvos — útil para diagnóstico */
 function listarIdsModulos() {

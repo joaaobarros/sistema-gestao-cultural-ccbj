@@ -1,3 +1,9 @@
+/**
+ * @file mod_pessoal.gs
+ * @layer backend/modules
+ * @description Módulo de gestão de pessoal/demandas — STUB. Todas as funções lançam "EM_BREVE".
+ *              Previsto: tarefas, processos e demandas institucionais (planilha PESSOAL).
+ */
 // mod_pessoal.gs
 // Módulo Pessoal — Em desenvolvimento
 function obterTarefas() {

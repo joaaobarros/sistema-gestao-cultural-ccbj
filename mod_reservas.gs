@@ -1,12 +1,28 @@
-// ============================================================
-// mod_reservas.gs
-// Reservas, Itens, Conflito, Disponibilidade
-// ============================================================
+/**
+ * @file mod_reservas.gs
+ * @description Módulo central de reservas: criação, edição, cancelamento, conflitos,
+ *              disponibilidade de itens e integração com a Agenda RECE.
+ * @layer backend
+ * @responsibility CRUD de reservas na planilha "Reservas"; verificação de conflitos de horário;
+ *                 cálculo de disponibilidade de itens por horário; processamento em lote;
+ *                 repositories e services do domínio de reservas.
+ * @dependencies utils.js (_getSheet, normalizarData, normalizarHora, horariosSobrepostos,
+ *               validarEmail, normalizarEmail, sanitizarNumero, logarErroSeguro),
+ *               mod_admin.gs (registrarLog, verificarDonoOuAdmin, verificarPermissao,
+ *               limitarRequisicoes, detectarComportamentoSuspeito, limparCacheUsuario),
+ *               Codigo.gs (gerarId, isMesmoDia, _notificarCancelamentoMesmoDia)
+ */
 
-// ==============================
-// OBTER RESERVAS
-// ==============================
-
+/**
+ * ========================================
+ * BLOCO: Leitura de reservas
+ * ========================================
+ * @description Retorna todas as reservas da planilha como array 2D (16 colunas).
+ *              Exposto ao frontend via google.script.run.obterReservas().
+ * @outputs Array de arrays com colunas: ID, Data, Início, Término, Sala, Turno,
+ *          Nome, Tipo, Responsável, Setor, Co-resp, Release, Itens, Status, Solicitação, Lote
+ * @sideEffects 1 leitura na planilha Reservas
+ */
 function obterReservas() {
   try {
     const aba = _getSheet("Reservas");
@@ -18,10 +34,18 @@ function obterReservas() {
   }
 }
 
-// ==============================
-// VERIFICAÇÃO DE CONFLITO
-// ==============================
-
+/**
+ * ========================================
+ * BLOCO: Verificação de conflito de horário
+ * ========================================
+ * @description Verifica se um horário solicitado conflita com reservas existentes na planilha.
+ *              Inclui buffer de 5 minutos entre reservas (limpeza do espaço).
+ *              É a fonte de verdade para conflitos — o frontend tem sua própria verificação
+ *              otimista (verificarConflitoFrontend) baseada no cache local.
+ * @inputs sala, data, inicio, termino (strings/Date), idReservaIgnorar (para edição)
+ * @outputs { conflito: boolean, tipo?, solicitado?, existente?, contexto? }
+ * @sideEffects 1 leitura na planilha Reservas
+ */
 function verificarConflitoEspaco(
   sala,
   data,
@@ -95,10 +119,18 @@ function verificarConflitoEspaco(
   return { conflito: false };
 }
 
-// ==============================
-// CANCELAR RESERVA
-// ==============================
-
+/**
+ * ========================================
+ * BLOCO: Cancelamento e habilitação de reservas
+ * ========================================
+ * @description cancelarReserva: cancela a reserva (apenas dono ou admin). Notifica admins
+ *              se o cancelamento for no mesmo dia (risco de sala desocupada).
+ *              cancelarReservaComJustificativa: versão admin com notificação ao dono e motivo.
+ *              habilitarReservaStatus: muda status para HABILITADO (admin/superadmin/habilitador).
+ *              verificarPermissaoCancelamento: consulta pré-cancelamento para exibir UI correta.
+ * @context Chamados via google.script.run pelo frontend (delegação de eventos data-acao)
+ * @sideEffects Escreve na planilha, registra log, pode enviar emails via GmailApp
+ */
 function cancelarReserva(id, emailAtual) {
   limitarRequisicoes("cancelar_reserva", 5, 30000);
 
@@ -294,10 +326,17 @@ function verificarPermissaoCancelamento(id, emailAtual) {
   throw new Error("Reserva não encontrada");
 }
 
-// ==============================
-// SALVAR EDIÇÃO DE RESERVA
-// ==============================
-
+/**
+ * ========================================
+ * BLOCO: Edição de reserva existente
+ * ========================================
+ * @description Valida campos, verifica conflito (ignorando a própria reserva),
+ *              verifica disponibilidade de itens, atualiza a linha na planilha,
+ *              sincroniza com a RECE se necessário e registra log de auditoria.
+ * @inputs dados: { id, data, horaInicio, horaTermino, sala, nomeAcao, responsavel, ... }
+ * @outputs { success: true, id }
+ * @sideEffects Escreve na planilha Reservas, pode atualizar ReservasRECE, registra log
+ */
 function salvarEdicaoReserva(dados) {
   validarCamposObrigatorios(dados, [
     "id",
@@ -389,10 +428,17 @@ function salvarEdicaoReserva(dados) {
   }
 }
 
-// ==============================
-// EXCLUIR REGISTRO
-// ==============================
-
+/**
+ * ========================================
+ * BLOCO: Exclusão definitiva de registros
+ * ========================================
+ * @description Remove fisicamente uma linha da planilha correspondente ao tipo.
+ *              Tipos permitidos: reserva, espaco, item, usuario, setor.
+ *              Usa lock de script para evitar race conditions em deleções concorrentes.
+ *              Para espaços: libera automaticamente itens alocados (liberarItensOrfaos).
+ * @inputs tipo (string), id, emailAtual
+ * @sideEffects Deleta linha da planilha, registra log, pode liberar itens órfãos
+ */
 function excluirRegistroPorID(tipo, id, emailAtual) {
   if (!tipo || !id) throw new Error("ID e tipo são obrigatórios.");
   if (!emailAtual || !emailAtual.includes("@"))
@@ -471,10 +517,21 @@ function excluirRegistroPorID(tipo, id, emailAtual) {
   }
 }
 
-// ==============================
-// DISPONIBILIDADE DE ITENS
-// ==============================
-
+/**
+ * ========================================
+ * BLOCO: Disponibilidade de itens do almoxarifado
+ * ========================================
+ * @description Calcula quantos itens estão disponíveis em um horário específico,
+ *              considerando todas as reservas ativas que se sobrepõem ao período.
+ *              validarDisponibilidadeItens: verifica estoque total (sem considerar horário).
+ *              verificarDisponibilidadeItensPorHorario: verifica disponibilidade real por horário.
+ *              obterDisponibilidadeItensPorHorario: retorna mapa nome→qtd disponível.
+ *              parseItensString: parseia a string "2x Cadeira | 1x Mesa" usada na planilha.
+ * @context Chamados em criarReservaController, salvarEdicaoReserva e processarAgendamentoLote
+ * @inputs itensSolicitados (string), data, inicio, termino, idSala
+ * @outputs Lança Error se insuficiente; obterDisponibilidadeItensPorHorario retorna mapa
+ * @sideEffects 2 leituras de planilha (Itens + Reservas) por chamada
+ */
 function validarDisponibilidadeItens(itensSolicitados) {
   const abaItens = _getSheet("Itens");
   if (!abaItens) return;
@@ -636,10 +693,17 @@ function obterDisponibilidadeItensPorHorario(
   }
 }
 
-// ==============================
-// ANALISAR DISPONIBILIDADE REAL
-// ==============================
-
+/**
+ * ========================================
+ * BLOCO: Análise de disponibilidade com sugestões
+ * ========================================
+ * @description Verifica conflitos para múltiplas datas simultaneamente e retorna
+ *              horários livres e sugestões de agendamento. Exposto ao frontend como
+ *              a fonte de verdade para a funcionalidade de análise/IA.
+ * @inputs payload: { sala, horaInicio, horaTermino, datas: string[] }
+ * @outputs { conflito, conflitosDetalhados, horariosLivres, sugestoes }
+ * @sideEffects 1 leitura na planilha Reservas
+ */
 function analisarDisponibilidadeReal(payload) {
   if (!payload) throw new Error("Payload não informado.");
 
@@ -779,10 +843,18 @@ function analisarDisponibilidadeReal(payload) {
   return { conflito, conflitosDetalhados, horariosLivres, sugestoes };
 }
 
-// ==============================
-// PROCESSAMENTO EM LOTE
-// ==============================
-
+/**
+ * ========================================
+ * BLOCO: Processamento em lote (legado)
+ * ========================================
+ * @description Cria múltiplas reservas de uma vez, verificando conflito e disponibilidade
+ *              de itens para cada data. Usa lock com retry para evitar race conditions.
+ *              NOTA: criarReservaController() é a versão mais recente que usa
+ *              ReservaRepository e ReservaService — preferir esta para novos usos.
+ * @inputs dados (objeto de reserva), datas (array de strings DD/MM/YYYY)
+ * @outputs { success: true, total, lote: idGrupoLote }
+ * @sideEffects Escrita em lote na planilha Reservas, registra log por data
+ */
 function processarAgendamentoLote(dados, datas) {
   if (!dados.responsavel || !validarEmail(dados.responsavel)) {
     throw new Error("Email do responsável inválido. Faça login novamente.");
@@ -909,10 +981,32 @@ function processarAgendamentoLote(dados, datas) {
   }
 }
 
-// ==============================
-// CONTROLLERS E REPOSITORIES
-// ==============================
-
+/**
+ * ========================================
+ * BLOCO: Controller, Repository e Service de reservas
+ * ========================================
+ * @description Camada de abstração para operações de reserva:
+ *
+ *              criarReservaController (entrypoint exposto):
+ *                Cria reservas para múltiplas datas, integra com RECE e CODIP, usa Repository.
+ *
+ *              ReservaRepository:
+ *                Acesso direto à planilha — salvar, atualizar por ID, buscar por ID.
+ *
+ *              ReceRepository:
+ *                Acesso à planilha ReservasRECE — salvar, atualizar/remover por ID de reserva geral.
+ *
+ *              ReceService:
+ *                Lógica de criação/atualização RECE — usa ReceRepository, monta linha padrão.
+ *
+ *              ReservaService:
+ *                Operações de alto nível — criar/atualizar, coordenando Repository e ReceService.
+ *
+ *              ATENÇÃO: criarReservaController e ReservaService.criar têm lógica parcialmente
+ *              duplicada. Ao criar novas funcionalidades, usar ReservaService.criar.
+ * @context criarReservaController é chamado pelo frontend via google.script.run
+ * @sideEffects Escreve nas planilhas Reservas, ReservasRECE e RelatoriosCODIP
+ */
 function criarReservaController(dados, datas) {
   const idLote = gerarId("LOTE");
   const linhas = [];

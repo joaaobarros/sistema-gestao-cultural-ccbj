@@ -1,4 +1,28 @@
+<!--
+@file mod_admin_js.html
+@type logic
+@description Módulo frontend de administração: renderização e gerenciamento de espaços,
+             itens, setores, usuários e logs de auditoria.
+@layer frontend
+@responsibility Exibir e editar configurações do sistema (admin/superadmin);
+               abrir modais de configuração; disparar exclusões; renderizar log de auditoria.
+@dependencies AppState (mod_ui_estado_js), escaparHTML/showLoader (mod_ui_componentes_js),
+              google.script.run (backend), SweetAlert2
+-->
 <script>
+
+/**
+ * ========================================
+ * BLOCO: Renderização do painel de espaços (admin)
+ * ========================================
+ * @description Gera a lista de espaços cadastrados com seus itens fixos.
+ *              Carrega os itens fixos de cada sala via chamada adicional ao backend
+ *              (obterDadosParaConfig('Itens')) para exibir o resumo de alocação.
+ * @context Aba #aba-gestao-admin — chamado em mostrarAba e após salvar/excluir espaço
+ * @inputs AppState.colecoes.salas, AppState.mapaNomes
+ * @outputs HTML injetado em #tabelaAdminEspacos
+ * @sideEffects Chama google.script.run.obterDadosParaConfig para itens fixos
+ */
 function renderizarEspacosAdmin() {
   const container = document.getElementById('tabelaAdminEspacos');
   if (!container) return;
@@ -117,6 +141,16 @@ function renderizarEspacosAdmin() {
 }).obterDadosParaConfig('Itens');
 }
 
+/**
+ * ========================================
+ * BLOCO: Rollback e auditoria
+ * ========================================
+ * @description executarRollback: desfaz a última ação registrada no log (apenas Superadmin).
+ *              carregarAuditoria: busca e exibe o log de auditoria completo.
+ *              renderizarLogs: gera o HTML do log; filtrarLogs: filtra por texto.
+ * @context Aba #aba-auditoria — ações restritas por nível de acesso
+ * @sideEffects Chama rollbackUltimaAcao / obterLogs no backend; modifica DOM
+ */
 function executarRollback() {
   if (!AppState.usuario.isSuperadmin) {
     Swal.fire('Acesso Negado', 'Apenas Superadmins podem desfazer ações.', 'error');
@@ -161,8 +195,11 @@ function executarRollback() {
 
 // --- RENDERIZAR ITENS (COM SUPORTE A FILTRO) ---
 /**
- * RENDERIZAR ITENS (Painel Admin)
- * Inclui classe 'item-renderizado' para suporte ao filtro de busca.
+ * BLOCO: Renderização de itens de almoxarifado (admin)
+ * @context Chamado ao abrir a aba de configurações ou após salvar/excluir um item.
+ * @inputs dadosFiltrados — array de itens filtrados pela busca; se null, usa AppState.colecoes.itens.
+ * @outputs DOM: preenche #listaAdminItens com cards de itens e controles de estoque/mobilização.
+ * @sideEffects Lê AppState.colecoes.itens; grava classe 'item-renderizado' para filtro de texto.
  */
 function renderizarItensAdmin(dadosFiltrados = null) {
   const containerItens = document.getElementById('listaAdminItens');
@@ -244,7 +281,13 @@ function renderizarItensAdmin(dadosFiltrados = null) {
   }).join('');
 }
 
-// RENDERIZAR SETORES
+/**
+ * BLOCO: Renderização de setores institucionais (admin)
+ * @context Chamado ao abrir a aba de configurações.
+ * @inputs AppState.colecoes.setores — filtra strings vazias e header "SETORES".
+ * @outputs DOM: preenche #listaAdminSetores com badges de setor e botão de exclusão.
+ * @sideEffects Nenhum além da mutação do DOM.
+ */
 function renderizarSetoresAdmin() {
   const container = document.getElementById('listaAdminSetores');
   if (!container) return;
@@ -290,7 +333,13 @@ function renderizarSetoresAdmin() {
   }).join('');
 }
 
-// RENDERIZAR ADMINISTRADORES
+/**
+ * BLOCO: Renderização de administradores do sistema (admin)
+ * @context Chamado ao abrir a aba de configurações; filtra header "email" e entradas inválidas.
+ * @inputs AppState.colecoes.administradores — array de [email, nível] ou apenas email.
+ * @outputs DOM: preenche #listaAdminUsuarios com tabela de admins (email, nível, exclusão).
+ * @sideEffects Nenhum além da mutação do DOM.
+ */
 function renderizarAdmins() {
   const container = document.getElementById('listaAdminUsuarios');
   if (!container) return;
@@ -344,6 +393,18 @@ function renderizarAdmins() {
 
 
 
+/**
+ * ========================================
+ * BLOCO: Exclusão e edição de registros admin
+ * ========================================
+ * @description dispararExclusao: confirmação + chamada ao backend para excluir espaço,
+ *              item, setor ou usuário. prepararEdicao: carrega dados da reserva no formulário.
+ *              excluirDefinitivo: exclusão definitiva de reservas.
+ *              abrirModalConfig / fecharModalConfig: modal de criação/edição de registros admin.
+ *              salvarConfiguracao: persiste as alterações do modal no backend.
+ * @context Botões de ação nas tabelas de administração (delegados via data-acao)
+ * @sideEffects Chama backend, re-renderiza tabelas após sucesso
+ */
 function dispararExclusao(id, tipo) {
   Swal.fire({
     title: `Excluir ${escaparHTML(tipo.toUpperCase())}?`,
@@ -380,7 +441,15 @@ function dispararExclusao(id, tipo) {
 }
 
 
-// FUNÇÃO PARA EXPANDIR / RECOLHER CARDS
+/**
+ * BLOCO: Helpers de UI — colapso de cards e filtro de lista
+ * @context toggleCard: acionado pelo botão de seta (chevron) em cada card de configuração.
+ *          filtrarLista: oninput nos campos de busca; filtra por texto no innerHTML de cada item.
+ *          filtrarItensAdmin: delega para renderizarItensAdmin com array pré-filtrado.
+ * @inputs toggleCard(idConteudo, botao) | filtrarLista(idContainer, termo) | filtrarItensAdmin(termo)
+ * @outputs DOM: alterna visibilidade do conteúdo do card / oculta/exibe itens não correspondentes.
+ * @sideEffects Nenhum além da mutação do DOM.
+ */
 function toggleCard(idConteudo, botao) {
   const conteudo = document.getElementById(idConteudo);
   const icone = botao.querySelector('i');
@@ -426,7 +495,13 @@ function filtrarItensAdmin(termo) {
 }
 
 /**
- * ABRIR MODAL DE CONFIGURAÇÃO (Expandido para Admins e Setores)
+ * BLOCO: Modal de configuração CRUD (espaços, itens, setores, usuários)
+ * @context abrirModalConfig: abre #modalConfig com campos dinâmicos conforme o tipo;
+ *          fecharModalConfig: fecha e limpa os campos transitórios (container-itens-fixos).
+ *          Tipo "espaco" carrega itens fixos da sala via atualizarVisualizacaoPatrimonio.
+ * @inputs tipo: 'espaco'|'item'|'setor'|'usuario'; id, nome, valor1, valor2 para pré-preenchimento.
+ * @outputs DOM: exibe #modalConfig com campos específicos; oculta os demais grupos de campos.
+ * @sideEffects Chama atualizarVisualizacaoPatrimonio se tipo='espaco'; limpa estado ao fechar.
  */
 function abrirModalConfig(tipo, id = null, nome = '', valor1 = '', valor2 = '') {
   const modal = document.getElementById('modalConfig');
@@ -497,8 +572,13 @@ function abrirModalConfig(tipo, id = null, nome = '', valor1 = '', valor2 = '') 
 }
 
 /**
- * CARREGAR AUDITORIA (LOGS)
- * Busca os logs no servidor e renderiza apenas para Superadmins.
+ * BLOCO: Carregamento e renderização do log de auditoria
+ * @context carregarAuditoria: chamado ao navegar para #aba-auditoria; abortado se !isAdmin.
+ *          renderizarLogs: recebe array do servidor e constrói tabela em #tabelaLogs;
+ *          filtrarLogs: filtra as linhas da tabela por texto em tempo real.
+ * @inputs carregarAuditoria() sem args; renderizarLogs(logs: array); filtrarLogs(valor: string).
+ * @outputs DOM: preenche #tabelaLogs; filtra linhas visíveis; exibe botão de rollback seletivo.
+ * @sideEffects google.script.run.obterLogsAuditoria — leitura da planilha MASTER.
  */
 function carregarAuditoria() {
   if (!AppState.usuario.isAdmin) return;
@@ -590,6 +670,13 @@ function renderizarLogs(logs) {
 
 
 
+/**
+ * BLOCO: Fechar modal de configuração
+ * @context Chamado pelo botão cancelar e após salvar com sucesso.
+ * @inputs Nenhum.
+ * @outputs DOM: adiciona classe 'hidden' a #modalConfig; limpa #container-itens-fixos.
+ * @sideEffects Limpa estado transitório do modal para a próxima abertura.
+ */
 function fecharModalConfig() {
   const modal = document.getElementById('modalConfig');
   if (modal) {
@@ -603,8 +690,11 @@ function fecharModalConfig() {
 
 
 /**
- * PREPARAR EDIÇÃO DE RESERVA
- * Localiza os dados no AppState e preenche o formulário de reserva.
+ * BLOCO: Preparar edição de reserva existente
+ * @context Acionado pelo botão "Editar" na tabela de reservas; localiza no AppState para evitar roundtrip.
+ * @inputs id: ID da reserva (coluna 0 do array).
+ * @outputs DOM: preenche todos os campos do formulário de reserva com os valores existentes.
+ * @sideEffects Define AppState.editandoId; navega para #aba-nova-reserva; scroll ao topo.
  */
 function prepararEdicao(id) {
   const reserva = AppState.colecoes.reservas.find(r => r[0] === id);
@@ -664,8 +754,11 @@ function prepararEdicao(id) {
 
 
 /**
- * LÓGICA DE INTERFACE (Logic.html)
- * Dispara o alerta e chama a função do servidor.
+ * BLOCO: Exclusão definitiva de registros (reservas, itens, espaços, setores, admins)
+ * @context Acionado pelo botão "Excluir definitivamente" após confirmação de exclusão suave.
+ * @inputs id: identificador do registro; tipo: 'reserva'|'item'|'espaco'|'setor'|'admin'.
+ * @outputs Swal de confirmação; após confirmação, chama servidor e recarrega a coleção afetada.
+ * @sideEffects google.script.run.excluirRegistro — operação irreversível na planilha.
  */
 function excluirDefinitivo(id, tipo) {
   Swal.fire({
@@ -718,8 +811,12 @@ function filtrarLogs(valor) {
 
 
 /**
- * ENVIA OS DADOS DE CONFIGURAÇÃO PARA O SERVIDOR
- * Suporta: Espaços, Itens, Usuários e Setores.
+ * BLOCO: Salvar configuração (CRUD unificado para espaços/itens/setores/usuários)
+ * @context Acionado pelo submit do #formConfig dentro do #modalConfig.
+ *          Lê o campo hidden #configTipo para despachar para o handler correto no servidor.
+ * @inputs DOM: #configTipo, #configId, e campos específicos por tipo (nome, capacidade, etc.).
+ * @outputs Swal de sucesso; fecha modal; recarrega a coleção correspondente no AppState.
+ * @sideEffects google.script.run.salvarConfiguracao — escrita na planilha MASTER.
  */
 function salvarConfiguracao() {
   const btnSalvar = document.querySelector('#formConfig button[type="submit"]');
@@ -787,6 +884,14 @@ function salvarConfiguracao() {
 }
 
 
+/**
+ * BLOCO: Patrimônio e mobilização de estoque
+ * @context atualizarVisualizacaoPatrimonio: carrega itens fixos associados a uma sala no modal de edição.
+ *          executarMobilizacaoEstoque: move quantidade de item entre depósito e sala (entrada/saída).
+ * @inputs atualizarVisualizacaoPatrimonio(idSala: string); executarMobilizacaoEstoque(idItem, idSala, acao: 'entrada'|'saida').
+ * @outputs DOM: preenche #container-itens-fixos com a lista de itens da sala e controles de quantidade.
+ * @sideEffects google.script.run.obterItensFixosPorSala / movimentarEstoqueItem — leitura/escrita na planilha.
+ */
 function atualizarVisualizacaoPatrimonio(idSala) {
   const container = document.getElementById('container-itens-fixos');
   if (!container) return;
@@ -911,29 +1016,15 @@ function executarMobilizacaoEstoque(idItem, idSala, acao) {
 
 
 
-// Atualiza o max do input de quantidade conforme o item selecionado
-function atualizarMaxQuantidade() {
-  const selVolantes = document.getElementById('selectVolantes');
-  const qtdInput = document.getElementById('qtdVolante');
-  if (!selVolantes || !qtdInput) return;
-
-  selVolantes.addEventListener('change', function() {
-    const opcaoSelecionada = this.options[this.selectedIndex];
-    const max = parseInt(opcaoSelecionada?.getAttribute('data-max') || '999');
-
-    qtdInput.max = max;
-
-    if (parseInt(qtdInput.value) > max) {
-      qtdInput.value = max;
-    }
-
-    const btnAdicionar = document.querySelector('button[onclick="adicionarItemVolante()"]');
-    if (btnAdicionar && max > 0) {
-      btnAdicionar.title = `Máximo disponível: ${max}`;
-    }
-  });
-}
-
+/**
+ * ========================================
+ * BLOCO: Controle de quantidade máxima de itens
+ * ========================================
+ * @description Atualiza o atributo max do input de quantidade conforme o item selecionado
+ *              no select de volantes (data-max na option). Chamado no change do select.
+ * @context Formulário de reserva — listener registrado no bootstrap_js
+ * @sideEffects Modifica qtdVolante.max e ajusta valor se acima do máximo
+ */
 function atualizarMaxQuantidade() {
   const selVolantes = document.getElementById('selectVolantes');
   const qtdInput = document.getElementById('qtdVolante');
@@ -944,6 +1035,14 @@ function atualizarMaxQuantidade() {
   if (parseInt(qtdInput.value) > max) qtdInput.value = max;
 }
 
+/**
+ * BLOCO: Feedback de disponibilidade no carrinho de itens volantes
+ * @context Chamado após analisarDisponibilidadeItens retornar do servidor;
+ *          exibe alertas visuais inline nos itens do carrinho que excedem o estoque disponível.
+ * @inputs disponibilidade: objeto { [nomeItem]: { disponivel: number } } retornado pelo servidor.
+ * @outputs DOM: adiciona badges de aviso ("Apenas X disponíveis") nos itens do carrinho.
+ * @sideEffects Nenhum além da mutação do DOM.
+ */
 function atualizarAvisosCarrinho(disponibilidade) {
   if (!disponibilidade || itensSelecionados.length === 0) return;
 
@@ -978,9 +1077,14 @@ function atualizarAvisosCarrinho(disponibilidade) {
 }
 
 
-// ===============================
-// 🔹 VALIDAÇÃO
-// ===============================
+/**
+ * BLOCO: Validação pré-submissão e geração de horários disponíveis
+ * @context validarAntesDeSalvar: chamado por salvarAgendamento antes do envio; bloqueia o submit se inválido.
+ *          gerarHorariosDisponiveis: gera lista de slots livres cruzando reservas existentes com o cache.
+ * @inputs validarAntesDeSalvar() — lê DOM do formulário; gerarHorariosDisponiveis(sala, data).
+ * @outputs validarAntesDeSalvar retorna boolean; gerarHorariosDisponiveis retorna string[] de HH:MM livres.
+ * @sideEffects Exibe Swal de erro se validação falhar; desabilita botão de submit temporariamente.
+ */
 function validarAntesDeSalvar() {
 
   const btn = document.querySelector('#formReserva button[type="submit"]');
@@ -1083,10 +1187,18 @@ function aplicarBloqueioVisual() {
 
 
 
-// ===============================
-// AGENDA RECE
-// ===============================
-
+/**
+ * BLOCO: Agenda RECE — coleta, carregamento, renderização, edição e cancelamento
+ * @context Exclusivo para usuários RECE. Gerencia o ciclo completo da agenda cultural RECE:
+ *          coletarDadosRece → dados extras do formulário RECE para compor o payload;
+ *          carregarReservasRece → busca no servidor e popula AppState.colecoes.reservasRece;
+ *          renderizarTabelaRece → renderiza tabela ou agenda visual conforme modo de visualização;
+ *          confirmarCancelamentoRece / excluirReceDefinitivo → operações de mutação;
+ *          prepararEdicaoRece → preenche formulário com dados existentes para re-submissão.
+ * @inputs IDs DOM do formulário RECE; AppState.colecoes.reservasRece; filtros de busca/data.
+ * @outputs DOM: #corpoTabelaRece ou modo agenda; Swal de confirmação para ações destrutivas.
+ * @sideEffects google.script.run.obterReservasRece / cancelarReservaRece / excluirReservaRece.
+ */
 function coletarDadosRece() {
   if (!modoRece) return null;
   return {
@@ -1468,10 +1580,16 @@ function prepararEdicaoRece(id) {
   }, 100);
 }
 
-// ===============================
-// EXPORTAÇÕES RECE
-// ===============================
-
+/**
+ * BLOCO: Exportação da agenda RECE (CSV, Planilha Google, PDF)
+ * @context receGetDadosFiltrados: filtro compartilhado por todas as exportações (busca + período).
+ *          exportarReceCSV: gera arquivo .csv com separador ';' e download via blob.
+ *          exportarRecePlanilha: envia dados ao servidor para criar/atualizar planilha Drive.
+ *          exportarRecePDF: abre janela de impressão com HTML estilizado dos dados filtrados.
+ * @inputs Filtros DOM: #receBusca, #receFiltroInicio, #receFiltroFim; AppState.colecoes.reservasRece.
+ * @outputs Arquivo CSV / nova janela impressão / chamada servidor para planilha.
+ * @sideEffects exportarRecePlanilha: google.script.run.exportarAgendaRecePlanilha — cria arquivo no Drive.
+ */
 function receGetDadosFiltrados() {
   const busca = (document.getElementById('receBusca')?.value || '').toLowerCase().trim();
   const filtroInicio = document.getElementById('receFiltroInicio')?.value;
@@ -1562,6 +1680,15 @@ function exportarRecePDF() {
   setTimeout(() => janela.print(), 500);
 }
 
+/**
+ * BLOCO: Dashboard de métricas e KPIs
+ * @context aplicarAtalhoDashboard: aplica atalhos de período (hoje/semana/mês/ano) nos filtros de data.
+ *          carregarDashboard: envia filtros ao servidor e renderiza KPIs, gráficos e tabelas.
+ *          redefinirFiltrosDashboard: reseta os filtros para o mês atual e recarrega.
+ * @inputs Filtros DOM: #dashDataInicio, #dashDataFim, #dashFiltroSala, #dashFiltroSetor.
+ * @outputs DOM: preenche #dashboardConteudo com cards KPI, gráfico de barras, mapa de calor e ranking.
+ * @sideEffects google.script.run.obterMetricasDashboard — agregação pesada no servidor.
+ */
 function aplicarAtalhoDashboard(valor) {
   const inicio = document.getElementById('dashDataInicio');
   const fim    = document.getElementById('dashDataFim');
@@ -1872,6 +1999,14 @@ function carregarDashboard() {
     .obterMetricasDashboard(dataInicio, dataFim, filtroSala, filtroSetor);
 }
 
+/**
+ * BLOCO: Sessão de usuário — logout e perfil
+ * @context confirmarLogout: exibe Swal e redireciona para logout GAS via google.script.run.fazerLogout.
+ *          carregarPerfilUsuario: busca dados do perfil no servidor e exibe no painel lateral.
+ * @inputs Nenhum (lê AppState.usuario para exibição; logout não tem argumentos).
+ * @outputs Swal de confirmação / DOM: preenche painel de perfil com nome, email e nível de acesso.
+ * @sideEffects google.script.run.fazerLogout / obterPerfilUsuario — leitura de sessão no servidor.
+ */
 function confirmarLogout() {
   Swal.fire({
     title: 'Sair do sistema?',
@@ -1944,7 +2079,17 @@ function carregarPerfilUsuario() {
     .obterPerfilUsuario();
 }
 
-// ── Manual de Uso ─────────────────────────────────────────────────────────────
+/**
+ * BLOCO: Manual de uso interativo
+ * @context abrirManual: abre #modalManual e renderiza o conteúdo pela primeira vez.
+ *          fecharManual: fecha o modal e persiste preferência de "não mostrar novamente".
+ *          mudarAbaManual: alterna entre abas intro/admin/operador/externo.
+ *          salvarPreferenciaManuai / verificarExibirManualAutomatico: controla exibição automática no primeiro acesso.
+ *          renderizarManualCompleto: renderiza todas as seções em Markdown usando renderizarMarkdown.
+ * @inputs abaInicial: string com o id da aba inicial; DOM: #modalManual e filhos.
+ * @outputs DOM: exibe o conteúdo do manual renderizado; persiste preferência via google.script.run.
+ * @sideEffects google.script.run.salvarPreferenciaUsuario — armazena flag de exibição automática.
+ */
 function abrirManual(abaInicial) {
   const modal = document.getElementById('modalManual');
   if (modal) modal.classList.remove('hidden');
@@ -2191,7 +2336,21 @@ function renderizarMarkdown(texto) {
     .replace(/\n/g, '<br>');
 }
 
-// Modal de resultado da IA — visual integrado ao sistema
+/**
+ * BLOCO: Assistente IA — painéis, chat, sugestões e geração de relatórios
+ * @context Conjunto de funções que integram a IA ao fluxo de trabalho:
+ *          exibirResultadoIA / mostrarLoadingIA / removerLoadingIA — UI de resultados;
+ *          abrirPainelIA — painel principal com atalhos para as funcionalidades de IA;
+ *          perguntarIAModal / enviarMensagemIA — chat conversacional com histórico;
+ *          gerarRelatorioIAModal / executarRelatorioIA — relatórios de ocupação/desempenho;
+ *          sugerirReservaIAModal / executarSugestaoIAComDados — sugestões de horário/sala;
+ *          preencherFormularioComSugestaoIA — aplica sugestão diretamente no formulário;
+ *          analisarDashboardIAModal — análise contextual das métricas exibidas;
+ *          parsearJsonIA / renderOpcoes / usarOpcaoIA / usarSugestaoIA — parsing e seleção de opções.
+ * @inputs Prompt textual do usuário; dados do AppState (reservas, salas, métricas do dashboard).
+ * @outputs Modais dinâmicos com resposta da IA; opcionalmente preenche o formulário de reserva.
+ * @sideEffects chamarIAComFallback / chamarIAUnificada — chamadas ao modelo de linguagem via servidor.
+ */
 function exibirResultadoIA(titulo, conteudo, icone, corIcone) {
   const id = 'modalIA_' + Date.now();
   const overlay = document.createElement('div');
@@ -3361,6 +3520,15 @@ function analisarDashboardIAModal() {
 // Manter compatibilidade com chamadas antigas no sidebar
 function gerarRelatorioIAFrontend() { gerarRelatorioIAModal(); }
 
+/**
+ * BLOCO: Navegação e log de acessos na aba de auditoria
+ * @context mostrarSubAbaAuditoria: alterna entre sub-abas logs/acessos/comparativo na #aba-auditoria.
+ *          carregarLogAcessos: busca o log de acessos/login no servidor e renderiza em tabela.
+ *          filtrarLogAcessos: filtra as linhas da tabela de acessos por texto.
+ * @inputs aba: 'logs'|'acessos'|'comparativo'; valor de filtro para filtrarLogAcessos.
+ * @outputs DOM: alterna visibilidade das divs #subaba-*; preenche tabela de acessos.
+ * @sideEffects google.script.run.obterLogAcessos — leitura da planilha de log.
+ */
 let SUBABA_AUDITORIA_ATIVA = null;
 
 function mostrarSubAbaAuditoria(aba) {

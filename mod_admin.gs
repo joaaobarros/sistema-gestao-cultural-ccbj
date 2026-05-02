@@ -1,7 +1,30 @@
-// ============================================================
-// mod_admin.gs
-// Autenticação, permissões, logs, configurações, solicitações
-// ============================================================
+/**
+ * @file mod_admin.gs
+ * @description Módulo de administração: autenticação de usuários, controle de permissões,
+ *              logs de auditoria, gerenciamento de configurações e fluxo de solicitações.
+ * @layer backend
+ * @responsibility Validação de identidade via Google Session; registro de auditoria;
+ *                 obterDadosIniciais (entrypoint principal do boot do frontend);
+ *                 CRUD de espaços, itens, setores e administradores;
+ *                 fluxo de aprovação/recusa de solicitações.
+ * @dependencies utils.js (_getSheet, validarEmail, normalizarEmail, sanitizarTexto),
+ *               Codigo.gs (gerarId, include), GmailApp, Session, LockService
+ */
+
+/**
+ * ========================================
+ * BLOCO: Identificação e perfil do usuário
+ * ========================================
+ * @description Obtém o email do usuário autenticado via Google Session.
+ *              obterEmailUsuario: tenta Session.getActiveUser, depois getEffectiveUser,
+ *                                 depois o fallback passado pelo cliente.
+ *              obterPerfilUsuario: busca nome e foto via People API (melhor esforço).
+ *              obterUrlLogout: gera URL de logout Google redirecionando para o app.
+ *              obterEmailsSistema: lista todos os emails conhecidos do sistema
+ *                                  (admins + log de acessos + responsáveis de reservas).
+ * @context obterEmailUsuario é chamado em praticamente todas as operações autenticadas
+ * @sideEffects obterPerfilUsuario faz chamada HTTP externa (People API)
+ */
 
 // ==============================
 // EMAIL E SESSÃO

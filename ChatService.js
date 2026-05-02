@@ -1,4 +1,12 @@
-// ChatService.gs 
+/**
+ * @file ChatService.js
+ * @layer backend/services
+ * @description Serviço de integração com modelo de linguagem (LLM): monta o prompt com contexto do sistema,
+ *              chama a API de IA e retorna resposta parseada. Usado por mod_metrics.gs.
+ * @responsibility Funções: chamarModeloIA(prompt, contexto), parsearRespostaIA(texto).
+ * @dependencies UrlFetchApp (chamada HTTP à API), PropertiesService (chave de API).
+ */
+// ChatService.gs
 // ================================
 // 🔧 CONFIG
 // ================================

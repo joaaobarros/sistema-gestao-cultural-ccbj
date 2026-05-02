@@ -1,4 +1,31 @@
-//DataLayer.gs
+/**
+ * @file DataLayer.js
+ * @description Camada de persistência baseada em arquivos JSON no Google Drive.
+ *              Alternativa às planilhas para dados que precisam de estrutura flexível
+ *              ou que não se encaixam bem no modelo tabular.
+ * @layer backend
+ * @responsibility Leitura e escrita segura (com lock) de arquivos JSON em pasta CCBJ_DATA.
+ * @dependencies DriveApp, LockService
+ *
+ * IMPACTO NO SISTEMA:
+ *   Atualmente pouco utilizado — a maior parte dos dados está nas planilhas via _getSheet.
+ *   Útil para dados de configuração flexível ou preferências de usuário com estrutura variável.
+ *
+ * RISCOS:
+ *   - readJSON usa LockService.getScriptLock (global) mesmo para leitura — pode criar
+ *     contenção desnecessária. Em uso futuro intensivo, considerar lock de usuário.
+ *   - Arquivos corrompidos são sobrescritos com [] automaticamente (dados perdidos).
+ */
+
+/**
+ * ========================================
+ * BLOCO: Acesso à pasta de dados no Drive
+ * ========================================
+ * @description Localiza ou cria a pasta "CCBJ_DATA" no Drive do script.
+ *              getFile: localiza ou cria um arquivo JSON dentro dessa pasta.
+ * @context Usados por readJSON e writeJSON
+ * @sideEffects Pode criar pasta ou arquivo no Drive se não existirem
+ */
 
 const DATA_FOLDER_NAME = "CCBJ_DATA";
 
@@ -18,6 +45,17 @@ function getFile(nome) {
   return pasta.createFile(nome, JSON.stringify([]));
 }
 
+/**
+ * ========================================
+ * BLOCO: Leitura e escrita de JSON com lock
+ * ========================================
+ * @description readJSON: lê e parseia arquivo JSON com lock de 5s (previne leitura parcial).
+ *              writeJSON: serializa e salva com lock de 30s (previne escrita concorrente).
+ *              readJSONAsMap / writeJSONFromMap: variantes para trabalhar com objetos
+ *              indexados por `id` ao invés de arrays.
+ * @context Chamados por módulos que usam persistência baseada em Drive
+ * @sideEffects readJSON: pode resetar arquivo corrompido para []; writeJSON: sobrescreve conteúdo
+ */
 function readJSON(nome) {
 
   const lock = LockService.getScriptLock();
