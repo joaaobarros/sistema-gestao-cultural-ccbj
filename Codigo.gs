@@ -1,13 +1,12 @@
 /**
  * @file Codigo.gs
- * @description Ponto de entrada do servidor GAS. Define doGet/doPost,
- *              a função include() para composição de templates HTML,
- *              e helpers globais usados por múltiplos módulos backend.
+ * @description Ponto de entrada do servidor GAS. Define doGet/doPost e
+ *              a função include() para composição de templates HTML.
  * @layer backend
- * @responsibility Roteamento HTTP, helpers de ID/data, notificações de cancelamento,
+ * @responsibility Roteamento HTTP, notificações de cancelamento,
  *                 stubs para funcionalidades em desenvolvimento.
  * @dependencies mod_admin.gs (aprovarSolicitacao, recusarSolicitacao),
- *               mod_reservas.gs (via helpers), utils.js (_getSheet, obterMapaSalas)
+ *               mod_reservas.gs (via helpers), utils.gs (gerarId, isMesmoDia)
  */
 
 const BASE_URL_FALLBACK =
@@ -31,31 +30,12 @@ function getBaseUrl() {
 
 /**
  * ========================================
- * BLOCO: Helpers globais do servidor
+ * BLOCO: Template helper
  * ========================================
- * @description Funções utilitárias usadas por múltiplos módulos backend.
- *              include(): injeção de fragmentos HTML no template (usado por Index.html).
- *              gerarId(): cria IDs únicos no padrão PREFIXO-TIMESTAMP-RANDOM.
- *              isMesmoDia(): verifica se uma data é hoje (usado para alertas de cancelamento).
- *              obterMapaSalas(): constrói mapa id→nome a partir da aba Configuracoes.
- * @sideEffects obterMapaSalas acessa a planilha (1 leitura)
+ * @description include(): injeção de fragmentos HTML no template (usado por Index.html).
  */
 function include(filename) {
   return HtmlService.createHtmlOutputFromFile(filename).getContent();
-}
-
-function gerarId(prefixo) {
-  const timestamp = Date.now().toString(36).toUpperCase();
-  const random = Math.random().toString(36).substring(2, 6).toUpperCase();
-  return `${prefixo}-${timestamp}-${random}`;
-}
-
-function isMesmoDia(dataReserva) {
-  const hoje = new Date();
-  hoje.setHours(0, 0, 0, 0);
-  const data = new Date(dataReserva);
-  data.setHours(0, 0, 0, 0);
-  return hoje.getTime() === data.getTime();
 }
 
 function obterMapaSalas() {
