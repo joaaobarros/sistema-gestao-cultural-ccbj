@@ -1,0 +1,213 @@
+<!--
+@file mod_processos.html
+@type module
+@description Gestão de processos institucionais — listagem, criação e acompanhamento de fase.
+@responsibility Estrutura HTML + JS da aba #aba-processos.
+@dependencies GAS.processos, showLoader, escaparHTML, temPermissao
+-->
+<section id="aba-processos" class="tab-content hidden pb-20">
+
+  <div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+
+    <!-- HEADER -->
+    <div class="p-5 border-b border-slate-100 bg-slate-50/50 flex flex-wrap justify-between items-center gap-3">
+      <div>
+        <h3 class="font-black text-slate-800 uppercase tracking-tighter text-sm">
+          <i class="fas fa-sitemap text-blue-400 mr-2"></i>Processos
+        </h3>
+        <p class="text-[10px] text-slate-400 font-medium">Acompanhamento de processos institucionais</p>
+      </div>
+      <div class="flex gap-2 items-center flex-wrap">
+        <div class="relative">
+          <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 text-xs"></i>
+          <input type="text" id="procBusca" placeholder="Buscar..."
+            oninput="_procFiltrar()"
+            style="padding:8px 12px 8px 30px;border:1.5px solid #e2e8f0;border-radius:12px;font-size:12px;outline:none;width:160px"
+            onfocus="this.style.borderColor='#3b82f6'" onblur="this.style.borderColor='#e2e8f0'">
+        </div>
+        <select id="procFiltroTipo" onchange="_procFiltrar()"
+          style="padding:8px 12px;border:1.5px solid #e2e8f0;border-radius:12px;font-size:12px;outline:none;color:#475569">
+          <option value="">Todos os tipos</option>
+          <option value="Compra">Compra</option>
+          <option value="Serviço">Serviço</option>
+          <option value="Convênio">Convênio</option>
+          <option value="Administrativo">Administrativo</option>
+          <option value="Outro">Outro</option>
+        </select>
+        <select id="procFiltroFase" onchange="_procFiltrar()"
+          style="padding:8px 12px;border:1.5px solid #e2e8f0;border-radius:12px;font-size:12px;outline:none;color:#475569">
+          <option value="">Todas as fases</option>
+          <option value="Iniciado">Iniciado</option>
+          <option value="Em Análise">Em Análise</option>
+          <option value="Aguardando Aprovação">Aguardando Aprovação</option>
+          <option value="Aprovado">Aprovado</option>
+          <option value="Encerrado">Encerrado</option>
+        </select>
+        <button onclick="abrirModalProcesso()" data-requer-permissao="processos:editar"
+          class="bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-black px-4 py-2 rounded-xl transition-all uppercase flex items-center gap-1.5">
+          <i class="fas fa-plus text-[9px]"></i>Novo Processo
+        </button>
+      </div>
+    </div>
+
+    <!-- TABELA -->
+    <div id="processosContainer" class="overflow-x-auto">
+      <div class="p-8 text-center">
+        <i class="fas fa-spinner animate-spin text-blue-300 text-xl"></i>
+        <p class="text-[11px] text-slate-400 mt-2">Carregando...</p>
+      </div>
+    </div>
+
+  </div>
+
+</section>
+
+<script>
+var _processosCache = [];
+
+function _procFaseCls(f) {
+  return {
+    'Iniciado':              'background:#eff6ff;color:#1d4ed8',
+    'Em Análise':            'background:#fef3c7;color:#92400e',
+    'Aguardando Aprovação':  'background:#fde8d8;color:#9a3412',
+    'Aprovado':              'background:#d1fae5;color:#065f46',
+    'Encerrado':             'background:#f1f5f9;color:#475569'
+  }[f] || 'background:#f1f5f9;color:#475569';
+}
+
+function carregarProcessos() {
+  var c = document.getElementById('processosContainer');
+  if (c) c.innerHTML = '<div class="p-8 text-center"><i class="fas fa-spinner animate-spin text-blue-300 text-xl"></i></div>';
+  GAS.processos.listar(function(lista) {
+    _processosCache = lista || [];
+    _procRenderizar();
+  }, function() {
+    if (c) c.innerHTML = '<div class="p-8 text-center text-red-400 text-sm"><i class="fas fa-exclamation-triangle mr-2"></i>Erro ao carregar processos.</div>';
+  });
+}
+
+function _procFiltrar() { _procRenderizar(); }
+
+function _procRenderizar() {
+  var busca = (document.getElementById('procBusca')?.value || '').toLowerCase();
+  var tipo  = document.getElementById('procFiltroTipo')?.value || '';
+  var fase  = document.getElementById('procFiltroFase')?.value || '';
+  var c     = document.getElementById('processosContainer');
+  if (!c) return;
+
+  var lista = _processosCache.filter(function(p) {
+    if (busca && !String(p.titulo||'').toLowerCase().includes(busca) &&
+                 !String(p.numero||'').toLowerCase().includes(busca)) return false;
+    if (tipo && p.tipo !== tipo) return false;
+    if (fase && p.fase !== fase) return false;
+    return true;
+  });
+
+  if (!lista.length) {
+    c.innerHTML = '<div class="p-12 text-center"><i class="fas fa-sitemap text-slate-200 text-4xl mb-3"></i>'
+      + '<p class="text-slate-400 font-bold text-sm">' + (_processosCache.length ? 'Nenhum processo encontrado.' : 'Nenhum processo cadastrado.') + '</p>'
+      + (temPermissao('processos','editar') ? '<button onclick="abrirModalProcesso()" class="mt-4 bg-blue-600 text-white text-xs font-black px-4 py-2 rounded-xl">+ Novo Processo</button>' : '')
+      + '</div>';
+    return;
+  }
+
+  c.innerHTML = '<table class="w-full text-sm"><thead>'
+    + '<tr class="border-b border-slate-100 bg-slate-50/50 text-left">'
+    + '<th class="px-5 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Nº / Título</th>'
+    + '<th class="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Tipo</th>'
+    + '<th class="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Fase</th>'
+    + '<th class="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Responsável</th>'
+    + '<th class="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Abertura</th>'
+    + '<th class="px-4 py-3"></th></tr></thead><tbody>'
+    + lista.map(function(p) {
+        var dt = '';
+        try { dt = p.criadoEm ? new Date(p.criadoEm).toLocaleDateString('pt-BR') : ''; } catch(e){}
+        return '<tr class="border-b border-slate-50 hover:bg-slate-50/50">'
+          + '<td class="px-5 py-3"><p class="font-semibold text-slate-700 text-xs">' + escaparHTML(p.titulo||'') + '</p>'
+          + (p.numero ? '<p class="text-[10px] text-slate-400 font-mono">#' + escaparHTML(p.numero) + '</p>' : '') + '</td>'
+          + '<td class="px-4 py-3 text-[11px] text-slate-500">' + escaparHTML(p.tipo||'—') + '</td>'
+          + '<td class="px-4 py-3"><span style="font-size:9px;font-weight:900;padding:2px 8px;border-radius:99px;' + _procFaseCls(p.fase) + '">' + escaparHTML(p.fase||'—') + '</span></td>'
+          + '<td class="px-4 py-3 text-[11px] text-slate-500">' + escaparHTML(p.responsavel||'—') + '</td>'
+          + '<td class="px-4 py-3 text-[11px] text-slate-400">' + escaparHTML(dt) + '</td>'
+          + '<td class="px-4 py-3 flex gap-1 items-center">'
+          + ((p.tipo==='Compra'||p.tipo==='Serviço') && temPermissao('contratacoes','editar') ? '<button onclick="_procCriarContratacao(\'' + escaparHTML(p.titulo) + '\')" class="text-amber-400 hover:text-amber-600 mr-1" title="Criar Contratação"><i class="fas fa-handshake text-xs"></i></button>' : '')
+          + (temPermissao('processos','editar') ? '<button onclick="abrirModalProcesso(\'' + escaparHTML(p.id) + '\')" class="text-blue-400 hover:text-blue-600 mr-1"><i class="fas fa-edit text-xs"></i></button>' : '')
+          + (temPermissao('processos','excluir') ? '<button onclick="_excluirProcesso(\'' + escaparHTML(p.id) + '\')" class="text-red-300 hover:text-red-500"><i class="fas fa-trash text-xs"></i></button>' : '')
+          + '</td></tr>';
+      }).join('') + '</tbody></table>';
+}
+
+function _procCriarContratacao(titulo) {
+  mostrarAba('aba-contratacoes');
+  setTimeout(function() {
+    if (typeof abrirModalContratacao === 'function') {
+      abrirModalContratacao(null, { objeto: titulo, status: 'Em Análise' });
+    }
+  }, 350);
+}
+
+function abrirModalProcesso(id) {
+  var dado = id ? _processosCache.find(function(p) { return p.id === id; }) : {};
+  dado = dado || {};
+  var _rhOpts = (typeof _rhCache !== 'undefined' ? _rhCache : [])
+    .map(function(p){ return '<option value="' + escaparHTML(p.nome||'') + '">'; }).join('');
+  Swal.fire({
+    title: id ? 'Editar Processo' : 'Novo Processo',
+    width: Math.min(540, window.innerWidth - 32),
+    showCancelButton: true,
+    confirmButtonText: '<i class="fas fa-save mr-1"></i>Salvar',
+    cancelButtonText: 'Cancelar',
+    confirmButtonColor: '#3b82f6',
+    customClass:{ popup:'rounded-3xl', confirmButton:'rounded-xl font-black text-sm', cancelButton:'rounded-xl font-bold text-sm' },
+    html: '<div class="text-left" style="padding:0 20px 16px">'
+      + '<div style="display:grid;grid-template-columns:100px 1fr;gap:10px;margin-bottom:10px">'
+      + '<div><label style="display:block;font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">Nº</label>'
+      + '<input id="procNum" style="width:100%;padding:9px 13px;font-size:12px;border:1.5px solid #e2e8f0;border-radius:12px;outline:none;box-sizing:border-box;text-align:center" value="' + escaparHTML(dado.numero||'') + '"></div>'
+      + '<div><label style="display:block;font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">Título *</label>'
+      + '<input id="procTitulo" style="width:100%;padding:9px 13px;font-size:13px;border:1.5px solid #e2e8f0;border-radius:12px;outline:none;box-sizing:border-box" value="' + escaparHTML(dado.titulo||'') + '" placeholder="Nome do processo"></div></div>'
+      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">'
+      + '<div><label style="display:block;font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">Tipo</label>'
+      + '<select id="procTipo" style="width:100%;padding:9px 13px;font-size:12px;border:1.5px solid #e2e8f0;border-radius:12px;outline:none">'
+      + ['Compra','Serviço','Convênio','Administrativo','Outro'].map(function(t){ return '<option'+(dado.tipo===t?' selected':'')+'>'+t+'</option>'; }).join('')
+      + '</select></div>'
+      + '<div><label style="display:block;font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">Fase</label>'
+      + '<select id="procFase" style="width:100%;padding:9px 13px;font-size:12px;border:1.5px solid #e2e8f0;border-radius:12px;outline:none">'
+      + ['Iniciado','Em Análise','Aguardando Aprovação','Aprovado','Encerrado'].map(function(f){ return '<option'+(dado.fase===f?' selected':'')+'>'+f+'</option>'; }).join('')
+      + '</select></div></div>'
+      + '<div><label style="display:block;font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">Responsável</label>'
+      + '<datalist id="rh-dl-proc">' + _rhOpts + '</datalist>'
+      + '<input id="procResp" list="rh-dl-proc" style="width:100%;padding:9px 13px;font-size:12px;border:1.5px solid #e2e8f0;border-radius:12px;outline:none;box-sizing:border-box" value="' + escaparHTML(dado.responsavel||'') + '" placeholder="Nome do colaborador"></div></div>',
+    preConfirm: function() {
+      var t = (document.getElementById('procTitulo')?.value||'').trim();
+      if (!t) { Swal.showValidationMessage('Título obrigatório'); return false; }
+      return { id:dado.id||null, numero:document.getElementById('procNum')?.value.trim(),
+               titulo:t, tipo:document.getElementById('procTipo')?.value,
+               fase:document.getElementById('procFase')?.value,
+               responsavel:document.getElementById('procResp')?.value.trim() };
+    }
+  }).then(function(r) {
+    if (!r.isConfirmed) return;
+    showLoader(true);
+    GAS.processos.salvar(r.value, function() {
+      showLoader(false); carregarProcessos();
+    }, function(e) { showLoader(false); Swal.fire('Erro', e.message,'error'); });
+  });
+}
+
+function _excluirProcesso(id) {
+  Swal.fire({ title:'Excluir processo?', icon:'warning', showCancelButton:true,
+    confirmButtonColor:'#ef4444', confirmButtonText:'Excluir', cancelButtonText:'Cancelar',
+    customClass:{popup:'rounded-3xl',confirmButton:'rounded-xl font-black text-sm',cancelButton:'rounded-xl font-bold text-sm'}
+  }).then(function(r) {
+    if (!r.isConfirmed) return;
+    showLoader(true);
+    GAS.processos.excluir(id, function() {
+      showLoader(false); carregarProcessos();
+    }, function(e) { showLoader(false); Swal.fire('Erro', e.message,'error'); });
+  });
+}
+
+window._onShow_aba_processos = function() {
+  if (!_processosCache.length) carregarProcessos();
+};
+</script>

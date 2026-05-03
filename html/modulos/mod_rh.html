@@ -1,0 +1,203 @@
+<!--
+@file mod_rh.html
+@type module
+@description Depto. Pessoal — gestão de colaboradores da equipe.
+@responsibility Estrutura HTML + JS da aba #aba-rh.
+@dependencies GAS.equipes, showLoader, escaparHTML, temPermissao
+-->
+<section id="aba-rh" class="tab-content hidden pb-20">
+
+  <div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+
+    <!-- HEADER -->
+    <div class="p-5 border-b border-slate-100 bg-slate-50/50 flex flex-wrap justify-between items-center gap-3">
+      <div>
+        <h3 class="font-black text-slate-800 uppercase tracking-tighter text-sm">
+          <i class="fas fa-id-badge text-teal-500 mr-2"></i>Depto. Pessoal
+        </h3>
+        <p class="text-[10px] text-slate-400 font-medium">Colaboradores e informações da equipe</p>
+      </div>
+      <div class="flex gap-2 items-center flex-wrap">
+        <div class="relative">
+          <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 text-xs"></i>
+          <input type="text" id="rhBusca" placeholder="Buscar colaborador..."
+            oninput="_rhFiltrar()"
+            style="padding:8px 12px 8px 30px;border:1.5px solid #e2e8f0;border-radius:12px;font-size:12px;outline:none;width:180px"
+            onfocus="this.style.borderColor='#14b8a6'" onblur="this.style.borderColor='#e2e8f0'">
+        </div>
+        <select id="rhFiltroSetor" onchange="_rhFiltrar()"
+          style="padding:8px 12px;border:1.5px solid #e2e8f0;border-radius:12px;font-size:12px;outline:none;color:#475569">
+          <option value="">Todos os setores</option>
+          <option value="Administração">Administração</option>
+          <option value="Comunicação">Comunicação</option>
+          <option value="Financeiro">Financeiro</option>
+          <option value="Operações">Operações</option>
+          <option value="Projetos">Projetos</option>
+          <option value="TI">TI</option>
+        </select>
+        <select id="rhFiltroStatus" onchange="_rhFiltrar()"
+          style="padding:8px 12px;border:1.5px solid #e2e8f0;border-radius:12px;font-size:12px;outline:none;color:#475569">
+          <option value="">Todos</option>
+          <option value="Ativo">Ativo</option>
+          <option value="Férias">Férias</option>
+          <option value="Afastado">Afastado</option>
+          <option value="Inativo">Inativo</option>
+        </select>
+        <button onclick="abrirModalColaborador()" data-requer-permissao="rh:editar"
+          class="bg-teal-600 hover:bg-teal-700 text-white text-[10px] font-black px-4 py-2 rounded-xl transition-all uppercase flex items-center gap-1.5">
+          <i class="fas fa-plus text-[9px]"></i>Novo Colaborador
+        </button>
+      </div>
+    </div>
+
+    <!-- GRID DE CARDS -->
+    <div id="rhContainer" class="p-5">
+      <div class="p-8 text-center">
+        <i class="fas fa-spinner animate-spin text-teal-300 text-xl"></i>
+        <p class="text-[11px] text-slate-400 mt-2">Carregando...</p>
+      </div>
+    </div>
+
+  </div>
+
+</section>
+
+<script>
+var _rhCache = [];
+
+function _rhStatusCls(s) {
+  return { 'Ativo':'background:#d1fae5;color:#065f46', 'Férias':'background:#eff6ff;color:#1d4ed8',
+           'Afastado':'background:#fef3c7;color:#92400e', 'Inativo':'background:#fee2e2;color:#991b1b' }[s]
+    || 'background:#f1f5f9;color:#475569';
+}
+
+function _rhIniciais(nome) {
+  return (nome||'?').split(' ').slice(0,2).map(function(n){ return n[0]||''; }).join('').toUpperCase();
+}
+
+function carregarRH() {
+  var c = document.getElementById('rhContainer');
+  if (c) c.innerHTML = '<div class="p-8 text-center"><i class="fas fa-spinner animate-spin text-teal-300 text-xl"></i></div>';
+  GAS.equipes.listar(function(lista) {
+    _rhCache = lista || [];
+    _rhFiltrar();
+  }, function() {
+    if (c) c.innerHTML = '<div class="p-8 text-center text-red-400 text-sm"><i class="fas fa-exclamation-triangle mr-2"></i>Erro ao carregar colaboradores.</div>';
+  });
+}
+
+function _rhFiltrar() {
+  var busca = (document.getElementById('rhBusca')?.value||'').toLowerCase();
+  var setor = document.getElementById('rhFiltroSetor')?.value || '';
+  var st    = document.getElementById('rhFiltroStatus')?.value || '';
+  var c     = document.getElementById('rhContainer');
+  if (!c) return;
+
+  var lista = _rhCache.filter(function(p) {
+    if (busca && !String(p.nome||'').toLowerCase().includes(busca) &&
+                 !String(p.cargo||'').toLowerCase().includes(busca)) return false;
+    if (setor && p.setor !== setor) return false;
+    if (st    && p.status !== st)  return false;
+    return true;
+  });
+
+  if (!lista.length) {
+    c.innerHTML = '<div class="p-12 text-center"><i class="fas fa-users text-slate-200 text-4xl mb-3"></i>'
+      + '<p class="text-slate-400 font-bold text-sm">' + (_rhCache.length ? 'Nenhum colaborador encontrado.' : 'Nenhum colaborador cadastrado.') + '</p>'
+      + (temPermissao('rh','editar') ? '<button onclick="abrirModalColaborador()" class="mt-4 bg-teal-600 text-white text-xs font-black px-4 py-2 rounded-xl">+ Novo Colaborador</button>' : '')
+      + '</div>';
+    return;
+  }
+
+  c.innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px">'
+    + lista.map(function(p) {
+        var st = p.status || 'Ativo';
+        var cores = ['#6366f1','#14b8a6','#f59e0b','#ec4899','#8b5cf6','#06b6d4'];
+        var cor = cores[Math.abs(p.id ? p.id.charCodeAt(4)||0 : 0) % cores.length];
+        return '<div style="background:#fff;border:1.5px solid #e2e8f0;border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:10px">'
+          + '<div style="display:flex;align-items:center;gap:10px">'
+          + '<div style="width:40px;height:40px;border-radius:50%;background:' + cor + ';display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;font-weight:900;flex-shrink:0">'
+          + escaparHTML(_rhIniciais(p.nome)) + '</div>'
+          + '<div style="flex:1;min-width:0">'
+          + '<p style="font-weight:800;font-size:12px;color:#1e293b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escaparHTML(p.nome||'') + '</p>'
+          + '<p style="font-size:10px;color:#64748b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escaparHTML(p.cargo||'—') + '</p>'
+          + '</div></div>'
+          + '<div style="display:flex;justify-content:space-between;align-items:center">'
+          + '<span style="font-size:9px;color:#94a3b8">' + escaparHTML(p.setor||'—') + '</span>'
+          + '<span style="font-size:8px;font-weight:900;padding:2px 8px;border-radius:99px;' + _rhStatusCls(st) + '">' + st + '</span>'
+          + '</div>'
+          + (temPermissao('rh','editar') ? '<div style="display:flex;gap:6px;justify-content:flex-end">'
+            + '<button onclick="abrirModalColaborador(\'' + escaparHTML(p.id) + '\')" style="font-size:10px;color:#6366f1;background:#eef2ff;border:none;border-radius:8px;padding:4px 10px;cursor:pointer"><i class="fas fa-edit" style="margin-right:4px"></i>Editar</button>'
+            + (temPermissao('rh','excluir') ? '<button onclick="_excluirColaborador(\'' + escaparHTML(p.id) + '\')" style="font-size:10px;color:#ef4444;background:#fee2e2;border:none;border-radius:8px;padding:4px 10px;cursor:pointer"><i class="fas fa-trash" style="margin-right:4px"></i></button>' : '')
+            + '</div>' : '')
+          + '</div>';
+      }).join('')
+    + '</div>';
+}
+
+function abrirModalColaborador(id) {
+  var dado = id ? _rhCache.find(function(p){ return p.id===id; }) : {};
+  dado = dado || {};
+  Swal.fire({
+    title: id ? 'Editar Colaborador' : 'Novo Colaborador',
+    width: Math.min(540, window.innerWidth-32),
+    showCancelButton: true,
+    confirmButtonText: '<i class="fas fa-save mr-1"></i>Salvar',
+    cancelButtonText: 'Cancelar',
+    confirmButtonColor: '#14b8a6',
+    customClass:{ popup:'rounded-3xl', confirmButton:'rounded-xl font-black text-sm', cancelButton:'rounded-xl font-bold text-sm' },
+    html: '<div class="text-left" style="padding:0 20px 16px">'
+      + '<div style="margin-bottom:10px"><label style="display:block;font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">Nome completo *</label>'
+      + '<input id="rhNome" style="width:100%;padding:9px 13px;font-size:13px;border:1.5px solid #e2e8f0;border-radius:12px;outline:none;box-sizing:border-box" value="' + escaparHTML(dado.nome||'') + '" placeholder="Nome do colaborador"></div>'
+      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">'
+      + '<div><label style="display:block;font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">Cargo</label>'
+      + '<input id="rhCargo" style="width:100%;padding:9px 13px;font-size:12px;border:1.5px solid #e2e8f0;border-radius:12px;outline:none;box-sizing:border-box" value="' + escaparHTML(dado.cargo||'') + '" placeholder="Ex: Analista de Projetos"></div>'
+      + '<div><label style="display:block;font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">Setor</label>'
+      + '<select id="rhSetor" style="width:100%;padding:9px 13px;font-size:12px;border:1.5px solid #e2e8f0;border-radius:12px;outline:none">'
+      + ['Administração','Comunicação','Financeiro','Operações','Projetos','TI'].map(function(s){ return '<option'+(dado.setor===s?' selected':'')+'>'+s+'</option>'; }).join('')
+      + '</select></div></div>'
+      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">'
+      + '<div><label style="display:block;font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">E-mail institucional</label>'
+      + '<input id="rhEmail" type="email" style="width:100%;padding:9px 13px;font-size:12px;border:1.5px solid #e2e8f0;border-radius:12px;outline:none;box-sizing:border-box" value="' + escaparHTML(dado.email||'') + '" placeholder="nome@ccbj.org.br"></div>'
+      + '<div><label style="display:block;font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">Status</label>'
+      + '<select id="rhStatus" style="width:100%;padding:9px 13px;font-size:12px;border:1.5px solid #e2e8f0;border-radius:12px;outline:none">'
+      + ['Ativo','Férias','Afastado','Inativo'].map(function(s){ return '<option'+(dado.status===s?' selected':'')+((!dado.status&&s==='Ativo')?' selected':'')+'>'+s+'</option>'; }).join('')
+      + '</select></div></div>'
+      + '<div><label style="display:block;font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">Telefone</label>'
+      + '<input id="rhTel" style="width:100%;padding:9px 13px;font-size:12px;border:1.5px solid #e2e8f0;border-radius:12px;outline:none;box-sizing:border-box" value="' + escaparHTML(dado.telefone||'') + '" placeholder="(85) 9xxxx-xxxx"></div></div>',
+    preConfirm: function() {
+      var n = (document.getElementById('rhNome')?.value||'').trim();
+      if (!n) { Swal.showValidationMessage('Nome obrigatório'); return false; }
+      return { id:dado.id||null, nome:n,
+               cargo:document.getElementById('rhCargo')?.value.trim(),
+               setor:document.getElementById('rhSetor')?.value,
+               email:document.getElementById('rhEmail')?.value.trim(),
+               status:document.getElementById('rhStatus')?.value,
+               telefone:document.getElementById('rhTel')?.value.trim() };
+    }
+  }).then(function(r) {
+    if (!r.isConfirmed) return;
+    showLoader(true);
+    GAS.equipes.salvar(r.value, function() {
+      showLoader(false); carregarRH();
+    }, function(e) { showLoader(false); Swal.fire('Erro', e.message,'error'); });
+  });
+}
+
+function _excluirColaborador(id) {
+  Swal.fire({ title:'Remover colaborador?', icon:'warning', showCancelButton:true,
+    confirmButtonColor:'#ef4444', confirmButtonText:'Remover', cancelButtonText:'Cancelar',
+    customClass:{popup:'rounded-3xl',confirmButton:'rounded-xl font-black text-sm',cancelButton:'rounded-xl font-bold text-sm'}
+  }).then(function(r) {
+    if (!r.isConfirmed) return;
+    showLoader(true);
+    GAS.equipes.excluir(id, function() {
+      showLoader(false); carregarRH();
+    }, function(e) { showLoader(false); Swal.fire('Erro', e.message,'error'); });
+  });
+}
+
+window._onShow_aba_rh = function() {
+  if (!_rhCache.length) carregarRH();
+};
+</script>

@@ -13,6 +13,9 @@ ORDEM DE CARREGAMENTO DOS SCRIPTS (obrigatória):
 
   ── SERVICES ──────────────────────────────────────────────────
   2. services/server_bridge_js — GAS object: bridge tipado para google.script.run
+                                  Namespaces: reservas, espacos, usuarios, contratos,
+                                  equipes, tarefas, processos, almoxarifado, balcao,
+                                  eficiencia, contratacoes, permissoes, financeiro (alias)
 
   ── MODULES (sem DOM, sem backend) ───────────────────────────
   3. modules/disponibilidade_module_js — conflito frontend, horários, normalização de datas
@@ -21,6 +24,7 @@ ORDEM DE CARREGAMENTO DOS SCRIPTS (obrigatória):
   ── UI HELPERS ────────────────────────────────────────────────
   5. mod_ui_componentes_js     — escaparHTML, showLoader, helpers de cor
   6. ui/navegacao_ui_js        — toggleSidebar, mostrarAba, toggleModulo
+                                  Dispatch genérico: window._onShow_aba_xxx
   7. ui/permissoes_ui_js       — configurarInterfacePorPermissao
 
   ── DOMÍNIO / FEATURES ────────────────────────────────────────
@@ -29,12 +33,23 @@ ORDEM DE CARREGAMENTO DOS SCRIPTS (obrigatória):
   10. mod_admin_js             — painéis admin, RECE, dashboard, manual
   11. mod_contratos_js         — CRUD de contratos, metas, rubricas, indicadores
   12. mod_favoritos_js         — drag-and-drop de favoritos na sidebar
-  13. bootstrap_js             — DOMContentLoaded, event listeners (SEMPRE POR ÚLTIMO)
+  13. mod_permissoes_js        — temPermissao(), carregarPermissoes(), aplicarPermissoesUI()
+  14. bootstrap_js             — DOMContentLoaded, event listeners (SEMPRE POR ÚLTIMO)
 
 MÓDULOS INLINE (incluídos fora da tag logic/):
   - PainelSolicitacoes, GestaoContratos — módulos de feature com JS próprio,
     carregados após o bootstrap para não bloquear a inicialização principal.
   - modal_manual — modal de ajuda carregado por último para não interferir no boot.
+
+MÓDULOS HTML (incluídos no <main>, cada um com JS próprio inline):
+  - mod_tarefas, mod_processos         — CRUD pessoal (GAS.tarefas, GAS.processos)
+  - mod_almoxarifado                   — estoque + movimentações (GAS.almoxarifado)
+  - mod_balcao                         — atendimentos ao público (GAS.balcao)
+  - mod_rh                             — funcionários / Depto. Pessoal (GAS.equipes)
+  - mod_eficiencia                     — métricas derivadas das reservas (GAS.eficiencia)
+  - mod_contratacoes                   — CRUD contratações PF/PJ (GAS.contratacoes)
+  - mod_relatorios_financeiros         — consolidação financeira cruzada (GAS.contratos + GAS.contratacoes)
+  Todos auto-registram: window._onShow_aba_xxx para carregamento lazy.
 -->
 
 <!DOCTYPE html>
@@ -228,6 +243,15 @@ MÓDULOS INLINE (incluídos fora da tag logic/):
 
       <?!= include('html/modulos/mod_financeiro'); ?>
 
+      <?!= include('html/modulos/mod_tarefas'); ?>
+      <?!= include('html/modulos/mod_processos'); ?>
+      <?!= include('html/modulos/mod_almoxarifado'); ?>
+      <?!= include('html/modulos/mod_balcao'); ?>
+      <?!= include('html/modulos/mod_rh'); ?>
+      <?!= include('html/modulos/mod_eficiencia'); ?>
+      <?!= include('html/modulos/mod_contratacoes'); ?>
+      <?!= include('html/modulos/mod_relatorios_financeiros'); ?>
+
     </div>
   </main>
 
@@ -254,6 +278,7 @@ MÓDULOS INLINE (incluídos fora da tag logic/):
   <?!= include('html/logic/mod_admin_js'); ?>
   <?!= include('html/logic/mod_contratos_js'); ?>
   <?!= include('html/logic/mod_favoritos_js'); ?>
+  <?!= include('html/logic/mod_permissoes_js'); ?>
 
   <!-- BOOTSTRAP: sempre por último -->
   <?!= include('html/logic/bootstrap_js'); ?>

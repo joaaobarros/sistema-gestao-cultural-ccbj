@@ -299,31 +299,93 @@ const GAS = {
   },
 
   /**
-   * BLOCO: Serviços de equipes — STUB
-   * @context Backend em desenvolvimento (mod_equipes.gs). Retorna stub sem chamar o servidor.
+   * BLOCO: Tarefas e processos (mod_pessoal.gs)
    */
-  equipes: {
-    obterFuncionarios: function(cb, err) { GAS._stub(cb); },
-    salvarFuncionario: function(dados, cb, err) { GAS._stub(cb); },
-    obterEscalas: function(cb, err) { GAS._stub(cb); },
-    salvarEscala: function(dados, cb, err) { GAS._stub(cb); },
-    obterAvaliacoes: function(cb, err) { GAS._stub(cb); },
-    registrarAvaliacao: function(dados, cb, err) { GAS._stub(cb); },
-    obterFerias: function(cb, err) { GAS._stub(cb); },
-    solicitarFerias: function(dados, cb, err) { GAS._stub(cb); }
+  tarefas: {
+    listar:  function(cb, err)             { GAS._call('obterTarefas',  [], cb, err); },
+    salvar:  function(dados, cb, err)      { GAS._call('salvarTarefa',  [dados], cb, err); },
+    excluir: function(id, cb, err)         { GAS._call('excluirTarefa', [id], cb, err); }
+  },
+
+  processos: {
+    listar:  function(cb, err)             { GAS._call('obterProcessos',  [], cb, err); },
+    salvar:  function(dados, cb, err)      { GAS._call('salvarProcesso',  [dados], cb, err); },
+    excluir: function(id, cb, err)         { GAS._call('excluirProcesso', [id], cb, err); }
   },
 
   /**
-   * BLOCO: Serviços financeiros — STUB
-   * @context Backend em desenvolvimento (mod_financeiro.gs). Retorna stub sem chamar o servidor.
+   * BLOCO: Almoxarifado (mod_almoxarifado.gs)
    */
+  almoxarifado: {
+    listar:      function(cb, err)                       { GAS._call('obterItensAlmoxarifado', [], cb, err); },
+    salvar:      function(dados, cb, err)                { GAS._call('salvarItemAlmoxarifado', [dados], cb, err); },
+    excluir:     function(id, cb, err)                   { GAS._call('excluirItemAlmoxarifado', [id], cb, err); },
+    movimentar:  function(id, tipo, qtd, obs, cb, err)   { GAS._call('movimentarEstoque', [id, tipo, qtd, obs], cb, err); },
+    movimentos:  function(cb, err)                       { GAS._call('obterMovimentacoes', [], cb, err); }
+  },
+
+  /**
+   * BLOCO: Balcão — atendimentos (mod_pessoal.gs)
+   */
+  balcao: {
+    listar:  function(cb, err)        { GAS._call('obterAtendimentos',  [], cb, err); },
+    salvar:  function(dados, cb, err) { GAS._call('salvarAtendimento',  [dados], cb, err); },
+    excluir: function(id, cb, err)    { GAS._call('excluirAtendimento', [id], cb, err); }
+  },
+
+  /**
+   * BLOCO: Equipes — colaboradores, escalas, férias (mod_equipes.gs)
+   */
+  equipes: {
+    listar:            function(cb, err)        { GAS._call('obterFuncionarios',  [], cb, err); },
+    salvar:            function(dados, cb, err) { GAS._call('salvarFuncionario',  [dados], cb, err); },
+    excluir:           function(id, cb, err)    { GAS._call('excluirFuncionario', [id], cb, err); },
+    obterEscalas:      function(cb, err)        { GAS._call('obterEscalas',       [], cb, err); },
+    salvarEscala:      function(dados, cb, err) { GAS._call('salvarEscala',       [dados], cb, err); },
+    obterAvaliacoes:   function(cb, err)        { GAS._call('obterAvaliacoes',    [], cb, err); },
+    registrarAvaliacao:function(dados, cb, err) { GAS._call('registrarAvaliacao', [dados], cb, err); },
+    obterFerias:       function(cb, err)        { GAS._call('obterFerias',        [], cb, err); },
+    solicitarFerias:   function(dados, cb, err) { GAS._call('solicitarFerias',    [dados], cb, err); }
+  },
+
+  /**
+   * BLOCO: Eficiência (mod_equipes.gs)
+   */
+  eficiencia: {
+    obterMetricas: function(cb, err) { GAS._call('obterMetricasEficiencia', [], cb, err); }
+  },
+
+  /**
+   * BLOCO: Contratações / financeiro (mod_financeiro.gs)
+   */
+  contratacoes: {
+    listar:           function(cb, err)        { GAS._call('obterContratacoes',  [], cb, err); },
+    salvar:           function(dados, cb, err) { GAS._call('salvarContratacao',  [dados], cb, err); },
+    excluir:          function(id, cb, err)    { GAS._call('excluirContratacao', [id], cb, err); },
+    obterPagamentos:  function(cb, err)        { GAS._call('obterPagamentos',    [], cb, err); },
+    registrarPagamento:function(dados, cb, err){ GAS._call('registrarPagamento', [dados], cb, err); },
+    fluxoCaixa:       function(cb, err)        { GAS._call('obterFluxoCaixa',    [], cb, err); }
+  },
+
+  // legado — mantido para retrocompatibilidade
   financeiro: {
-    obterContratacoes: function(cb, err) { GAS._stub(cb); },
-    salvarContratacao: function(dados, cb, err) { GAS._stub(cb); },
-    excluirContratacao: function(id, email, cb, err) { GAS._stub(cb); },
-    obterPagamentos: function(cb, err) { GAS._stub(cb); },
-    registrarPagamento: function(dados, cb, err) { GAS._stub(cb); },
-    obterFluxoCaixa: function(cb, err) { GAS._stub(cb); }
+    obterContratacoes:  function(cb, err)        { GAS._call('obterContratacoes',  [], cb, err); },
+    salvarContratacao:  function(dados, cb, err) { GAS._call('salvarContratacao',  [dados], cb, err); },
+    excluirContratacao: function(id, email, cb, err) { GAS._call('excluirContratacao', [id], cb, err); },
+    obterPagamentos:    function(cb, err)        { GAS._call('obterPagamentos',    [], cb, err); },
+    registrarPagamento: function(dados, cb, err) { GAS._call('registrarPagamento', [dados], cb, err); },
+    obterFluxoCaixa:    function(cb, err)        { GAS._call('obterFluxoCaixa',    [], cb, err); }
+  },
+
+  /**
+   * BLOCO: Permissões modulares (mod_permissoes.gs)
+   */
+  permissoes: {
+    obter:   function(cb, err)        { GAS._call('obterPermissoesUsuario',   [], cb, err); },
+    listar:  function(cb, err)        { GAS._call('listarPermissoes',         [], cb, err); },
+    salvar:  function(dados, cb, err) { GAS._call('salvarPermissaoUsuario',   [dados], cb, err); },
+    excluir: function(email, cb, err) { GAS._call('excluirPermissaoUsuario',  [email], cb, err); },
+    podacessar: function(email, mod, cb, err) { GAS._call('podeAcessarModulo', [email, mod], cb, err); }
   }
 
 };

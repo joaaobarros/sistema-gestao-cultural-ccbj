@@ -1,27 +1,75 @@
 /**
  * @file mod_financeiro.gs
  * @layer backend/modules
- * @description Módulo financeiro — STUB. Todas as funções lançam "EM_BREVE".
- *              Previsto: contratações, pagamentos e fluxo de caixa (planilha FINANCEIRO).
- *              Nota: contratos ativos são gerenciados por mod_relatorios.gs, não por este arquivo.
+ * @description Contratações e pagamentos operacionais.
+ *              Nota: contratos de projetos (metas/rubricas) estão em mod_relatorios.gs.
+ *              Dados persistidos em Drive JSON via DataLayer.gs.
  */
-// mod_financeiro.gs
-// Módulo Financeiro — Em desenvolvimento
+
+// ── Contratações ─────────────────────────────────────────
+
 function obterContratacoes() {
-  throw new Error("EM_BREVE");
+  return readJSON('contratacoes.json');
 }
-function salvarContratacao() {
-  throw new Error("EM_BREVE");
+
+function salvarContratacao(dados) {
+  var lista = readJSON('contratacoes.json');
+  if (!dados.id) {
+    dados.id = 'ctt_' + Date.now();
+    dados.criadoEm = new Date().toISOString();
+    lista.push(dados);
+  } else {
+    var encontrado = false;
+    for (var i = 0; i < lista.length; i++) {
+      if (lista[i].id === dados.id) { lista[i] = dados; encontrado = true; break; }
+    }
+    if (!encontrado) lista.push(dados);
+  }
+  writeJSON('contratacoes.json', lista);
+  return { ok: true, id: dados.id };
 }
-function excluirContratacao() {
-  throw new Error("EM_BREVE");
+
+function excluirContratacao(id) {
+  var lista = readJSON('contratacoes.json');
+  writeJSON('contratacoes.json', lista.filter(function(c) { return c.id !== id; }));
+  return { ok: true };
 }
+
+// ── Pagamentos ───────────────────────────────────────────
+
 function obterPagamentos() {
-  throw new Error("EM_BREVE");
+  return readJSON('pagamentos.json');
 }
-function registrarPagamento() {
-  throw new Error("EM_BREVE");
+
+function registrarPagamento(dados) {
+  var lista = readJSON('pagamentos.json');
+  dados.id = 'pag_' + Date.now();
+  dados.criadoEm = new Date().toISOString();
+  lista.push(dados);
+  writeJSON('pagamentos.json', lista);
+  return { ok: true, id: dados.id };
 }
+
+function excluirPagamento(id) {
+  var lista = readJSON('pagamentos.json');
+  writeJSON('pagamentos.json', lista.filter(function(p) { return p.id !== id; }));
+  return { ok: true };
+}
+
+// ── Fluxo de Caixa ───────────────────────────────────────
+
 function obterFluxoCaixa() {
-  throw new Error("EM_BREVE");
+  var pagamentos = readJSON('pagamentos.json');
+  var totalSaidas = pagamentos.reduce(function(s, p) { return s + (Number(p.valor) || 0); }, 0);
+
+  var contratacoes = readJSON('contratacoes.json');
+  var totalContratado = contratacoes.reduce(function(s, c) { return s + (Number(c.valor) || 0); }, 0);
+
+  return {
+    totalSaidas: totalSaidas,
+    totalContratado: totalContratado,
+    saldo: totalContratado - totalSaidas,
+    pagamentos: pagamentos,
+    totalPagamentos: pagamentos.length
+  };
 }

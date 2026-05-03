@@ -101,13 +101,9 @@ function mostrarAba(idAba) {
   }
 
   if (idAba === 'aba-contratos-fin') {
-
     if (typeof _finOnShow === 'function') {
       _finOnShow();
-      return;
-    }
-
-    if (!_ctrCache || !_ctrCache.contratos || !_ctrCache.contratos.length) {
+    } else if (!_ctrCache || !_ctrCache.contratos || !_ctrCache.contratos.length) {
       carregarDadosContratos();
     } else {
       renderizarContratos();
@@ -134,10 +130,16 @@ function mostrarAba(idAba) {
     if (typeof carregarSolicitacoes === 'function') carregarSolicitacoes();
   }
 
+  // Dispatch genérico para módulos que registram window._onShow_aba_xxx
+  var _dynHandler = window['_onShow_' + idAba.replace(/-/g, '_')];
+  if (typeof _dynHandler === 'function') _dynHandler();
+
   if (window.innerWidth < 768) {
     const sb = document.getElementById('sidebarPrincipal');
+    const ov = document.getElementById('sidebarOverlay');
     if (sb && !sb.classList.contains('-translate-x-full')) {
       sb.classList.add('-translate-x-full');
+      if (ov) ov.classList.add('hidden');
     }
   }
 
