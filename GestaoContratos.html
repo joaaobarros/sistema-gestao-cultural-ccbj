@@ -178,7 +178,8 @@
   border-radius:24px !important;
   padding:0 !important;
   overflow:hidden !important;
-  max-width:640px !important;
+  max-width:1000px !important;
+  width:95vw !important;
 }
 .swal2-popup.ctr-modal .swal2-header {
   padding:0 !important;
@@ -723,10 +724,10 @@ function abrirModalRubrica(idMeta, dadosIn){
 
   Swal.fire({
     title: dados.id?'Editar Rubrica':'Nova Rubrica',
-    width: Math.min(560, window.innerWidth-32),
+    width: Math.min(1000, window.innerWidth-32),
     showCancelButton:true, confirmButtonText:'<i class="fas fa-save mr-1"></i>Salvar',
     cancelButtonText:'Cancelar', confirmButtonColor:'#6366f1',
-    customClass:{popup:'rounded-3xl',confirmButton:'rounded-xl font-black text-sm',cancelButton:'rounded-xl font-bold text-sm'},
+    customClass:{popup:'ctr-modal rounded-3xl',confirmButton:'rounded-xl font-black text-sm',cancelButton:'rounded-xl font-bold text-sm'},
     html:`
         <div class="text-left" style="padding:0 20px 16px">
         ${meta.titulo?`<div style="display:flex;align-items:center;gap:8px;padding:7px 12px;background:#eef2ff;border:1px solid #c7d2fe;border-radius:10px;margin-bottom:12px">
@@ -757,7 +758,7 @@ function abrirModalRubrica(idMeta, dadosIn){
             <div style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:12px;padding:10px">
 
             <!-- HEADER -->
-            <div style="display:grid;grid-template-columns:1fr 90px 70px 110px 1fr 28px;gap:5px;margin-bottom:6px">
+            <div style="display:grid;grid-template-columns:2fr 110px 90px 140px 2fr 40px;gap:5px;margin-bottom:6px">
                 <span style="font-size:9px;font-weight:900;color:#94a3b8;text-transform:uppercase;padding:0 2px">Descrição</span>
                 <span style="font-size:9px;font-weight:900;color:#94a3b8;text-transform:uppercase;text-align:center">Tipo</span>
                 <span style="font-size:9px;font-weight:900;color:#94a3b8;text-transform:uppercase;text-align:center">Qtd</span>
