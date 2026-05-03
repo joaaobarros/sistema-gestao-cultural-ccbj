@@ -17,19 +17,28 @@ var _ctrColapsados = {}; // { [idContrato]: true/false }
 function carregarDadosContratos(cb) {
   GAS.contratos.obterDados(function(d) {
 
-    _ctrCache = d || { contratos:[], metas:[], indicadores:[], rubricas:[] };
+    // recria objeto (evita referência antiga)
+    _ctrCache = JSON.parse(JSON.stringify(
+      d || { contratos:[], metas:[], indicadores:[], rubricas:[] }
+    ));
 
-    if (!_ctrCache.rubricas) _ctrCache.rubricas = [];
+    // hardening completo (evita undefined no render)
+    _ctrCache.contratos   = Array.isArray(_ctrCache.contratos)   ? _ctrCache.contratos   : [];
+    _ctrCache.metas       = Array.isArray(_ctrCache.metas)       ? _ctrCache.metas       : [];
+    _ctrCache.indicadores = Array.isArray(_ctrCache.indicadores) ? _ctrCache.indicadores : [];
+    _ctrCache.rubricas    = Array.isArray(_ctrCache.rubricas)    ? _ctrCache.rubricas    : [];
 
-    if (typeof renderizarContratos === 'function') {
-      renderizarContratos();
-    }
-
+    // callback SEMPRE depois de dados válidos
     if (typeof cb === 'function') cb();
 
   }, function(err) {
+
     console.error('Erro contratos:', err);
+
     Swal.fire('Erro','Falha ao carregar contratos','error');
+
+    // garante que o fluxo não trava
+    if (typeof cb === 'function') cb();
   });
 }
 
@@ -47,15 +56,17 @@ function _fmtDataCtr(v) {
 }
 
 function _totalRubricas(idMeta) {
-  return (_ctrCache.rubricas || [])
-    .filter(function(r){ return r.idMeta === idMeta; })
-    .reduce(function(s,r){ return s + (Number(r.valor)||0); }, 0);
+  return (_ctrCache?.rubricas || [])
+    .filter(r => r.idMeta === idMeta)
+    .reduce((s, r) => s + (Number(r.valor) || 0), 0);
 }
 
 function _totalContrato(idContrato) {
-  return (_ctrCache.metas || [])
-    .filter(function(m){ return m.idContrato === idContrato; })
-    .reduce(function(s,m){ return s + _totalRubricas(m.id); }, 0);
+  const metas = (_ctrCache?.metas || []).filter(m => m.idContrato === idContrato);
+
+  return metas.reduce(function(total, meta) {
+    return total + (_totalRubricas(meta.id) || 0);
+  }, 0);
 }
 
 function _pctContrato(idContrato) {
@@ -459,10 +470,37 @@ function abrirModalContrato(dados) {
     }
   }).then(function(r) {
     if (!r.isConfirmed) return;
+
     showLoader(true);
-    GAS.contratos.salvar(r.value, AppState.usuario.email,
-      function(){ showLoader(false); carregarDadosContratos(renderizarContratos); codipPopularContratos(); },
-      _handleServerError);
+
+    GAS.contratos.salvar(
+      r.value,
+      AppState.usuario.email,
+
+      function(){
+
+        showLoader(false);
+
+        // reset de estado
+        _memoriaCalculo = [];
+        window._memTotal = 0;
+        _ctrCache = null;
+
+        carregarDadosContratos(function(){
+
+          renderizarContratos();
+
+          // só executa depois do render
+          if (typeof codipPopularContratos === 'function') {
+            codipPopularContratos();
+          }
+
+        });
+
+      },
+
+      _handleServerError
+    );
   });
 }
 
