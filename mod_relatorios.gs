@@ -1006,13 +1006,14 @@ function salvarRubrica(dados, email) {
         gerarId("MEM"),
         idFinal,
         String(item.descricao || ""),
-        String(dados.metrica || ""),
+        String(item.tipo || ""),
         qtd,
         val,
         subtotal,
         new Date(),
         String(email || ""),
         "SIM",
+        String(item.obs || ""),
       ]);
     });
 
@@ -1070,7 +1071,8 @@ function listarMemoriaRubrica(idRubrica) {
   const aba = _getSheet("RubricasMemoria");
   if (!aba || aba.getLastRow() < 2) return [];
 
-  const dados = aba.getRange(2, 1, aba.getLastRow() - 1, 10).getValues();
+  const numCols = Math.max(aba.getLastColumn(), 11);
+  const dados = aba.getRange(2, 1, aba.getLastRow() - 1, numCols).getValues();
 
   return dados.filter(
     (r) => String(r[1]) === String(idRubrica) && _isAtivoMemoria(r[9]),
