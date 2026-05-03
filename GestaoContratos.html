@@ -140,14 +140,22 @@
 
 /* ── Memória de Cálculo ───────────────────────────────── */
 .mem-row {
-  display:grid;
-  grid-template-columns:1fr 90px 70px 110px 1fr 32px;
+  display:flex;
+  flex-direction:column;
   gap:6px;
+  margin-bottom:10px;
+  padding:10px;
+  background:#fff;
+  border:1.5px solid #e2e8f0;
+  border-radius:10px;
+}
+.mem-linha-ctrl {
+  display:flex;
+  gap:6px;
+  flex-wrap:wrap;
   align-items:center;
-  margin-bottom:6px;
 }
 .mem-input {
-  width:100%;
   padding:7px 10px;
   border:1.5px solid #e2e8f0;
   border-radius:9px;
@@ -157,9 +165,11 @@
   transition:border-color .15s;
   box-sizing:border-box;
   font-family:inherit;
+  min-width:0;
+  width:100%;
 }
+.mem-linha-ctrl .mem-input { width:auto; flex:1; min-width:80px; }
 .mem-input:focus { border-color:#6366f1; }
-.mem-input-money { text-align:right; color:#059669; font-weight:800; }
 
 /* ── Observação textarea grande ───────────────────────── */
 .ctr-obs-textarea {
@@ -235,15 +245,18 @@ var _ctrExpanded = {};   // { idContrato: true/false }
 var _ctrFiltro   = '';
 
 // ── Helpers ──────────────────────────────────────────
-function _fmtMoedaBR(v) {
+function _fmtMoeda(v) {
   var n = Number(v) || 0;
-  return 'R$\u00a0' + n.toLocaleString('pt-BR', { minimumFractionDigits:2, maximumFractionDigits:2 });
+  var partes = n.toFixed(2).split('.');
+  partes[0] = partes[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  return 'R$\u00a0' + partes[0] + ',' + partes[1];
 }
-function _parseMoedaBR(s) {
+function _parseMoeda(s) {
   if (!s) return 0;
-  return parseFloat(String(s).replace(/\./g,'').replace(',','.')) || 0;
+  var limpo = String(s).replace(/R\$|\s/g,'').trim();
+  return parseFloat(limpo.replace(/\./g,'').replace(',','.')) || 0;
 }
-function _mascaraMoedaEl(el) {
+function _mascaraMoeda(el) {
   if (!el || el._maskApplied) return;
   el._maskApplied = true;
   el.addEventListener('input', function() {
@@ -387,13 +400,13 @@ function _renderCtrCard(ctr) {
     +(total>0
       ? '<div class="mt-2">'
         +'<div class="flex justify-between mb-1">'
-        +'<span class="text-[10px] font-black text-slate-500">Total: <b class="text-slate-700">'+_fmtMoedaBR(total)+'</b></span>'
+        +'<span class="text-[10px] font-black text-slate-500">Total: <b class="text-slate-700">'+_fmtMoeda(total)+'</b></span>'
         +'<span class="text-[10px] font-black '+(pct>=90?'text-red-500':pct>=70?'text-amber-500':'text-emerald-600')+'">'+pct+'% alocado</span>'
         +'</div>'
         +'<div class="ctr-progress-wrap"><div class="ctr-progress-fill" style="width:'+pct+'%;background:'+barCor+'"></div></div>'
-        +(alocado>0?'<p class="text-[9px] text-slate-400 mt-1">Rubricas: <b class="text-emerald-600">'+_fmtMoedaBR(alocado)+'</b> · Saldo: <b class="'+(saldo<0?'text-red-500':'text-slate-600')+'">'+_fmtMoedaBR(saldo)+'</b></p>':'')
+        +(alocado>0?'<p class="text-[9px] text-slate-400 mt-1">Rubricas: <b class="text-emerald-600">'+_fmtMoeda(alocado)+'</b> · Saldo: <b class="'+(saldo<0?'text-red-500':'text-slate-600')+'">'+_fmtMoeda(saldo)+'</b></p>':'')
         +'</div>'
-      : (alocado>0?'<div class="mt-1 inline-flex items-center gap-1.5 bg-indigo-50 text-indigo-700 text-[10px] font-black px-3 py-1 rounded-full"><i class="fas fa-coins text-[9px]"></i>'+_fmtMoedaBR(alocado)+' alocado</div>':''))
+      : (alocado>0?'<div class="mt-1 inline-flex items-center gap-1.5 bg-indigo-50 text-indigo-700 text-[10px] font-black px-3 py-1 rounded-full"><i class="fas fa-coins text-[9px]"></i>'+_fmtMoeda(alocado)+' alocado</div>':''))
     +'</div>'
     // ── AÇÕES ──
     +'<div class="flex flex-col items-end gap-2 shrink-0">'
@@ -430,7 +443,7 @@ function _renderMetaBlock(meta, idContrato) {
             +(r.obs?'<span class="text-[9px] text-slate-400 italic truncate hidden sm:block">'+escaparHTML(r.obs.substring(0,40))+'</span>':'')
             +'</div>'
             +'<div class="flex items-center gap-1.5 shrink-0">'
-            +'<span class="ctr-valor-tag">'+_fmtMoedaBR(r.valor)+'</span>'
+            +'<span class="ctr-valor-tag">'+_fmtMoeda(r.valor)+'</span>'
             +'<button onclick="editarRubrica(\''+escaparHTML(r.id)+'\')" class="ctr-icon-btn bg-slate-100 text-slate-400 hover:bg-indigo-600 hover:text-white"><i class="fas fa-edit text-[9px]"></i></button>'
             +'<button onclick="excluirRubricaUI(\''+escaparHTML(r.id)+'\')" class="ctr-icon-btn bg-slate-100 text-slate-400 hover:bg-red-600 hover:text-white"><i class="fas fa-trash text-[9px]"></i></button>'
             +'</div></div>';
@@ -464,7 +477,7 @@ function _renderMetaBlock(meta, idContrato) {
     +'<p class="text-[10px] font-black text-indigo-600 uppercase tracking-widest leading-none">Meta '+(meta.numero||'')+'</p>'
     +'<p class="font-bold text-slate-800 text-sm mt-0.5 leading-tight">'+escaparHTML(meta.titulo||'')+'</p>'
     +(meta.descricao?'<p class="text-[10px] text-slate-500 mt-0.5 truncate">'+escaparHTML(meta.descricao)+'</p>':'')
-    +(totalMeta>0?'<p class="text-[10px] font-black text-emerald-600 mt-1"><i class="fas fa-coins mr-1 text-[8px]"></i>'+_fmtMoedaBR(totalMeta)+' em rubricas</p>':'')
+    +(totalMeta>0?'<p class="text-[10px] font-black text-emerald-600 mt-1"><i class="fas fa-coins mr-1 text-[8px]"></i>'+_fmtMoeda(totalMeta)+' em rubricas</p>':'')
     +'</div>'
     +'<div class="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">'
     +'<button onclick="event.stopPropagation();abrirModalIndicador(\''+escaparHTML(meta.id)+'\',\''+escaparHTML(idContrato)+'\')" class="ctr-btn ctr-btn-indigo"><i class="fas fa-chart-line text-[8px]"></i>Indicador</button>'
@@ -634,8 +647,8 @@ function abrirModalContrato(dadosIn) {
         var el=document.getElementById(id);
         if (el && !el._fp) el._fp=flatpickr(el,{dateFormat:'d/m/Y',locale:'pt',allowInput:true});
       });
-      _mascaraMoedaEl(document.getElementById('ctrValorTotal'));
-      _mascaraMoedaEl(document.getElementById('ctrContrapartida'));
+      _mascaraMoeda(document.getElementById('ctrValorTotal'));
+      _mascaraMoeda(document.getElementById('ctrContrapartida'));
     },
     preConfirm: function(){
       var nome=document.getElementById('ctrNome')?.value.trim();
@@ -647,9 +660,9 @@ function abrirModalContrato(dadosIn) {
         vigIni:document.getElementById('ctrIni')?.value.trim(),
         vigFim:document.getElementById('ctrFim')?.value.trim(),
         status:document.getElementById('ctrStatus')?.value,
-        valorTotal:_parseMoedaBR(document.getElementById('ctrValorTotal')?.value),
+        valorTotal:_parseMoeda(document.getElementById('ctrValorTotal')?.value),
         fonteRecurso:document.getElementById('ctrFonte')?.value.trim(),
-        contrapartida:_parseMoedaBR(document.getElementById('ctrContrapartida')?.value),
+        contrapartida:_parseMoeda(document.getElementById('ctrContrapartida')?.value),
         modalidade:document.getElementById('ctrModalidade')?.value,
         obsFinanceiro:document.getElementById('ctrObsFinan')?.value.trim()
       };
@@ -766,43 +779,66 @@ function excluirMetaUI(id){
 
 var _memoriaCalculo = [];
 
-function _memCalcularItem(i){
-  var qtd = parseFloat(String(i.qtd).replace(',','.')) || 0;
-  var valor = parseFloat(String(i.valor).replace(',','.')) || 0;
-  return qtd * valor;
+// Lê valores diretamente dos inputs do DOM (após a máscara já ter rodado)
+function _memAtualizarTotal(){
+  var total = 0;
+  var rows = document.querySelectorAll('.mem-row');
+  if (rows.length) {
+    rows.forEach(function(row){
+      var qtd = parseFloat((row.querySelector('.mem-qtd')||{}).value || '0') || 0;
+      var rawVal = ((row.querySelector('.mem-val')||{}).value || '0');
+      var val = parseFloat(rawVal.replace(/\./g,'').replace(',','.')) || 0;
+      total += qtd * val;
+    });
+  } else {
+    total = _memoriaCalculo.reduce(function(s,i){
+      return s + (Number(i.qtd)||0) * (Number(i.valor)||0);
+    }, 0);
+  }
+  var el = document.getElementById('memTotal');
+  if(el) el.textContent = _fmtMoeda(total);
 }
 
-function _memAtualizarTotal(){
-  var total = _memoriaCalculo.reduce(function(s,i){ return s + _memCalcularItem(i); }, 0);
-  var el = document.getElementById('memTotal');
-  if(el) el.textContent = _fmtMoedaBR(total);
+// Máscara monetária + atualização de total — chamada de oninput dos campos de valor
+function _memMascaraValor(el){
+  var raw = el.value.replace(/\D/g,'');
+  if(!raw){ el.value=''; _memAtualizarTotal(); return; }
+  var n = (parseInt(raw,10)/100).toFixed(2);
+  var p = n.split('.');
+  p[0] = p[0].replace(/\B(?=(\d{3})+(?!\d))/g,'.');
+  el.value = p[0]+','+p[1];
+  _memAtualizarTotal();
+}
+
+// Sincroniza estado ao sair do campo de valor
+function _memBlurValor(el, i){
+  var v = parseFloat(String(el.value||'').replace(/\./g,'').replace(',','.')) || 0;
+  _memoriaCalculo[i].valor = v;
+  _memAtualizarTotal();
 }
 
 function _memRenderizar(){
-  var container=document.getElementById('memLinhas');
+  var container = document.getElementById('memLinhas');
   if(!container) return;
-  container.innerHTML=_memoriaCalculo.map(function(item,i){
-    var valorFmt = (parseFloat(String(item.valor||0).replace(',','.')) || 0).toFixed(2).replace('.',',');
-    return '<div style="display:grid;grid-template-columns:1fr 90px 70px 110px 1fr 28px;gap:5px;margin-bottom:5px;align-items:center">'
-        +'<input class="mem-input" placeholder="Descrição" value="'+escaparHTML(item.descricao||'')+'" oninput="_memoriaCalculo['+i+'].descricao=this.value">'
-        +'<select class="mem-input" onchange="_memoriaCalculo['+i+'].tipo=this.value">'
-            +'<option value="mensal" '+(item.tipo==='mensal'||!item.tipo?'selected':'')+'>Mensal</option>'
-            +'<option value="diaria" '+(item.tipo==='diaria'?'selected':'')+'>Diária</option>'
-            +'<option value="hora" '+(item.tipo==='hora'?'selected':'')+'>Hora técnica</option>'
-            +'<option value="unitario" '+(item.tipo==='unitario'?'selected':'')+'>Unitário</option>'
-        +'</select>'
-        +'<input type="number" class="mem-input" style="text-align:center" min="0" step="any" value="'+(item.qtd||1)+'" oninput="_memoriaCalculo['+i+'].qtd=parseFloat(this.value)||0;_memAtualizarTotal()">'
-        +'<input class="mem-input mem-input-money" placeholder="0,00" value="'+valorFmt+'" oninput="_memoriaCalculo['+i+'].valor=parseFloat(this.value.replace(/\\./g,\'\').replace(\',\',\'.\'))||0;_memAtualizarTotal()">'
-        +'<input class="mem-input" placeholder="Detalhe..." value="'+escaparHTML(item.obs||'')+'" oninput="_memoriaCalculo['+i+'].obs=this.value">'
-        +'<button type="button" onclick="_memRemoverLinha('+i+')" style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;background:#fee2e2;border:none;border-radius:7px;cursor:pointer;color:#dc2626;font-size:11px;flex-shrink:0">✕</button>'
-        +'</div>';
+  container.innerHTML = _memoriaCalculo.map(function(item, i){
+    var valorFmt = (Number(item.valor)||0).toFixed(2).replace('.', ',');
+    return '<div class="mem-row">'
+      + '<input class="mem-input" placeholder="Descrição" value="'+escaparHTML(item.descricao||'')+'" oninput="_memoriaCalculo['+i+'].descricao=this.value">'
+      + '<input class="mem-input" placeholder="Observação (opcional)" value="'+escaparHTML(item.obs||'')+'" oninput="_memoriaCalculo['+i+'].obs=this.value">'
+      + '<div class="mem-linha-ctrl">'
+        + '<select class="mem-input" style="max-width:120px" onchange="_memoriaCalculo['+i+'].tipo=this.value">'
+          + '<option value="mensal" '+(item.tipo==='mensal'||!item.tipo?'selected':'')+'>Mensal</option>'
+          + '<option value="diaria" '+(item.tipo==='diaria'?'selected':'')+'>Diária</option>'
+          + '<option value="hora" '+(item.tipo==='hora'?'selected':'')+'>Hora técnica</option>'
+          + '<option value="unitario" '+(item.tipo==='unitario'?'selected':'')+'>Unitário</option>'
+        + '</select>'
+        + '<input type="number" class="mem-input mem-qtd" min="0" step="any" style="max-width:72px;text-align:center" value="'+(item.qtd||1)+'" oninput="_memoriaCalculo['+i+'].qtd=parseFloat(this.value)||0;_memAtualizarTotal()">'
+        + '<input class="mem-input mem-val" placeholder="0,00" style="max-width:110px;text-align:right;color:#059669;font-weight:800" value="'+valorFmt+'" oninput="_memMascaraValor(this)" onblur="_memBlurValor(this,'+i+')">'
+        + '<button type="button" onclick="_memRemoverLinha('+i+')" style="width:30px;height:30px;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:#fee2e2;border:none;border-radius:7px;cursor:pointer;color:#dc2626;font-size:11px">✕</button>'
+      + '</div>'
+    + '</div>';
   }).join('');
   _memAtualizarTotal();
-  setTimeout(function(){
-    document.querySelectorAll('.mem-input-money').forEach(function(el){
-      _mascaraMoedaEl(el);
-    });
-  }, 0);
 }
 
 function _memAdicionarLinha(){
@@ -848,16 +884,8 @@ function abrirModalRubrica(idMeta, dadosIn){
             </button>
             </div>
 
-            <div style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:12px;padding:10px;overflow-x:auto">
-            <div style="display:grid;grid-template-columns:1fr 90px 70px 110px 1fr 28px;gap:5px;margin-bottom:6px;min-width:560px">
-                <span style="font-size:9px;font-weight:900;color:#94a3b8;text-transform:uppercase;padding:0 2px">Descrição</span>
-                <span style="font-size:9px;font-weight:900;color:#94a3b8;text-transform:uppercase;padding-left:4px">Tipo</span>
-                <span style="font-size:9px;font-weight:900;color:#94a3b8;text-transform:uppercase;text-align:center">Qtd</span>
-                <span style="font-size:9px;font-weight:900;color:#94a3b8;text-transform:uppercase;text-align:right;padding-right:4px">Unit. (R$)</span>
-                <span style="font-size:9px;font-weight:900;color:#94a3b8;text-transform:uppercase;padding:0 2px">Obs</span>
-                <span></span>
-            </div>
-            <div id="memLinhas" style="min-width:560px"></div>
+            <div style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:12px;padding:10px">
+            <div id="memLinhas"></div>
             </div>
 
             <div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px;padding:10px 12px;background:#f0fdf4;border:1.5px solid #bbf7d0;border-radius:12px">
@@ -895,24 +923,31 @@ function abrirModalRubrica(idMeta, dadosIn){
       }
     },
     preConfirm:function(){
+      // Força sync estado ← DOM antes de validar (garante que campos não-blur sejam capturados)
+      document.querySelectorAll('.mem-row').forEach(function(row, idx){
+        if (!_memoriaCalculo[idx]) return;
+        var qtdEl = row.querySelector('.mem-qtd');
+        var valEl = row.querySelector('.mem-val');
+        if (qtdEl) _memoriaCalculo[idx].qtd = parseFloat(qtdEl.value)||0;
+        if (valEl) _memoriaCalculo[idx].valor = parseFloat(String(valEl.value||'').replace(/\./g,'').replace(',','.'))||0;
+      });
+
       var nome=document.getElementById('rubNome')?.value.trim();
       if(!nome){Swal.showValidationMessage('Nome obrigatório.');return false;}
-      var total = _memoriaCalculo.reduce(function(s,i){ return s + _memCalcularItem(i); },0);
+
+      var total = _memoriaCalculo.reduce(function(s,i){
+        return s + (Number(i.qtd)||0) * (Number(i.valor)||0);
+      }, 0);
       if(total<=0){Swal.showValidationMessage('Valor total deve ser maior que zero.');return false;}
+
       return {
         id: dados.id || null,
         idMeta,
         nome,
         valor: total,
         memoriaCalculo: _memoriaCalculo.map(function(i){
-          return {
-            descricao: i.descricao || '',
-            tipo: i.tipo || 'mensal',
-            qtd: parseFloat(String(i.qtd||0).replace(',','.')) || 0,
-            valor: parseFloat(String(i.valor||0).replace(',','.')) || 0,
-            subtotal: _memCalcularItem(i),
-            obs: i.obs || ''
-          };
+          var q = Number(i.qtd)||0, v = Number(i.valor)||0;
+          return { descricao:i.descricao||'', tipo:i.tipo||'mensal', qtd:q, valor:v, subtotal:q*v, obs:i.obs||'' };
         }),
         obs: document.getElementById('rubObs')?.value.trim()
       };

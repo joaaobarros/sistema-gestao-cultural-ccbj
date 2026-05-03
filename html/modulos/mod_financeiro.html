@@ -271,7 +271,7 @@ function _finRenderizarLista() {
       +'</div>'
       +'<span style="font-size:8px;font-weight:900;padding:2px 8px;border-radius:99px;white-space:nowrap;'+statusCls+'">'+status+'</span>'
       +'</div>'
-      +(total>0?'<p class="text-[11px] font-black text-emerald-600 mb-1">'+(_fmtMoedaBR?_fmtMoedaBR(total):total)+'</p>':'')
+      +(total>0?'<p class="text-[11px] font-black text-emerald-600 mb-1">'+_fmtMoeda(total)+'</p>':'')
       +(metas.length?'<p class="text-[10px] text-slate-400">'+metas.length+' meta'+(metas.length>1?'s':'')+'</p>':'<p class="text-[10px] text-slate-300 italic">Sem metas</p>')
       +(total>0?'<div class="fin-progress-wrap"><div class="fin-progress-fill" style="width:'+pct+'%;background:'+barCor+'"></div></div>':'')
       +'</div>';
@@ -311,7 +311,7 @@ function _finRenderizarDetalhe(ctr) {
   var pct     = total>0 ? Math.min(100,Math.round(alocado/total*100)) : 0;
   var barCor  = pct>=90?'#ef4444':pct>=70?'#f59e0b':'#6366f1';
   var metas   = (_ctrCache.metas||[]).filter(function(m){ return m.idContrato===ctr.id; });
-  var fmt     = _fmtMoedaBR || function(v){ return 'R$ '+Number(v).toFixed(2); };
+  var fmt     = _fmtMoeda;
   var fmtDt   = _fmtDataBR  || function(v){ return v||''; };
 
   var statusCls = {
