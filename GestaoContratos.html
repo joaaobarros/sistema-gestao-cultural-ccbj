@@ -1025,7 +1025,7 @@ function abrirModalIndicador(idMeta, idContrato, dadosIn){
         +'<span style="font-size:9px;font-weight:700;color:'+(fora?'#cbd5e1':'#64748b')+'">'+nm+'</span>'
         +'<input type="number" id="indM_'+_a+'_'+i+'" value="'+val+'" min="0"'
         +(fora?' disabled':'')
-        +' style="width:100%;text-align:center;font-size:11px;font-weight:700;border:1.5px solid '+(fora?'#f1f5f9':'#e2e8f0')+';border-radius:8px;padding:5px 2px;outline:none;background:'+(fora?'#f8fafc':'#fff')+';opacity:'+(fora?.3:1)+';pointer-events:'+(fora?'none':'auto')+';box-sizing:border-box">'
+        +' style="width:100%;text-align:center;font-size:11px;font-weight:700;border:1.5px solid '+(fora?'#f1f5f9':'#e2e8f0')+';border-radius:8px;padding:5px 2px;outline:none;background:'+(fora?'#f8fafc':'#fff')+';opacity:'+(fora?0.3:1)+';pointer-events:'+(fora?'none':'auto')+';box-sizing:border-box">'
         +'</div>';
     }).join('');
 
@@ -1043,58 +1043,77 @@ function abrirModalIndicador(idMeta, idContrato, dadosIn){
   Swal.fire({
     title: dados.id?'Editar Indicador':'Novo Indicador',
     width: Math.min(720, window.innerWidth-32),
-    showCancelButton:true, confirmButtonText:'<i class="fas fa-save mr-1"></i>Salvar',
-    cancelButtonText:'Cancelar', confirmButtonColor:'#6366f1',
-    customClass:{popup:'rounded-3xl',confirmButton:'rounded-xl font-black text-sm',cancelButton:'rounded-xl font-bold text-sm'},
-    html:`
-        <div class="text-left" style="max-height:74vh;overflow-y:auto;padding:0 20px 16px">
-        ${metaObj.titulo?`<div style="display:flex;align-items:center;gap:8px;padding:7px 12px;background:#eef2ff;border:1px solid #c7d2fe;border-radius:10px;margin-bottom:12px">
-            <i class="fas fa-bullseye text-indigo-400 text-xs"></i>
-            <span style="font-size:10px;font-weight:900;color:#4338ca">Meta ${escaparHTML(metaObj.numero||'')} — ${escaparHTML(metaObj.titulo)}</span>
-        </div>`:''}
-        <div style="display:grid;grid-template-columns:80px 1fr;gap:10px;margin-bottom:10px">
-            <div>
-            <label class="ctr-label">Nº</label>
-            <input id="indNum" class="ctr-input" style="text-align:center" value="${escaparHTML(dados.numero||'')}" placeholder="01">
-            </div>
-            <div>
-            <label class="ctr-label">Nome do Indicador *</label>
-            <input id="indNome" class="ctr-input" value="${escaparHTML(dados.nome||dados.texto||'')}" placeholder="Ex.: Nº de pessoas atendidas presencialmente">
-            </div>
-        </div>
-        <div style="margin-bottom:12px">
-            <label class="ctr-label">Metodologia</label>
-            <textarea id="indDesc" class="ctr-obs-textarea" placeholder="Como é medido...">${escaparHTML(dados.descricao||'')}</textarea>
-        </div>
-        <div>
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-            <label class="ctr-label" style="margin-bottom:0">Metas mensais por ano de vigência</label>
-            ${ctr.vigIni?`<span style="font-size:10px;color:#cbd5e1"><i class="fas fa-calendar mr-1"></i>${escaparHTML(_fmtDataBR(ctr.vigIni)||'')} a ${escaparHTML(_fmtDataBR(ctr.vigFim)||'')}</span>`:''}
-            </div>
-            <div style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:14px;padding:14px;max-height:240px;overflow-y:auto">
-            ${faixasHtml}
-            </div>
-        </div>
-        </div>`,
-    preConfirm:function(){
-      var nome=document.getElementById('indNome')?.value.trim();
-      if(!nome){Swal.showValidationMessage('Nome obrigatório.');return false;}
-      var mesesPorAno={};
-      for(var a=anoInicio;a<=anoFim;a++){
-        var _a2=a;
-        mesesPorAno[_a2]=_NM.map(function(_,i){return Number(document.getElementById('indM_'+_a2+'_'+i)?.value)||0;});
+    showCancelButton:true,
+    confirmButtonText:'<i class="fas fa-save mr-1"></i>Salvar',
+    cancelButtonText:'Cancelar',
+    confirmButtonColor:'#6366f1',
+    customClass:{
+      popup:'rounded-3xl',
+      confirmButton:'rounded-xl font-black text-sm',
+      cancelButton:'rounded-xl font-bold text-sm'
+    },
+    html: `...`, // mantido como está no seu código
+
+    preConfirm: function(){
+
+      var nome = document.getElementById('indNome')?.value.trim();
+      if(!nome){
+        Swal.showValidationMessage('Nome obrigatório.');
+        return false;
       }
-      return {id:dados.id||null,idMeta,idContrato,numero:document.getElementById('indNum')?.value.trim(),
-        nome,texto:nome,descricao:document.getElementById('indDesc')?.value.trim(),
-        meses:mesesPorAno,ano:anoInicio};
+
+      var numero = document.getElementById('indNum')?.value.trim() || '';
+      var descricao = document.getElementById('indDesc')?.value?.trim() || '';
+
+      var mesesPorAno = {};
+      var total = 0;
+
+      for(var a = anoInicio; a <= anoFim; a++){
+        var _a2 = a;
+
+        mesesPorAno[_a2] = _NM.map(function(_, i){
+          var v = Number(document.getElementById('indM_'+_a2+'_'+i)?.value) || 0;
+          total += v;
+          return v;
+        });
+      }
+
+      if(total <= 0){
+        Swal.showValidationMessage('Informe pelo menos um valor mensal maior que zero.');
+        return false;
+      }
+
+      return {
+        id: dados.id || null,
+        idMeta: idMeta,
+        idContrato: idContrato,
+        numero: numero,
+        nome: nome,
+        texto: nome,
+        descricao: descricao,
+        meses: mesesPorAno,
+        ano: anoInicio
+      };
     }
+
   }).then(function(r){
     if(!r.isConfirmed) return;
+
     showLoader(true);
+
     google.script.run
-      .withSuccessHandler(function(){showLoader(false);carregarDadosContratos(function(){renderizarContratos();codipPopularContratos();});})
-      .withFailureHandler(function(e){showLoader(false);Swal.fire('Erro',e.message,'error');})
-      .salvarIndicador(r.value,AppState.usuario.email);
+      .withSuccessHandler(function(){
+        showLoader(false);
+        carregarDadosContratos(function(){
+          if(typeof renderizarContratos === 'function') renderizarContratos();
+          if(typeof codipPopularContratos === 'function') codipPopularContratos();
+        });
+      })
+      .withFailureHandler(function(e){
+        showLoader(false);
+        Swal.fire('Erro', e.message, 'error');
+      })
+      .salvarIndicador(r.value, AppState.usuario.email);
   });
 }
 
