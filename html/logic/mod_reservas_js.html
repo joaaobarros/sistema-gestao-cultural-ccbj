@@ -3029,7 +3029,7 @@ async function uploadImagemSeNecessario() {
 }
 
 function alternarModoVisualizacaoRece(modo) {
-  const tabelaWrap = document.querySelector('#aba-agenda-rece .bg-white.rounded-3xl.shadow-xl .overflow-x-auto');
+  const tabelaWrap = document.getElementById('tabelaReceWrapper');
   const semRes   = document.getElementById('semResultadosRece');
   const agendaV  = document.getElementById('viewAgendaRece');
   const btnLista = document.getElementById('btnModoListaRece');
@@ -3127,7 +3127,7 @@ function renderizarModoAgendaRece() {
   const PX_POR_HORA = 64;
   const TOTAL_PX = (TOTAL_MIN / 60) * PX_POR_HORA;
   const horasMarkers = Array.from({length:14}, (_,i) => 8+i);
-  const colStyle = '';
+  const colStyle = 'grid-template-columns: 44px repeat(7, minmax(80px, 1fr));';
 
   let html = `<div class="bg-white rounded-2xl border border-slate-200 overflow-hidden flex flex-col h-full">
     <div class="grid border-b border-slate-100" style="${colStyle}">
