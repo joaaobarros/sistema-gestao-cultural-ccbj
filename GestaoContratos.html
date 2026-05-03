@@ -862,6 +862,12 @@ function _memRenderizar() {
         + ' style="max-width:110px;text-align:right;color:#059669;font-weight:800"'
         + ' value="' + valorFmt + '">'
 
+        + '<div class="mem-subtotal"'
+        + ' style="min-width:110px;text-align:right;font-weight:900;'
+        + 'color:#065f46;display:flex;align-items:center;justify-content:flex-end">'
+        + _fmtMoeda((item.qtd || 0) * (item.valor || 0))
+        + '</div>'
+
         + '<button type="button" onclick="_memRemoverLinha(' + i + ')"'
         + ' style="width:30px;height:30px;flex-shrink:0;display:flex;align-items:center;'
         + 'justify-content:center;background:#fee2e2;border:none;border-radius:7px;'
@@ -896,6 +902,14 @@ function _memSyncEAtualizar() {
     if (valEl) {
       _memoriaCalculo[idx].valor = _parseMoeda(valEl.value);
     }
+
+    var subtotalEl = row.querySelector('.mem-subtotal');
+    if (subtotalEl) {
+      var qtd = Number(_memoriaCalculo[idx].qtd) || 0;
+      var val = Number(_memoriaCalculo[idx].valor) || 0;
+      subtotalEl.textContent = _fmtMoeda(qtd * val);
+    }
+
   });
 
   var total = _memoriaCalculo.reduce(function(s, item) {
