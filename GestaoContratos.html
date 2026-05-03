@@ -251,11 +251,22 @@ function _fmtMoeda(v) {
   partes[0] = partes[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
   return 'R$ ' + partes[0] + ',' + partes[1];
 }
-function _parseMoeda(str) {
-  if (!str) return 0;
-  const limpo = String(str).replace(/R\$|\s/g,'').trim();
-  const normalizado = limpo.replace(/\./g,'').replace(',','.');
-  return parseFloat(normalizado) || 0;
+function _parseMoeda(valor) {
+  if (valor === null || valor === undefined || valor === '') return 0;
+  if (typeof valor === 'number') return isNaN(valor) ? 0 : valor;
+
+  var str = String(valor)
+    .replace(/R\$\s*/gi, '')
+    .replace(/\s/g, '')
+    .trim();
+
+  // Formato pt-BR: tem vírgula como decimal
+  if (str.includes(',')) {
+    str = str.replace(/\./g, '').replace(',', '.');
+  }
+
+  var n = parseFloat(str);
+  return isNaN(n) ? 0 : n;
 }
 function _fmtMoedaInput(v) {
   const n = Number(v) || 0;
@@ -269,12 +280,39 @@ function _mascaraMoeda(el) {
   el._maskApplied = true;
 
   el.addEventListener('input', function() {
-    let v = this.value.replace(/\D/g,'');
-    if (!v) { this.value=''; return; }
-    v = (parseInt(v,10)/100).toFixed(2);
-    let partes = v.split('.');
-    partes[0] = partes[0].replace(/\B(?=(\d{3})+(?!\d))/g,'.');
-    this.value = partes[0]+','+partes[1];
+    // Remove tudo que não é dígito
+    var digitos = this.value.replace(/\D/g, '');
+
+    if (!digitos || digitos === '0') {
+      this.value = '0,01';
+      _memSyncEAtualizar();
+      return;
+    }
+
+    // Remove zeros à esquerda mas mantém pelo menos 3 dígitos (para centavos)
+    digitos = digitos.replace(/^0+/, '') || '0';
+
+    // Garante mínimo de 3 dígitos para representar X,XX
+    while (digitos.length < 3) digitos = '0' + digitos;
+
+    // Separa inteiros e centavos
+    var centavos = digitos.slice(-2);
+    var inteiros  = digitos.slice(0, -2);
+
+    // Remove zeros à esquerda da parte inteira
+    inteiros = inteiros.replace(/^0+/, '') || '0';
+
+    // Formata milhar
+    inteiros = inteiros.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+
+    this.value = inteiros + ',' + centavos;
+
+    _memSyncEAtualizar();
+  });
+
+  // Seleciona tudo ao focar para facilitar digitação
+  el.addEventListener('focus', function() {
+    this.select();
   });
 }
 function _fmtDataBR(v) {
@@ -793,52 +831,43 @@ function _memRenderizar() {
   if (!container) return;
 
   container.innerHTML = _memoriaCalculo.map(function(item, i) {
+    // Formata valor existente no padrão X.XXX,XX
     var valorFmt = _fmtMoedaInput(item.valor || 0);
 
     return '<div class="mem-row" data-idx="' + i + '">'
 
-      // Descrição
       + '<input class="mem-input" placeholder="Descrição"'
       + ' value="' + escaparHTML(item.descricao || '') + '"'
       + ' oninput="_memoriaCalculo[' + i + '].descricao=this.value">'
 
-      // Observação
       + '<input class="mem-input" placeholder="Observação (opcional)"'
       + ' value="' + escaparHTML(item.obs || '') + '"'
       + ' oninput="_memoriaCalculo[' + i + '].obs=this.value">'
 
-      // Controles
       + '<div class="mem-linha-ctrl">'
 
-        // Tipo
         + '<select class="mem-input" style="max-width:120px"'
         + ' onchange="_memoriaCalculo[' + i + '].tipo=this.value">'
-        + '<option value="mensal"'   + (item.tipo === 'mensal'   || !item.tipo ? ' selected' : '') + '>Mensal</option>'
+        + '<option value="mensal"'   + ((!item.tipo || item.tipo === 'mensal')   ? ' selected' : '') + '>Mensal</option>'
         + '<option value="diaria"'   + (item.tipo === 'diaria'   ? ' selected' : '') + '>Diária</option>'
         + '<option value="hora"'     + (item.tipo === 'hora'     ? ' selected' : '') + '>Hora técnica</option>'
         + '<option value="unitario"' + (item.tipo === 'unitario' ? ' selected' : '') + '>Unitário</option>'
         + '<option value="parcela"'  + (item.tipo === 'parcela'  ? ' selected' : '') + '>Parcela</option>'
         + '</select>'
 
-        // Quantidade — atualiza estado E total no oninput
+        // Qtd — oninput direto pois é type=number sem máscara
         + '<input type="number" class="mem-input mem-qtd"'
         + ' min="0" step="any" style="max-width:72px;text-align:center"'
         + ' value="' + (item.qtd || 1) + '"'
-        + ' oninput="'
-        +   '_memoriaCalculo[' + i + '].qtd = parseFloat(this.value) || 0;'
-        +   '_memSyncEAtualizar()">'
+        + ' oninput="_memoriaCalculo[' + i + '].qtd=parseFloat(this.value)||0;_memSyncEAtualizar()">'
 
-        // Valor — atualiza estado E total no oninput (sem depender do onblur)
+        // Valor — SEM oninput inline; a máscara cuida do recálculo
         + '<input class="mem-input mem-val"'
-        + ' id="memVal_' + i + '"'
+        + ' data-idx="' + i + '"'
         + ' placeholder="0,00"'
         + ' style="max-width:110px;text-align:right;color:#059669;font-weight:800"'
-        + ' value="' + valorFmt + '"'
-        + ' oninput="'
-        +   '_memoriaCalculo[' + i + '].valor = _parseMoeda(this.value);'  // atualiza estado a cada tecla
-        +   '_memSyncEAtualizar()">'                                        // recalcula total
+        + ' value="' + valorFmt + '">'
 
-        // Remover
         + '<button type="button" onclick="_memRemoverLinha(' + i + ')"'
         + ' style="width:30px;height:30px;flex-shrink:0;display:flex;align-items:center;'
         + 'justify-content:center;background:#fee2e2;border:none;border-radius:7px;'
@@ -848,23 +877,20 @@ function _memRenderizar() {
     + '</div>';
   }).join('');
 
-  // Aplica máscara de moeda após render
+  // Aplica máscara após render — ela é responsável por chamar _memSyncEAtualizar
   setTimeout(function() {
     document.querySelectorAll('.mem-val').forEach(function(el) {
       _mascaraMoeda(el);
     });
+    _memSyncEAtualizar();
   }, 0);
-
-  _memSyncEAtualizar();
 }
 
-
 function _memSyncEAtualizar() {
-  // Lê todos os inputs do DOM e garante que o estado está atualizado
   document.querySelectorAll('.mem-row').forEach(function(row) {
-    var idx    = parseInt(row.getAttribute('data-idx'), 10);
-    var qtdEl  = row.querySelector('.mem-qtd');
-    var valEl  = row.querySelector('.mem-val');
+    var idx   = parseInt(row.getAttribute('data-idx'), 10);
+    var qtdEl = row.querySelector('.mem-qtd');
+    var valEl = row.querySelector('.mem-val');
 
     if (isNaN(idx) || !_memoriaCalculo[idx]) return;
 
@@ -872,16 +898,12 @@ function _memSyncEAtualizar() {
       _memoriaCalculo[idx].qtd = parseFloat(qtdEl.value) || 0;
     }
     if (valEl) {
-      // _parseMoeda converte "1.000,50" → 1000.50
       _memoriaCalculo[idx].valor = _parseMoeda(valEl.value);
     }
   });
 
-  // Recalcula total a partir do estado já sincronizado
   var total = _memoriaCalculo.reduce(function(s, item) {
-    var qtd   = Number(item.qtd)   || 0;
-    var valor = Number(item.valor) || 0;
-    return s + qtd * valor;
+    return s + (Number(item.qtd) || 0) * (Number(item.valor) || 0);
   }, 0);
 
   window._memTotal = total;
@@ -890,101 +912,134 @@ function _memSyncEAtualizar() {
   if (el) el.textContent = _fmtMoeda(total);
 }
 
-function _memAdicionarLinha(){
-  _memoriaCalculo.push({ descricao:'', tipo:'mensal', qtd:1, valor:0, obs:'' });
+function _memAdicionarLinha() {
+  _memoriaCalculo.push({ descricao: '', tipo: 'mensal', qtd: 1, valor: 0, obs: '' });
   _memRenderizar();
 }
 
-function _memRemoverLinha(i){
-  _memoriaCalculo.splice(i,1);
-  if(!_memoriaCalculo.length) _memoriaCalculo=[{descricao:'',tipo:'mensal',qtd:1,valor:0,obs:''}];
+function _memRemoverLinha(i) {
+  _memoriaCalculo.splice(i, 1);
+  if (!_memoriaCalculo.length) {
+    _memoriaCalculo = [{ descricao: '', tipo: 'mensal', qtd: 1, valor: 0, obs: '' }];
+  }
   _memRenderizar();
 }
 
-function abrirModalRubrica(idMeta, dadosIn){
-  var dados=dadosIn||{};
-  var meta=(_ctrCache.metas||[]).find(function(m){return m.id===idMeta;})||{};
+function abrirModalRubrica(idMeta, dadosIn) {
+  var dados = dadosIn || {};
+
+  // idMeta sempre vem do parâmetro — não do objeto dados
+  // evita bug onde dados.idMeta diverge do idMeta real
+  var idMetaFinal = idMeta || dados.idMeta || '';
+
+  var meta = (_ctrCache.metas || []).find(function(m) { return m.id === idMetaFinal; }) || {};
+
   _memoriaCalculo = [];
 
   Swal.fire({
-    title: dados.id?'Editar Rubrica':'Nova Rubrica',
-    width: Math.min(900, window.innerWidth-32),
-    showCancelButton:true, confirmButtonText:'<i class="fas fa-save mr-1"></i>Salvar',
-    cancelButtonText:'Cancelar', confirmButtonColor:'#6366f1',
-    customClass:{popup:'ctr-modal rounded-3xl',confirmButton:'rounded-xl font-black text-sm',cancelButton:'rounded-xl font-bold text-sm'},
-    html:`
-        <div class="text-left" style="padding:0 20px 16px">
-        ${meta.titulo?`<div style="display:flex;align-items:center;gap:8px;padding:7px 12px;background:#eef2ff;border:1px solid #c7d2fe;border-radius:10px;margin-bottom:12px">
-            <i class="fas fa-bullseye text-indigo-400 text-xs"></i>
-            <span style="font-size:10px;font-weight:900;color:#4338ca">Meta ${escaparHTML(meta.numero||'')} — ${escaparHTML(meta.titulo)}</span>
-        </div>`:''}
+    title: dados.id ? 'Editar Rubrica' : 'Nova Rubrica',
+    width: Math.min(900, window.innerWidth - 32),
+    showCancelButton: true,
+    confirmButtonText: '<i class="fas fa-save mr-1"></i>Salvar',
+    cancelButtonText: 'Cancelar',
+    confirmButtonColor: '#6366f1',
+    customClass: {
+      popup: 'ctr-modal rounded-3xl',
+      confirmButton: 'rounded-xl font-black text-sm',
+      cancelButton: 'rounded-xl font-bold text-sm',
+    },
 
-        <div style="margin-bottom:12px">
-            <label class="ctr-label">Nome da Rubrica *</label>
-            <input id="rubNome" class="ctr-input" value="${escaparHTML(dados.nome||'')}" placeholder="Ex.: Cache de Artistas">
-        </div>
+    html: '<div class="text-left" style="padding:0 20px 16px">'
 
-        <div style="margin-bottom:12px">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-            <label class="ctr-label" style="margin-bottom:0">Memória de Cálculo</label>
-            <button type="button" onclick="_memAdicionarLinha()"
-                style="font-size:9px;font-weight:900;color:#6366f1;background:#eef2ff;border:none;border-radius:8px;padding:4px 10px;cursor:pointer;text-transform:uppercase;letter-spacing:.06em">
-                <i class="fas fa-plus mr-1"></i>Linha
-            </button>
-            </div>
+      // Badge meta vinculada
+      + (meta.titulo
+          ? '<div style="display:flex;align-items:center;gap:8px;padding:7px 12px;'
+          + 'background:#eef2ff;border:1px solid #c7d2fe;border-radius:10px;margin-bottom:12px">'
+          + '<i class="fas fa-bullseye" style="color:#818cf8;font-size:11px"></i>'
+          + '<span style="font-size:10px;font-weight:900;color:#4338ca;text-transform:uppercase">Meta '
+          + escaparHTML(meta.numero || '') + ' — ' + escaparHTML(meta.titulo) + '</span>'
+          + '</div>'
+          : '')
 
-            <div style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:12px;padding:10px">
-            <div id="memLinhas"></div>
-            </div>
+      // Nome
+      + '<div style="margin-bottom:12px">'
+      + '<label class="ctr-label">Nome da Rubrica *</label>'
+      + '<input id="rubNome" class="ctr-input"'
+      + ' value="' + escaparHTML(dados.nome || '') + '"'
+      + ' placeholder="Ex.: Cache de Artistas">'
+      + '</div>'
 
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px;padding:10px 12px;background:#f0fdf4;border:1.5px solid #bbf7d0;border-radius:12px">
-            <span style="font-size:10px;font-weight:900;color:#059669;text-transform:uppercase">Total calculado</span>
-            <span id="memTotal" style="font-size:16px;font-weight:900;color:#059669">R$&nbsp;0,00</span>
-            </div>
-        </div>
+      // Memória de cálculo
+      + '<div style="margin-bottom:12px">'
+      + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">'
+      + '<label class="ctr-label" style="margin-bottom:0">Memória de Cálculo</label>'
+      + '<button type="button" onclick="_memAdicionarLinha()"'
+      + ' style="font-size:9px;font-weight:900;color:#6366f1;background:#eef2ff;border:none;'
+      + 'border-radius:8px;padding:4px 10px;cursor:pointer;text-transform:uppercase;letter-spacing:.06em">'
+      + '<i class="fas fa-plus" style="margin-right:4px"></i>Linha</button>'
+      + '</div>'
+      + '<div style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:12px;padding:10px">'
+      + '<div id="memLinhas"></div>'
+      + '</div>'
+      + '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px;'
+      + 'padding:10px 12px;background:#f0fdf4;border:1.5px solid #bbf7d0;border-radius:12px">'
+      + '<span style="font-size:10px;font-weight:900;color:#059669;text-transform:uppercase">Total calculado</span>'
+      + '<span id="memTotal" style="font-size:16px;font-weight:900;color:#059669">R$ 0,00</span>'
+      + '</div>'
+      + '</div>'
 
-        <div>
-            <label class="ctr-label">Observação</label>
-            <textarea id="rubObs" class="ctr-obs-textarea" placeholder="Memória ou justificativa...">${escaparHTML(dados.obs||'')}</textarea>
-        </div>
-        </div>`,
-    didOpen: function(){
-      if (dados.id){
+      // Observação
+      + '<div>'
+      + '<label class="ctr-label">Observação</label>'
+      + '<textarea id="rubObs" class="ctr-obs-textarea"'
+      + ' placeholder="Memória ou justificativa...">' + escaparHTML(dados.obs || '') + '</textarea>'
+      + '</div>'
+
+      + '</div>',
+
+    didOpen: function() {
+      if (dados.id) {
+        // Carrega memória existente do backend
         google.script.run
-          .withSuccessHandler(function(lista){
-            _memoriaCalculo = Array.isArray(lista) && lista.length
-              ? lista.map(function(i){
-                  return {
-                    descricao: String(i[2]||''),
-                    tipo: String(i[3]||'mensal'),
-                    qtd: parseFloat(String(i[4]||1).replace(',','.')) || 1,
-                    valor: parseFloat(String(i[5]||0).replace(/\./g,'').replace(',','.')) || 0,
-                    obs: String(i[9]||'')
-                  };
-                })
-              : [{descricao:'',tipo:'mensal',qtd:1,valor:0,obs:''}];
+          .withSuccessHandler(function(lista) {
+            // lista = array de linhas: [ID, ID_RUB, DESCRICAO, METRICA, QTD, VALOR, SUBTOTAL, ...]
+            if (Array.isArray(lista) && lista.length) {
+              _memoriaCalculo = lista.map(function(row) {
+                return {
+                  descricao: String(row[2] || ''),
+                  tipo:      String(row[3] || 'mensal'),
+                  qtd:       parseFloat(String(row[4]).replace(',', '.')) || 1,
+                  valor:     parseFloat(String(row[5]).replace(',', '.')) || 0,
+                  obs:       String(row[10] || ''),  // coluna obs se existir, senão ''
+                };
+              });
+            } else {
+              _memoriaCalculo = [{ descricao: '', tipo: 'mensal', qtd: 1, valor: 0, obs: '' }];
+            }
+            _memRenderizar();
+          })
+          .withFailureHandler(function(e) {
+            console.error('Erro ao carregar memória:', e.message);
+            _memoriaCalculo = [{ descricao: '', tipo: 'mensal', qtd: 1, valor: 0, obs: '' }];
             _memRenderizar();
           })
           .obterMemoriaRubrica(dados.id);
       } else {
-        _memoriaCalculo=[{descricao:'',tipo:'mensal',qtd:1,valor:0,obs:''}];
+        _memoriaCalculo = [{ descricao: '', tipo: 'mensal', qtd: 1, valor: 0, obs: '' }];
         _memRenderizar();
       }
     },
-    preConfirm: function() {
 
-      // 1. Sync final DOM → estado antes de qualquer validação
-      //    Garante captura mesmo se o usuário clicou Salvar sem blur
+    preConfirm: function() {
+      // Sync final — garante estado correto independente de blur
       _memSyncEAtualizar();
 
-      // 2. Validar nome
       var nome = (document.getElementById('rubNome')?.value || '').trim();
       if (!nome) {
         Swal.showValidationMessage('Nome obrigatório.');
         return false;
       }
 
-      // 3. Validar total (já calculado pelo sync acima)
       var total = window._memTotal || 0;
       if (total <= 0) {
         Swal.showValidationMessage(
@@ -993,10 +1048,9 @@ function abrirModalRubrica(idMeta, dadosIn){
         return false;
       }
 
-      // 4. Payload — valores já são numbers puros após o sync
       return {
-        id:     dados.id  || null,
-        idMeta: idMeta,
+        id:     dados.id     || null,
+        idMeta: idMetaFinal,         // usa a variável do closure, não dados.idMeta
         nome:   nome,
         valor:  total,
         memoriaCalculo: _memoriaCalculo.map(function(item) {
@@ -1005,8 +1059,8 @@ function abrirModalRubrica(idMeta, dadosIn){
           return {
             descricao: String(item.descricao || '').trim(),
             tipo:      String(item.tipo      || 'unitario').trim(),
-            qtd:       qtd,    // number puro
-            valor:     valor,  // number puro — ex: 1000.50, nunca "1.000,50"
+            qtd:       qtd,
+            valor:     valor,
             subtotal:  qtd * valor,
             obs:       String(item.obs || '').trim(),
           };
@@ -1014,13 +1068,20 @@ function abrirModalRubrica(idMeta, dadosIn){
         obs: (document.getElementById('rubObs')?.value || '').trim(),
       };
     },
-  }).then(function(r){
-    if(!r.isConfirmed) return;
+
+  }).then(function(r) {
+    if (!r.isConfirmed) return;
     showLoader(true);
     google.script.run
-      .withSuccessHandler(function(){showLoader(false);carregarDadosContratos(renderizarContratos);})
-      .withFailureHandler(function(e){showLoader(false);Swal.fire('Erro',e.message,'error');})
-      .salvarRubrica(r.value,AppState.usuario.email);
+      .withSuccessHandler(function() {
+        showLoader(false);
+        carregarDadosContratos(renderizarContratos);
+      })
+      .withFailureHandler(function(e) {
+        showLoader(false);
+        Swal.fire('Erro', e.message, 'error');
+      })
+      .salvarRubrica(r.value, AppState.usuario.email);
   });
 }
 
