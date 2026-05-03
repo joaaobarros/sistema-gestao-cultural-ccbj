@@ -59,8 +59,8 @@ const GAS = {
     habilitar: function(id, email, obs, cb, err) {
       GAS._call('habilitarReservaStatus', [id, email, obs], cb, err);
     },
-    verificarConflito: function(dados, cb, err) {
-      GAS._call('verificarConflitoEspaco', [dados], cb, err);
+    verificarConflito: function(sala, data, inicio, termino, idIgnorar, cb, err) {
+      GAS._call('verificarConflitoEspaco', [sala, data, inicio, termino, idIgnorar], cb, err);
     },
     analisarDisponibilidade: function(payload, cb, err) {
       GAS._call('analisarDisponibilidadeReal', [payload], cb, err);
@@ -166,8 +166,8 @@ const GAS = {
     exportarPlanilha: function(dados, cb, err) {
       GAS._call('exportarAgendaRecePlanilha', [dados], cb, err);
     },
-    uploadImagem: function(b64, nome, cb, err) {
-      GAS._call('uploadImagemRece', [b64, nome], cb, err);
+    uploadImagem: function(b64, mimeType, nome, cb, err) {
+      GAS._call('uploadImagemRece', [b64, mimeType, nome], cb, err);
     }
   },
 
@@ -181,6 +181,9 @@ const GAS = {
     },
     chat: function(mensagens, ctx, cb, err) {
       GAS._call('chamarIAChat', [mensagens, ctx], cb, err);
+    },
+    reescreverDescricao: function(texto, setor, cb, err) {
+      GAS._call('reescreverDescricaoAcaoIA', [texto, setor], cb, err);
     }
   },
 
@@ -251,11 +254,11 @@ const GAS = {
    * @context Polling e listagem de solicitações CODIP/aprovações.
    */
   solicitacoes: {
-    listarTodas: function(cb, err) {
-      GAS._call('listarTodasSolicitacoes', [], cb, err);
+    listarTodas: function(email, cb, err) {
+      GAS._call('listarTodasSolicitacoes', [email], cb, err);
     },
-    listarPendentes: function(cb, err) {
-      GAS._call('listarSolicitacoesPendentes', [], cb, err);
+    listarPendentes: function(email, cb, err) {
+      GAS._call('listarSolicitacoesPendentes', [email], cb, err);
     },
     criar: function(tipo, subtipo, dados, usuario, justificativa, cb, err) {
       GAS._call('chat_criarSolicitacao', [tipo, subtipo, dados, usuario, justificativa], cb, err);
