@@ -4385,5 +4385,22 @@ function exportarCODIPCSV() {
   URL.revokeObjectURL(a.href);
 }
 
+function aplicarSugestaoHorario(horario) {
+  const inputInicio = document.getElementById('horaInicio');
+  const inputFim    = document.getElementById('horaTermino');
+  if (inputInicio) inputInicio.value = horario;
+  if (inputFim)    inputFim.value    = adicionar1Hora(horario);
+  if (typeof validarHorarios === 'function') validarHorarios();
+  if (typeof atualizarTudoTempoReal === 'function') atualizarTudoTempoReal();
+}
+
+function trocarSalaSugestao(idSala) {
+  const select = document.getElementById('selectSala');
+  if (select) {
+    select.value = idSala;
+    select.dispatchEvent(new Event('change'));
+    if (typeof atualizarTudoTempoReal === 'function') atualizarTudoTempoReal();
+  }
+}
 
 </script>
