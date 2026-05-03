@@ -4,7 +4,7 @@
  * @description Cálculo de métricas de ocupação e KPIs do dashboard; integração com modelo de IA para
  *              análise e sugestões contextuais (chamarIA, relatórios, sugestão de reserva).
  * @responsibility Entrypoints: obterMetricasDashboard, chamarIA, chamarIAChat.
- * @dependencies utils.js (_getSheet), ChatService.js (se presente), planilha MASTER/ESPACOS.
+ * @dependencies utils.js (_getSheet), planilha MASTER/ESPACOS.
  */
 // ============================================================
 // mod_metrics.gs
