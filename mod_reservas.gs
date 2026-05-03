@@ -849,8 +849,7 @@ function analisarDisponibilidadeReal(payload) {
  * ========================================
  * @description Cria múltiplas reservas de uma vez, verificando conflito e disponibilidade
  *              de itens para cada data. Usa lock com retry para evitar race conditions.
- *              NOTA: criarReservaController() é a versão mais recente que usa
- *              ReservaRepository e ReservaService — preferir esta para novos usos.
+ *              NOTA: criarReservaController() é o entrypoint canônico para novos usos.
  * @inputs dados (objeto de reserva), datas (array de strings DD/MM/YYYY)
  * @outputs { success: true, total, lote: idGrupoLote }
  * @sideEffects Escrita em lote na planilha Reservas, registra log por data
@@ -1000,11 +999,9 @@ function processarAgendamentoLote(dados, datas) {
  *                Lógica de criação/atualização RECE — usa ReceRepository, monta linha padrão.
  *
  *              ReservaService:
- *                Operações de alto nível — criar/atualizar, coordenando Repository e ReceService.
- *
- *              ATENÇÃO: criarReservaController e ReservaService.criar têm lógica parcialmente
- *              duplicada. Ao criar novas funcionalidades, usar ReservaService.criar.
- * @context criarReservaController é chamado pelo frontend via google.script.run
+ *                Operações de alto nível — criar delega para criarReservaController; atualizar
+ *                coordena Repository e ReceService diretamente.
+ * @context criarReservaController é o entrypoint único — chamado pelo frontend via google.script.run
  * @sideEffects Escreve nas planilhas Reservas, ReservasRECE e RelatoriosCODIP
  */
 function criarReservaController(dados, datas) {
@@ -1174,35 +1171,7 @@ const ReceService = {
 
 const ReservaService = {
   criar(dados, datas) {
-    const idLote = gerarId("LOTE");
-    const linhas = [];
-    datas.forEach((data) => {
-      const idReserva = gerarId("RES");
-      const linha = [
-        idReserva,
-        data,
-        dados.horaInicio,
-        dados.horaTermino,
-        dados.sala,
-        dados.turno,
-        dados.nomeAcao,
-        dados.tipoAcao,
-        dados.responsavel,
-        dados.setor,
-        dados.coResponsavel,
-        dados.release,
-        dados.itensVolantes,
-        "CONFIRMADO",
-        new Date(),
-        idLote,
-      ];
-      linhas.push(linha);
-      if (dados.modoRece) {
-        ReceService.criarOuAtualizar({ id: idReserva, ...dados, data });
-      }
-    });
-    ReservaRepository.salvar(linhas);
-    return { sucesso: true };
+    return criarReservaController(dados, datas);
   },
   atualizar(dados) {
     const reservaExistente = ReservaRepository.buscarPorId(dados.id);
