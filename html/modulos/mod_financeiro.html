@@ -449,27 +449,59 @@ function _finVoltarLista() {
   document.querySelectorAll('.fin-ctr-item').forEach(function(el){ el.classList.remove('active'); });
 }
 
-// ── Hook: quando a aba financeira é ativada ───────────
-document.addEventListener('DOMContentLoaded', function() {
-  var btnFin = document.querySelector('[data-aba="aba-contratos-fin"]');
-  if (btnFin) {
-    var origClick = btnFin.onclick;
-    btnFin.addEventListener('click', function() {
-      if (typeof carregarDadosContratos === 'function' && (!_ctrCache||!_ctrCache.contratos||!_ctrCache.contratos.length)) {
-        carregarDadosContratos(function(){ _finRenderizarLista(); });
-      } else {
-        _finRenderizarLista();
-      }
-    });
+// ══════════════════════════════════════════════════════
+// FIX: Inicialização confiável + override seguro
+// ══════════════════════════════════════════════════════
+
+if (!window._finInitApplied) {
+  window._finInitApplied = true;
+
+  // mantém referência original
+  var _origRenderizar = window.renderizarContratos;
+
+  // override seguro
+  window.renderizarContratos = function() {
+
+    if (typeof _origRenderizar === 'function') {
+      try { _origRenderizar(); } catch(e){ console.warn(e); }
+    }
+
+    _finRenderizarLista();
+
+    if (_finContratoSelecionado) {
+      var ctr = (_ctrCache.contratos||[]).find(function(c){ return c.id===_finContratoSelecionado; });
+      if (ctr) _finRenderizarDetalhe(ctr);
+    }
+  };
+}
+
+function _finInit() {
+
+  if (typeof carregarDadosContratos !== 'function') {
+    console.warn('carregarDadosContratos não encontrado');
+    return;
   }
+
+  // se já tem dados → só renderiza
+  if (_ctrCache && _ctrCache.contratos && _ctrCache.contratos.length) {
+    _finRenderizarLista();
+    return;
+  }
+
+  // senão → carrega
+  carregarDadosContratos(function(){
+    _finRenderizarLista();
+  });
+}
+
+// 🔁 dispara quando DOM carregar
+document.addEventListener('DOMContentLoaded', function() {
+  setTimeout(_finInit, 100);
 });
 
-// Sobrescreve a função original de renderização
-window.renderizarContratos = function() {
-  _finRenderizarLista();
-  if (_finContratoSelecionado) {
-    var ctr = (_ctrCache.contratos||[]).find(function(c){ return c.id===_finContratoSelecionado; });
-    if (ctr) _finRenderizarDetalhe(ctr);
-  }
+// 🔁 dispara também quando aba for exibida manualmente
+window._finOnShow = function() {
+  _finInit();
 };
+
 </script>

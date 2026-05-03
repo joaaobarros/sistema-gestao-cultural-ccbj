@@ -101,7 +101,17 @@ function mostrarAba(idAba) {
   }
 
   if (idAba === 'aba-contratos-fin') {
-    if (typeof carregarDadosContratos === 'function') carregarDadosContratos(renderizarContratos);
+
+    if (typeof _finOnShow === 'function') {
+      _finOnShow();
+      return;
+    }
+
+    if (!_ctrCache || !_ctrCache.contratos || !_ctrCache.contratos.length) {
+      carregarDadosContratos();
+    } else {
+      renderizarContratos();
+    }
   }
 
   if (idAba === 'aba-auditoria') {

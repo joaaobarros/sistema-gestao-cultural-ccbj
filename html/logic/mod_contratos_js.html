@@ -16,10 +16,21 @@ var _ctrColapsados = {}; // { [idContrato]: true/false }
 
 function carregarDadosContratos(cb) {
   GAS.contratos.obterDados(function(d) {
+
     _ctrCache = d || { contratos:[], metas:[], indicadores:[], rubricas:[] };
+
     if (!_ctrCache.rubricas) _ctrCache.rubricas = [];
+
+    if (typeof renderizarContratos === 'function') {
+      renderizarContratos();
+    }
+
     if (typeof cb === 'function') cb();
-  }, function(err) { console.warn('Contratos:', err.message); });
+
+  }, function(err) {
+    console.error('Erro contratos:', err);
+    Swal.fire('Erro','Falha ao carregar contratos','error');
+  });
 }
 
 // ── UTILITÁRIOS ───────────────────────────────────────────────

@@ -335,22 +335,7 @@ function _totalMetasCtr(idContrato) {
 // CARREGAR / RENDERIZAR
 // ══════════════════════════════════════════════════════
 
-function carregarDadosContratos(cb) {
-  showLoader(true);
-  google.script.run
-    .withSuccessHandler(function(d){
-      showLoader(false);
-      _ctrCache = d || { contratos:[], metas:[], indicadores:[], rubricas:[] };
-      if (!_ctrCache.rubricas) _ctrCache.rubricas=[];
-      if (typeof codipPopularContratos==='function') codipPopularContratos();
-      if (typeof cb==='function') cb();
-    })
-    .withFailureHandler(function(err){
-      showLoader(false);
-      Swal.fire('Erro','Falha ao carregar contratos: '+err.message,'error');
-    })
-    .obterDadosContratos();
-}
+
 
 function renderizarContratos() {
   var container = document.getElementById('listaContratos');
