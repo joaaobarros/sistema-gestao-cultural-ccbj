@@ -999,17 +999,21 @@ function abrirModalRubrica(idMeta, dadosIn) {
 
       + '<div style="display:flex;align-items:center;justify-content:space-between">'
         + '<label class="ctr-label" style="margin-bottom:0">Nome da Rubrica *</label>'
+        + '<input id="rubNome" class="ctr-input"'
+        + ' value="' + escaparHTML(dados.nome || '') + '"'
+        + ' placeholder="Nome da rubrica"'
+        + ' style="margin-bottom:12px">'
         + (dados.id
           ? '<button type="button" onclick="_abrirHistoricoRubrica(\'' + dados.id + '\')"'
             + ' style="font-size:10px;font-weight:900;color:#6366f1;background:#eef2ff;border:none;'
-            + 'border-radius:8px;padding:5px 10px;cursor:pointer">'
+            + 'border-radius:8px;padding:5px 10px;margin-left:8px;cursor:pointer">'
             + '<i class="fas fa-history" style="margin-right:4px"></i>Histórico'
             + '</button>'
           : '')
       + '</div>'
 
       + '<div style="margin-bottom:12px">'
-        + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">'
+        + '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px">'
         + '<label class="ctr-label" style="margin-bottom:0">Memória de Cálculo</label>'
         + '<button type="button" onclick="_memAdicionarLinha()"'
         + ' style="font-size:9px;font-weight:900;color:#6366f1;background:#eef2ff;border:none;'
