@@ -795,3 +795,30 @@ function criarIndiceItens(dadosItens) {
 
   return indice;
 }
+function _fmtMoedaInput(v) {
+  var n = Number(v) || 0;
+  var partes = n.toFixed(2).split('.');
+  partes[0] = partes[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  return partes[0] + ',' + partes[1];
+}
+
+
+/**
+ * ========================================
+ * BLOCO: Helpers globais
+ * ========================================
+ */
+
+function gerarId(prefixo) {
+  const timestamp = Date.now().toString(36).toUpperCase();
+  const random = Math.random().toString(36).substring(2, 6).toUpperCase();
+  return `${prefixo}-${timestamp}-${random}`;
+}
+
+function isMesmoDia(dataReserva) {
+  const hoje = new Date();
+  hoje.setHours(0, 0, 0, 0);
+  const data = new Date(dataReserva);
+  data.setHours(0, 0, 0, 0);
+  return hoje.getTime() === data.getTime();
+}

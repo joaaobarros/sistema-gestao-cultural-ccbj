@@ -246,26 +246,35 @@ var _ctrFiltro   = '';
 
 // ── Helpers ──────────────────────────────────────────
 function _fmtMoeda(v) {
-  var n = Number(v) || 0;
-  var partes = n.toFixed(2).split('.');
+  const n = Number(v) || 0;
+  const partes = n.toFixed(2).split('.');
   partes[0] = partes[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-  return 'R$\u00a0' + partes[0] + ',' + partes[1];
+  return 'R$ ' + partes[0] + ',' + partes[1];
 }
-function _parseMoeda(s) {
-  if (!s) return 0;
-  var limpo = String(s).replace(/R\$|\s/g,'').trim();
-  return parseFloat(limpo.replace(/\./g,'').replace(',','.')) || 0;
+function _parseMoeda(str) {
+  if (!str) return 0;
+  const limpo = String(str).replace(/R\$|\s/g,'').trim();
+  const normalizado = limpo.replace(/\./g,'').replace(',','.');
+  return parseFloat(normalizado) || 0;
 }
+function _fmtMoedaInput(v) {
+  const n = Number(v) || 0;
+  const partes = n.toFixed(2).split('.');
+  partes[0] = partes[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  return partes[0] + ',' + partes[1];
+}
+
 function _mascaraMoeda(el) {
-  if (!el || el._maskApplied) return;
+  if (el._maskApplied) return;
   el._maskApplied = true;
+
   el.addEventListener('input', function() {
-    var raw = this.value.replace(/\D/g,'');
-    if (!raw) { this.value=''; return; }
-    var n = (parseInt(raw,10)/100).toFixed(2);
-    var p = n.split('.');
-    p[0] = p[0].replace(/\B(?=(\d{3})+(?!\d))/g,'.');
-    this.value = p[0]+','+p[1];
+    let v = this.value.replace(/\D/g,'');
+    if (!v) { this.value=''; return; }
+    v = (parseInt(v,10)/100).toFixed(2);
+    let partes = v.split('.');
+    partes[0] = partes[0].replace(/\B(?=(\d{3})+(?!\d))/g,'.');
+    this.value = partes[0]+','+partes[1];
   });
 }
 function _fmtDataBR(v) {
@@ -780,35 +789,16 @@ function excluirMetaUI(id){
 var _memoriaCalculo = [];
 
 // Lê valores diretamente dos inputs do DOM (após a máscara já ter rodado)
-function _memAtualizarTotal(){
-  var total = 0;
-  var rows = document.querySelectorAll('.mem-row');
-  if (rows.length) {
-    rows.forEach(function(row){
-      var qtd = parseFloat((row.querySelector('.mem-qtd')||{}).value || '0') || 0;
-      var rawVal = ((row.querySelector('.mem-val')||{}).value || '0');
-      var val = parseFloat(rawVal.replace(/\./g,'').replace(',','.')) || 0;
-      total += qtd * val;
-    });
-  } else {
-    total = _memoriaCalculo.reduce(function(s,i){
-      return s + (Number(i.qtd)||0) * (Number(i.valor)||0);
-    }, 0);
-  }
-  var el = document.getElementById('memTotal');
-  if(el) el.textContent = _fmtMoeda(total);
+function _memCalcularItem(i){
+  return (Number(i.qtd)||0) * (Number(i.valor)||0);
 }
 
-// Máscara monetária + atualização de total — chamada de oninput dos campos de valor
-function _memMascaraValor(el){
-  var raw = el.value.replace(/\D/g,'');
-  if(!raw){ el.value=''; _memAtualizarTotal(); return; }
-  var n = (parseInt(raw,10)/100).toFixed(2);
-  var p = n.split('.');
-  p[0] = p[0].replace(/\B(?=(\d{3})+(?!\d))/g,'.');
-  el.value = p[0]+','+p[1];
-  _memAtualizarTotal();
+function _memAtualizarTotal(){
+  const total = _memoriaCalculo.reduce((s,i)=>s + _memCalcularItem(i),0);
+  document.getElementById('memTotal').textContent = _fmtMoeda(total);
 }
+
+
 
 // Sincroniza estado ao sair do campo de valor
 function _memBlurValor(el, i){
@@ -820,25 +810,58 @@ function _memBlurValor(el, i){
 function _memRenderizar(){
   var container = document.getElementById('memLinhas');
   if(!container) return;
+
   container.innerHTML = _memoriaCalculo.map(function(item, i){
-    var valorFmt = (Number(item.valor)||0).toFixed(2).replace('.', ',');
+
+    var valorFmt = _fmtMoedaInput(item.valor || 0);
+
     return '<div class="mem-row">'
+      
+      // LINHA 1 - DESCRIÇÃO
       + '<input class="mem-input" placeholder="Descrição" value="'+escaparHTML(item.descricao||'')+'" oninput="_memoriaCalculo['+i+'].descricao=this.value">'
+      
+      // LINHA 2 - OBS
       + '<input class="mem-input" placeholder="Observação (opcional)" value="'+escaparHTML(item.obs||'')+'" oninput="_memoriaCalculo['+i+'].obs=this.value">'
+      
+      // LINHA 3 - CONTROLES
       + '<div class="mem-linha-ctrl">'
+
+        // TIPO
         + '<select class="mem-input" style="max-width:120px" onchange="_memoriaCalculo['+i+'].tipo=this.value">'
           + '<option value="mensal" '+(item.tipo==='mensal'||!item.tipo?'selected':'')+'>Mensal</option>'
           + '<option value="diaria" '+(item.tipo==='diaria'?'selected':'')+'>Diária</option>'
           + '<option value="hora" '+(item.tipo==='hora'?'selected':'')+'>Hora técnica</option>'
           + '<option value="unitario" '+(item.tipo==='unitario'?'selected':'')+'>Unitário</option>'
+          + '<option value="parcela" '+(item.tipo==='parcela'?'selected':'')+'>Parcela</option>'
         + '</select>'
-        + '<input type="number" class="mem-input mem-qtd" min="0" step="any" style="max-width:72px;text-align:center" value="'+(item.qtd||1)+'" oninput="_memoriaCalculo['+i+'].qtd=parseFloat(this.value)||0;_memAtualizarTotal()">'
-        + '<input class="mem-input mem-val" placeholder="0,00" style="max-width:110px;text-align:right;color:#059669;font-weight:800" value="'+valorFmt+'" oninput="_memMascaraValor(this)" onblur="_memBlurValor(this,'+i+')">'
-        + '<button type="button" onclick="_memRemoverLinha('+i+')" style="width:30px;height:30px;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:#fee2e2;border:none;border-radius:7px;cursor:pointer;color:#dc2626;font-size:11px">✕</button>'
+
+        // QTD
+        + '<input type="number" class="mem-input mem-qtd" min="0" step="any" style="max-width:72px;text-align:center" value="'+(item.qtd||1)+'" '
+        + 'oninput="_memoriaCalculo['+i+'].qtd=parseFloat(this.value)||0; _memAtualizarTotal()">'
+
+        // VALOR (CORRIGIDO)
+        + '<input class="mem-input mem-val" id="memVal_'+i+'" placeholder="0,00" style="max-width:110px;text-align:right;color:#059669;font-weight:800" '
+        + 'value="'+valorFmt+'" '
+        + 'oninput="_mascaraMoeda(this); _memAtualizarTotal()" '
+        + 'onblur="_memoriaCalculo['+i+'].valor=_parseMoeda(this.value); this.value=_fmtMoedaInput(_memoriaCalculo['+i+'].valor); _memAtualizarTotal()">'
+
+        // REMOVER
+        + '<button type="button" onclick="_memRemoverLinha('+i+')" '
+        + 'style="width:30px;height:30px;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:#fee2e2;border:none;border-radius:7px;cursor:pointer;color:#dc2626;font-size:11px">✕</button>'
+
       + '</div>'
     + '</div>';
+
   }).join('');
+
   _memAtualizarTotal();
+
+  // aplicar máscara após render
+  setTimeout(function(){
+    document.querySelectorAll('.mem-val').forEach(function(el){
+      _mascaraMoeda(el);
+    });
+  },0);
 }
 
 function _memAdicionarLinha(){

@@ -1789,7 +1789,7 @@ function inicializarApp() {
        console.log('Sistema pronto. Usuário:', AppState.usuario.email);
       // Carrega badge de solicitações pendentes + inicia polling em tempo real
       setTimeout(function() { _pollSolicitacoes(true); }, 2000);
-      // 🧠 ATIVA PREVISÃO AUTOMÁTICA NO FORM
+      // ATIVA PREVISÃO AUTOMÁTICA NO FORM
       setTimeout(() => {
         try { ativarPrevisaoForm(); } catch(e) { console.warn(e); }
       }, 500);
