@@ -785,22 +785,99 @@ function _memCalcularItem(i){
 }
 
 function _memAtualizarTotal() {
-  // Sincroniza estado ← DOM antes de calcular
-  document.querySelectorAll('.mem-row').forEach(function(row, idx) {
-    if (!_memoriaCalculo[idx]) return;
+  _memSyncEAtualizar();
+}
 
-    var qtdEl = row.querySelector('.mem-qtd');
-    var valEl = row.querySelector('.mem-val');
+function _memRenderizar() {
+  var container = document.getElementById('memLinhas');
+  if (!container) return;
+
+  container.innerHTML = _memoriaCalculo.map(function(item, i) {
+    var valorFmt = _fmtMoedaInput(item.valor || 0);
+
+    return '<div class="mem-row" data-idx="' + i + '">'
+
+      // Descrição
+      + '<input class="mem-input" placeholder="Descrição"'
+      + ' value="' + escaparHTML(item.descricao || '') + '"'
+      + ' oninput="_memoriaCalculo[' + i + '].descricao=this.value">'
+
+      // Observação
+      + '<input class="mem-input" placeholder="Observação (opcional)"'
+      + ' value="' + escaparHTML(item.obs || '') + '"'
+      + ' oninput="_memoriaCalculo[' + i + '].obs=this.value">'
+
+      // Controles
+      + '<div class="mem-linha-ctrl">'
+
+        // Tipo
+        + '<select class="mem-input" style="max-width:120px"'
+        + ' onchange="_memoriaCalculo[' + i + '].tipo=this.value">'
+        + '<option value="mensal"'   + (item.tipo === 'mensal'   || !item.tipo ? ' selected' : '') + '>Mensal</option>'
+        + '<option value="diaria"'   + (item.tipo === 'diaria'   ? ' selected' : '') + '>Diária</option>'
+        + '<option value="hora"'     + (item.tipo === 'hora'     ? ' selected' : '') + '>Hora técnica</option>'
+        + '<option value="unitario"' + (item.tipo === 'unitario' ? ' selected' : '') + '>Unitário</option>'
+        + '<option value="parcela"'  + (item.tipo === 'parcela'  ? ' selected' : '') + '>Parcela</option>'
+        + '</select>'
+
+        // Quantidade — atualiza estado E total no oninput
+        + '<input type="number" class="mem-input mem-qtd"'
+        + ' min="0" step="any" style="max-width:72px;text-align:center"'
+        + ' value="' + (item.qtd || 1) + '"'
+        + ' oninput="'
+        +   '_memoriaCalculo[' + i + '].qtd = parseFloat(this.value) || 0;'
+        +   '_memSyncEAtualizar()">'
+
+        // Valor — atualiza estado E total no oninput (sem depender do onblur)
+        + '<input class="mem-input mem-val"'
+        + ' id="memVal_' + i + '"'
+        + ' placeholder="0,00"'
+        + ' style="max-width:110px;text-align:right;color:#059669;font-weight:800"'
+        + ' value="' + valorFmt + '"'
+        + ' oninput="'
+        +   '_memoriaCalculo[' + i + '].valor = _parseMoeda(this.value);'  // atualiza estado a cada tecla
+        +   '_memSyncEAtualizar()">'                                        // recalcula total
+
+        // Remover
+        + '<button type="button" onclick="_memRemoverLinha(' + i + ')"'
+        + ' style="width:30px;height:30px;flex-shrink:0;display:flex;align-items:center;'
+        + 'justify-content:center;background:#fee2e2;border:none;border-radius:7px;'
+        + 'cursor:pointer;color:#dc2626;font-size:11px">✕</button>'
+
+      + '</div>'
+    + '</div>';
+  }).join('');
+
+  // Aplica máscara de moeda após render
+  setTimeout(function() {
+    document.querySelectorAll('.mem-val').forEach(function(el) {
+      _mascaraMoeda(el);
+    });
+  }, 0);
+
+  _memSyncEAtualizar();
+}
+
+
+function _memSyncEAtualizar() {
+  // Lê todos os inputs do DOM e garante que o estado está atualizado
+  document.querySelectorAll('.mem-row').forEach(function(row) {
+    var idx    = parseInt(row.getAttribute('data-idx'), 10);
+    var qtdEl  = row.querySelector('.mem-qtd');
+    var valEl  = row.querySelector('.mem-val');
+
+    if (isNaN(idx) || !_memoriaCalculo[idx]) return;
 
     if (qtdEl) {
       _memoriaCalculo[idx].qtd = parseFloat(qtdEl.value) || 0;
     }
     if (valEl) {
-      // Converte "1.200,50" → 1200.50
+      // _parseMoeda converte "1.000,50" → 1000.50
       _memoriaCalculo[idx].valor = _parseMoeda(valEl.value);
     }
   });
 
+  // Recalcula total a partir do estado já sincronizado
   var total = _memoriaCalculo.reduce(function(s, item) {
     var qtd   = Number(item.qtd)   || 0;
     var valor = Number(item.valor) || 0;
@@ -811,63 +888,6 @@ function _memAtualizarTotal() {
 
   var el = document.getElementById('memTotal');
   if (el) el.textContent = _fmtMoeda(total);
-}
-
-function _memRenderizar(){
-  var container = document.getElementById('memLinhas');
-  if(!container) return;
-
-  container.innerHTML = _memoriaCalculo.map(function(item, i){
-
-    var valorFmt = _fmtMoedaInput(item.valor || 0);
-
-    return '<div class="mem-row">'
-      
-      // LINHA 1 - DESCRIÇÃO
-      + '<input class="mem-input" placeholder="Descrição" value="'+escaparHTML(item.descricao||'')+'" oninput="_memoriaCalculo['+i+'].descricao=this.value">'
-      
-      // LINHA 2 - OBS
-      + '<input class="mem-input" placeholder="Observação (opcional)" value="'+escaparHTML(item.obs||'')+'" oninput="_memoriaCalculo['+i+'].obs=this.value">'
-      
-      // LINHA 3 - CONTROLES
-      + '<div class="mem-linha-ctrl">'
-
-        // TIPO
-        + '<select class="mem-input" style="max-width:120px" onchange="_memoriaCalculo['+i+'].tipo=this.value">'
-          + '<option value="mensal" '+(item.tipo==='mensal'||!item.tipo?'selected':'')+'>Mensal</option>'
-          + '<option value="diaria" '+(item.tipo==='diaria'?'selected':'')+'>Diária</option>'
-          + '<option value="hora" '+(item.tipo==='hora'?'selected':'')+'>Hora técnica</option>'
-          + '<option value="unitario" '+(item.tipo==='unitario'?'selected':'')+'>Unitário</option>'
-          + '<option value="parcela" '+(item.tipo==='parcela'?'selected':'')+'>Parcela</option>'
-        + '</select>'
-
-        // QTD
-        + '<input type="number" class="mem-input mem-qtd" min="0" step="any" style="max-width:72px;text-align:center" value="'+(item.qtd||1)+'" '
-        + 'oninput="_memoriaCalculo['+i+'].qtd=parseFloat(this.value)||0; _memAtualizarTotal()">'
-
-        // VALOR (CORRIGIDO)
-        + '<input class="mem-input mem-val" id="memVal_'+i+'" placeholder="0,00" style="max-width:110px;text-align:right;color:#059669;font-weight:800" '
-        + 'value="'+valorFmt+'" '
-        + 'oninput="_memAtualizarTotal()"'
-        + 'onblur="_memoriaCalculo['+i+'].valor=_parseMoeda(this.value); this.value=_fmtMoedaInput(_memoriaCalculo['+i+'].valor); _memAtualizarTotal()">'
-
-        // REMOVER
-        + '<button type="button" onclick="_memRemoverLinha('+i+')" '
-        + 'style="width:30px;height:30px;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:#fee2e2;border:none;border-radius:7px;cursor:pointer;color:#dc2626;font-size:11px">✕</button>'
-
-      + '</div>'
-    + '</div>';
-
-  }).join('');
-
-  _memAtualizarTotal();
-
-  // aplicar máscara após render
-  setTimeout(function(){
-  document.querySelectorAll('.mem-val').forEach(function(el){
-      _mascaraMoeda(el);
-    });
-  },0); 
 }
 
 function _memAdicionarLinha(){
@@ -951,39 +971,49 @@ function abrirModalRubrica(idMeta, dadosIn){
         _memRenderizar();
       }
     },
-    preConfirm:function(){
-      // Força sync estado ← DOM antes de validar (garante que campos não-blur sejam capturados)
-      document.querySelectorAll('.mem-row').forEach(function(row, idx){
-        if (!_memoriaCalculo[idx]) return;
-        var qtdEl = row.querySelector('.mem-qtd');
-        var valEl = row.querySelector('.mem-val');
-        if (qtdEl) _memoriaCalculo[idx].qtd = parseFloat(qtdEl.value)||0;
-        if (valEl) _memoriaCalculo[idx].valor = _parseMoeda(this.value)||0;
-      });
+    preConfirm: function() {
 
-      var nome=document.getElementById('rubNome')?.value.trim();
-      if(!nome){Swal.showValidationMessage('Nome obrigatório.');return false;}
+      // 1. Sync final DOM → estado antes de qualquer validação
+      //    Garante captura mesmo se o usuário clicou Salvar sem blur
+      _memSyncEAtualizar();
 
-      var total = _memoriaCalculo.reduce(function(s,i){
-        return s + (Number(i.qtd)||0) * (Number(i.valor)||0);
-      }, 0);
-      if((window._memTotal || 0) <= 0){
-        Swal.showValidationMessage('Valor total deve ser maior que zero.');
+      // 2. Validar nome
+      var nome = (document.getElementById('rubNome')?.value || '').trim();
+      if (!nome) {
+        Swal.showValidationMessage('Nome obrigatório.');
         return false;
       }
 
+      // 3. Validar total (já calculado pelo sync acima)
+      var total = window._memTotal || 0;
+      if (total <= 0) {
+        Swal.showValidationMessage(
+          'O total calculado é zero. Verifique as quantidades e valores.'
+        );
+        return false;
+      }
+
+      // 4. Payload — valores já são numbers puros após o sync
       return {
-        id: dados.id || null,
-        idMeta,
-        nome,
-        valor: total,
-        memoriaCalculo: _memoriaCalculo.map(function(i){
-          var q = Number(i.qtd)||0, v = Number(i.valor)||0;
-          return { descricao:i.descricao||'', tipo:i.tipo||'mensal', qtd:q, valor:v, subtotal:q*v, obs:i.obs||'' };
+        id:     dados.id  || null,
+        idMeta: idMeta,
+        nome:   nome,
+        valor:  total,
+        memoriaCalculo: _memoriaCalculo.map(function(item) {
+          var qtd   = Number(item.qtd)   || 0;
+          var valor = Number(item.valor) || 0;
+          return {
+            descricao: String(item.descricao || '').trim(),
+            tipo:      String(item.tipo      || 'unitario').trim(),
+            qtd:       qtd,    // number puro
+            valor:     valor,  // number puro — ex: 1000.50, nunca "1.000,50"
+            subtotal:  qtd * valor,
+            obs:       String(item.obs || '').trim(),
+          };
         }),
-        obs: document.getElementById('rubObs')?.value.trim()
+        obs: (document.getElementById('rubObs')?.value || '').trim(),
       };
-    }
+    },
   }).then(function(r){
     if(!r.isConfirmed) return;
     showLoader(true);
