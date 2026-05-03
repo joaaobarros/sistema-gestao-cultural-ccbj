@@ -891,6 +891,10 @@ function _mapaMetas() {
   return mapa;
 }
 
+function _isAtivoMemoria(v) {
+  return v === true || String(v).toUpperCase() === "SIM";
+}
+
 function _mapaRubricas() {
   const rubricas = obterRubricas();
   const mapa = {};
@@ -1062,78 +1066,6 @@ function salvarRubrica(dados, email) {
   }
 }
 
-function adicionarItemMemoriaRubrica(dados, emailUsuario) {
-  const lock = LockService.getScriptLock();
-  lock.waitLock(10000);
-
-  try {
-    if (!dados.idRubrica) throw new Error("Rubrica obrigatória");
-
-    const quantidade = Number(dados.quantidade || 0);
-    const valorUnitario = Number(dados.valorUnitario || 0);
-
-    if (quantidade <= 0 || valorUnitario < 0) {
-      throw new Error("Valores inválidos");
-    }
-
-    const subtotal = quantidade * valorUnitario;
-
-    const aba = _getSheet("RubricasMemoria");
-
-    aba.appendRow([
-      gerarId("MEM"),
-      dados.idRubrica,
-      sanitizarTexto(dados.descricao),
-      dados.metrica || "UN",
-      quantidade,
-      valorUnitario,
-      subtotal,
-      new Date(),
-      emailUsuario,
-      true,
-    ]);
-
-    atualizarValorRubrica(dados.idRubrica);
-
-    return true;
-  } finally {
-    lock.releaseLock();
-  }
-}
-
-function calcularValorRubrica(idRubrica) {
-  const aba = _getSheet("RubricasMemoria");
-  if (!aba || aba.getLastRow() < 2) return 0;
-
-  const dados = aba.getRange(2, 1, aba.getLastRow() - 1, 10).getValues();
-
-  let total = 0;
-
-  for (let i = 0; i < dados.length; i++) {
-    if (String(dados[i][1]) === String(idRubrica) && dados[i][9] === true) {
-      total += Number(dados[i][6] || 0);
-    }
-  }
-
-  return total;
-}
-
-function atualizarValorRubrica(idRubrica) {
-  const valor = calcularValorRubrica(idRubrica);
-
-  const aba = _getSheet("Rubricas");
-  const dados = aba.getDataRange().getValues();
-
-  for (let i = 1; i < dados.length; i++) {
-    if (String(dados[i][0]) === String(idRubrica)) {
-      aba.getRange(i + 1, 4).setValue(valor);
-      return true;
-    }
-  }
-
-  return false;
-}
-
 function listarMemoriaRubrica(idRubrica) {
   const aba = _getSheet("RubricasMemoria");
   if (!aba || aba.getLastRow() < 2) return [];
@@ -1141,7 +1073,7 @@ function listarMemoriaRubrica(idRubrica) {
   const dados = aba.getRange(2, 1, aba.getLastRow() - 1, 10).getValues();
 
   return dados.filter(
-    (r) => String(r[1]) === String(idRubrica) && r[9] === true,
+    (r) => String(r[1]) === String(idRubrica) && _isAtivoMemoria(r[9]),
   );
 }
 
@@ -1219,7 +1151,7 @@ function adicionarItemMemoriaRubrica(dados, emailUsuario) {
       subtotal,
       new Date(),
       emailUsuario,
-      true,
+      "SIM",
     ]);
 
     atualizarValorRubrica(dados.idRubrica);
@@ -1239,7 +1171,7 @@ function calcularValorRubrica(idRubrica) {
   let total = 0;
 
   for (let i = 0; i < dados.length; i++) {
-    if (String(dados[i][1]) === String(idRubrica) && dados[i][9] === true) {
+    if (String(dados[i][1]) === String(idRubrica) && _isAtivoMemoria(dados[i][9])) {
       total += Number(dados[i][6] || 0);
     }
   }
