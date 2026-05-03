@@ -171,6 +171,27 @@
 .mem-linha-ctrl .mem-input { width:auto; flex:1; min-width:80px; }
 .mem-input:focus { border-color:#6366f1; }
 
+/* ── Scroll da Memória de Cálculo ─────────────────────── */
+#memScroll {
+  max-height: 320px;       /* mostra ~3 memórias */
+  overflow-y: auto;
+  padding-right: 4px;      /* evita cortar conteúdo com scrollbar */
+}
+
+/* Scroll bonito (Chrome, Edge, etc.) */
+#memScroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+#memScroll::-webkit-scrollbar-thumb {
+  background: #c7d2fe;
+  border-radius: 6px;
+}
+
+#memScroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
 /* ── Observação textarea grande ───────────────────────── */
 .ctr-obs-textarea {
   width:100%;
@@ -864,7 +885,7 @@ function _memRenderizar() {
 
         + '<div class="mem-input mem-subtotal"'
         + ' title="Subtotal da linha (Quantidade × Valor)"'
-        + ' style="min-width:120px;text-align:right;'
+        + ' style="min-width:130px;text-align:right;'
         + 'color:#059669;font-weight:900;font-size:14px;'
         + 'display:flex;align-items:center;justify-content:flex-end;'
         + 'background:#f0fdf4;border:1px solid #bbf7d0;cursor:default">'
@@ -984,21 +1005,25 @@ function abrirModalRubrica(idMeta, dadosIn) {
       + '</div>'
 
       + '<div style="margin-bottom:12px">'
-      + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">'
-      + '<label class="ctr-label" style="margin-bottom:0">Memória de Cálculo</label>'
-      + '<button type="button" onclick="_memAdicionarLinha()"'
-      + ' style="font-size:9px;font-weight:900;color:#6366f1;background:#eef2ff;border:none;'
-      + 'border-radius:8px;padding:4px 10px;cursor:pointer;text-transform:uppercase">'
-      + '<i class="fas fa-plus" style="margin-right:4px"></i>Linha</button>'
-      + '</div>'
-      + '<div style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:12px;padding:10px">'
-      + '<div id="memLinhas"></div>'
-      + '</div>'
-      + '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px;'
-      + 'padding:10px 12px;background:#f0fdf4;border:1.5px solid #bbf7d0;border-radius:12px">'
-      + '<span style="font-size:10px;font-weight:900;color:#059669;text-transform:uppercase">Total calculado</span>'
-      + '<span id="memTotal" style="font-size:16px;font-weight:900;color:#059669">R$ 0,00</span>'
-      + '</div>'
+        + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">'
+        + '<label class="ctr-label" style="margin-bottom:0">Memória de Cálculo</label>'
+        + '<button type="button" onclick="_memAdicionarLinha()"'
+        + ' style="font-size:9px;font-weight:900;color:#6366f1;background:#eef2ff;border:none;'
+        + 'border-radius:8px;padding:4px 10px;cursor:pointer;text-transform:uppercase">'
+        + '<i class="fas fa-plus" style="margin-right:4px"></i>Linha</button>'
+        + '</div>'
+
+        + '<div style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:12px;padding:10px">'
+          + '<div id="memScroll" style="max-height:320px;overflow-y:auto;padding-right:4px">'
+            + '<div id="memLinhas"></div>'
+          + '</div>'
+        + '</div>'
+
+        + '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px;'
+        + 'padding:10px 12px;background:#f0fdf4;border:1.5px solid #bbf7d0;border-radius:12px">'
+        + '<span style="font-size:10px;font-weight:900;color:#059669;text-transform:uppercase">Total calculado</span>'
+        + '<span id="memTotal" style="font-size:16px;font-weight:900;color:#059669">R$ 0,00</span>'
+        + '</div>'
       + '</div>'
 
       + '<div>'
