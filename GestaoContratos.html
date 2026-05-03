@@ -1174,47 +1174,59 @@ function abrirModalIndicador(idMeta, idContrato, dadosIn) {
     html: '<div class="text-left" style="padding:0 20px 16px">' + htmlModal + '</div>',
 
     preConfirm: function() {
-      // ── 1. Validar nome ─────────────────────────────────
-      var nome = (document.getElementById('indNome')?.value || '').trim();
+
+      // ── SYNC DOM → ESTADO (crítico: captura campos sem blur) ──
+      document.querySelectorAll('.mem-row').forEach(function(row, idx) {
+        if (!_memoriaCalculo[idx]) return;
+
+        var qtdEl = row.querySelector('.mem-qtd');
+        var valEl = row.querySelector('.mem-val');
+
+        if (qtdEl) {
+          _memoriaCalculo[idx].qtd = parseFloat(qtdEl.value) || 0;
+        }
+        if (valEl) {
+          // _parseMoeda converte "1.000,00" → 1000 antes de enviar
+          _memoriaCalculo[idx].valor = _parseMoeda(valEl.value);
+        }
+      });
+
+      var nome = document.getElementById('rubNome')?.value.trim();
       if (!nome) {
-        Swal.showValidationMessage('Nome do indicador obrigatório.');
+        Swal.showValidationMessage('Nome obrigatório.');
         return false;
       }
 
-      // ── 2. Coletar valores dos inputs mensais ────────────
-      var mesesPorAno = {};
-      var totalGeral  = 0;
+      // Recalcula após sync
+      var total = _memoriaCalculo.reduce(function(s, item) {
+        return s + (Number(item.qtd) || 0) * (Number(item.valor) || 0);
+      }, 0);
 
-      for (var a = anoInicio; a <= anoFim; a++) {
-        var _a2 = a;
-        var arrMes = _NM.map(function(_, i) {
-          var el = document.getElementById('indM_' + _a2 + '_' + i);
-          var v  = el ? (Number(el.value) || 0) : 0;
-          totalGeral += v;
-          return v;
-        });
-        mesesPorAno[_a2] = arrMes;
-      }
-
-      // ── 3. Validar: pelo menos um mês com valor > 0 ──────
-      if (totalGeral <= 0) {
+      if (total <= 0) {
         Swal.showValidationMessage(
-          'Informe pelo menos um valor mensal maior que zero.'
+          'O total calculado é zero. Verifique quantidades e valores.'
         );
         return false;
       }
 
-      // ── 4. Montar payload ────────────────────────────────
       return {
-        id:          dados.id  || null,
-        idMeta:      idMeta,
-        idContrato:  idContrato,
-        numero:      (document.getElementById('indNum')?.value  || '').trim(),
-        nome:        nome,
-        texto:       nome,  // campo legado — backend usa ambos
-        descricao:   (document.getElementById('indDesc')?.value || '').trim(),
-        meses:       mesesPorAno,   // { 2025: [0,10,...], 2026: [...] }
-        ano:         anoInicio,     // ano de referência para formato legado
+        id:     dados.id || null,
+        idMeta: idMeta,
+        nome:   nome,
+        valor:  total,
+        memoriaCalculo: _memoriaCalculo.map(function(item) {
+          var qtd   = Number(item.qtd)   || 0;
+          var valor = Number(item.valor) || 0;  // já convertido pelo sync acima
+          return {
+            descricao: String(item.descricao || '').trim(),
+            tipo:      String(item.tipo      || 'unitario').trim(),
+            qtd:       qtd,    // number puro
+            valor:     valor,  // number puro — ex: 1000, não "1.000,00"
+            subtotal:  qtd * valor,
+            obs:       String(item.obs || '').trim(),
+          };
+        }),
+        obs: document.getElementById('rubObs')?.value.trim() || '',
       };
     },
 
