@@ -156,9 +156,27 @@
   outline:none;
   transition:border-color .15s;
   box-sizing:border-box;
+  font-family:inherit;
 }
 .mem-input:focus { border-color:#6366f1; }
 .mem-input-money { text-align:right; color:#059669; font-weight:800; }
+
+/* ── Observação textarea grande ───────────────────────── */
+.ctr-obs-textarea {
+  width:100%;
+  box-sizing:border-box;
+  resize:vertical;
+  min-height:90px;
+  padding:10px 13px;
+  border:1.5px solid #e2e8f0;
+  border-radius:12px;
+  font-size:13px;
+  font-weight:600;
+  font-family:inherit;
+  outline:none;
+  transition:border-color .15s;
+}
+.ctr-obs-textarea:focus { border-color:#6366f1; box-shadow:0 0 0 3px rgba(99,102,241,.12); }
 
 /* ── Auditoria ────────────────────────────────────────── */
 .audit-chip {
@@ -191,6 +209,19 @@
   max-height:80vh;
   overflow-y:auto;
   scrollbar-width:thin;
+}
+
+/* ── Input base ───────────────────────────────────────── */
+.ctr-input {
+  width:100%; padding:9px 13px; font-size:13px; font-weight:600;
+  border:1.5px solid #e2e8f0; border-radius:12px; outline:none;
+  transition:border-color .15s,box-shadow .15s; background:#fff;
+  font-family:inherit; box-sizing:border-box;
+}
+.ctr-input:focus { border-color:#6366f1; box-shadow:0 0 0 3px rgba(99,102,241,.12); }
+.ctr-label {
+  display:block; font-size:10px; font-weight:900; letter-spacing:.07em;
+  text-transform:uppercase; color:#94a3b8; margin-bottom:6px;
 }
 </style>
 
@@ -387,6 +418,8 @@ function _renderMetaBlock(meta, idContrato) {
   var totalMeta  = _totalRubricasMetaCtr(meta.id);
   var inds       = (_ctrCache.indicadores||[]).filter(function(i){ return i.idMeta===meta.id; });
   var rubs       = (_ctrCache.rubricas||[]).filter(function(r){ return r.idMeta===meta.id; });
+  var metaBodyId = 'ctr-meta-body-'+escaparHTML(meta.id);
+  var metaExpandido = _ctrExpanded['meta-'+meta.id] !== false;
 
   var rubsHtml = rubs.length
     ? '<div class="px-3 pt-2 pb-1"><p class="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Rubricas</p>'
@@ -425,8 +458,8 @@ function _renderMetaBlock(meta, idContrato) {
     : '';
 
   return '<div class="ctr-meta-block mt-3 first:mt-3">'
-    // meta header
-    +'<div class="ctr-meta-header">'
+    // meta header — clicável para colapsar
+    +'<div class="ctr-meta-header" style="cursor:pointer" onclick="_ctrToggleMeta(\''+escaparHTML(meta.id)+'\')">'
     +'<div class="flex-1 min-w-0">'
     +'<p class="text-[10px] font-black text-indigo-600 uppercase tracking-widest leading-none">Meta '+(meta.numero||'')+'</p>'
     +'<p class="font-bold text-slate-800 text-sm mt-0.5 leading-tight">'+escaparHTML(meta.titulo||'')+'</p>'
@@ -434,17 +467,20 @@ function _renderMetaBlock(meta, idContrato) {
     +(totalMeta>0?'<p class="text-[10px] font-black text-emerald-600 mt-1"><i class="fas fa-coins mr-1 text-[8px]"></i>'+_fmtMoedaBR(totalMeta)+' em rubricas</p>':'')
     +'</div>'
     +'<div class="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">'
-    +'<button onclick="abrirModalIndicador(\''+escaparHTML(meta.id)+'\',\''+escaparHTML(idContrato)+'\')" class="ctr-btn ctr-btn-indigo"><i class="fas fa-chart-line text-[8px]"></i>Indicador</button>'
-    +'<button onclick="abrirModalRubrica(\''+escaparHTML(meta.id)+'\')" class="ctr-btn ctr-btn-green"><i class="fas fa-tag text-[8px]"></i>Rubrica</button>'
-    +'<button onclick="editarMeta(\''+escaparHTML(meta.id)+'\')" class="ctr-icon-btn bg-white text-slate-400 hover:bg-indigo-600 hover:text-white"><i class="fas fa-edit text-[9px]"></i></button>'
-    +'<button onclick="excluirMetaUI(\''+escaparHTML(meta.id)+'\')" class="ctr-icon-btn bg-white text-slate-400 hover:bg-red-600 hover:text-white"><i class="fas fa-trash text-[9px]"></i></button>'
+    +'<button onclick="event.stopPropagation();abrirModalIndicador(\''+escaparHTML(meta.id)+'\',\''+escaparHTML(idContrato)+'\')" class="ctr-btn ctr-btn-indigo"><i class="fas fa-chart-line text-[8px]"></i>Indicador</button>'
+    +'<button onclick="event.stopPropagation();abrirModalRubrica(\''+escaparHTML(meta.id)+'\')" class="ctr-btn ctr-btn-green"><i class="fas fa-tag text-[8px]"></i>Rubrica</button>'
+    +'<button onclick="event.stopPropagation();editarMeta(\''+escaparHTML(meta.id)+'\')" class="ctr-icon-btn bg-white text-slate-400 hover:bg-indigo-600 hover:text-white"><i class="fas fa-edit text-[9px]"></i></button>'
+    +'<button onclick="event.stopPropagation();excluirMetaUI(\''+escaparHTML(meta.id)+'\')" class="ctr-icon-btn bg-white text-slate-400 hover:bg-red-600 hover:text-white"><i class="fas fa-trash text-[9px]"></i></button>'
+    +'<i id="ctr-meta-chevron-'+escaparHTML(meta.id)+'" class="fas fa-chevron-'+(metaExpandido?'up':'down')+' text-slate-400 text-[9px] ml-1"></i>'
     +'</div>'
     +'</div>'
+    +'<div id="'+metaBodyId+'"'+(metaExpandido?'':' style="display:none"')+'>'
     + rubsHtml + indsHtml
+    +'</div>'
     +'</div>';
 }
 
-// ── Toggle collapse ───────────────────────────────────
+// ── Toggle collapse contrato ──────────────────────────
 function _ctrToggle(idContrato) {
   var body    = document.getElementById('ctr-body-'+idContrato);
   var chevron = document.getElementById('ctr-chevron-'+idContrato);
@@ -456,6 +492,19 @@ function _ctrToggle(idContrato) {
     chevron.innerHTML = aberto
       ? '<i class="fas fa-chevron-down text-[8px]"></i>Expandir'
       : '<i class="fas fa-chevron-up text-[8px]"></i>Recolher';
+  }
+}
+
+// ── Toggle collapse meta ──────────────────────────────
+function _ctrToggleMeta(idMeta) {
+  var body    = document.getElementById('ctr-meta-body-'+idMeta);
+  var chevron = document.getElementById('ctr-meta-chevron-'+idMeta);
+  if (!body) return;
+  var aberto = body.style.display !== 'none';
+  body.style.display = aberto ? 'none' : '';
+  _ctrExpanded['meta-'+idMeta] = !aberto;
+  if (chevron) {
+    chevron.className = 'fas fa-chevron-'+(aberto?'down':'up')+' text-slate-400 text-[9px] ml-1';
   }
 }
 
@@ -495,17 +544,17 @@ function abrirModalContrato(dadosIn) {
             <i class="fas fa-file-contract mr-1"></i>Identificação
             </p>
             <div style="margin-bottom:10px">
-            <label style="font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;display:block;margin-bottom:5px">Nome / Título *</label>
-            <input id="ctrNome" class="ctr-input" value="${escaparHTML(dados.nome||'')}" placeholder="Ex.: Contrato de Gestão CCBJ 2025/2027" style="width:100%;box-sizing:border-box">
+            <label class="ctr-label">Nome / Título *</label>
+            <input id="ctrNome" class="ctr-input" value="${escaparHTML(dados.nome||'')}" placeholder="Ex.: Contrato de Gestão CCBJ 2025/2027">
             </div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
             <div>
-                <label style="font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;display:block;margin-bottom:5px">Número</label>
-                <input id="ctrNumero" class="ctr-input" value="${escaparHTML(dados.numero||'')}" placeholder="005/2025" style="width:100%;box-sizing:border-box">
+                <label class="ctr-label">Número</label>
+                <input id="ctrNumero" class="ctr-input" value="${escaparHTML(dados.numero||'')}" placeholder="005/2025">
             </div>
             <div>
-                <label style="font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;display:block;margin-bottom:5px">Status</label>
-                <select id="ctrStatus" class="ctr-input" style="width:100%;box-sizing:border-box">
+                <label class="ctr-label">Status</label>
+                <select id="ctrStatus" class="ctr-input">
                 <option ${(dados.status||'Ativo')==='Ativo'?'selected':''}>Ativo</option>
                 <option ${dados.status==='Encerrado'?'selected':''}>Encerrado</option>
                 <option ${dados.status==='Suspenso'?'selected':''}>Suspenso</option>
@@ -513,8 +562,8 @@ function abrirModalContrato(dadosIn) {
             </div>
             </div>
             <div>
-            <label style="font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;display:block;margin-bottom:5px">Objeto / Descrição</label>
-            <textarea id="ctrDesc" class="ctr-input" rows="3" placeholder="Objetivo e escopo..." style="width:100%;box-sizing:border-box;resize:vertical;min-height:60px">${escaparHTML(dados.descricao||'')}</textarea>
+            <label class="ctr-label">Objeto / Descrição</label>
+            <textarea id="ctrDesc" class="ctr-obs-textarea" placeholder="Objetivo e escopo...">${escaparHTML(dados.descricao||'')}</textarea>
             </div>
         </div>
 
@@ -525,12 +574,12 @@ function abrirModalContrato(dadosIn) {
             </p>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
             <div>
-                <label style="font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;display:block;margin-bottom:5px">Início</label>
-                <input id="ctrIni" class="ctr-input" value="${escaparHTML(_fmtDataBR(dados.vigIni))}" placeholder="01/01/2025" style="width:100%;box-sizing:border-box">
+                <label class="ctr-label">Início</label>
+                <input id="ctrIni" class="ctr-input" value="${escaparHTML(_fmtDataBR(dados.vigIni))}" placeholder="01/01/2025">
             </div>
             <div>
-                <label style="font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;display:block;margin-bottom:5px">Fim</label>
-                <input id="ctrFim" class="ctr-input" value="${escaparHTML(_fmtDataBR(dados.vigFim))}" placeholder="31/12/2027" style="width:100%;box-sizing:border-box">
+                <label class="ctr-label">Fim</label>
+                <input id="ctrFim" class="ctr-input" value="${escaparHTML(_fmtDataBR(dados.vigFim))}" placeholder="31/12/2027">
             </div>
             </div>
         </div>
@@ -542,28 +591,28 @@ function abrirModalContrato(dadosIn) {
             </p>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
             <div>
-                <label style="font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;display:block;margin-bottom:5px">Valor Total</label>
+                <label class="ctr-label">Valor Total</label>
                 <div style="position:relative">
                 <span style="position:absolute;left:11px;top:50%;transform:translateY(-50%);font-size:11px;font-weight:800;color:#059669;pointer-events:none">R$</span>
-                <input id="ctrValorTotal" class="ctr-input" style="padding-left:30px;text-align:right;font-weight:800;color:#059669;width:100%;box-sizing:border-box" value="${valFmt}" placeholder="0,00">
+                <input id="ctrValorTotal" class="ctr-input" style="padding-left:30px;text-align:right;font-weight:800;color:#059669" value="${valFmt}" placeholder="0,00">
                 </div>
             </div>
             <div>
-                <label style="font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;display:block;margin-bottom:5px">Fonte de Recurso</label>
-                <input id="ctrFonte" class="ctr-input" value="${escaparHTML(dados.fonteRecurso||'')}" placeholder="SECULT-CE, Prefeitura..." style="width:100%;box-sizing:border-box">
+                <label class="ctr-label">Fonte de Recurso</label>
+                <input id="ctrFonte" class="ctr-input" value="${escaparHTML(dados.fonteRecurso||'')}" placeholder="SECULT-CE, Prefeitura...">
             </div>
             </div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
             <div>
-                <label style="font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;display:block;margin-bottom:5px">Contrapartida</label>
+                <label class="ctr-label">Contrapartida</label>
                 <div style="position:relative">
                 <span style="position:absolute;left:11px;top:50%;transform:translateY(-50%);font-size:11px;font-weight:800;color:#6366f1;pointer-events:none">R$</span>
-                <input id="ctrContrapartida" class="ctr-input" style="padding-left:30px;text-align:right;font-weight:800;color:#6366f1;width:100%;box-sizing:border-box" value="${ctrFmt}" placeholder="0,00">
+                <input id="ctrContrapartida" class="ctr-input" style="padding-left:30px;text-align:right;font-weight:800;color:#6366f1" value="${ctrFmt}" placeholder="0,00">
                 </div>
             </div>
             <div>
-                <label style="font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;display:block;margin-bottom:5px">Modalidade</label>
-                <select id="ctrModalidade" class="ctr-input" style="width:100%;box-sizing:border-box">
+                <label class="ctr-label">Modalidade</label>
+                <select id="ctrModalidade" class="ctr-input">
                 <option value="" ${!dados.modalidade?'selected':''}>Selecione...</option>
                 <option ${dados.modalidade==='Convênio'?'selected':''}>Convênio</option>
                 <option ${dados.modalidade==='Contrato de Gestão'?'selected':''}>Contrato de Gestão</option>
@@ -575,8 +624,8 @@ function abrirModalContrato(dadosIn) {
             </div>
             </div>
             <div>
-            <label style="font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;display:block;margin-bottom:5px">Observações financeiras</label>
-            <textarea id="ctrObsFinan" class="ctr-input" rows="2" placeholder="Parcelas, cronograma..." style="width:100%;box-sizing:border-box;resize:vertical">${escaparHTML(dados.obsFinanceiro||'')}</textarea>
+            <label class="ctr-label">Observações financeiras</label>
+            <textarea id="ctrObsFinan" class="ctr-obs-textarea" placeholder="Parcelas, cronograma...">${escaparHTML(dados.obsFinanceiro||'')}</textarea>
             </div>
         </div>
         </div>`,
@@ -660,17 +709,17 @@ function abrirModalMeta(idContrato, dadosIn){
   </div>`:''}
   <div style="display:grid;grid-template-columns:80px 1fr;gap:10px;margin-bottom:10px">
     <div>
-      <label style="font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;display:block;margin-bottom:5px">Nº</label>
-      <input id="metNum" class="ctr-input" style="text-align:center;width:100%;box-sizing:border-box" value="${escaparHTML(dados.numero||'')}" placeholder="01">
+      <label class="ctr-label">Nº</label>
+      <input id="metNum" class="ctr-input" style="text-align:center" value="${escaparHTML(dados.numero||'')}" placeholder="01">
     </div>
     <div>
-      <label style="font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;display:block;margin-bottom:5px">Título *</label>
-      <input id="metTit" class="ctr-input" style="width:100%;box-sizing:border-box" value="${escaparHTML(dados.titulo||'')}" placeholder="Ex.: Público presencial atendido">
+      <label class="ctr-label">Título *</label>
+      <input id="metTit" class="ctr-input" value="${escaparHTML(dados.titulo||'')}" placeholder="Ex.: Público presencial atendido">
     </div>
   </div>
   <div>
-    <label style="font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;display:block;margin-bottom:5px">Descrição</label>
-    <textarea id="metDesc" class="ctr-input" rows="3" placeholder="Detalhamento..." style="width:100%;box-sizing:border-box;resize:vertical">${escaparHTML(dados.descricao||'')}</textarea>
+    <label class="ctr-label">Descrição</label>
+    <textarea id="metDesc" class="ctr-obs-textarea" placeholder="Detalhamento...">${escaparHTML(dados.descricao||'')}</textarea>
   </div>
 </div>`,
     preConfirm:function(){
@@ -712,10 +761,60 @@ function excluirMetaUI(id){
 }
 
 // ══════════════════════════════════════════════════════
-// MODAL RUBRICA + MEMÓRIA DE CÁLCULO
+// MODAL RUBRICA + MEMÓRIA DE CÁLCULO — CORRIGIDO
 // ══════════════════════════════════════════════════════
 
 var _memoriaCalculo = [];
+
+function _memCalcularItem(i){
+  var qtd = parseFloat(String(i.qtd).replace(',','.')) || 0;
+  var valor = parseFloat(String(i.valor).replace(',','.')) || 0;
+  return qtd * valor;
+}
+
+function _memAtualizarTotal(){
+  var total = _memoriaCalculo.reduce(function(s,i){ return s + _memCalcularItem(i); }, 0);
+  var el = document.getElementById('memTotal');
+  if(el) el.textContent = _fmtMoedaBR(total);
+}
+
+function _memRenderizar(){
+  var container=document.getElementById('memLinhas');
+  if(!container) return;
+  container.innerHTML=_memoriaCalculo.map(function(item,i){
+    var valorFmt = (parseFloat(String(item.valor||0).replace(',','.')) || 0).toFixed(2).replace('.',',');
+    return '<div style="display:grid;grid-template-columns:1fr 90px 70px 110px 1fr 28px;gap:5px;margin-bottom:5px;align-items:center">'
+        +'<input class="mem-input" placeholder="Descrição" value="'+escaparHTML(item.descricao||'')+'" oninput="_memoriaCalculo['+i+'].descricao=this.value">'
+        +'<select class="mem-input" onchange="_memoriaCalculo['+i+'].tipo=this.value">'
+            +'<option value="mensal" '+(item.tipo==='mensal'||!item.tipo?'selected':'')+'>Mensal</option>'
+            +'<option value="diaria" '+(item.tipo==='diaria'?'selected':'')+'>Diária</option>'
+            +'<option value="hora" '+(item.tipo==='hora'?'selected':'')+'>Hora técnica</option>'
+            +'<option value="unitario" '+(item.tipo==='unitario'?'selected':'')+'>Unitário</option>'
+        +'</select>'
+        +'<input type="number" class="mem-input" style="text-align:center" min="0" step="any" value="'+(item.qtd||1)+'" oninput="_memoriaCalculo['+i+'].qtd=parseFloat(this.value)||0;_memAtualizarTotal()">'
+        +'<input class="mem-input mem-input-money" placeholder="0,00" value="'+valorFmt+'" oninput="_memoriaCalculo['+i+'].valor=parseFloat(this.value.replace(/\\./g,\'\').replace(\',\',\'.\'))||0;_memAtualizarTotal()">'
+        +'<input class="mem-input" placeholder="Detalhe..." value="'+escaparHTML(item.obs||'')+'" oninput="_memoriaCalculo['+i+'].obs=this.value">'
+        +'<button type="button" onclick="_memRemoverLinha('+i+')" style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;background:#fee2e2;border:none;border-radius:7px;cursor:pointer;color:#dc2626;font-size:11px;flex-shrink:0">✕</button>'
+        +'</div>';
+  }).join('');
+  _memAtualizarTotal();
+  setTimeout(function(){
+    document.querySelectorAll('.mem-input-money').forEach(function(el){
+      _mascaraMoedaEl(el);
+    });
+  }, 0);
+}
+
+function _memAdicionarLinha(){
+  _memoriaCalculo.push({ descricao:'', tipo:'mensal', qtd:1, valor:0, obs:'' });
+  _memRenderizar();
+}
+
+function _memRemoverLinha(i){
+  _memoriaCalculo.splice(i,1);
+  if(!_memoriaCalculo.length) _memoriaCalculo=[{descricao:'',tipo:'mensal',qtd:1,valor:0,obs:''}];
+  _memRenderizar();
+}
 
 function abrirModalRubrica(idMeta, dadosIn){
   var dados=dadosIn||{};
@@ -724,7 +823,7 @@ function abrirModalRubrica(idMeta, dadosIn){
 
   Swal.fire({
     title: dados.id?'Editar Rubrica':'Nova Rubrica',
-    width: Math.min(1000, window.innerWidth-32),
+    width: Math.min(900, window.innerWidth-32),
     showCancelButton:true, confirmButtonText:'<i class="fas fa-save mr-1"></i>Salvar',
     cancelButtonText:'Cancelar', confirmButtonColor:'#6366f1',
     customClass:{popup:'ctr-modal rounded-3xl',confirmButton:'rounded-xl font-black text-sm',cancelButton:'rounded-xl font-bold text-sm'},
@@ -735,108 +834,70 @@ function abrirModalRubrica(idMeta, dadosIn){
             <span style="font-size:10px;font-weight:900;color:#4338ca">Meta ${escaparHTML(meta.numero||'')} — ${escaparHTML(meta.titulo)}</span>
         </div>`:''}
 
-        <div style="margin-bottom:10px">
-            <label style="font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;display:block;margin-bottom:5px">
-            Nome da Rubrica *
-            </label>
-            <input id="rubNome" class="ctr-input" style="width:100%;box-sizing:border-box"
-            value="${escaparHTML(dados.nome||'')}" placeholder="Ex.: Cache de Artistas">
+        <div style="margin-bottom:12px">
+            <label class="ctr-label">Nome da Rubrica *</label>
+            <input id="rubNome" class="ctr-input" value="${escaparHTML(dados.nome||'')}" placeholder="Ex.: Cache de Artistas">
         </div>
 
         <div style="margin-bottom:12px">
-            
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-            <label style="font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase">
-                Memória de Cálculo
-            </label>
+            <label class="ctr-label" style="margin-bottom:0">Memória de Cálculo</label>
             <button type="button" onclick="_memAdicionarLinha()"
                 style="font-size:9px;font-weight:900;color:#6366f1;background:#eef2ff;border:none;border-radius:8px;padding:4px 10px;cursor:pointer;text-transform:uppercase;letter-spacing:.06em">
                 <i class="fas fa-plus mr-1"></i>Linha
             </button>
             </div>
 
-            <div style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:12px;padding:10px">
-
-            <!-- HEADER -->
-            <div style="display:grid;grid-template-columns:2fr 110px 90px 140px 2fr 40px;gap:5px;margin-bottom:6px">
+            <div style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:12px;padding:10px;overflow-x:auto">
+            <div style="display:grid;grid-template-columns:1fr 90px 70px 110px 1fr 28px;gap:5px;margin-bottom:6px;min-width:560px">
                 <span style="font-size:9px;font-weight:900;color:#94a3b8;text-transform:uppercase;padding:0 2px">Descrição</span>
-                <span style="font-size:9px;font-weight:900;color:#94a3b8;text-transform:uppercase;padding-left:4px">Obs</span>
-                <span style="font-size:9px;font-weight:900;color:#94a3b8;text-transform:uppercase;text-align:center">Tipo</span>
+                <span style="font-size:9px;font-weight:900;color:#94a3b8;text-transform:uppercase;padding-left:4px">Tipo</span>
                 <span style="font-size:9px;font-weight:900;color:#94a3b8;text-transform:uppercase;text-align:center">Qtd</span>
                 <span style="font-size:9px;font-weight:900;color:#94a3b8;text-transform:uppercase;text-align:right;padding-right:4px">Unit. (R$)</span>
+                <span style="font-size:9px;font-weight:900;color:#94a3b8;text-transform:uppercase;padding:0 2px">Obs</span>
                 <span></span>
             </div>
-
-            <div id="memLinhas"></div>
-
+            <div id="memLinhas" style="min-width:560px"></div>
             </div>
 
-            <!-- TOTAL -->
             <div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px;padding:10px 12px;background:#f0fdf4;border:1.5px solid #bbf7d0;border-radius:12px">
-            <span style="font-size:10px;font-weight:900;color:#059669;text-transform:uppercase">
-                Total calculado
-            </span>
-            <span id="memTotal" style="font-size:16px;font-weight:900;color:#059669">
-                R$ 0,00
-            </span>
+            <span style="font-size:10px;font-weight:900;color:#059669;text-transform:uppercase">Total calculado</span>
+            <span id="memTotal" style="font-size:16px;font-weight:900;color:#059669">R$&nbsp;0,00</span>
             </div>
-
         </div>
 
         <div>
-            <label style="font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;display:block;margin-bottom:5px">
-            Observação
-            </label>
-            <textarea id="rubObs" class="ctr-input" rows="2"
-            style="width:100%;box-sizing:border-box;resize:vertical"
-            placeholder="Memória ou justificativa...">${escaparHTML(dados.obs||'')}</textarea>
+            <label class="ctr-label">Observação</label>
+            <textarea id="rubObs" class="ctr-obs-textarea" placeholder="Memória ou justificativa...">${escaparHTML(dados.obs||'')}</textarea>
         </div>
         </div>`,
     didOpen: function(){
       if (dados.id){
         google.script.run
           .withSuccessHandler(function(lista){
-            _memoriaCalculo = Array.isArray(lista)
-            ? lista.map(function(i){
-                return {
+            _memoriaCalculo = Array.isArray(lista) && lista.length
+              ? lista.map(function(i){
+                  return {
                     descricao: String(i[2]||''),
                     tipo: String(i[3]||'mensal'),
-                    qtd: Number(i[4])||1,
-                    valor: parseFloat(
-                      String(i[5]).replace(/\./g,'').replace(',','.')
-                    ) || 0,
+                    qtd: parseFloat(String(i[4]||1).replace(',','.')) || 1,
+                    valor: parseFloat(String(i[5]||0).replace(/\./g,'').replace(',','.')) || 0,
                     obs: String(i[9]||'')
-                };
+                  };
                 })
-              : [{
-                descricao:'',
-                tipo:'mensal',
-                qtd:1,
-                valor:0,
-                obs:''
-                }];
-            if (!_memoriaCalculo.length)
-                _memoriaCalculo=[{
-                    descricao:'',
-                    tipo:'mensal',
-                    qtd:1,
-                    valor:0,
-                    obs:''
-                }];
+              : [{descricao:'',tipo:'mensal',qtd:1,valor:0,obs:''}];
             _memRenderizar();
           })
           .obterMemoriaRubrica(dados.id);
       } else {
-        _memoriaCalculo=[{descricao:'',qtd:1,valor:0}];
+        _memoriaCalculo=[{descricao:'',tipo:'mensal',qtd:1,valor:0,obs:''}];
         _memRenderizar();
       }
     },
     preConfirm:function(){
       var nome=document.getElementById('rubNome')?.value.trim();
       if(!nome){Swal.showValidationMessage('Nome obrigatório.');return false;}
-      var total = _memoriaCalculo.reduce(function(s,i){
-        return s + _memCalcularItem(i);
-      },0);
+      var total = _memoriaCalculo.reduce(function(s,i){ return s + _memCalcularItem(i); },0);
       if(total<=0){Swal.showValidationMessage('Valor total deve ser maior que zero.');return false;}
       return {
         id: dados.id || null,
@@ -844,19 +905,17 @@ function abrirModalRubrica(idMeta, dadosIn){
         nome,
         valor: total,
         memoriaCalculo: _memoriaCalculo.map(function(i){
-        return {
+          return {
             descricao: i.descricao || '',
             tipo: i.tipo || 'mensal',
-            qtd: Number(i.qtd) || 0,
-            valor: parseFloat(
-              String(i.valor).replace(/\./g,'').replace(',','.')
-            ) || 0,
+            qtd: parseFloat(String(i.qtd||0).replace(',','.')) || 0,
+            valor: parseFloat(String(i.valor||0).replace(',','.')) || 0,
             subtotal: _memCalcularItem(i),
             obs: i.obs || ''
-        };
+          };
         }),
         obs: document.getElementById('rubObs')?.value.trim()
-        };
+      };
     }
   }).then(function(r){
     if(!r.isConfirmed) return;
@@ -867,58 +926,12 @@ function abrirModalRubrica(idMeta, dadosIn){
       .salvarRubrica(r.value,AppState.usuario.email);
   });
 }
-function _memCalcularItem(i){
-      return (Number(i.qtd)||0) * (Number(i.valor)||0);
-}
-function _memRenderizar(){
-  var container=document.getElementById('memLinhas');
-  if(!container) return;
-  container.innerHTML=_memoriaCalculo.map(function(item,i){
-    return '<div class="mem-row" style="display:grid;grid-template-columns:1fr 90px 70px 110px 1fr 28px;gap:5px;margin-bottom:5px">'
-        +'<input class="mem-input" placeholder="Descrição" value="'+escaparHTML(item.descricao||'')+'" oninput="_memoriaCalculo['+i+'].descricao=this.value">'
-        +'<select class="mem-input" onchange="_memoriaCalculo['+i+'].tipo=this.value">'
-            +'<option value="mensal" '+(item.tipo==='mensal'?'selected':'')+'>Mensal</option>'
-            +'<option value="diaria" '+(item.tipo==='diaria'?'selected':'')+'>Diária</option>'
-            +'<option value="hora" '+(item.tipo==='hora'?'selected':'')+'>Hora técnica</option>'
-            +'<option value="unitario" '+(item.tipo==='unitario'?'selected':'')+'>Unitário</option>'
-        +'</select>'
-        +'<input type="number" class="mem-input" style="text-align:center" min="0" value="'+(item.qtd||1)+'" oninput="_memoriaCalculo['+i+'].qtd=Number(this.value)||0;_memAtualizarTotal()">'
-        +'<input class="mem-input mem-input-money" value="'+((item.valor||0).toFixed(2).replace('.',','))+'" oninput="_memoriaCalculo['+i+'].valor=(parseFloat(this.value.replace(/\\./g,\'\').replace(\',\',\'.\'))||0);_memAtualizarTotal()">'
-        +'<input class="mem-input" placeholder="Detalhe..." value="'+escaparHTML(item.obs||'')+'" oninput="_memoriaCalculo['+i+'].obs=this.value">'
-        +'<button type="button" onclick="_memRemoverLinha('+i+')" style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;background:#fee2e2;border:none;border-radius:7px;cursor:pointer;color:#dc2626;font-size:10px">✕</button>'
-        +'</div>';
-  }).join('');
-  _memAtualizarTotal();
-  setTimeout(function(){
-    document.querySelectorAll('.mem-input-money').forEach(function(el){
-        _mascaraMoedaEl(el);
-    });
-    }, 0);
-}
-function _memAdicionarLinha(){
-  _memoriaCalculo.push({
-    descricao:'',
-    tipo:'mensal',
-    qtd:1,
-    valor:0,
-    obs:''
-  });
-  _memRenderizar();
-}
-function _memRemoverLinha(i){
-  _memoriaCalculo.splice(i,1);
-  if(!_memoriaCalculo.length) _memoriaCalculo=[{descricao:'',qtd:1,valor:0}];
-  _memRenderizar();
-}
-function _memCalcularItem(i){
-  var qtd = Number(i.qtd) || 0;
-  var valor = Number(i.valor) || 0;
-  return qtd * valor;
-}
+
 function editarRubrica(id){
   var r=(_ctrCache.rubricas||[]).find(function(x){return x.id===id;});
   if(r) abrirModalRubrica(r.idMeta,r);
 }
+
 function excluirRubricaUI(id){
   Swal.fire({
     title:'Excluir rubrica?',text:'Esta ação não pode ser desfeita.',
@@ -955,8 +968,6 @@ function abrirModalIndicador(idMeta, idContrato, dadosIn){
     return 0;
   };
 
-  var hoje = new Date(); hoje.setHours(0,0,0,0);
-
   var faixasHtml = '';
   for (var ano=anoInicio; ano<=anoFim; ano++) {
     var _a=ano;
@@ -967,7 +978,7 @@ function abrirModalIndicador(idMeta, idContrato, dadosIn){
       return '<div style="display:flex;flex-direction:column;align-items:center;gap:3px">'
         +'<span style="font-size:9px;font-weight:700;color:'+(fora?'#cbd5e1':'#64748b')+'">'+nm+'</span>'
         +'<input type="number" id="indM_'+_a+'_'+i+'" value="'+val+'" min="0"'
-        +(fora?' disabled title="Fora da vigência"':'')
+        +(fora?' disabled':'')
         +' style="width:100%;text-align:center;font-size:11px;font-weight:700;border:1.5px solid '+(fora?'#f1f5f9':'#e2e8f0')+';border-radius:8px;padding:5px 2px;outline:none;background:'+(fora?'#f8fafc':'#fff')+';opacity:'+(fora?.3:1)+';pointer-events:'+(fora?'none':'auto')+';box-sizing:border-box">'
         +'</div>';
     }).join('');
@@ -997,21 +1008,21 @@ function abrirModalIndicador(idMeta, idContrato, dadosIn){
         </div>`:''}
         <div style="display:grid;grid-template-columns:80px 1fr;gap:10px;margin-bottom:10px">
             <div>
-            <label style="font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;display:block;margin-bottom:5px">Nº</label>
-            <input id="indNum" class="ctr-input" style="text-align:center;width:100%;box-sizing:border-box" value="${escaparHTML(dados.numero||'')}" placeholder="01">
+            <label class="ctr-label">Nº</label>
+            <input id="indNum" class="ctr-input" style="text-align:center" value="${escaparHTML(dados.numero||'')}" placeholder="01">
             </div>
             <div>
-            <label style="font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;display:block;margin-bottom:5px">Nome do Indicador *</label>
-            <input id="indNome" class="ctr-input" style="width:100%;box-sizing:border-box" value="${escaparHTML(dados.nome||dados.texto||'')}" placeholder="Ex.: Nº de pessoas atendidas presencialmente">
+            <label class="ctr-label">Nome do Indicador *</label>
+            <input id="indNome" class="ctr-input" value="${escaparHTML(dados.nome||dados.texto||'')}" placeholder="Ex.: Nº de pessoas atendidas presencialmente">
             </div>
         </div>
         <div style="margin-bottom:12px">
-            <label style="font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;display:block;margin-bottom:5px">Metodologia</label>
-            <textarea id="indDesc" class="ctr-input" rows="2" style="width:100%;box-sizing:border-box;resize:vertical" placeholder="Como é medido...">${escaparHTML(dados.descricao||'')}</textarea>
+            <label class="ctr-label">Metodologia</label>
+            <textarea id="indDesc" class="ctr-obs-textarea" placeholder="Como é medido...">${escaparHTML(dados.descricao||'')}</textarea>
         </div>
         <div>
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-            <label style="font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase">Metas mensais por ano de vigência</label>
+            <label class="ctr-label" style="margin-bottom:0">Metas mensais por ano de vigência</label>
             ${ctr.vigIni?`<span style="font-size:10px;color:#cbd5e1"><i class="fas fa-calendar mr-1"></i>${escaparHTML(_fmtDataBR(ctr.vigIni)||'')} a ${escaparHTML(_fmtDataBR(ctr.vigFim)||'')}</span>`:''}
             </div>
             <div style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:14px;padding:14px;max-height:240px;overflow-y:auto">
@@ -1071,7 +1082,7 @@ function _ctrBuscar(val){
 }
 
 // ══════════════════════════════════════════════════════
-// AUDITORIA — FUNÇÕES CORRIGIDAS
+// AUDITORIA
 // ══════════════════════════════════════════════════════
 
 function carregarAuditoria(){
@@ -1166,7 +1177,6 @@ function renderizarLogs(logs){
 // INIT BLOCK
 // ══════════════════════════════════════════════════════
 
-// Sobrescreve a função global de busca de contratos
 window.codipPopularContratos = function(){
   var sel=document.getElementById('codipSelectContrato');
   if(!sel) return;
@@ -1179,24 +1189,4 @@ window.codipPopularContratos = function(){
   var si=document.getElementById('codipSelectIndicador');
   if(si) si.innerHTML='<option value="">Selecione um indicador...</option>';
 };
-
-function coletarMemoriaCalculoUI() {
-  const rows = document.querySelectorAll('.mem-row');
-
-  return Array.from(rows).map(row => ({
-    descricao: row.querySelector('.mem-desc')?.value || '',
-    tipo: row.querySelector('.mem-tipo')?.value || '',
-    quantidade: Number(row.querySelector('.mem-qtd')?.value) || 0,
-    valorUnitario: _parseMoedaBR(row.querySelector('.mem-unit')?.value),
-    observacao: row.querySelector('.mem-obs')?.value || ''
-  }));
-}
-
-function calcularMemoria(memoria) {
-  return memoria.map(l => {
-    const subtotal = l.quantidade * l.valorUnitario;
-    return { ...l, subtotal };
-  });
-}
-
 </script>

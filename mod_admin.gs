@@ -1417,3 +1417,33 @@ function detectarComportamentoSuspeito(acao) {
     );
   }
 }
+
+function salvarPreferencia(chave, valor) {
+  var email = Session.getActiveUser().getEmail();
+  if (!email || !chave) return;
+  var aba = _getSheet('PreferenciasUsuarios');
+  if (!aba) return;
+  var dados = aba.getLastRow() > 1 ? aba.getDataRange().getValues() : [[]];
+  for (var i = 1; i < dados.length; i++) {
+    if (String(dados[i][0]).toLowerCase() === email.toLowerCase() && dados[i][1] === chave) {
+      aba.getRange(i + 1, 3).setValue(valor);
+      aba.getRange(i + 1, 4).setValue(new Date().toISOString());
+      return;
+    }
+  }
+  aba.appendRow([email, chave, valor, new Date().toISOString()]);
+}
+
+function obterPreferencia(chave) {
+  var email = Session.getActiveUser().getEmail();
+  if (!email || !chave) return null;
+  var aba = _getSheet('PreferenciasUsuarios');
+  if (!aba || aba.getLastRow() < 2) return null;
+  var dados = aba.getDataRange().getValues();
+  for (var i = 1; i < dados.length; i++) {
+    if (String(dados[i][0]).toLowerCase() === email.toLowerCase() && dados[i][1] === chave) {
+      return String(dados[i][2] || '') || null;
+    }
+  }
+  return null;
+}
