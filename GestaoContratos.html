@@ -999,56 +999,51 @@ function abrirModalRubrica(idMeta, dadosIn) {
 
     didOpen: function() {
       if (dados.id) {
-        // Mostra estado de carregamento enquanto busca do backend
         var container = document.getElementById('memLinhas');
         if (container) {
           container.innerHTML = '<div style="padding:20px;text-align:center;color:#94a3b8;font-size:12px">'
-            + '<i class="fas fa-spinner fa-spin" style="margin-right:6px"></i>Carregando memória...</div>';
+            + '<i class="fas fa-spinner fa-spin" style="margin-right:6px"></i>Carregando...</div>';
         }
 
         google.script.run
           .withSuccessHandler(function(lista) {
+            console.log('obterMemoriaRubrica retornou:', JSON.stringify(lista));
+
             if (Array.isArray(lista) && lista.length) {
-              _memoriaCalculo = lista
-                // Filtra linhas vazias (segurança)
-                .filter(function(row) { return row && row[1]; })
-                .map(function(row) {
-                  // Schema RubricasMemoria (10 colunas, índice 0-based):
-                  // 0=ID | 1=ID_RUBRICA | 2=DESCRICAO | 3=METRICA |
-                  // 4=QUANTIDADE | 5=VALOR_UNITARIO | 6=SUBTOTAL |
-                  // 7=CRIADO_EM | 8=CRIADO_POR | 9=ATIVO
-                  var qtd   = parseFloat(String(row[4] || '0').replace(',', '.')) || 0;
-                  var valor = parseFloat(String(row[5] || '0').replace(',', '.')) || 0;
+              _memoriaCalculo = lista.map(function(row) {
+                // Valores chegam como number (GAS serializa numbers corretamente)
+                var qtd   = Number(row[4]) || 0;
+                var valor = Number(row[5]) || 0;
 
-                  // DESCRICAO pode conter "desc — obs" concatenados pelo backend
-                  // Separa de volta para exibir nos campos corretos
-                  var descricaoRaw = String(row[2] || '');
-                  var partes       = descricaoRaw.split(' — ');
-                  var descricao    = partes[0] || '';
-                  var obs          = partes.length > 1 ? partes.slice(1).join(' — ') : '';
+                // DESCRICAO pode ser "desc — obs" (concatenado pelo backend)
+                var descricaoRaw = String(row[2] || '');
+                var idx          = descricaoRaw.indexOf(' — ');
+                var descricao    = idx >= 0 ? descricaoRaw.substring(0, idx) : descricaoRaw;
+                var obs          = idx >= 0 ? descricaoRaw.substring(idx + 3) : '';
 
-                  return {
-                    descricao: descricao,
-                    tipo:      String(row[3] || 'mensal'),
-                    qtd:       qtd,
-                    valor:     valor,
-                    obs:       obs,
-                  };
-                });
+                return {
+                  descricao: descricao,
+                  tipo:      String(row[3] || 'mensal'),
+                  qtd:       qtd,
+                  valor:     valor,
+                  obs:       obs,
+                };
+              });
             } else {
+              console.warn('obterMemoriaRubrica: lista vazia — iniciando com linha padrão');
               _memoriaCalculo = [{ descricao: '', tipo: 'mensal', qtd: 1, valor: 0, obs: '' }];
             }
+
             _memRenderizar();
           })
           .withFailureHandler(function(e) {
-            console.error('obterMemoriaRubrica falhou:', e.message);
+            console.error('obterMemoriaRubrica ERRO:', e.message);
             _memoriaCalculo = [{ descricao: '', tipo: 'mensal', qtd: 1, valor: 0, obs: '' }];
             _memRenderizar();
           })
           .obterMemoriaRubrica(dados.id);
 
       } else {
-        // Nova rubrica começa com uma linha vazia
         _memoriaCalculo = [{ descricao: '', tipo: 'mensal', qtd: 1, valor: 0, obs: '' }];
         _memRenderizar();
       }

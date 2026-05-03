@@ -1154,7 +1154,31 @@ function listarMemoriaRubrica(idRubrica) {
 
 // Alias público exposto ao frontend via google.script.run
 function obterMemoriaRubrica(idRubrica) {
-  return listarMemoriaRubrica(idRubrica);
+  var aba = _getSheet('RubricasMemoria');
+  if (!aba || aba.getLastRow() < 2) {
+    console.log('obterMemoriaRubrica: aba vazia ou não encontrada');
+    return [];
+  }
+
+  // Lê todas as colunas disponíveis (não fixar em 10 — pode variar)
+  var numCols = Math.max(aba.getLastColumn(), 10);
+  var dados   = aba.getRange(2, 1, aba.getLastRow() - 1, numCols).getValues();
+
+  console.log('obterMemoriaRubrica: total linhas lidas =', dados.length, '| buscando id =', idRubrica);
+
+  var resultado = dados.filter(function(r) {
+    var idRubNaLinha = String(r[1] || '').trim();
+    var ativo        = String(r[9] || '').trim().toUpperCase();
+
+    // Aceita: 'SIM', 'TRUE', '1', ou vazio (linhas antigas sem o campo)
+    var estaAtivo = ativo === 'SIM' || ativo === 'TRUE' || ativo === '1' || ativo === '';
+
+    return idRubNaLinha === String(idRubrica).trim() && estaAtivo;
+  });
+
+  console.log('obterMemoriaRubrica: linhas encontradas =', resultado.length);
+
+  return resultado;
 }
 
 function excluirRubrica(id, email) {
@@ -1683,9 +1707,6 @@ function salvarVersaoContrato(idContrato, email) {
   return true;
 }
 
-function obterMemoriaRubrica(idRubrica) {
-  return listarMemoriaRubrica(idRubrica);
-}
 
 // ─────────────────────────────────────────────────────────────
 // BLOCO: parseMoeda — conversão robusta de moeda pt-BR → number
