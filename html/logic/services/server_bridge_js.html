@@ -334,6 +334,31 @@ const GAS = {
   },
 
   /**
+ * BLOCO: Comunicação — processos de produção (mod_comunicacao_processos.gs)
+ */
+  comunicacaoProcessos: {
+    listar: function(cb, err) {
+      GAS._call('listarProcessosComunicacao', [], cb, err);
+    },
+
+    criar: function(dados, cb, err) {
+      GAS._call('criarProcessoComunicacao', [dados], cb, err);
+    },
+
+    atualizar: function(id, dados, cb, err) {
+      GAS._call('atualizarProcessoComunicacao', [id, dados], cb, err);
+    },
+
+    excluir: function(id, cb, err) {
+      GAS._call('excluirProcessoComunicacao', [id], cb, err);
+    },
+
+    mudarStatus: function(id, status, cb, err) {
+      GAS._call('mudarStatusProcesso', [id, status], cb, err);
+    }
+  },
+
+  /**
    * BLOCO: Equipes — colaboradores, escalas, férias (mod_equipes.gs)
    */
   equipes: {

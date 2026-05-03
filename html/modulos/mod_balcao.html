@@ -1,219 +1,223 @@
-<!--
-@file mod_balcao.html
-@type module
-@description Balcão de atendimento — registro e acompanhamento de atendimentos ao público.
-@responsibility Estrutura HTML + JS da aba #aba-balcao.
-@dependencies GAS.balcao, showLoader, escaparHTML, temPermissao
--->
 <section id="aba-balcao" class="tab-content hidden pb-20">
 
   <div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
 
     <!-- HEADER -->
-    <div class="p-5 border-b border-slate-100 bg-slate-50/50 flex flex-wrap justify-between items-center gap-3">
+    <div class="p-5 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
       <div>
-        <h3 class="font-black text-slate-800 uppercase tracking-tighter text-sm">
-          <i class="fas fa-headset text-orange-400 mr-2"></i>Balcão de Atendimento
+        <h3 class="font-black text-slate-800 uppercase text-sm">
+          <i class="fas fa-bullhorn text-orange-400 mr-2"></i>Central de Comunicação
         </h3>
-        <p class="text-[10px] text-slate-400 font-medium">Registro de atendimentos e solicitações ao público</p>
+        <p class="text-[10px] text-slate-400">Produção, campanhas e publicização</p>
       </div>
-      <div class="flex gap-2 items-center flex-wrap">
-        <div class="relative">
-          <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 text-xs"></i>
-          <input type="text" id="balcaoBusca" placeholder="Buscar atendimento..."
-            oninput="_balcaoFiltrar()"
-            style="padding:8px 12px 8px 30px;border:1.5px solid #e2e8f0;border-radius:12px;font-size:12px;outline:none;width:180px"
-            onfocus="this.style.borderColor='#f97316'" onblur="this.style.borderColor='#e2e8f0'">
-        </div>
-        <select id="balcaoFiltroStatus" onchange="_balcaoFiltrar()"
-          style="padding:8px 12px;border:1.5px solid #e2e8f0;border-radius:12px;font-size:12px;outline:none;color:#475569">
-          <option value="">Todos os status</option>
-          <option value="Aberto">Aberto</option>
-          <option value="Em Atendimento">Em Atendimento</option>
-          <option value="Aguardando">Aguardando</option>
-          <option value="Resolvido">Resolvido</option>
-          <option value="Encerrado">Encerrado</option>
-        </select>
-        <button onclick="mostrarAba('aba-nova-reserva')"
-          class="bg-purple-100 hover:bg-purple-200 text-purple-700 text-[10px] font-black px-4 py-2 rounded-xl transition-all uppercase flex items-center gap-1.5">
-          <i class="fas fa-calendar-plus text-[9px]"></i>Nova Reserva
-        </button>
-        <button onclick="abrirModalAtendimento()" data-requer-permissao="balcao:editar"
-          class="bg-orange-500 hover:bg-orange-600 text-white text-[10px] font-black px-4 py-2 rounded-xl transition-all uppercase flex items-center gap-1.5">
-          <i class="fas fa-plus text-[9px]"></i>Novo Atendimento
-        </button>
-      </div>
+
+      <button onclick="abrirModalAtendimento()"
+        class="bg-orange-500 hover:bg-orange-600 text-white text-[10px] font-black px-4 py-2 rounded-xl">
+        <i class="fas fa-plus mr-1"></i>Novo Processo
+      </button>
+    </div>
+
+    <!-- FILTROS -->
+    <div class="p-4 flex gap-3 flex-wrap border-b">
+
+      <input id="balcaoBusca" placeholder="Buscar..."
+        class="border rounded-lg px-3 py-2 text-xs w-60">
+
+      <select id="balcaoFiltroStatus"
+        class="border rounded-lg px-3 py-2 text-xs">
+        <option value="">Todos</option>
+        <option>Solicitado</option>
+        <option>Em andamento</option>
+        <option>Concluído</option>
+      </select>
+
     </div>
 
     <!-- CONTADORES -->
-    <div id="balcaoContadores" class="hidden px-5 py-3 border-b border-slate-100 bg-orange-50/30 flex flex-wrap gap-4"></div>
+    <div id="balcaoContadores" class="flex gap-2 p-3 text-xs"></div>
 
-    <!-- TABELA -->
-    <div id="balcaoContainer" class="overflow-x-auto">
-      <div class="p-8 text-center">
-        <i class="fas fa-spinner animate-spin text-orange-300 text-xl"></i>
-        <p class="text-[11px] text-slate-400 mt-2">Carregando...</p>
-      </div>
-    </div>
+    <!-- CONTEÚDO -->
+    <div id="balcaoContainer"></div>
 
   </div>
-
 </section>
 
 <script>
 var _balcaoCache = [];
 
-function _balcaoStatusCls(s) {
-  return {
-    'Aberto':          'background:#fff7ed;color:#c2410c',
-    'Em Atendimento':  'background:#fef3c7;color:#92400e',
-    'Aguardando':      'background:#eff6ff;color:#1d4ed8',
-    'Resolvido':       'background:#d1fae5;color:#065f46',
-    'Encerrado':       'background:#f1f5f9;color:#475569'
-  }[s] || 'background:#f1f5f9;color:#475569';
-}
-
+// ==========================
+// CARREGAR
+// ==========================
 function carregarBalcao() {
-  var c = document.getElementById('balcaoContainer');
-  if (c) c.innerHTML = '<div class="p-8 text-center"><i class="fas fa-spinner animate-spin text-orange-300 text-xl"></i></div>';
-  GAS.balcao.listar(function(lista) {
+  GAS.comunicacaoProcessos.listar(function(lista){
     _balcaoCache = lista || [];
-    _balcaoRenderizarContadores();
     _balcaoFiltrar();
-  }, function() {
-    if (c) c.innerHTML = '<div class="p-8 text-center text-red-400 text-sm"><i class="fas fa-exclamation-triangle mr-2"></i>Erro ao carregar atendimentos.</div>';
+    _balcaoRenderizarContadores();
   });
 }
 
-function _balcaoRenderizarContadores() {
-  var el = document.getElementById('balcaoContadores');
-  if (!el) return;
-  var contadores = {};
-  _balcaoCache.forEach(function(a) { var s = a.status||'Aberto'; contadores[s] = (contadores[s]||0)+1; });
-  if (!Object.keys(contadores).length) { el.classList.add('hidden'); return; }
-  el.classList.remove('hidden');
-  el.innerHTML = Object.keys(contadores).map(function(s) {
-    return '<span style="font-size:10px;font-weight:900;padding:3px 10px;border-radius:99px;' + _balcaoStatusCls(s) + '">' + s + ': ' + contadores[s] + '</span>';
+// ==========================
+// FILTRAR
+// ==========================
+function _balcaoFiltrar(){
+
+  var q = (document.getElementById('balcaoBusca').value || '').toLowerCase();
+  var st = document.getElementById('balcaoFiltroStatus').value;
+
+  var filtrados = _balcaoCache.filter(function(a){
+
+    var matchBusca =
+      (a.titulo || a.assunto || '').toLowerCase().includes(q) ||
+      (a.descricao || '').toLowerCase().includes(q);
+
+    var matchStatus = !st || a.status === st;
+
+    return matchBusca && matchStatus;
+  });
+
+  renderizarBalcao(filtrados);
+}
+
+// ==========================
+// CONTADORES
+// ==========================
+function _balcaoRenderizarContadores(){
+
+  var c = document.getElementById('balcaoContadores');
+
+  var map = {};
+
+  _balcaoCache.forEach(function(a){
+    var s = a.status || 'Sem status';
+    map[s] = (map[s]||0)+1;
+  });
+
+  c.innerHTML = Object.keys(map).map(function(s){
+    return `<div class="px-3 py-1 bg-slate-100 rounded">${s}: ${map[s]}</div>`;
   }).join('');
 }
 
-function _balcaoFiltrar() {
-  var busca = (document.getElementById('balcaoBusca')?.value||'').toLowerCase();
-  var st    = document.getElementById('balcaoFiltroStatus')?.value || '';
-  var c     = document.getElementById('balcaoContainer');
-  if (!c) return;
+// ==========================
+// RENDER
+// ==========================
+function renderizarBalcao(lista){
 
-  var lista = _balcaoCache.filter(function(a) {
-    if (busca && !String(a.solicitante||'').toLowerCase().includes(busca) &&
-                 !String(a.assunto||'').toLowerCase().includes(busca)) return false;
-    if (st && a.status !== st) return false;
-    return true;
-  });
+  lista = lista || _balcaoCache;
+
+  var c = document.getElementById('balcaoContainer');
 
   if (!lista.length) {
-    c.innerHTML = '<div class="p-12 text-center"><i class="fas fa-headset text-slate-200 text-4xl mb-3"></i>'
-      + '<p class="text-slate-400 font-bold text-sm">' + (_balcaoCache.length ? 'Nenhum atendimento encontrado.' : 'Nenhum atendimento registrado.') + '</p>'
-      + (temPermissao('balcao','editar') ? '<button onclick="abrirModalAtendimento()" class="mt-4 bg-orange-500 text-white text-xs font-black px-4 py-2 rounded-xl">+ Novo Atendimento</button>' : '')
-      + '</div>';
+    c.innerHTML = '<div class="p-10 text-center text-slate-400">Nenhum processo</div>';
     return;
   }
 
-  // Ordena: abertos primeiro
-  lista.sort(function(a, b) {
-    var ord = {'Aberto':0,'Em Atendimento':1,'Aguardando':2,'Resolvido':3,'Encerrado':4};
-    return (ord[a.status]||9) - (ord[b.status]||9);
-  });
-
-  c.innerHTML = '<table class="w-full text-sm"><thead>'
-    + '<tr class="border-b border-slate-100 bg-slate-50/50 text-left">'
-    + '<th class="px-5 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Solicitante</th>'
-    + '<th class="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Assunto</th>'
-    + '<th class="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Status</th>'
-    + '<th class="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Responsável</th>'
-    + '<th class="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Data</th>'
-    + '<th class="px-4 py-3"></th></tr></thead><tbody>'
-    + lista.map(function(a) {
-        var dt = '';
-        try { dt = a.criadoEm ? new Date(a.criadoEm).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : ''; } catch(e){}
-        return '<tr class="border-b border-slate-50 hover:bg-slate-50/50">'
-          + '<td class="px-5 py-3 font-semibold text-slate-700 text-xs">' + escaparHTML(a.solicitante||'—') + '</td>'
-          + '<td class="px-4 py-3 text-[11px] text-slate-600 max-w-xs"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;max-width:200px">' + escaparHTML(a.assunto||'—') + '</span></td>'
-          + '<td class="px-4 py-3"><span style="font-size:9px;font-weight:900;padding:2px 8px;border-radius:99px;' + _balcaoStatusCls(a.status) + '">' + escaparHTML(a.status||'') + '</span></td>'
-          + '<td class="px-4 py-3 text-[11px] text-slate-500">' + escaparHTML(a.responsavel||'—') + '</td>'
-          + '<td class="px-4 py-3 text-[10px] text-slate-400">' + escaparHTML(dt) + '</td>'
-          + '<td class="px-4 py-3">'
-          + (temPermissao('balcao','editar') ? '<button onclick="abrirModalAtendimento(\'' + escaparHTML(a.id) + '\')" class="text-orange-400 hover:text-orange-600 mr-2"><i class="fas fa-edit text-xs"></i></button>' : '')
-          + (temPermissao('balcao','excluir') ? '<button onclick="_excluirAtendimento(\'' + escaparHTML(a.id) + '\')" class="text-red-300 hover:text-red-500"><i class="fas fa-trash text-xs"></i></button>' : '')
-          + '</td></tr>';
-      }).join('') + '</tbody></table>';
+  c.innerHTML = `
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="bg-slate-50 text-left text-xs">
+          <th class="p-3">Tipo</th>
+          <th class="p-3">Título</th>
+          <th class="p-3">Status</th>
+          <th class="p-3">Prazo</th>
+          <th class="p-3">Responsável</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        ${lista.map(a => `
+          <tr class="border-b hover:bg-slate-50">
+            <td class="p-3">${a.tipo || '-'}</td>
+            <td class="p-3 font-semibold">${a.titulo || a.assunto || '-'}</td>
+            <td class="p-3">${a.status || '-'}</td>
+            <td class="p-3">${a.prazo || '-'}</td>
+            <td class="p-3">${a.responsavel || '-'}</td>
+            <td class="p-3">
+              <button onclick="editarAtendimento('${a.id}')">✏️</button>
+              <button onclick="excluirAtendimento('${a.id}')">🗑️</button>
+            </td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
 }
 
-function abrirModalAtendimento(id) {
-  var dado = id ? _balcaoCache.find(function(a){ return a.id===id; }) : {};
-  dado = dado || {};
-  var _rhOpts = (typeof _rhCache !== 'undefined' ? _rhCache : [])
-    .map(function(p){ return '<option value="' + escaparHTML(p.nome||'') + '">'; }).join('');
+// ==========================
+// MODAL
+// ==========================
+function abrirModalAtendimento(atual){
+
+  atual = atual || {};
+
   Swal.fire({
-    title: id ? 'Editar Atendimento' : 'Novo Atendimento',
-    width: Math.min(540, window.innerWidth-32),
-    showCancelButton: true,
-    confirmButtonText: '<i class="fas fa-save mr-1"></i>Salvar',
-    cancelButtonText: 'Cancelar',
-    confirmButtonColor: '#f97316',
-    customClass:{ popup:'rounded-3xl', confirmButton:'rounded-xl font-black text-sm', cancelButton:'rounded-xl font-bold text-sm' },
-    html: '<div class="text-left" style="padding:0 20px 16px">'
-      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">'
-      + '<div><label style="display:block;font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">Solicitante *</label>'
-      + '<input id="balcSolic" style="width:100%;padding:9px 13px;font-size:12px;border:1.5px solid #e2e8f0;border-radius:12px;outline:none;box-sizing:border-box" value="' + escaparHTML(dado.solicitante||'') + '" placeholder="Nome do solicitante"></div>'
-      + '<div><label style="display:block;font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">Status</label>'
-      + '<select id="balcStatus" style="width:100%;padding:9px 13px;font-size:12px;border:1.5px solid #e2e8f0;border-radius:12px;outline:none">'
-      + ['Aberto','Em Atendimento','Aguardando','Resolvido','Encerrado'].map(function(s){ return '<option'+(dado.status===s?' selected':'')+'>'+s+'</option>'; }).join('')
-      + '</select></div></div>'
-      + '<div style="margin-bottom:10px"><label style="display:block;font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">Assunto *</label>'
-      + '<input id="balcAssunto" style="width:100%;padding:9px 13px;font-size:13px;border:1.5px solid #e2e8f0;border-radius:12px;outline:none;box-sizing:border-box" value="' + escaparHTML(dado.assunto||'') + '" placeholder="Descreva o assunto do atendimento"></div>'
-      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">'
-      + '<div><label style="display:block;font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">Responsável</label>'
-      + '<datalist id="rh-dl-balc">' + _rhOpts + '</datalist>'
-      + '<input id="balcResp" list="rh-dl-balc" style="width:100%;padding:9px 13px;font-size:12px;border:1.5px solid #e2e8f0;border-radius:12px;outline:none;box-sizing:border-box" value="' + escaparHTML(dado.responsavel||'') + '" placeholder="Quem está atendendo"></div>'
-      + '<div><label style="display:block;font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">Canal</label>'
-      + '<select id="balcCanal" style="width:100%;padding:9px 13px;font-size:12px;border:1.5px solid #e2e8f0;border-radius:12px;outline:none">'
-      + ['Presencial','Telefone','E-mail','WhatsApp','Outro'].map(function(c){ return '<option'+(dado.canal===c?' selected':'')+'>'+c+'</option>'; }).join('')
-      + '</select></div></div>'
-      + '<div><label style="display:block;font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">Observações</label>'
-      + '<textarea id="balcObs" style="width:100%;padding:9px 13px;font-size:12px;border:1.5px solid #e2e8f0;border-radius:12px;outline:none;resize:vertical;min-height:60px;box-sizing:border-box" placeholder="Detalhes adicionais...">' + escaparHTML(dado.obs||'') + '</textarea></div></div>',
-    preConfirm: function() {
-      var s = (document.getElementById('balcSolic')?.value||'').trim();
-      var a = (document.getElementById('balcAssunto')?.value||'').trim();
-      if (!s || !a) { Swal.showValidationMessage('Solicitante e Assunto são obrigatórios'); return false; }
-      return { id:dado.id||null, solicitante:s, assunto:a,
-               status:document.getElementById('balcStatus')?.value,
-               responsavel:document.getElementById('balcResp')?.value.trim(),
-               canal:document.getElementById('balcCanal')?.value,
-               obs:document.getElementById('balcObs')?.value.trim() };
+    title: atual.id ? 'Editar Processo' : 'Novo Processo',
+    html: `
+      <input id="balcSolicitante" class="swal2-input" placeholder="Responsável" value="${atual.responsavel||''}">
+      <input id="balcAssunto" class="swal2-input" placeholder="Título" value="${atual.titulo||atual.assunto||''}">
+      <select id="balcCanal" class="swal2-input">
+        <option value="grafico">Gráfico</option>
+        <option value="foto">Foto</option>
+        <option value="video">Vídeo</option>
+        <option value="rece">Publicação</option>
+      </select>
+      <select id="balcStatus" class="swal2-input">
+        <option>Solicitado</option>
+        <option>Em andamento</option>
+        <option>Concluído</option>
+      </select>
+      <textarea id="balcObs" class="swal2-textarea" placeholder="Descrição">${atual.descricao||''}</textarea>
+    `,
+    preConfirm: function(){
+
+      return {
+        id: atual.id || null,
+
+        titulo: document.getElementById('balcAssunto').value,
+        descricao: document.getElementById('balcObs').value,
+        tipo: document.getElementById('balcCanal').value,
+
+        status: document.getElementById('balcStatus').value,
+        responsavel: document.getElementById('balcSolicitante').value,
+
+        origem: 'manual'
+      };
     }
-  }).then(function(r) {
-    if (!r.isConfirmed) return;
-    showLoader(true);
-    GAS.balcao.salvar(r.value, function() {
-      showLoader(false); carregarBalcao();
-    }, function(e) { showLoader(false); Swal.fire('Erro', e.message,'error'); });
+
+  }).then(function(r){
+
+    if (!r.value) return;
+
+    if (r.value.id) {
+      GAS.comunicacaoProcessos.atualizar(r.value.id, r.value, carregarBalcao);
+    } else {
+      GAS.comunicacaoProcessos.criar(r.value, carregarBalcao);
+    }
+
   });
 }
 
-function _excluirAtendimento(id) {
-  Swal.fire({ title:'Excluir atendimento?', icon:'warning', showCancelButton:true,
-    confirmButtonColor:'#ef4444', confirmButtonText:'Excluir', cancelButtonText:'Cancelar',
-    customClass:{popup:'rounded-3xl',confirmButton:'rounded-xl font-black text-sm',cancelButton:'rounded-xl font-bold text-sm'}
-  }).then(function(r) {
-    if (!r.isConfirmed) return;
-    showLoader(true);
-    GAS.balcao.excluir(id, function() {
-      showLoader(false); carregarBalcao();
-    }, function(e) { showLoader(false); Swal.fire('Erro', e.message,'error'); });
-  });
+// ==========================
+// EDITAR
+// ==========================
+function editarAtendimento(id){
+  var atual = _balcaoCache.find(a => a.id === id);
+  abrirModalAtendimento(atual);
 }
 
-window._onShow_aba_balcao = function() {
-  if (!_balcaoCache.length) carregarBalcao();
+// ==========================
+// EXCLUIR
+// ==========================
+function excluirAtendimento(id){
+  GAS.comunicacaoProcessos.excluir(id, carregarBalcao);
+}
+
+// ==========================
+window._onShow_aba_balcao = function(){
+  carregarBalcao();
 };
+
+// ==========================
+document.getElementById('balcaoBusca').addEventListener('input', _balcaoFiltrar);
+document.getElementById('balcaoFiltroStatus').addEventListener('change', _balcaoFiltrar);
+
 </script>
