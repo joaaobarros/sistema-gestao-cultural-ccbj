@@ -89,6 +89,7 @@ function onDragOverItem(e, index) {
 
 function onDropReorder(e, index) {
   e.preventDefault();
+  e.stopPropagation();
   if (dragOrigem !== 'favorito' || dragIndex === null) return;
   const item = favoritos.splice(dragIndex, 1)[0];
   favoritos.splice(index, 0, item);

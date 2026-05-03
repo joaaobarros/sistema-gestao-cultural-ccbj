@@ -205,8 +205,15 @@ document.addEventListener('DOMContentLoaded', function () {
   const favContainer = document.getElementById('favoritosContainer');
   if (favContainer) {
     favContainer.addEventListener('dragover', e => e.preventDefault());
+    favContainer.addEventListener('drop', onDropFavoritos);
     GAS.sessao.carregarPreferencias(function(prefs) { iniciarPreferencias(prefs); });
   }
+
+  document.addEventListener('dragend', function() {
+    dragItem   = null;
+    dragOrigem = null;
+    dragIndex  = null;
+  });
 
   /**
    * ========================================
