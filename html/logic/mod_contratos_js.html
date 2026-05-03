@@ -13,32 +13,22 @@
 
 // _ctrCache é declarado em GestaoContratos.html (carregado após este módulo)
 var _ctrColapsados = {}; // { [idContrato]: true/false }
-
 function carregarDadosContratos(cb) {
   GAS.contratos.obterDados(function(d) {
 
-    // recria objeto (evita referência antiga)
-    _ctrCache = JSON.parse(JSON.stringify(
-      d || { contratos:[], metas:[], indicadores:[], rubricas:[] }
-    ));
+    console.log('RETORNO BACKEND:', d);
 
-    // hardening completo (evita undefined no render)
-    _ctrCache.contratos   = Array.isArray(_ctrCache.contratos)   ? _ctrCache.contratos   : [];
-    _ctrCache.metas       = Array.isArray(_ctrCache.metas)       ? _ctrCache.metas       : [];
-    _ctrCache.indicadores = Array.isArray(_ctrCache.indicadores) ? _ctrCache.indicadores : [];
-    _ctrCache.rubricas    = Array.isArray(_ctrCache.rubricas)    ? _ctrCache.rubricas    : [];
+    _ctrCache = d || { contratos:[], metas:[], indicadores:[], rubricas:[] };
 
-    // callback SEMPRE depois de dados válidos
-    if (typeof cb === 'function') cb();
+    if (!_ctrCache.rubricas) _ctrCache.rubricas = [];
+
+    if (typeof cb === 'function') {
+      cb();
+    }
 
   }, function(err) {
-
     console.error('Erro contratos:', err);
-
     Swal.fire('Erro','Falha ao carregar contratos','error');
-
-    // garante que o fluxo não trava
-    if (typeof cb === 'function') cb();
   });
 }
 
@@ -451,24 +441,30 @@ function abrirModalContrato(dados) {
       if (elC) _mascaraMoeda(elC);
     },
     preConfirm: function() {
-      var nome = document.getElementById('ctrNome')?.value.trim();
-      if (!nome) { Swal.showValidationMessage('Nome obrigatório.'); return false; }
-      return {
-        id:            dados.id||null,
-        nome:          nome,
-        numero:        document.getElementById('ctrNumero')?.value.trim(),
-        descricao:     document.getElementById('ctrDesc')?.value.trim(),
-        vigIni:        document.getElementById('ctrIni')?.value.trim(),
-        vigFim:        document.getElementById('ctrFim')?.value.trim(),
-        status:        document.getElementById('ctrStatus')?.value,
-        valorTotal:    _parseMoeda(document.getElementById('ctrValorTotal')?.value),
-        fonteRecurso:  document.getElementById('ctrFonte')?.value.trim(),
-        contrapartida: _parseMoeda(document.getElementById('ctrContrapartida')?.value),
-        modalidade:    document.getElementById('ctrModalidade')?.value,
-        obsFinanceiro: document.getElementById('ctrObsFinan')?.value.trim()
-      };
-    }
-  }).then(function(r) {
+  var nome = document.getElementById('ctrNome')?.value.trim();
+  if (!nome) {
+    Swal.showValidationMessage('Nome obrigatório.');
+    return false;
+  }
+
+  return {
+    id:            dados.id || null,
+    nome:          nome,
+    numero:        document.getElementById('ctrNumero')?.value.trim(),
+    descricao:     document.getElementById('ctrDesc')?.value.trim(),
+    vigIni:        document.getElementById('ctrIni')?.value.trim(),
+    vigFim:        document.getElementById('ctrFim')?.value.trim(),
+    status:        document.getElementById('ctrStatus')?.value,
+    valorTotal:    _parseMoeda(document.getElementById('ctrValorTotal')?.value),
+    fonteRecurso:  document.getElementById('ctrFonte')?.value.trim(),
+    contrapartida: _parseMoeda(document.getElementById('ctrContrapartida')?.value),
+    modalidade:    document.getElementById('ctrModalidade')?.value,
+    obsFinanceiro: document.getElementById('ctrObsFinan')?.value.trim()
+  };
+}
+  
+}).then(function(r) {
+
     if (!r.isConfirmed) return;
 
     showLoader(true);
@@ -479,18 +475,19 @@ function abrirModalContrato(dados) {
 
       function(){
 
+        console.log('SALVOU → aguardando reload');
+
         showLoader(false);
 
-        // reset de estado
         _memoriaCalculo = [];
         window._memTotal = 0;
-        _ctrCache = null;
 
         carregarDadosContratos(function(){
 
+          console.log('DADOS RECARREGADOS:', _ctrCache.rubricas);
+
           renderizarContratos();
 
-          // só executa depois do render
           if (typeof codipPopularContratos === 'function') {
             codipPopularContratos();
           }
@@ -510,19 +507,54 @@ function editarContrato(id) {
 }
 
 function excluirContratoUI(id) {
-  const c = (_ctrCache.contratos||[]).find(function(x){ return x.id===id; })||{};
+  const c = (_ctrCache.contratos || []).find(function(x){ return x.id === id; }) || {};
+
   Swal.fire({
     title: 'Excluir contrato?',
-    html: `<p class="text-sm text-slate-600">O contrato <b>${escaparHTML(c.nome||'')}</b> será removido.<br><span class="text-[11px] text-slate-400">Metas e indicadores vinculados não serão removidos automaticamente.</span></p>`,
-    icon: 'warning', showCancelButton:true, confirmButtonColor:'#ef4444',
-    confirmButtonText:'<i class="fas fa-trash mr-1"></i>Excluir', cancelButtonText:'Cancelar',
-    customClass:{ popup:'rounded-3xl', confirmButton:'rounded-xl font-black text-sm', cancelButton:'rounded-xl font-bold text-sm' }
+    html: `<p class="text-sm text-slate-600">O contrato <b>${escaparHTML(c.nome || '')}</b> será removido.<br><span class="text-[11px] text-slate-400">Metas e indicadores vinculados não serão removidos automaticamente.</span></p>`,
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonColor: '#ef4444',
+    confirmButtonText: '<i class="fas fa-trash mr-1"></i>Excluir',
+    cancelButtonText: 'Cancelar',
+    customClass: {
+      popup: 'rounded-3xl',
+      confirmButton: 'rounded-xl font-black text-sm',
+      cancelButton: 'rounded-xl font-bold text-sm'
+    }
   }).then(function(r){
+
     if (!r.isConfirmed) return;
+
     showLoader(true);
-    GAS.contratos.excluir(id, AppState.usuario.email,
-      function(){ showLoader(false); carregarDadosContratos(renderizarContratos); },
-      _handleServerError);
+
+    GAS.contratos.excluir(
+      id,
+      AppState.usuario.email,
+
+      function(){
+
+        console.log('EXCLUIU → aguardando reload');
+
+        showLoader(false);
+
+        carregarDadosContratos(function(){
+
+          console.log('DADOS RECARREGADOS:', _ctrCache.rubricas);
+
+          renderizarContratos();
+
+          if (typeof codipPopularContratos === 'function') {
+            codipPopularContratos();
+          }
+
+        });
+
+      },
+
+      _handleServerError
+    );
+
   });
 }
 
@@ -570,33 +602,89 @@ function abrirModalMeta(idContrato, dados) {
         titulo:titulo, descricao:document.getElementById('metDesc')?.value.trim() };
     }
   }).then(function(r){
-    if (!r.isConfirmed) return;
-    showLoader(true);
-    GAS.contratos.salvarMeta(r.value, AppState.usuario.email,
-      function(){ showLoader(false); carregarDadosContratos(renderizarContratos); },
-      _handleServerError);
-  });
+  if (!r.isConfirmed) return;
+
+  showLoader(true);
+
+  GAS.contratos.salvarMeta(
+    r.value,
+    AppState.usuario.email,
+
+    function(){
+
+      showLoader(false);
+
+      carregarDadosContratos(function(){
+
+        renderizarContratos();
+
+        if (typeof codipPopularContratos === 'function') {
+          codipPopularContratos();
+        }
+
+      });
+
+    },
+
+    _handleServerError
+  );
+});
 }
 
 function editarMeta(id) {
-  const m = (_ctrCache.metas||[]).find(function(x){ return x.id===id; });
+  const m = (_ctrCache.metas || []).find(function(x){ return x.id === id; });
   if (m) abrirModalMeta(m.idContrato, m);
 }
 
 function excluirMetaUI(id) {
-  const m = (_ctrCache.metas||[]).find(function(x){ return x.id===id; })||{};
+  const m = (_ctrCache.metas || []).find(function(x){ return x.id === id; }) || {};
+
   Swal.fire({
-    title:'Excluir meta?',
-    html:`<p class="text-sm text-slate-600">Meta <b>${escaparHTML(m.numero||'')} — ${escaparHTML(m.titulo||'')}</b></p>`,
-    icon:'warning', showCancelButton:true, confirmButtonColor:'#ef4444',
-    confirmButtonText:'<i class="fas fa-trash mr-1"></i>Excluir', cancelButtonText:'Cancelar',
-    customClass:{ popup:'rounded-3xl', confirmButton:'rounded-xl font-black text-sm', cancelButton:'rounded-xl font-bold text-sm' }
+    title: 'Excluir meta?',
+    html: `<p class="text-sm text-slate-600">Meta <b>${escaparHTML(m.numero || '')} — ${escaparHTML(m.titulo || '')}</b></p>`,
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonColor: '#ef4444',
+    confirmButtonText: '<i class="fas fa-trash mr-1"></i>Excluir',
+    cancelButtonText: 'Cancelar',
+    customClass: {
+      popup: 'rounded-3xl',
+      confirmButton: 'rounded-xl font-black text-sm',
+      cancelButton: 'rounded-xl font-bold text-sm'
+    }
   }).then(function(r){
+
     if (!r.isConfirmed) return;
+
     showLoader(true);
-    GAS.contratos.excluirMeta(id, AppState.usuario.email,
-      function(){ showLoader(false); carregarDadosContratos(renderizarContratos); },
-      _handleServerError);
+
+    GAS.contratos.excluirMeta(
+      id,
+      AppState.usuario.email,
+
+      function(){
+
+        console.log('EXCLUIU META → aguardando reload');
+
+        showLoader(false);
+
+        carregarDadosContratos(function(){
+
+          console.log('DADOS RECARREGADOS:', _ctrCache.rubricas);
+
+          renderizarContratos();
+
+          if (typeof codipPopularContratos === 'function') {
+            codipPopularContratos();
+          }
+
+        });
+
+      },
+
+      _handleServerError
+    );
+
   });
 }
 
@@ -701,12 +789,33 @@ function abrirModalIndicador(idMeta, idContrato, dados) {
         meses:mesesPorAno, ano:anoInicio };
     }
   }).then(function(r){
-    if (!r.isConfirmed) return;
-    showLoader(true);
-    GAS.contratos.salvarIndicador(r.value, AppState.usuario.email,
-      function(){ showLoader(false); carregarDadosContratos(function(){ renderizarContratos(); codipPopularContratos(); }); },
-      _handleServerError);
-  });
+  if (!r.isConfirmed) return;
+
+  showLoader(true);
+
+  GAS.contratos.salvarIndicador(
+    r.value,
+    AppState.usuario.email,
+
+    function(){
+
+      showLoader(false);
+
+      carregarDadosContratos(function(){
+
+        renderizarContratos();
+
+        if (typeof codipPopularContratos === 'function') {
+          codipPopularContratos();
+        }
+
+      });
+
+    },
+
+    _handleServerError
+  );
+});
 }
 
 function editarIndicador(id) {
@@ -716,16 +825,51 @@ function editarIndicador(id) {
 
 function excluirIndicadorUI(id) {
   Swal.fire({
-    title:'Excluir indicador?', text:'Esta ação não pode ser desfeita.',
-    icon:'warning', showCancelButton:true, confirmButtonColor:'#ef4444',
-    confirmButtonText:'<i class="fas fa-trash mr-1"></i>Excluir', cancelButtonText:'Cancelar',
-    customClass:{ popup:'rounded-3xl', confirmButton:'rounded-xl font-black text-sm', cancelButton:'rounded-xl font-bold text-sm' }
+    title: 'Excluir indicador?',
+    text: 'Esta ação não pode ser desfeita.',
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonColor: '#ef4444',
+    confirmButtonText: '<i class="fas fa-trash mr-1"></i>Excluir',
+    cancelButtonText: 'Cancelar',
+    customClass: {
+      popup: 'rounded-3xl',
+      confirmButton: 'rounded-xl font-black text-sm',
+      cancelButton: 'rounded-xl font-bold text-sm'
+    }
   }).then(function(r){
+
     if (!r.isConfirmed) return;
+
     showLoader(true);
-    GAS.contratos.excluirIndicador(id, AppState.usuario.email,
-      function(){ showLoader(false); carregarDadosContratos(renderizarContratos); },
-      _handleServerError);
+
+    GAS.contratos.excluirIndicador(
+      id,
+      AppState.usuario.email,
+
+      function(){
+
+        console.log('EXCLUIU INDICADOR → aguardando reload');
+
+        showLoader(false);
+
+        carregarDadosContratos(function(){
+
+          console.log('DADOS RECARREGADOS:', _ctrCache.rubricas);
+
+          renderizarContratos();
+
+          if (typeof codipPopularContratos === 'function') {
+            codipPopularContratos();
+          }
+
+        });
+
+      },
+
+      _handleServerError
+    );
+
   });
 }
 
