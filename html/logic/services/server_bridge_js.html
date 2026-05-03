@@ -36,6 +36,10 @@ const GAS = {
     runner[fnName].apply(runner, Array.isArray(args) ? args : (args !== undefined ? [args] : []));
   },
 
+  _stub: function(cb) {
+    if (typeof cb === 'function') cb({ ok: false, stub: true, msg: 'Funcionalidade em desenvolvimento' });
+  },
+
   /**
    * BLOCO: Serviços de reserva
    * @context CRUD e disponibilidade de reservas.
@@ -180,7 +184,7 @@ const GAS = {
       GAS._call('chamarIA', [prompt, ctx], cb, err);
     },
     chat: function(mensagens, ctx, cb, err) {
-      GAS._call('chamarIAChat', [mensagens, ctx], cb, err);
+      GAS._stub(cb);
     },
     reescreverDescricao: function(texto, setor, cb, err) {
       GAS._call('reescreverDescricaoAcaoIA', [texto, setor], cb, err);
@@ -292,6 +296,34 @@ const GAS = {
     gerarDownload: function(conteudo, cb, err) {
       GAS._call('gerarDocumentoDownload', [conteudo], cb, err);
     }
+  },
+
+  /**
+   * BLOCO: Serviços de equipes — STUB
+   * @context Backend em desenvolvimento (mod_equipes.gs). Retorna stub sem chamar o servidor.
+   */
+  equipes: {
+    obterFuncionarios: function(cb, err) { GAS._stub(cb); },
+    salvarFuncionario: function(dados, cb, err) { GAS._stub(cb); },
+    obterEscalas: function(cb, err) { GAS._stub(cb); },
+    salvarEscala: function(dados, cb, err) { GAS._stub(cb); },
+    obterAvaliacoes: function(cb, err) { GAS._stub(cb); },
+    registrarAvaliacao: function(dados, cb, err) { GAS._stub(cb); },
+    obterFerias: function(cb, err) { GAS._stub(cb); },
+    solicitarFerias: function(dados, cb, err) { GAS._stub(cb); }
+  },
+
+  /**
+   * BLOCO: Serviços financeiros — STUB
+   * @context Backend em desenvolvimento (mod_financeiro.gs). Retorna stub sem chamar o servidor.
+   */
+  financeiro: {
+    obterContratacoes: function(cb, err) { GAS._stub(cb); },
+    salvarContratacao: function(dados, cb, err) { GAS._stub(cb); },
+    excluirContratacao: function(id, email, cb, err) { GAS._stub(cb); },
+    obterPagamentos: function(cb, err) { GAS._stub(cb); },
+    registrarPagamento: function(dados, cb, err) { GAS._stub(cb); },
+    obterFluxoCaixa: function(cb, err) { GAS._stub(cb); }
   }
 
 };
