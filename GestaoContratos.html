@@ -775,18 +775,21 @@ var _memoriaCalculo = [];
 
 // Lê valores diretamente dos inputs do DOM (após a máscara já ter rodado)
 function _memCalcularItem(i){
-  return (Number(i.qtd)||0) * (Number(i.valor)||0);
+  const qtd = Number(i.qtd) || 0;
+
+  const valor = typeof i.valor === 'string'
+    ? Number(i.valor.replace(/\./g,'').replace(',','.'))
+    : Number(i.valor) || 0;
+
+  return qtd * valor;
 }
 
 function _memAtualizarTotal(){
-  const total = _memoriaCalculo.reduce(function(s,i){
-    return s + (Number(i.qtd)||0) * (Number(i.valor)||0);
-  }, 0);
+  const total = _memoriaCalculo.reduce((s,i)=>s + _memCalcularItem(i),0);
 
-  var el = document.getElementById('memTotal');
-  if (el) {
-    el.textContent = _fmtMoeda(total);
-  }
+  window._memTotal = total; 
+
+  document.getElementById('memTotal').textContent = _fmtMoeda(total);
 }
 
 function _memRenderizar(){
@@ -943,7 +946,10 @@ function abrirModalRubrica(idMeta, dadosIn){
       var total = _memoriaCalculo.reduce(function(s,i){
         return s + (Number(i.qtd)||0) * (Number(i.valor)||0);
       }, 0);
-      if(total<=0){Swal.showValidationMessage('Valor total deve ser maior que zero.');return false;}
+      if((window._memTotal || 0) <= 0){
+        Swal.showValidationMessage('Valor total deve ser maior que zero.');
+        return false;
+      }
 
       return {
         id: dados.id || null,
