@@ -862,9 +862,12 @@ function _memRenderizar() {
         + ' style="max-width:110px;text-align:right;color:#059669;font-weight:800"'
         + ' value="' + valorFmt + '">'
 
-        + '<div class="mem-subtotal"'
-        + ' style="min-width:110px;text-align:right;font-weight:900;'
-        + 'color:#065f46;display:flex;align-items:center;justify-content:flex-end">'
+        + '<div class="mem-input mem-subtotal"'
+        + ' title="Subtotal da linha (Quantidade × Valor)"'
+        + ' style="max-width:110px;text-align:right;'
+        + 'color:#059669;font-weight:900;font-size:14px;'
+        + 'display:flex;align-items:center;justify-content:flex-end;'
+        + 'background:#f0fdf4;border:1px solid #bbf7d0;cursor:default">'
         + _fmtMoeda((item.qtd || 0) * (item.valor || 0))
         + '</div>'
 
