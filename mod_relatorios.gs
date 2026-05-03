@@ -1208,6 +1208,35 @@ function obterMemoriaRubrica(idRubrica) {
   return memoria;
 }
 
+function obterHistoricoRubrica(idRubrica) {
+
+  const aba = _getSheet('RubricasHistorico');
+  if (!aba || aba.getLastRow() < 2) return [];
+
+  const dados = aba.getDataRange().getValues();
+
+  return dados
+    .slice(1)
+    .filter(function(r){
+      return String(r[1]).trim() === String(idRubrica).trim();
+    })
+    .map(function(r){
+      var parsed = {};
+      try {
+        parsed = JSON.parse(r[3] || '{}');
+      } catch(e) {}
+
+      return {
+        data: r[0],
+        usuario: r[2],
+        nome: parsed.nome || '',
+        total: Number(parsed.total) || 0,
+        itens: Array.isArray(parsed.itens) ? parsed.itens : []
+      };
+    })
+    .reverse();
+}
+
 function excluirRubrica(id, email) {
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
