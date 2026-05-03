@@ -802,7 +802,9 @@ function abrirModalRubrica(idMeta, dadosIn){
                     descricao: String(i[2]||''),
                     tipo: String(i[3]||'mensal'),
                     qtd: Number(i[4])||1,
-                    valor: Number(i[5])||0,
+                    valor: parseFloat(
+                      String(i[5]).replace(/\./g,'').replace(',','.')
+                    ) || 0,
                     obs: String(i[9]||'')
                 };
                 })
@@ -832,7 +834,9 @@ function abrirModalRubrica(idMeta, dadosIn){
     preConfirm:function(){
       var nome=document.getElementById('rubNome')?.value.trim();
       if(!nome){Swal.showValidationMessage('Nome obrigatório.');return false;}
-      var total=_memoriaCalculo.reduce(function(s,i){return s+Number(i.qtd||0)*Number(i.valor||0);},0);
+      var total = _memoriaCalculo.reduce(function(s,i){
+        return s + _memCalcularItem(i);
+      },0);
       if(total<=0){Swal.showValidationMessage('Valor total deve ser maior que zero.');return false;}
       return {
         id: dados.id || null,
@@ -844,8 +848,10 @@ function abrirModalRubrica(idMeta, dadosIn){
             descricao: i.descricao || '',
             tipo: i.tipo || 'mensal',
             qtd: Number(i.qtd) || 0,
-            valor: Number(i.valor) || 0,
-            subtotal: (Number(i.qtd)||0) * (Number(i.valor)||0),
+            valor: parseFloat(
+              String(i.valor).replace(/\./g,'').replace(',','.')
+            ) || 0,
+            subtotal: _memCalcularItem(i),
             obs: i.obs || ''
         };
         }),
@@ -861,7 +867,9 @@ function abrirModalRubrica(idMeta, dadosIn){
       .salvarRubrica(r.value,AppState.usuario.email);
   });
 }
-
+function _memCalcularItem(i){
+      return (Number(i.qtd)||0) * (Number(i.valor)||0);
+}
 function _memRenderizar(){
   var container=document.getElementById('memLinhas');
   if(!container) return;
@@ -874,8 +882,8 @@ function _memRenderizar(){
             +'<option value="hora" '+(item.tipo==='hora'?'selected':'')+'>Hora técnica</option>'
             +'<option value="unitario" '+(item.tipo==='unitario'?'selected':'')+'>Unitário</option>'
         +'</select>'
-        +'<input type="number" class="mem-input" style="text-align:center" min="0" value="'+(item.qtd||1)+'" oninput="_memoriaCalculo['+i+'].qtd=Number(this.value);_memAtualizarTotal()">'
-        +'<input class="mem-input mem-input-money" value="'+_fmtMoedaBR(item.valor||0).replace('R$','').trim()+'" oninput="_memoriaCalculo['+i+'].valor=_parseMoedaBR(this.value);_memAtualizarTotal()">'
+        +'<input type="number" class="mem-input" style="text-align:center" min="0" value="'+(item.qtd||1)+'" oninput="_memoriaCalculo['+i+'].qtd=Number(this.value)||0;_memAtualizarTotal()">'
+        +'<input class="mem-input mem-input-money" value="'+((item.valor||0).toFixed(2).replace('.',','))+'" oninput="_memoriaCalculo['+i+'].valor=(parseFloat(this.value.replace(/\\./g,\'\').replace(\',\',\'.\'))||0);_memAtualizarTotal()">'
         +'<input class="mem-input" placeholder="Detalhe..." value="'+escaparHTML(item.obs||'')+'" oninput="_memoriaCalculo['+i+'].obs=this.value">'
         +'<button type="button" onclick="_memRemoverLinha('+i+')" style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;background:#fee2e2;border:none;border-radius:7px;cursor:pointer;color:#dc2626;font-size:10px">✕</button>'
         +'</div>';
@@ -902,12 +910,11 @@ function _memRemoverLinha(i){
   if(!_memoriaCalculo.length) _memoriaCalculo=[{descricao:'',qtd:1,valor:0}];
   _memRenderizar();
 }
-function _memAtualizarTotal(){
-  var tot=_memoriaCalculo.reduce(function(s,i){return s+Number(i.qtd||0)*Number(i.valor||0);},0);
-  var el=document.getElementById('memTotal');
-  if(el) el.textContent=_fmtMoedaBR(tot);
+function _memCalcularItem(i){
+  var qtd = Number(i.qtd) || 0;
+  var valor = Number(i.valor) || 0;
+  return qtd * valor;
 }
-
 function editarRubrica(id){
   var r=(_ctrCache.rubricas||[]).find(function(x){return x.id===id;});
   if(r) abrirModalRubrica(r.idMeta,r);

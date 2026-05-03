@@ -13,7 +13,7 @@
 const BASE_URL_FALLBACK =
   "https://script.google.com/macros/s/AKfycbzw2Gum2jte37SUmkEvbHUkwkxD_BRg51s_E7p3VUeODP2pIZUyO76yL5E2JuiuMUp1wg/exec";
 
-/*
+/**
  * ========================================
  * BLOCO: URL base e configuração de deployment
  * ========================================
