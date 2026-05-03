@@ -794,17 +794,14 @@ function _memCalcularItem(i){
 }
 
 function _memAtualizarTotal(){
-  const total = _memoriaCalculo.reduce((s,i)=>s + _memCalcularItem(i),0);
-  document.getElementById('memTotal').textContent = _fmtMoeda(total);
-}
+  const total = _memoriaCalculo.reduce(function(s,i){
+    return s + (Number(i.qtd)||0) * (Number(i.valor)||0);
+  }, 0);
 
-
-
-// Sincroniza estado ao sair do campo de valor
-function _memBlurValor(el, i){
-  var v = parseFloat(String(el.value||'').replace(/\./g,'').replace(',','.')) || 0;
-  _memoriaCalculo[i].valor = v;
-  _memAtualizarTotal();
+  var el = document.getElementById('memTotal');
+  if (el) {
+    el.textContent = _fmtMoeda(total);
+  }
 }
 
 function _memRenderizar(){
@@ -842,7 +839,7 @@ function _memRenderizar(){
         // VALOR (CORRIGIDO)
         + '<input class="mem-input mem-val" id="memVal_'+i+'" placeholder="0,00" style="max-width:110px;text-align:right;color:#059669;font-weight:800" '
         + 'value="'+valorFmt+'" '
-        + 'oninput="_mascaraMoeda(this); _memAtualizarTotal()" '
+        + 'oninput="_memAtualizarTotal()"'
         + 'onblur="_memoriaCalculo['+i+'].valor=_parseMoeda(this.value); this.value=_fmtMoedaInput(_memoriaCalculo['+i+'].valor); _memAtualizarTotal()">'
 
         // REMOVER
@@ -858,10 +855,10 @@ function _memRenderizar(){
 
   // aplicar máscara após render
   setTimeout(function(){
-    document.querySelectorAll('.mem-val').forEach(function(el){
+  document.querySelectorAll('.mem-val').forEach(function(el){
       _mascaraMoeda(el);
     });
-  },0);
+  },0); 
 }
 
 function _memAdicionarLinha(){
@@ -952,7 +949,7 @@ function abrirModalRubrica(idMeta, dadosIn){
         var qtdEl = row.querySelector('.mem-qtd');
         var valEl = row.querySelector('.mem-val');
         if (qtdEl) _memoriaCalculo[idx].qtd = parseFloat(qtdEl.value)||0;
-        if (valEl) _memoriaCalculo[idx].valor = parseFloat(String(valEl.value||'').replace(/\./g,'').replace(',','.'))||0;
+        if (valEl) _memoriaCalculo[idx].valor = _parseMoeda(this.value)||0;
       });
 
       var nome=document.getElementById('rubNome')?.value.trim();
