@@ -938,145 +938,206 @@ function obterRubricaPorId(id) {
 }
 
 function salvarRubrica(dados, email) {
+  // ── LOG DE ENTRADA ───────────────────────────────────────
+  console.log('salvarRubrica: payload recebido =', JSON.stringify({
+    id:      dados.id,
+    idMeta:  dados.idMeta,
+    nome:    dados.nome,
+    itens:   (dados.memoriaCalculo || []).length,
+  }));
+
+  // ── VALIDAÇÃO ESTRUTURAL ─────────────────────────────────
+  if (!dados.idMeta) {
+    throw new Error('idMeta é obrigatório.');
+  }
+  if (!dados.nome || !String(dados.nome).trim()) {
+    throw new Error('Nome da rubrica é obrigatório.');
+  }
+
+  const memoriaArr = Array.isArray(dados.memoriaCalculo) ? dados.memoriaCalculo : [];
+
+  if (!memoriaArr.length) {
+    throw new Error('Memória de cálculo vazia. Adicione pelo menos um item.');
+  }
+
+  // ── PARSE E VALIDAÇÃO DE CADA ITEM ──────────────────────
+  const memoriaValidada = memoriaArr.map(function(item, idx) {
+    const qtd   = parseMoeda(item.qtd);   // suporta tanto number quanto string
+    const valor = parseMoeda(item.valor); // converte "1.200,50" → 1200.50
+
+    const subtotal = qtd * valor;
+
+    console.log(
+      'salvarRubrica item[' + idx + ']: ' +
+      'descricao="' + (item.descricao || '') + '" ' +
+      'qtd=' + qtd + ' valor=' + valor + ' subtotal=' + subtotal
+    );
+
+    return {
+      descricao: String(item.descricao || '').trim(),
+      tipo:      String(item.tipo      || 'unitario').trim(),
+      qtd:       qtd,
+      valor:     valor,
+      subtotal:  subtotal,
+      obs:       String(item.obs       || '').trim(),
+    };
+  });
+
+  // ── CÁLCULO DO TOTAL ─────────────────────────────────────
+  const valorCalculado = memoriaValidada.reduce(function(soma, item) {
+    return soma + item.subtotal;
+  }, 0);
+
+  console.log('salvarRubrica: valorCalculado =', valorCalculado);
+
+  if (valorCalculado <= 0) {
+    throw new Error(
+      'O valor total calculado é zero ou negativo (' + valorCalculado + '). ' +
+      'Verifique as quantidades e valores da memória de cálculo.'
+    );
+  }
+
+  // ── LOCK ─────────────────────────────────────────────────
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
 
   try {
-    const aba = _getSheet("Rubricas");
-    const abaMemoria = _getSheet("RubricasMemoria");
+    const aba        = _getSheet('Rubricas');
+    const abaMemoria = _getSheet('RubricasMemoria');
 
-    const idFinal = String(dados.id || gerarId("RUB")).trim();
+    if (!aba)        throw new Error('Aba "Rubricas" não encontrada.');
+    if (!abaMemoria) throw new Error('Aba "RubricasMemoria" não encontrada.');
 
-    // 🔹 memória de cálculo (sempre fonte de verdade)
-    const memoriaArr = Array.isArray(dados.memoriaCalculo)
-      ? dados.memoriaCalculo
-      : [];
+    const idFinal = String(dados.id || '').trim() || gerarId('RUB');
 
-    // 🔹 calcula valor automaticamente
-    const valorCalculado = memoriaArr.reduce((soma, item) => {
-      const qtd = Number(item.qtd) || 0;
-      const val = Number(item.valor) || 0;
-      return soma + qtd * val;
-    }, 0);
-
-    const linha = [
+    // ── SALVAR / ATUALIZAR RUBRICA ───────────────────────
+    // Colunas: ID | ID_META | NOME | VALOR | OBS
+    const linhaRubrica = [
       idFinal,
-      String(dados.idMeta || ""),
-      String(dados.nome || ""),
+      String(dados.idMeta || ''),
+      String(dados.nome   || '').trim(),
       valorCalculado,
-      String(dados.obs || ""),
+      String(dados.obs    || '').trim(),
     ];
 
-    // 🔹 salva/atualiza rubrica (SEM JSON duplicado)
     if (!dados.id) {
-      aba.appendRow(linha);
+      aba.appendRow(linhaRubrica);
     } else {
-      const rows = aba.getDataRange().getValues();
-      let found = false;
+      const rows  = aba.getDataRange().getValues();
+      let   found = false;
 
       for (let i = 1; i < rows.length; i++) {
         if (String(rows[i][0]).trim() === idFinal) {
-          aba.getRange(i + 1, 1, 1, linha.length).setValues([linha]);
+          aba.getRange(i + 1, 1, 1, linhaRubrica.length).setValues([linhaRubrica]);
           found = true;
           break;
         }
       }
-
-      if (!found) aba.appendRow(linha);
+      if (!found) aba.appendRow(linhaRubrica);
     }
 
-    // 🔹 limpa memória antiga da rubrica
+    // ── LIMPAR MEMÓRIA ANTERIOR ──────────────────────────
     if (abaMemoria.getLastRow() > 1) {
-      const memRows = abaMemoria.getDataRange().getValues();
+      const memRows = abaMemoria
+        .getRange(2, 1, abaMemoria.getLastRow() - 1, 1)
+        .getValues();
 
-      for (let i = memRows.length - 1; i >= 1; i--) {
-        if (String(memRows[i][1]).trim() === idFinal) {
-          abaMemoria.deleteRow(i + 1);
+      // Iterar de baixo para cima ao deletar linhas
+      for (let i = memRows.length - 1; i >= 0; i--) {
+        // coluna 2 (índice 1) = ID_RUBRICA
+        const idRubNaLinha = String(
+          abaMemoria.getRange(i + 2, 2).getValue()
+        ).trim();
+
+        if (idRubNaLinha === idFinal) {
+          abaMemoria.deleteRow(i + 2);
         }
       }
     }
 
-    // 🔹 salva nova memória (linha a linha)
-    memoriaArr.forEach((item) => {
-      const qtd = Number(item.qtd) || 0;
-      const val = Number(item.valor) || 0;
-      const subtotal = qtd * val;
+    // ── INSERIR NOVA MEMÓRIA ─────────────────────────────
+    // Colunas (10 — alinhado com Setup.js):
+    // ID | ID_RUBRICA | DESCRICAO | METRICA | QUANTIDADE |
+    // VALOR_UNITARIO | SUBTOTAL | CRIADO_EM | CRIADO_POR | ATIVO
+    //
+    // NOTA: "obs" do item é incluído em DESCRICAO se não vazio,
+    // para não criar coluna extra fora do schema.
+    memoriaValidada.forEach(function(item) {
+      const descricaoCompleta = item.obs
+        ? item.descricao + (item.descricao ? ' — ' : '') + item.obs
+        : item.descricao;
 
       abaMemoria.appendRow([
-        gerarId("MEM"),
-        idFinal,
-        String(item.descricao || ""),
-        String(item.tipo || ""),
-        qtd,
-        val,
-        subtotal,
-        new Date(),
-        String(email || ""),
-        "SIM",
-        String(item.obs || ""),
+        gerarId('MEM'),    // ID
+        idFinal,           // ID_RUBRICA
+        descricaoCompleta, // DESCRICAO
+        item.tipo,         // METRICA (tipo: mensal, diária, etc.)
+        item.qtd,          // QUANTIDADE
+        item.valor,        // VALOR_UNITARIO
+        item.subtotal,     // SUBTOTAL
+        new Date(),        // CRIADO_EM
+        String(email || ''), // CRIADO_POR
+        'SIM',             // ATIVO
       ]);
     });
 
-    // 🔹 log
+    // ── LOG DE AUDITORIA ─────────────────────────────────
     registrarLog(
-      "SALVAR",
-      "RUBRICA",
+      'SALVAR',
+      'RUBRICA',
       idFinal,
-      JSON.stringify({
-        ...dados,
-        valorCalculado,
-        memoriaCalculo: memoriaArr,
-      }),
-      "",
-      "",
-      String(email || ""),
+      JSON.stringify({ nome: dados.nome, valorCalculado, itens: memoriaValidada.length }),
+      '',
+      '',
+      String(email || ''),
     );
 
-    // 🔹 atualiza agregação
-    atualizarValorRubrica(idFinal);
-
-    // 🔹 versionamento automático
+    // ── VERSIONAMENTO ────────────────────────────────────
     try {
       let idContrato = dados.idContrato;
 
       if (!idContrato && dados.idMeta) {
-        const metas = _getSheet("Metas").getDataRange().getValues();
-
-        const meta = metas.find(
-          (m) => String(m[0]).trim() === String(dados.idMeta).trim(),
-        );
-
-        if (meta) {
-          idContrato = meta[1];
-        }
+        const metas = _getSheet('Metas').getDataRange().getValues();
+        const meta  = metas.find(function(m) {
+          return String(m[0]).trim() === String(dados.idMeta).trim();
+        });
+        if (meta) idContrato = meta[1];
       }
 
-      if (idContrato) {
-        salvarVersaoContrato(idContrato, email);
-      }
+      if (idContrato) salvarVersaoContrato(idContrato, email);
     } catch (e) {
-      console.warn("Erro ao versionar contrato:", e.message);
+      console.warn('salvarRubrica: erro ao versionar contrato:', e.message);
     }
 
     return true;
+
   } catch (e) {
-    console.error("salvarRubrica:", e.message);
-    return false;
+    console.error('salvarRubrica:', e.message);
+    throw e; // propagar para o frontend ver a mensagem real
   } finally {
     lock.releaseLock();
   }
 }
 
 function listarMemoriaRubrica(idRubrica) {
-  const aba = _getSheet("RubricasMemoria");
+  const aba = _getSheet('RubricasMemoria');
   if (!aba || aba.getLastRow() < 2) return [];
 
-  const numCols = Math.max(aba.getLastColumn(), 11);
-  const dados = aba.getRange(2, 1, aba.getLastRow() - 1, numCols).getValues();
+  // Lê exatamente 10 colunas (conforme Setup)
+  const dados = aba
+    .getRange(2, 1, aba.getLastRow() - 1, 10)
+    .getValues();
 
-  return dados.filter(
-    (r) => String(r[1]) === String(idRubrica) && _isAtivoMemoria(r[9]),
-  );
+  return dados.filter(function(r) {
+    const idRubNaLinha = String(r[1]).trim();
+    const ativo        = String(r[9]).toUpperCase();
+    return idRubNaLinha === String(idRubrica).trim() && ativo === 'SIM';
+  });
+}
+
+// Alias público exposto ao frontend via google.script.run
+function obterMemoriaRubrica(idRubrica) {
+  return listarMemoriaRubrica(idRubrica);
 }
 
 function excluirRubrica(id, email) {
@@ -1165,20 +1226,19 @@ function adicionarItemMemoriaRubrica(dados, emailUsuario) {
 }
 
 function calcularValorRubrica(idRubrica) {
-  const aba = _getSheet("RubricasMemoria");
+  const aba = _getSheet('RubricasMemoria');
   if (!aba || aba.getLastRow() < 2) return 0;
 
   const dados = aba.getRange(2, 1, aba.getLastRow() - 1, 10).getValues();
 
-  let total = 0;
+  return dados.reduce(function(total, r) {
+    const idRubNaLinha = String(r[1]).trim();
+    const ativo        = String(r[9]).toUpperCase();
+    if (idRubNaLinha !== String(idRubrica).trim() || ativo !== 'SIM') return total;
 
-  for (let i = 0; i < dados.length; i++) {
-    if (String(dados[i][1]) === String(idRubrica) && _isAtivoMemoria(dados[i][9])) {
-      total += Number(dados[i][6] || 0);
-    }
-  }
-
-  return total;
+    // r[6] = SUBTOTAL — usar parseMoeda para tolerância
+    return total + parseMoeda(r[6]);
+  }, 0);
 }
 
 function atualizarValorRubrica(idRubrica) {
@@ -1608,4 +1668,48 @@ function salvarVersaoContrato(idContrato, email) {
 
 function obterMemoriaRubrica(idRubrica) {
   return listarMemoriaRubrica(idRubrica);
+}
+
+// ─────────────────────────────────────────────────────────────
+// BLOCO: parseMoeda — conversão robusta de moeda pt-BR → number
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * Converte string monetária no formato pt-BR para number.
+ * Aceita: "1.200,50" | "1200,50" | "1200.50" | 1200 | "R$ 1.200,50"
+ * Nunca retorna NaN — retorna 0 em caso de entrada inválida.
+ *
+ * @param {string|number} valor
+ * @returns {number}
+ */
+function parseMoeda(valor) {
+  if (valor === null || valor === undefined || valor === '') return 0;
+
+  // Já é número
+  if (typeof valor === 'number') {
+    return isNaN(valor) ? 0 : valor;
+  }
+
+  // Remove símbolo, espaços e caracteres não numéricos exceto , e .
+  let str = String(valor)
+    .replace(/R\$\s*/gi, '')
+    .replace(/\s/g, '')
+    .trim();
+
+  // Formato pt-BR: separador de milhar = ".", decimal = ","
+  // Ex: "1.200,50" → "1200.50"
+  if (str.includes(',')) {
+    // Remove pontos de milhar, troca vírgula por ponto decimal
+    str = str.replace(/\./g, '').replace(',', '.');
+  }
+  // Formato com ponto decimal puro (ex: "1200.50") — não mexer
+
+  const resultado = parseFloat(str);
+
+  if (isNaN(resultado)) {
+    console.warn('parseMoeda: não foi possível converter "' + valor + '" → retornando 0');
+    return 0;
+  }
+
+  return resultado;
 }

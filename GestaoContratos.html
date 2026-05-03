@@ -784,12 +784,33 @@ function _memCalcularItem(i){
   return qtd * valor;
 }
 
-function _memAtualizarTotal(){
-  const total = _memoriaCalculo.reduce((s,i)=>s + _memCalcularItem(i),0);
+function _memAtualizarTotal() {
+  // Sincroniza estado ← DOM antes de calcular
+  document.querySelectorAll('.mem-row').forEach(function(row, idx) {
+    if (!_memoriaCalculo[idx]) return;
 
-  window._memTotal = total; 
+    var qtdEl = row.querySelector('.mem-qtd');
+    var valEl = row.querySelector('.mem-val');
 
-  document.getElementById('memTotal').textContent = _fmtMoeda(total);
+    if (qtdEl) {
+      _memoriaCalculo[idx].qtd = parseFloat(qtdEl.value) || 0;
+    }
+    if (valEl) {
+      // Converte "1.200,50" → 1200.50
+      _memoriaCalculo[idx].valor = _parseMoeda(valEl.value);
+    }
+  });
+
+  var total = _memoriaCalculo.reduce(function(s, item) {
+    var qtd   = Number(item.qtd)   || 0;
+    var valor = Number(item.valor) || 0;
+    return s + qtd * valor;
+  }, 0);
+
+  window._memTotal = total;
+
+  var el = document.getElementById('memTotal');
+  if (el) el.textContent = _fmtMoeda(total);
 }
 
 function _memRenderizar(){
@@ -998,118 +1019,219 @@ function excluirRubricaUI(id){
 // MODAL INDICADOR
 // ══════════════════════════════════════════════════════
 
-function abrirModalIndicador(idMeta, idContrato, dadosIn){
-  var dados=dadosIn||{};
-  var ctr=(_ctrCache.contratos||[]).find(function(c){return c.id===idContrato;})||{};
-  var metaObj=(_ctrCache.metas||[]).find(function(m){return m.id===idMeta;})||{};
-  var _NM=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+function abrirModalIndicador(idMeta, idContrato, dadosIn) {
+  var dados    = dadosIn || {};
+  var ctr      = (_ctrCache.contratos || []).find(function(c) { return c.id === idContrato; }) || {};
+  var metaObj  = (_ctrCache.metas     || []).find(function(m) { return m.id === idMeta;     }) || {};
+  var _NM      = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 
-  var anoInicio = ctr.vigIni ? (_parseDateBR(_fmtDataBR(ctr.vigIni))||new Date()).getFullYear() : new Date().getFullYear();
-  var anoFim    = ctr.vigFim ? (_parseDateBR(_fmtDataBR(ctr.vigFim))||new Date()).getFullYear() : anoInicio;
+  // ── Vigência do contrato ───────────────────────────────────────────────
+  var vigIniDate = ctr.vigIni ? _parseDateBR(_fmtDataBR(ctr.vigIni)) : null;
+  var vigFimDate = ctr.vigFim ? _parseDateBR(_fmtDataBR(ctr.vigFim)) : null;
 
-  var getVal = function(ano,mes){
+  var anoInicio = vigIniDate ? vigIniDate.getFullYear() : new Date().getFullYear();
+  var anoFim    = vigFimDate ? vigFimDate.getFullYear() : anoInicio;
+
+  // ── Leitura de valor salvo por ano/mês ────────────────────────────────
+  // Suporta 3 formatos que o backend pode devolver:
+  //   1. objeto multi-ano: { "2025": [0,10,...], "2026": [...] }
+  //   2. array simples (legado, ano único):  [0,10,...]
+  //   3. ausente: 0
+  function getVal(ano, mes) {
     if (!dados.meses) return 0;
-    if (!Array.isArray(dados.meses)&&typeof dados.meses==='object') return (dados.meses[ano]||[])[mes]||0;
-    if (Array.isArray(dados.meses)&&String(ano)===String(dados.ano||anoInicio)) return dados.meses[mes]||0;
-    return 0;
-  };
 
-  var faixasHtml = '';
-  for (var ano=anoInicio; ano<=anoFim; ano++) {
-    var _a=ano;
-    var mesesHtml=_NM.map(function(nm,i){
-      var ini=new Date(_a,i,1), fim=new Date(_a,i+1,0);
-      var fora=(ctr.vigIni&&fim<_parseDateBR(_fmtDataBR(ctr.vigIni)))||(ctr.vigFim&&ini>_parseDateBR(_fmtDataBR(ctr.vigFim)));
-      var val=getVal(_a,i);
-      return '<div style="display:flex;flex-direction:column;align-items:center;gap:3px">'
-        +'<span style="font-size:9px;font-weight:700;color:'+(fora?'#cbd5e1':'#64748b')+'">'+nm+'</span>'
-        +'<input type="number" id="indM_'+_a+'_'+i+'" value="'+val+'" min="0"'
-        +(fora?' disabled':'')
-        +' style="width:100%;text-align:center;font-size:11px;font-weight:700;border:1.5px solid '+(fora?'#f1f5f9':'#e2e8f0')+';border-radius:8px;padding:5px 2px;outline:none;background:'+(fora?'#f8fafc':'#fff')+';opacity:'+(fora?0.3:1)+';pointer-events:'+(fora?'none':'auto')+';box-sizing:border-box">'
-        +'</div>';
-    }).join('');
-
-    faixasHtml+='<div style="margin-bottom:16px">'
-      +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">'
-      +'<span style="font-size:10px;font-weight:900;color:#fff;background:#6366f1;padding:2px 10px;border-radius:99px;text-transform:uppercase;letter-spacing:.07em">'+_a+'</span>'
-      +'<div style="flex:1;border-top:1.5px solid #e2e8f0"></div>'
-      +'</div>'
-      +'<div style="display:grid;grid-template-columns:repeat(12,1fr);gap:5px">'+mesesHtml+'</div>'
-      +'</div>';
-  }
-
-  if (!faixasHtml) faixasHtml='<p style="font-size:11px;color:#94a3b8;font-style:italic;text-align:center;padding:16px">Configure a vigência do contrato para habilitar os campos mensais.</p>';
-
-  Swal.fire({
-    title: dados.id?'Editar Indicador':'Novo Indicador',
-    width: Math.min(720, window.innerWidth-32),
-    showCancelButton:true,
-    confirmButtonText:'<i class="fas fa-save mr-1"></i>Salvar',
-    cancelButtonText:'Cancelar',
-    confirmButtonColor:'#6366f1',
-    customClass:{
-      popup:'rounded-3xl',
-      confirmButton:'rounded-xl font-black text-sm',
-      cancelButton:'rounded-xl font-bold text-sm'
-    },
-    html: `...`, // mantido como está no seu código
-
-    preConfirm: function(){
-
-      var nome = document.getElementById('indNome')?.value.trim();
-      if(!nome){
-        Swal.showValidationMessage('Nome obrigatório.');
-        return false;
-      }
-
-      var numero = document.getElementById('indNum')?.value.trim() || '';
-      var descricao = document.getElementById('indDesc')?.value?.trim() || '';
-
-      var mesesPorAno = {};
-      var total = 0;
-
-      for(var a = anoInicio; a <= anoFim; a++){
-        var _a2 = a;
-
-        mesesPorAno[_a2] = _NM.map(function(_, i){
-          var v = Number(document.getElementById('indM_'+_a2+'_'+i)?.value) || 0;
-          total += v;
-          return v;
-        });
-      }
-
-      if(total <= 0){
-        Swal.showValidationMessage('Informe pelo menos um valor mensal maior que zero.');
-        return false;
-      }
-
-      return {
-        id: dados.id || null,
-        idMeta: idMeta,
-        idContrato: idContrato,
-        numero: numero,
-        nome: nome,
-        texto: nome,
-        descricao: descricao,
-        meses: mesesPorAno,
-        ano: anoInicio
-      };
+    // Formato 1 — objeto multi-ano (formato atual do backend)
+    if (!Array.isArray(dados.meses) && typeof dados.meses === 'object') {
+      var arrAno = dados.meses[ano] || dados.meses[String(ano)];
+      return arrAno ? (Number(arrAno[mes]) || 0) : 0;
     }
 
-  }).then(function(r){
-    if(!r.isConfirmed) return;
+    // Formato 2 — array simples, só válido para o ano de origem
+    if (Array.isArray(dados.meses)) {
+      var anoOrigem = Number(dados.ano) || anoInicio;
+      if (Number(ano) === anoOrigem) {
+        return Number(dados.meses[mes]) || 0;
+      }
+      return 0;
+    }
+
+    return 0;
+  }
+
+  // ── Gerar grid de meses por ano ───────────────────────────────────────
+  var faixasHtml = '';
+
+  for (var ano = anoInicio; ano <= anoFim; ano++) {
+    var _a = ano;
+
+    var mesesHtml = _NM.map(function(nm, i) {
+      var iniciaMes = new Date(_a, i, 1);
+      var terminaMes = new Date(_a, i + 1, 0);
+
+      var foraVigencia = (vigIniDate && terminaMes < vigIniDate) ||
+                         (vigFimDate && iniciaMes  > vigFimDate);
+
+      var val = getVal(_a, i);
+
+      var estiloInput = [
+        'width:100%',
+        'text-align:center',
+        'font-size:11px',
+        'font-weight:700',
+        'border:1.5px solid ' + (foraVigencia ? '#f1f5f9' : '#e2e8f0'),
+        'border-radius:8px',
+        'padding:5px 2px',
+        'outline:none',
+        'background:'       + (foraVigencia ? '#f8fafc' : '#fff'),
+        'opacity:'          + (foraVigencia ? '0.3'     : '1'),
+        'pointer-events:'   + (foraVigencia ? 'none'    : 'auto'),
+        'box-sizing:border-box',
+      ].join(';');
+
+      return '<div style="display:flex;flex-direction:column;align-items:center;gap:3px">'
+        + '<span style="font-size:9px;font-weight:700;color:' + (foraVigencia ? '#cbd5e1' : '#64748b') + '">' + nm + '</span>'
+        + '<input type="number" id="indM_' + _a + '_' + i + '" value="' + val + '" min="0"'
+        + (foraVigencia ? ' disabled' : '')
+        + ' style="' + estiloInput + '">'
+        + '</div>';
+    }).join('');
+
+    faixasHtml += '<div style="margin-bottom:16px">'
+      + '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">'
+      + '<span style="font-size:10px;font-weight:900;color:#fff;background:#6366f1;padding:2px 10px;border-radius:99px;text-transform:uppercase;letter-spacing:.07em">' + _a + '</span>'
+      + '<div style="flex:1;border-top:1.5px solid #e2e8f0"></div>'
+      + '</div>'
+      + '<div style="display:grid;grid-template-columns:repeat(12,1fr);gap:5px">' + mesesHtml + '</div>'
+      + '</div>';
+  }
+
+  if (!faixasHtml) {
+    faixasHtml = '<p style="font-size:11px;color:#94a3b8;font-style:italic;text-align:center;padding:16px">'
+      + 'Configure a vigência do contrato para habilitar os campos mensais.</p>';
+  }
+
+  // ── HTML do modal ─────────────────────────────────────────────────────
+  var htmlModal = ''
+    // Breadcrumb meta vinculada
+    + (metaObj.titulo
+        ? '<div style="display:flex;align-items:center;gap:8px;padding:7px 12px;background:#eef2ff;border:1px solid #c7d2fe;border-radius:10px;margin-bottom:14px">'
+          + '<i class="fas fa-bullseye" style="color:#818cf8;font-size:11px;flex-shrink:0"></i>'
+          + '<span style="font-size:10px;font-weight:900;color:#4338ca;text-transform:uppercase;letter-spacing:.06em;flex-shrink:0">Meta:</span>'
+          + '<span style="font-size:11px;color:#4338ca;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'
+          + 'Meta ' + escaparHTML(metaObj.numero || '') + ' — ' + escaparHTML(metaObj.titulo) + '</span>'
+          + '</div>'
+        : '')
+
+    // Número + Nome
+    + '<div style="display:grid;grid-template-columns:80px 1fr;gap:10px;margin-bottom:12px">'
+    +   '<div>'
+    +     '<label class="ctr-label">Nº</label>'
+    +     '<input id="indNum" class="ctr-input" style="text-align:center" value="'
+    +     escaparHTML(dados.numero || '') + '" placeholder="01">'
+    +   '</div>'
+    +   '<div>'
+    +     '<label class="ctr-label">Nome do Indicador *</label>'
+    +     '<input id="indNome" class="ctr-input" value="'
+    +     escaparHTML(dados.nome || dados.texto || '')
+    +     '" placeholder="Ex.: Nº de pessoas atendidas presencialmente">'
+    +   '</div>'
+    + '</div>'
+
+    // Metodologia
+    + '<div style="margin-bottom:14px">'
+    +   '<label class="ctr-label">Metodologia <span style="font-weight:400;text-transform:none;color:#cbd5e1">(opcional)</span></label>'
+    +   '<textarea id="indDesc" class="ctr-obs-textarea" placeholder="Como este indicador é medido...">'
+    +   escaparHTML(dados.descricao || '') + '</textarea>'
+    + '</div>'
+
+    // Grid meses
+    + '<div>'
+    +   '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">'
+    +     '<label class="ctr-label" style="margin-bottom:0">Metas mensais por ano</label>'
+    +     '<span style="font-size:10px;color:#cbd5e1">'
+    +     '<i class="fas fa-calendar-alt" style="margin-right:4px"></i>'
+    +     (_fmtDataBR(ctr.vigIni) || '—') + ' a ' + (_fmtDataBR(ctr.vigFim) || '—')
+    +     '</span>'
+    +   '</div>'
+    +   '<div style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:12px;padding:14px;max-height:300px;overflow-y:auto;scrollbar-width:thin">'
+    +   faixasHtml
+    +   '</div>'
+    + '</div>';
+
+  // ── Swal ──────────────────────────────────────────────────────────────
+  Swal.fire({
+    title: dados.id ? 'Editar Indicador' : 'Novo Indicador',
+    width: Math.min(720, window.innerWidth - 32),
+    showCancelButton:    true,
+    confirmButtonText:   '<i class="fas fa-save mr-1"></i>Salvar',
+    cancelButtonText:    'Cancelar',
+    confirmButtonColor:  '#6366f1',
+    customClass: {
+      popup:           'rounded-3xl',
+      confirmButton:   'rounded-xl font-black text-sm',
+      cancelButton:    'rounded-xl font-bold text-sm',
+    },
+    html: '<div class="text-left" style="padding:0 20px 16px">' + htmlModal + '</div>',
+
+    preConfirm: function() {
+      // ── 1. Validar nome ─────────────────────────────────
+      var nome = (document.getElementById('indNome')?.value || '').trim();
+      if (!nome) {
+        Swal.showValidationMessage('Nome do indicador obrigatório.');
+        return false;
+      }
+
+      // ── 2. Coletar valores dos inputs mensais ────────────
+      var mesesPorAno = {};
+      var totalGeral  = 0;
+
+      for (var a = anoInicio; a <= anoFim; a++) {
+        var _a2 = a;
+        var arrMes = _NM.map(function(_, i) {
+          var el = document.getElementById('indM_' + _a2 + '_' + i);
+          var v  = el ? (Number(el.value) || 0) : 0;
+          totalGeral += v;
+          return v;
+        });
+        mesesPorAno[_a2] = arrMes;
+      }
+
+      // ── 3. Validar: pelo menos um mês com valor > 0 ──────
+      if (totalGeral <= 0) {
+        Swal.showValidationMessage(
+          'Informe pelo menos um valor mensal maior que zero.'
+        );
+        return false;
+      }
+
+      // ── 4. Montar payload ────────────────────────────────
+      return {
+        id:          dados.id  || null,
+        idMeta:      idMeta,
+        idContrato:  idContrato,
+        numero:      (document.getElementById('indNum')?.value  || '').trim(),
+        nome:        nome,
+        texto:       nome,  // campo legado — backend usa ambos
+        descricao:   (document.getElementById('indDesc')?.value || '').trim(),
+        meses:       mesesPorAno,   // { 2025: [0,10,...], 2026: [...] }
+        ano:         anoInicio,     // ano de referência para formato legado
+      };
+    },
+
+  }).then(function(r) {
+    if (!r.isConfirmed) return;
 
     showLoader(true);
 
     google.script.run
-      .withSuccessHandler(function(){
+      .withSuccessHandler(function() {
         showLoader(false);
-        carregarDadosContratos(function(){
-          if(typeof renderizarContratos === 'function') renderizarContratos();
-          if(typeof codipPopularContratos === 'function') codipPopularContratos();
+        carregarDadosContratos(function() {
+          if (typeof renderizarContratos    === 'function') renderizarContratos();
+          if (typeof codipPopularContratos  === 'function') codipPopularContratos();
         });
       })
-      .withFailureHandler(function(e){
+      .withFailureHandler(function(e) {
         showLoader(false);
         Swal.fire('Erro', e.message, 'error');
       })
