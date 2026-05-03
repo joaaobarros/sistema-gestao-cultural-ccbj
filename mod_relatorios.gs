@@ -939,150 +939,126 @@ function obterRubricaPorId(id) {
 
 function salvarRubrica(dados, email) {
 
-  // ── LOG DE ENTRADA ───────────────────────────────────────
-  console.log('salvarRubrica: payload =', JSON.stringify({
-    id:     dados.id     || null,
-    idMeta: dados.idMeta || null,
-    nome:   dados.nome   || null,
-    itens:  (dados.memoriaCalculo || []).length,
-  }));
-
-  // ── VALIDAÇÃO ESTRUTURAL ─────────────────────────────────
-  if (!dados.idMeta) {
-    throw new Error('idMeta é obrigatório.');
-  }
-  if (!String(dados.nome || '').trim()) {
-    throw new Error('Nome da rubrica é obrigatório.');
-  }
-
-  const memoriaArr = Array.isArray(dados.memoriaCalculo) ? dados.memoriaCalculo : [];
-
-  if (!memoriaArr.length) {
-    throw new Error('Memória de cálculo vazia. Adicione pelo menos um item.');
-  }
-
-  // ── PARSE E VALIDAÇÃO DE CADA ITEM ──────────────────────
-  const memoriaValidada = memoriaArr.map(function(item, idx) {
-    const qtd      = parseMoeda(item.qtd);
-    const valor    = parseMoeda(item.valor);
-    const subtotal = qtd * valor;
-
-    console.log(
-      'item[' + idx + ']' +
-      ' desc="'     + (item.descricao || '') + '"' +
-      ' qtd='       + qtd +
-      ' valor='     + valor +
-      ' subtotal='  + subtotal +
-      ' | raw_qtd=' + JSON.stringify(item.qtd) +
-      ' | raw_val=' + JSON.stringify(item.valor)
-    );
-
-    return {
-      descricao: String(item.descricao || '').trim(),
-      tipo:      String(item.tipo      || 'unitario').trim(),
-      qtd:       qtd,
-      valor:     valor,
-      subtotal:  subtotal,
-      obs:       String(item.obs       || '').trim(),
-    };
-  });
-
-  // ── CÁLCULO DO TOTAL ─────────────────────────────────────
-  const valorCalculado = memoriaValidada.reduce(function(soma, item) {
-    return soma + item.subtotal;
-  }, 0);
-
-  console.log('salvarRubrica: valorCalculado =', valorCalculado);
-
-  if (valorCalculado <= 0) {
-    throw new Error(
-      'Valor total calculado é zero ou negativo (' + valorCalculado + '). ' +
-      'Verifique as quantidades e valores da memória de cálculo.'
-    );
-  }
-
-  // ── LOCK ─────────────────────────────────────────────────
-  const lock = LockService.getScriptLock();
+  var lock = LockService.getScriptLock();
   lock.waitLock(10000);
 
   try {
-    const aba        = _getSheet('Rubricas');
+
+    console.log('salvarRubrica: payload =', JSON.stringify({
+      id: dados.id || null,
+      idMeta: dados.idMeta || null,
+      nome: dados.nome || null,
+      itens: (dados.memoriaCalculo || []).length,
+    }));
+
+    if (!dados.idMeta) throw new Error('idMeta é obrigatório.');
+    if (!String(dados.nome || '').trim()) throw new Error('Nome da rubrica é obrigatório.');
+
+    const memoriaArr = Array.isArray(dados.memoriaCalculo) ? dados.memoriaCalculo : [];
+
+    if (!memoriaArr.length) {
+      throw new Error('Memória de cálculo vazia.');
+    }
+
+    const memoriaValidada = memoriaArr.map(function(item, idx) {
+
+      const qtd   = parseMoeda(item.qtd);
+      const valor = parseMoeda(item.valor);
+      const subtotal = qtd * valor;
+
+      return {
+        descricao: String(item.descricao || '').trim(),
+        tipo: String(item.tipo || 'unitario').trim(),
+        qtd: qtd,
+        valor: valor,
+        subtotal: subtotal,
+        obs: String(item.obs || '').trim(),
+      };
+    });
+
+    const valorCalculado = memoriaValidada.reduce(function(s, i) {
+      return s + i.subtotal;
+    }, 0);
+
+    if (valorCalculado <= 0) {
+      throw new Error('Valor total inválido.');
+    }
+
+    const aba = _getSheet('Rubricas');
     const abaMemoria = _getSheet('RubricasMemoria');
 
-    if (!aba)        throw new Error('Aba "Rubricas" não encontrada.');
-    if (!abaMemoria) throw new Error('Aba "RubricasMemoria" não encontrada.');
+    if (!aba || !abaMemoria) {
+      throw new Error('Abas necessárias não encontradas.');
+    }
 
     const idFinal = String(dados.id || '').trim() || gerarId('RUB');
 
-    // ── SALVAR / ATUALIZAR RUBRICA ───────────────────────
-    // Schema: ID | ID_META | NOME | VALOR | OBS
+    // =====================================================
+    // UPDATE OU INSERT
+    // =====================================================
     const linhaRubrica = [
       idFinal,
       String(dados.idMeta || ''),
-      String(dados.nome   || '').trim(),
+      String(dados.nome || '').trim(),
       valorCalculado,
-      String(dados.obs    || '').trim(),
+      String(dados.obs || '').trim(),
     ];
 
-    if (!dados.id) {
-      aba.appendRow(linhaRubrica);
-    } else {
-      const rows = aba.getDataRange().getValues();
-      let found  = false;
+    const rows = aba.getDataRange().getValues();
+    let found = false;
 
-      for (let i = 1; i < rows.length; i++) {
-        if (String(rows[i][0]).trim() === idFinal) {
-          aba.getRange(i + 1, 1, 1, linhaRubrica.length).setValues([linhaRubrica]);
-          found = true;
-          break;
-        }
+    for (let i = 1; i < rows.length; i++) {
+      if (String(rows[i][0]).trim() === idFinal) {
+        aba.getRange(i + 1, 1, 1, linhaRubrica.length)
+           .setValues([linhaRubrica]);
+        found = true;
+        break;
       }
-
-      if (!found) aba.appendRow(linhaRubrica);
     }
 
-    // ── LIMPAR MEMÓRIA ANTERIOR ──────────────────────────
-    // Lê coluna ID_RUBRICA (col 2) de uma vez — evita getRange por célula no loop
+    if (!found) aba.appendRow(linhaRubrica);
+
+    // =====================================================
+    // LIMPEZA EM LOTE
+    // =====================================================
     if (abaMemoria.getLastRow() > 1) {
-      const totalLinhas   = abaMemoria.getLastRow() - 1;
-      const colunaIdRub   = abaMemoria
-        .getRange(2, 2, totalLinhas, 1)
-        .getValues(); // [[id], [id], ...]
 
-      // Percorre de baixo para cima para não deslocar índices ao deletar
-      for (let i = totalLinhas - 1; i >= 0; i--) {
-        if (String(colunaIdRub[i][0]).trim() === idFinal) {
-          abaMemoria.deleteRow(i + 2); // +2: offset cabeçalho + índice 0-based
-        }
+      const all = abaMemoria.getRange(2,1,abaMemoria.getLastRow()-1,10).getValues();
+
+      const filtrado = all.filter(function(r){
+        return String(r[1]).trim() !== idFinal;
+      });
+
+      abaMemoria.getRange(2,1,abaMemoria.getLastRow()-1,10).clearContent();
+
+      if (filtrado.length) {
+        abaMemoria.getRange(2,1,filtrado.length,10).setValues(filtrado);
       }
     }
 
-    // ── INSERIR NOVA MEMÓRIA ─────────────────────────────
-    // Schema (10 colunas — alinhado com Setup.js):
-    // ID | ID_RUBRICA | DESCRICAO | METRICA | QUANTIDADE |
-    // VALOR_UNITARIO | SUBTOTAL | CRIADO_EM | CRIADO_POR | ATIVO
-    //
-    // "obs" é concatenado em DESCRICAO para não criar coluna fora do schema.
-    const linhasMemoria = memoriaValidada.map(function(item) {
+    // =====================================================
+    // INSERÇÃO EM LOTE
+    // =====================================================
+    const linhasMemoria = memoriaValidada.map(function(item){
+
       const descricaoFinal = item.obs
         ? item.descricao + (item.descricao ? ' — ' : '') + item.obs
         : item.descricao;
 
       return [
-        gerarId('MEM'),        // ID
-        idFinal,               // ID_RUBRICA
-        descricaoFinal,        // DESCRICAO
-        item.tipo,             // METRICA
-        item.qtd,              // QUANTIDADE
-        item.valor,            // VALOR_UNITARIO
-        item.subtotal,         // SUBTOTAL
-        new Date(),            // CRIADO_EM
-        String(email || ''),   // CRIADO_POR
-        'SIM',                 // ATIVO
+        gerarId('MEM'),
+        idFinal,
+        descricaoFinal,
+        item.tipo,
+        item.qtd,
+        item.valor,
+        item.subtotal,
+        new Date(),
+        String(email || ''),
+        'SIM'
       ];
     });
 
-    // Insere todas as linhas de uma vez — um único batch write
     if (linhasMemoria.length) {
       abaMemoria.getRange(
         abaMemoria.getLastRow() + 1,
@@ -1092,28 +1068,55 @@ function salvarRubrica(dados, email) {
       ).setValues(linhasMemoria);
     }
 
-    // ── LOG DE AUDITORIA ─────────────────────────────────
+    // =====================================================
+    // HISTÓRICO DE ALTERAÇÃO
+    // =====================================================
+    try {
+      const abaHist = _getSheet('RubricasHistorico');
+
+      if (abaHist) {
+        abaHist.appendRow([
+          new Date(),
+          idFinal,
+          String(email || ''),
+          JSON.stringify({
+            nome: dados.nome,
+            total: valorCalculado,
+            itens: memoriaValidada
+          })
+        ]);
+      }
+
+    } catch(e) {
+      console.warn('Histórico não salvo:', e.message);
+    }
+
+    // =====================================================
+    // LOG ORIGINAL
+    // =====================================================
     registrarLog(
       'SALVAR',
       'RUBRICA',
       idFinal,
       JSON.stringify({
-        nome:            dados.nome,
-        valorCalculado:  valorCalculado,
-        itens:           memoriaValidada.length,
+        nome: dados.nome,
+        valorCalculado: valorCalculado,
+        itens: memoriaValidada.length,
       }),
       '',
       '',
-      String(email || ''),
+      String(email || '')
     );
 
-    // ── VERSIONAMENTO ────────────────────────────────────
+    // =====================================================
+    // VERSIONAMENTO 
+    // =====================================================
     try {
       let idContrato = dados.idContrato || null;
 
       if (!idContrato && dados.idMeta) {
         const metas = _getSheet('Metas').getDataRange().getValues();
-        const meta  = metas.find(function(m) {
+        const meta = metas.find(function(m){
           return String(m[0]).trim() === String(dados.idMeta).trim();
         });
         if (meta) idContrato = String(meta[1]).trim();
@@ -1122,15 +1125,15 @@ function salvarRubrica(dados, email) {
       if (idContrato) salvarVersaoContrato(idContrato, email);
 
     } catch (e) {
-      // Versionamento nunca deve bloquear o save principal
-      console.warn('salvarRubrica: erro no versionamento:', e.message);
+      console.warn('Versionamento:', e.message);
     }
 
     return true;
 
   } catch (e) {
     console.error('salvarRubrica:', e.message);
-    throw e; // propaga mensagem real para o frontend via withFailureHandler
+    throw e;
+
   } finally {
     lock.releaseLock();
   }
@@ -1160,25 +1163,49 @@ function obterMemoriaRubrica(idRubrica) {
     return [];
   }
 
-  // Lê todas as colunas disponíveis (não fixar em 10 — pode variar)
-  var numCols = Math.max(aba.getLastColumn(), 10);
-  var dados   = aba.getRange(2, 1, aba.getLastRow() - 1, numCols).getValues();
+  var lastCol = aba.getLastColumn();
+  var dados = aba.getRange(2, 1, aba.getLastRow() - 1, lastCol).getValues();
+  var headers = aba.getRange(1, 1, 1, lastCol).getValues()[0];
 
-  console.log('obterMemoriaRubrica: total linhas lidas =', dados.length, '| buscando id =', idRubrica);
+  // Index dinâmico (evita quebra se mudar ordem das colunas)
+  function idx(nome) {
+    return headers.indexOf(nome);
+  }
+
+  var iIdRubrica = idx('ID_RUBRICA');
+  var iDesc      = idx('DESCRICAO');
+  var iTipo      = idx('METRICA');
+  var iQtd       = idx('QUANTIDADE');
+  var iValor     = idx('VALOR_UNITARIO');
+  var iObs       = idx('OBS');
+  var iAtivo     = idx('ATIVO');
+
+  console.log('obterMemoriaRubrica: total linhas =', dados.length, '| buscando id =', idRubrica);
 
   var resultado = dados.filter(function(r) {
-    var idRubNaLinha = String(r[1] || '').trim();
-    var ativo        = String(r[9] || '').trim().toUpperCase();
+    var idLinha = String(r[iIdRubrica] || '').trim();
+    var ativo   = iAtivo > -1 ? String(r[iAtivo] || '').trim().toUpperCase() : 'SIM';
 
-    // Aceita: 'SIM', 'TRUE', '1', ou vazio (linhas antigas sem o campo)
     var estaAtivo = ativo === 'SIM' || ativo === 'TRUE' || ativo === '1' || ativo === '';
 
-    return idRubNaLinha === String(idRubrica).trim() && estaAtivo;
+    return idLinha === String(idRubrica).trim() && estaAtivo;
   });
 
-  console.log('obterMemoriaRubrica: linhas encontradas =', resultado.length);
+  console.log('obterMemoriaRubrica: encontradas =', resultado.length);
 
-  return resultado;
+  var memoria = resultado.map(function(r){
+    return {
+      descricao: String(r[iDesc] || ''),
+      tipo: String(r[iTipo] || 'mensal'),
+      qtd: Number(r[iQtd]) || 0,
+      valor: Number(r[iValor]) || 0,
+      obs: iObs > -1 ? String(r[iObs] || '') : ''
+    };
+  });
+
+  console.log('obterMemoriaRubrica: retorno formatado =', JSON.stringify(memoria));
+
+  return memoria;
 }
 
 function excluirRubrica(id, email) {

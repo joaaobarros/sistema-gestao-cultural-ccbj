@@ -280,29 +280,24 @@ function _mascaraMoeda(el) {
   el._maskApplied = true;
 
   el.addEventListener('input', function() {
-    // Remove tudo que não é dígito
+
     var digitos = this.value.replace(/\D/g, '');
 
-    if (!digitos || digitos === '0') {
-      this.value = '0,01';
+    if (!digitos) {
+      this.value = '';
       _memSyncEAtualizar();
       return;
     }
 
-    // Remove zeros à esquerda mas mantém pelo menos 3 dígitos (para centavos)
-    digitos = digitos.replace(/^0+/, '') || '0';
+    digitos = digitos.replace(/^0+/, '');
+    if (!digitos) digitos = '0';
 
-    // Garante mínimo de 3 dígitos para representar X,XX
     while (digitos.length < 3) digitos = '0' + digitos;
 
-    // Separa inteiros e centavos
     var centavos = digitos.slice(-2);
-    var inteiros  = digitos.slice(0, -2);
+    var inteiros = digitos.slice(0, -2);
 
-    // Remove zeros à esquerda da parte inteira
     inteiros = inteiros.replace(/^0+/, '') || '0';
-
-    // Formata milhar
     inteiros = inteiros.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
 
     this.value = inteiros + ',' + centavos;
@@ -310,7 +305,6 @@ function _mascaraMoeda(el) {
     _memSyncEAtualizar();
   });
 
-  // Seleciona tudo ao focar para facilitar digitação
   el.addEventListener('focus', function() {
     this.select();
   });
@@ -887,6 +881,7 @@ function _memRenderizar() {
 }
 
 function _memSyncEAtualizar() {
+
   document.querySelectorAll('.mem-row').forEach(function(row) {
     var idx   = parseInt(row.getAttribute('data-idx'), 10);
     var qtdEl = row.querySelector('.mem-qtd');
@@ -897,6 +892,7 @@ function _memSyncEAtualizar() {
     if (qtdEl) {
       _memoriaCalculo[idx].qtd = parseFloat(qtdEl.value) || 0;
     }
+
     if (valEl) {
       _memoriaCalculo[idx].valor = _parseMoeda(valEl.value);
     }
@@ -928,13 +924,16 @@ function _memRemoverLinha(i) {
 function abrirModalRubrica(idMeta, dadosIn) {
   var dados       = dadosIn || {};
   var idMetaFinal = idMeta  || dados.idMeta || '';
-  var idRubrica   = dados.id ? String(dados.id).trim() : null; // captura explícita
+  var idRubrica   = dados.id ? String(dados.id).trim() : null;
 
   console.log('abrirModalRubrica: idRubrica=', idRubrica, '| idMeta=', idMetaFinal, '| dados=', JSON.stringify(dados));
 
   var meta = (_ctrCache.metas || []).find(function(m) { return m.id === idMetaFinal; }) || {};
 
   _memoriaCalculo = [];
+
+  // CONTROLE DE CARREGAMENTO
+  var _memCarregando = !!idRubrica;
 
   Swal.fire({
     title: idRubrica ? 'Editar Rubrica' : 'Nova Rubrica',
@@ -997,7 +996,6 @@ function abrirModalRubrica(idMeta, dadosIn) {
       console.log('didOpen: idRubrica=', idRubrica);
 
       if (idRubrica) {
-        // ── EDIÇÃO: carrega memória do backend ──────────────
         var container = document.getElementById('memLinhas');
         if (container) {
           container.innerHTML =
@@ -1009,47 +1007,52 @@ function abrirModalRubrica(idMeta, dadosIn) {
           .withSuccessHandler(function(lista) {
             console.log('obterMemoriaRubrica retornou', (lista || []).length, 'itens:', JSON.stringify(lista));
 
+            _memCarregando = false; // LIBERA SAVE
+
             if (Array.isArray(lista) && lista.length) {
-              _memoriaCalculo = lista.map(function(row) {
-                var qtd   = Number(row[4]) || 0;
-                var valor = Number(row[5]) || 0;
-
-                // Separa descricao e obs (backend concatena com ' — ')
-                var descricaoRaw = String(row[2] || '');
-                var sep          = descricaoRaw.indexOf(' — ');
-                var descricao    = sep >= 0 ? descricaoRaw.substring(0, sep) : descricaoRaw;
-                var obs          = sep >= 0 ? descricaoRaw.substring(sep + 3) : '';
-
+              _memoriaCalculo = lista.map(function(item) {
                 return {
-                  descricao: descricao,
-                  tipo:      String(row[3] || 'mensal'),
-                  qtd:       qtd,
-                  valor:     valor,
-                  obs:       obs,
+                  descricao: item.descricao || '',
+                  tipo:      item.tipo || 'mensal',
+                  qtd:       Number(item.qtd) || 0,
+                  valor:     Number(item.valor) || 0,
+                  obs:       item.obs || ''
                 };
               });
             } else {
-              console.warn('Memória vazia para rubrica', idRubrica, '— iniciando com linha padrão');
               _memoriaCalculo = [{ descricao: '', tipo: 'mensal', qtd: 1, valor: 0, obs: '' }];
             }
 
             _memRenderizar();
+            _memSyncEAtualizar();
           })
           .withFailureHandler(function(e) {
             console.error('obterMemoriaRubrica ERRO:', e.message);
+
+            _memCarregando = false; // LIBERA SAVE MESMO EM ERRO
+
             _memoriaCalculo = [{ descricao: '', tipo: 'mensal', qtd: 1, valor: 0, obs: '' }];
             _memRenderizar();
+            _memSyncEAtualizar(); // GARANTIA
           })
-          .obterMemoriaRubrica(idRubrica); // passa string limpa, não dados.id
+          .obterMemoriaRubrica(idRubrica);
 
       } else {
-        // ── NOVA RUBRICA ────────────────────────────────────
+        _memCarregando = false;
         _memoriaCalculo = [{ descricao: '', tipo: 'mensal', qtd: 1, valor: 0, obs: '' }];
         _memRenderizar();
+        _memSyncEAtualizar();
       }
     },
 
     preConfirm: function() {
+
+      // BLOQUEIO CRÍTICO
+      if (_memCarregando) {
+        Swal.showValidationMessage('Aguarde o carregamento da memória de cálculo.');
+        return false;
+      }
+
       _memSyncEAtualizar();
 
       var nome = (document.getElementById('rubNome')?.value || '').trim();
@@ -1065,7 +1068,7 @@ function abrirModalRubrica(idMeta, dadosIn) {
       }
 
       return {
-        id:     idRubrica,   // string limpa ou null
+        id:     idRubrica,
         idMeta: idMetaFinal,
         nome:   nome,
         valor:  total,
@@ -1087,10 +1090,17 @@ function abrirModalRubrica(idMeta, dadosIn) {
 
   }).then(function(r) {
     if (!r.isConfirmed) return;
+
     showLoader(true);
+
     google.script.run
       .withSuccessHandler(function() {
         showLoader(false);
+
+        // RESET DE ESTADO (evita resíduo)
+        _memoriaCalculo = [];
+        window._memTotal = 0;
+
         carregarDadosContratos(function() {
           renderizarContratos();
         });
@@ -1102,7 +1112,6 @@ function abrirModalRubrica(idMeta, dadosIn) {
       .salvarRubrica(r.value, AppState.usuario.email);
   });
 }
-
 
 function editarRubrica(id) {
   var r = (_ctrCache.rubricas || []).find(function(x) { return x.id === id; });
