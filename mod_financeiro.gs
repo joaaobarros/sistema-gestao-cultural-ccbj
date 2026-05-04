@@ -198,7 +198,7 @@ function calcularCustoVinculo(v) {
   // =========================
   // BENEFÍCIOS
   // =========================
-  var valeTransporte = salarioAjustado * vtA * 2 * 22;
+  var valeTransporte = vtA * 2 * 22;
   var descontoVT = salarioAjustado * 0.06;
 
   var valeAlimentacao = va * 22;
@@ -215,8 +215,8 @@ function calcularCustoVinculo(v) {
   // =========================
   // PROVISÕES
   // =========================
-  var ferias = (salarioAjustado + totalEncargos) / 3 / 12;
-  var decimoTerceiro = (salarioAjustado + totalEncargos) / 12;
+  var ferias = salarioAjustado * (1 + 1/3) / 12;
+  var decimoTerceiro = salarioAjustado / 12;
   var fgtsRescisao = fgts * 0.40;
 
   var totalProvisoes = ferias + decimoTerceiro + fgtsRescisao;
@@ -477,12 +477,12 @@ function simularDemissao(idVinculo, dataDemissao) {
   if (!row) return null;
 
   var custoMensal = Number(row[idx['Custo Total Mensal']] || 0);
+  var salario = Number(row[idx['Salário Ajustado']] || row[idx['Salário Base']] || 0);
 
-  // custo rescisório estimado
-  var fgts = custoMensal * 0.08;
+  // custo rescisório estimado sobre salário (não custo total)
+  var fgts = salario * 0.08;
   var multa = fgts * 0.40;
-
-  var aviso = custoMensal; // simplificado
+  var aviso = salario;
 
   var custoDemissao = multa + aviso;
 

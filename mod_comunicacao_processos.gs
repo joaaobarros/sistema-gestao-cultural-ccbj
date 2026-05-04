@@ -573,6 +573,115 @@ function _mapearTipoParaFuncao(tipo){
   return 'comunicacao';
 }
 
+// =====================================================
+// GESTORES POR FUNÇÃO
+// =====================================================
+
+function _obterGestoresPorFuncao(funcao) {
+  if (!funcao) return [];
+
+  var aba = _abrirAba('EQUIPES', 'Funcionarios');
+  var dados = aba.getDataRange().getValues();
+  var headers = dados[0];
+
+  var idx = {};
+  headers.forEach(function(h, i){ idx[h] = i; });
+
+  var hoje = new Date().toISOString().slice(0, 10);
+  var lista = [];
+
+  for (var i = 1; i < dados.length; i++) {
+    var row = dados[i];
+
+    var ativo = String(row[idx['Status']] || '').toLowerCase() === 'ativo';
+    if (!ativo) continue;
+
+    var email = row[idx['Email Institucional']];
+    if (!email) continue;
+
+    var gestor = String(row[idx['Gestor']] || '').toLowerCase() === 'sim' ||
+                 String(row[idx['Papel']] || '').toLowerCase() === 'gestor';
+    if (!gestor) continue;
+
+    var funcoes = [];
+    try { funcoes = JSON.parse(row[idx['Funcoes']] || '[]'); } catch(e){}
+
+    var pertence = funcoes.some(function(f){
+      return f.tipo === funcao && f.ativo !== false;
+    });
+
+    if (pertence) lista.push(email);
+  }
+
+  return lista;
+}
+
+// =====================================================
+// REVISÃO DE PROCESSOS
+// =====================================================
+
+function solicitarAlteracaoProcesso(idProcesso, texto, emailCliente) {
+  var aba = _abaProcessos();
+  var valores = aba.getDataRange().getValues();
+  var headers = valores[0];
+
+  var map = {};
+  headers.forEach(function(h, idx){ map[h] = idx; });
+
+  for (var i = 1; i < valores.length; i++) {
+    if (valores[i][0] !== idProcesso) continue;
+
+    valores[i][map['Revisao Status']] = 'Solicitada';
+    valores[i][map['Revisao Solicitacao']] = texto || '';
+    valores[i][map['Revisao Solicitante']] = emailCliente || '';
+    valores[i][map['Revisao Data']] = new Date().toISOString();
+    valores[i][map['Revisao Resposta']] = '';
+
+    aba.getRange(i + 1, 1, 1, valores[i].length).setValues([valores[i]]);
+
+    // notificar equipe de comunicação
+    var emails = _obterResponsaveisPorTipo('comunicacao');
+    var assunto = '[REVISÃO] Solicitação de alteração no processo ' + idProcesso;
+    var mensagem = 'O cliente solicitou uma revisão:\n\n"' + (texto || '') + '"\n\nProcesso: ' + idProcesso;
+    emails.forEach(function(email){ enviarEmailInterno(email, assunto, mensagem); });
+
+    return { ok: true };
+  }
+
+  return { ok: false };
+}
+
+function responderRevisaoProcesso(idProcesso, status, resposta) {
+  var aba = _abaProcessos();
+  var valores = aba.getDataRange().getValues();
+  var headers = valores[0];
+
+  var map = {};
+  headers.forEach(function(h, idx){ map[h] = idx; });
+
+  for (var i = 1; i < valores.length; i++) {
+    if (valores[i][0] !== idProcesso) continue;
+
+    valores[i][map['Revisao Status']] = status || 'Respondida';
+    valores[i][map['Revisao Resposta']] = resposta || '';
+    valores[i][map['Data Atualização']] = new Date().toISOString();
+
+    aba.getRange(i + 1, 1, 1, valores[i].length).setValues([valores[i]]);
+
+    // notificar solicitante
+    var solicitante = valores[i][map['Revisao Solicitante']];
+    if (solicitante) {
+      var assunto = '[REVISÃO] Resposta à sua solicitação — processo ' + idProcesso;
+      var mensagem = 'Sua solicitação de revisão foi respondida.\n\nStatus: ' + (status || '') + '\n\n' + (resposta || '');
+      enviarEmailInterno(solicitante, assunto, mensagem);
+    }
+
+    return { ok: true };
+  }
+
+  return { ok: false };
+}
+
 function responderTarefaComoFuncao(idTarefa, mensagem, autor) {
 
   if (!mensagem) return { ok: false };

@@ -1,100 +1,128 @@
-
+<!--
+@file mod_balcao.html
+@type module
+@description Central de Comunicação — processos de produção, fila por função, Kanban, entregas e revisões.
+@responsibility Estrutura HTML + JS da aba #aba-balcao.
+@dependencies GAS.comunicacaoProcessos, GAS.entregas, GAS.revisao, GAS.tarefas,
+              showLoader, escaparHTML, temPermissao
+-->
 
 <style>
-  .modo-btn{
+  .modo-btn {
     font-size:10px;
-    padding:6px 8px;
+    padding:6px 10px;
     border-radius:8px;
     background:#f1f5f9;
     color:#64748b;
     transition:all .15s ease;
+    border:none;
+    cursor:pointer;
+    display:inline-flex;
+    align-items:center;
+    gap:4px;
+  }
+  .modo-btn:hover { background:#6366f1; color:#fff; }
+  .modo-btn.ativo  { background:#1e293b; color:#fff; }
+
+  .kanban-item {
+    transition:all .15s ease;
+    user-select:none;
+  }
+  .kanban-item:hover {
+    transform:translateY(-1px);
+    box-shadow:0 4px 12px rgba(0,0,0,.08);
+  }
+  .kanban-col { transition:background .2s; border-radius:14px; }
+  .kanban-col.drag-over {
+    outline:2px dashed #a5b4fc;
+    background:#eef2ff !important;
   }
 
-  .modo-btn:hover{
-    background:#6366f1;
-    color:white;
+  .balcao-func-btn {
+    padding:5px 12px;
+    border-radius:8px;
+    font-size:10px;
+    font-weight:700;
+    border:1.5px solid #e2e8f0;
+    background:#fff;
+    color:#64748b;
+    cursor:pointer;
+    transition:all .15s;
+    white-space:nowrap;
   }
-
-  .modo-btn.ativo{
-    background:#1e293b;
-    color:white;
-  }
-
-  .kanban-item{
-    transition: all .15s ease;
-  }
-
-  .kanban-item:hover{
-    transform: scale(1.02);
-  }
-
-  .kanban-col{
-    transition: background .2s;
-  }
-
-  .kanban-col.drag-over{
-    background: #eef2ff;
-  }
-
+  .balcao-func-btn.ativo { background:#1e293b; color:#fff; border-color:#1e293b; }
+  .balcao-func-btn:hover:not(.ativo) { border-color:#6366f1; color:#6366f1; }
 </style>
 
 <section id="aba-balcao" class="tab-content hidden pb-20">
 
+  <!-- CARD PRINCIPAL: lista de processos -->
   <div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
 
     <!-- HEADER -->
-    <div class="p-5 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
+    <div class="p-5 border-b border-slate-100 bg-slate-50/50 flex flex-wrap justify-between items-center gap-3">
       <div>
         <h3 class="font-black text-slate-800 uppercase text-sm">
           <i class="fas fa-bullhorn text-orange-400 mr-2"></i>Central de Comunicação
         </h3>
         <p class="text-[10px] text-slate-400">Produção, campanhas e publicização</p>
       </div>
-
       <button onclick="abrirModalAtendimento()"
-        class="bg-orange-500 hover:bg-orange-600 text-white text-[10px] font-black px-4 py-2 rounded-xl">
-        <i class="fas fa-plus mr-1"></i>Novo Processo
+        class="bg-orange-500 hover:bg-orange-600 text-white text-[10px] font-black px-4 py-2 rounded-xl transition-all uppercase flex items-center gap-1.5">
+        <i class="fas fa-plus text-[9px]"></i>Novo Processo
       </button>
     </div>
 
     <!-- FILTROS -->
-    <div class="p-4 flex gap-3 flex-wrap border-b">
-
-      <input id="balcaoBusca" placeholder="Buscar..."
-        class="border rounded-lg px-3 py-2 text-xs w-60">
-
+    <div class="p-4 flex gap-3 flex-wrap border-b border-slate-100 items-center">
+      <div class="relative">
+        <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 text-xs"></i>
+        <input id="balcaoBusca" placeholder="Buscar processo..."
+          style="padding:8px 12px 8px 30px;border:1.5px solid #e2e8f0;border-radius:10px;font-size:12px;outline:none;width:200px;transition:border-color .15s"
+          onfocus="this.style.borderColor='#f97316'" onblur="this.style.borderColor='#e2e8f0'">
+      </div>
       <select id="balcaoFiltroStatus"
-        class="border rounded-lg px-3 py-2 text-xs">
-        <option value="">Todos</option>
+        style="padding:8px 12px;border:1.5px solid #e2e8f0;border-radius:10px;font-size:12px;outline:none;color:#475569">
+        <option value="">Todos os status</option>
         <option>Solicitado</option>
         <option>Em andamento</option>
         <option>Concluído</option>
       </select>
-
-      <button onclick="mudarModoFila('lista')" data-modo="lista" class="modo-btn">☰</button>
-      <button onclick="mudarModoFila('kanban')" data-modo="kanban" class="modo-btn">▦</button>
-      <button onclick="mudarModoFila('cards')" data-modo="cards" class="modo-btn">◫</button>
-      <button onclick="mudarModoFila('carga')" data-modo="carga" class="modo-btn">👥</button>
-      <button onclick="mudarModoFila('timeline')" data-modo="timeline" class="modo-btn">⏱</button>
-
     </div>
 
     <!-- CONTADORES -->
-    <div id="balcaoContadores" class="flex gap-2 p-3 text-xs"></div>
+    <div id="balcaoContadores" class="flex gap-2 p-3 flex-wrap border-b border-slate-50"></div>
 
     <!-- CONTEÚDO PRINCIPAL -->
-    <div id="balcaoContainer"></div>
+    <div id="balcaoContainer">
+      <div class="p-10 text-center">
+        <i class="fas fa-spinner animate-spin text-orange-300 text-xl"></i>
+        <p class="text-[11px] text-slate-400 mt-2">Carregando...</p>
+      </div>
+    </div>
 
   </div>
 
-  <div class="mt-6 bg-white border border-slate-200 rounded-2xl p-4">
+  <!-- FILA DA EQUIPE -->
+  <div class="mt-6 bg-white border border-slate-200 rounded-3xl p-5">
 
-    <div class="text-[10px] uppercase tracking-wider text-slate-400 mb-2 font-black">
-      Fila da equipe
-    </div>
-
-    <div class="text-xs font-semibold text-slate-700 mb-3">
-      Design
+    <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+      <div>
+        <div class="text-[10px] uppercase tracking-wider text-slate-400 font-black mb-0.5">Fila da equipe</div>
+        <div id="balcaoFuncaoLabel" class="text-xs font-black text-slate-700">Design</div>
+      </div>
+      <div class="flex items-center gap-3 flex-wrap">
+        <!-- Seletor de função -->
+        <div id="balcaoFuncaoSelector" class="flex gap-1 flex-wrap"></div>
+        <!-- Modos de visualização -->
+        <div class="flex gap-1">
+          <button onclick="mudarModoFila('lista')"     data-modo="lista"     class="modo-btn ativo" title="Lista"><i class="fas fa-list text-[10px]"></i></button>
+          <button onclick="mudarModoFila('kanban')"    data-modo="kanban"    class="modo-btn" title="Kanban"><i class="fas fa-columns text-[10px]"></i></button>
+          <button onclick="mudarModoFila('cards')"     data-modo="cards"     class="modo-btn" title="Cards"><i class="fas fa-th-large text-[10px]"></i></button>
+          <button onclick="mudarModoFila('carga')"     data-modo="carga"     class="modo-btn" title="Carga por pessoa"><i class="fas fa-users text-[10px]"></i></button>
+          <button onclick="mudarModoFila('timeline')"  data-modo="timeline"  class="modo-btn" title="Timeline"><i class="fas fa-stream text-[10px]"></i></button>
+        </div>
+      </div>
     </div>
 
     <div id="fila-funcao"></div>
@@ -104,1269 +132,883 @@
 </section>
 
 <script>
+// ══════════════════════════════════════════════════════
+// ESTADO
+// ══════════════════════════════════════════════════════
+var _balcaoCache       = [];
+var _balcaoFuncaoAtual = 'design';
+var _modoFila          = 'lista';
 
-var _balcaoCache = [];
-
-var ENTREGAS_PADRAO = [
-  'design',
-  'diagramacao',
-  'foto',
-  'ensaio_fotografico',
-  'video',
-  'edicao_video',
-  'stories',
-  'materia',
-  'divulgacao'
+var _FUNCOES_BALCAO = [
+  { key:'design',       label:'Design'       },
+  { key:'foto',         label:'Foto'         },
+  { key:'video',        label:'Vídeo'        },
+  { key:'materia',      label:'Texto'        },
+  { key:'comunicacao',  label:'Geral'        }
 ];
 
-// ==========================
+var ENTREGAS_PADRAO = [
+  'design','diagramacao','foto','ensaio_fotografico',
+  'video','edicao_video','stories','materia','divulgacao'
+];
+
+// ══════════════════════════════════════════════════════
+// HELPERS
+// ══════════════════════════════════════════════════════
+function _labelEntrega(k){
+  var m = { design:'Peça gráfica', diagramacao:'Diagramação', foto:'Fotografia',
+            ensaio_fotografico:'Ensaio fotográfico', video:'Captação de vídeo',
+            edicao_video:'Edição de vídeo', stories:'Cobertura (stories)',
+            materia:'Matéria / texto', divulgacao:'Publicação / divulgação' };
+  return m[k] || k;
+}
+
+function _isAtrasadoBalcao(prazo, status){
+  if (!prazo) return false;
+  return new Date(prazo) < new Date() && (status||'').toLowerCase() !== 'concluído';
+}
+
+// ══════════════════════════════════════════════════════
 // CARREGAR
-// ==========================
-function carregarBalcao() {
+// ══════════════════════════════════════════════════════
+function carregarBalcao(){
   GAS.comunicacaoProcessos.listar(function(lista){
     _balcaoCache = lista || [];
     _balcaoFiltrar();
     _balcaoRenderizarContadores();
+  }, function(e){
+    document.getElementById('balcaoContainer').innerHTML =
+      '<div class="p-10 text-center text-red-400 text-sm"><i class="fas fa-exclamation-triangle mr-2"></i>Erro ao carregar processos.</div>';
   });
 }
 
-// ==========================
+// ══════════════════════════════════════════════════════
 // FILTRAR
-// ==========================
+// ══════════════════════════════════════════════════════
 function _balcaoFiltrar(){
-
-  var q = (document.getElementById('balcaoBusca').value || '').toLowerCase();
+  var q  = (document.getElementById('balcaoBusca').value||'').toLowerCase();
   var st = document.getElementById('balcaoFiltroStatus').value;
-
   var filtrados = _balcaoCache.filter(function(a){
-
-    var matchBusca =
-      (a.titulo || a.assunto || '').toLowerCase().includes(q) ||
-      (a.descricao || '').toLowerCase().includes(q);
-
+    var matchBusca  = (a.titulo||a.assunto||'').toLowerCase().includes(q) ||
+                      (a.descricao||'').toLowerCase().includes(q);
     var matchStatus = !st || a.status === st;
-
     return matchBusca && matchStatus;
   });
-
   renderizarBalcao(filtrados);
 }
 
-// ==========================
-// CONTADORES
-// ==========================
+// ══════════════════════════════════════════════════════
+// CONTADORES — com badge de atraso
+// ══════════════════════════════════════════════════════
 function _balcaoRenderizarContadores(){
-
   var c = document.getElementById('balcaoContadores');
-
-  var map = {};
-
+  if (!c) return;
+  var map = {}, atrasados = 0;
   _balcaoCache.forEach(function(a){
-    var s = a.status || 'Sem status';
+    var s = a.status||'Sem status';
     map[s] = (map[s]||0)+1;
+    if (_isAtrasadoBalcao(a.prazo, a.status)) atrasados++;
   });
-
-  c.innerHTML = Object.keys(map).map(function(s){
-    return `<div class="px-3 py-1 bg-slate-100 rounded">${s}: ${map[s]}</div>`;
+  var html = Object.keys(map).map(function(s){
+    var cls = s.toLowerCase()==='concluído' ? 'bg-emerald-100 text-emerald-700'
+            : s.toLowerCase()==='em andamento' ? 'bg-amber-100 text-amber-700'
+            : 'bg-slate-100 text-slate-600';
+    return '<div class="px-3 py-1 rounded-lg text-[11px] font-bold '+cls+'">'+escaparHTML(s)+': '+map[s]+'</div>';
   }).join('');
+  if (atrasados){
+    html += '<div class="px-3 py-1 bg-red-100 text-red-700 rounded-lg text-[11px] font-black">'
+          + '<i class="fas fa-exclamation-triangle mr-1"></i>'
+          + atrasados+' atrasado'+(atrasados>1?'s':'')+'</div>';
+  }
+  c.innerHTML = html;
 }
 
-// ==========================
-// RENDER
-// ==========================
+// ══════════════════════════════════════════════════════
+// RENDER — tabela de processos
+// ══════════════════════════════════════════════════════
 function renderizarBalcao(lista){
-
   lista = lista || _balcaoCache;
-
   var c = document.getElementById('balcaoContainer');
+  if (!c) return;
 
-  function esc(s){
-    return String(s||'')
-      .replace(/&/g,'&amp;')
-      .replace(/</g,'&lt;')
-      .replace(/>/g,'&gt;');
-  }
-
-  if (!lista.length) {
-    c.innerHTML = `
-      <div class="p-12 text-center">
-        <i class="fas fa-bullhorn text-slate-200 text-4xl mb-3"></i>
-        <p class="text-slate-400 font-bold text-sm">Nenhum processo encontrado</p>
-      </div>
-    `;
+  if (!lista.length){
+    c.innerHTML = '<div class="p-12 text-center">'
+      + '<i class="fas fa-bullhorn text-slate-200 text-4xl mb-3"></i>'
+      + '<p class="text-slate-400 font-bold text-sm">Nenhum processo encontrado</p>'
+      + (temPermissao('comunicacao','editar')
+          ? '<button onclick="abrirModalAtendimento()" class="mt-4 bg-orange-500 text-white text-xs font-black px-4 py-2 rounded-xl">+ Novo Processo</button>'
+          : '')
+      + '</div>';
     return;
   }
 
-  c.innerHTML = `
-    <div class="overflow-x-auto">
-      <table class="w-full text-sm">
-
-        <thead>
-          <tr class="text-[10px] uppercase tracking-wider text-slate-400 border-b">
-            <th class="p-3 text-left">Tipo</th>
-            <th class="p-3 text-left">Processo</th>
-            <th class="p-3 text-left">Status</th>
-            <th class="p-3 text-left">Prazo</th>
-            <th class="p-3 text-left">Responsável</th>
-            <th class="p-3 text-right"></th>
-          </tr>
-        </thead>
-
-        <tbody>
-          ${lista.map(a => {
-
-            const id = a.id || '';
-            const status = (a.status || '').toLowerCase().trim();
-
-            const statusClass =
-              status === 'concluído' ? 'bg-emerald-100 text-emerald-700' :
-              status === 'em andamento' ? 'bg-amber-100 text-amber-700' :
-              'bg-slate-100 text-slate-600';
-
-            return `
-              <tr class="border-b hover:bg-slate-50 transition cursor-pointer"
-                  onclick="_balcaoToggle('${id}')">
-
-                <!-- TIPO -->
-                <td class="p-3">
-                  <span class="text-[10px] font-bold text-slate-500 uppercase">
-                    ${esc(a.tipo || '-')}
-                  </span>
-                </td>
-
-                <!-- TÍTULO + DESCRIÇÃO -->
-                <td class="p-3">
-                  <div class="font-semibold text-slate-800 leading-tight">
-                    ${esc(a.titulo || a.assunto || '-')}
-                  </div>
-                  ${
-                    a.descricao
-                      ? `<div class="text-[11px] text-slate-400 mt-0.5 truncate">
-                          ${esc(a.descricao)}
-                        </div>`
-                      : ''
-                  }
-                </td>
-
-                <!-- STATUS -->
-                <td class="p-3">
-                  <span class="px-2 py-1 rounded-full text-[10px] font-black ${statusClass}">
-                    ${esc(a.status || '-')}
-                  </span>
-                </td>
-
-                <!-- PRAZO -->
-                <td class="p-3 text-[11px] text-slate-500">
-                  ${esc(a.prazo || '-')}
-                </td>
-
-                <!-- RESPONSÁVEL -->
-                <td class="p-3 text-[11px] text-slate-600">
-                  ${esc(a.responsavel || '-')}
-                </td>
-
-                <!-- AÇÕES -->
-                <td class="p-3 text-right">
-                  <div class="flex justify-end gap-1">
-
-                    <button
-                      onclick="event.stopPropagation(); editarAtendimento('${id}')"
-                      class="w-7 h-7 flex items-center justify-center rounded-md bg-slate-100 text-slate-500 hover:bg-indigo-600 hover:text-white transition">
-                      <i class="fas fa-edit text-[10px]"></i>
-                    </button>
-
-                    <button
-                      onclick="event.stopPropagation(); excluirAtendimento('${id}')"
-                      class="w-7 h-7 flex items-center justify-center rounded-md bg-slate-100 text-slate-400 hover:bg-red-600 hover:text-white transition">
-                      <i class="fas fa-trash text-[10px]"></i>
-                    </button>
-
-                    <button
-                      onclick="event.stopPropagation(); abrirSolicitacaoRevisao('${id}')"
-                      class="w-7 h-7 flex items-center justify-center rounded-md bg-amber-100 text-amber-600 hover:bg-amber-500 hover:text-white transition"
-                      title="Solicitar alteração">
-                      <i class="fas fa-pen text-[10px]"></i>
-                    </button>
-
-                  </div>
-                </td>
-
-              </tr>
-
-              <tr id="balcao-detail-${id}" class="hidden bg-slate-50">
-                <td colspan="6" class="p-4">
-                  <div id="balcao-detail-content-${id}"></div>
-                </td>
-              </tr>
-            `;
-          }).join('')}
-        </tbody>
-
-      </table>
-    </div>
-  `;
+  c.innerHTML = '<div class="overflow-x-auto"><table class="w-full text-sm">'
+    + '<thead><tr class="text-[10px] uppercase tracking-wider text-slate-400 border-b bg-slate-50/50">'
+    + '<th class="p-3 text-left">Tipo</th>'
+    + '<th class="p-3 text-left">Processo</th>'
+    + '<th class="p-3 text-left">Status</th>'
+    + '<th class="p-3 text-left">Prazo</th>'
+    + '<th class="p-3 text-left">Responsável</th>'
+    + '<th class="p-3 text-right"></th>'
+    + '</tr></thead><tbody>'
+    + lista.map(function(a){
+        var id       = a.id||'';
+        var status   = (a.status||'').toLowerCase().trim();
+        var atrasado = _isAtrasadoBalcao(a.prazo, a.status);
+        var stCls    = status==='concluído'     ? 'bg-emerald-100 text-emerald-700'
+                     : status==='em andamento'  ? 'bg-amber-100 text-amber-700'
+                     : 'bg-slate-100 text-slate-600';
+        return '<tr class="border-b hover:bg-slate-50 transition cursor-pointer'+(atrasado?' bg-red-50/30':'')+'" onclick="_balcaoToggle(\''+escaparHTML(id)+'\')">'
+          + '<td class="p-3"><span class="text-[10px] font-bold text-slate-500 uppercase">'+escaparHTML(a.tipo||'-')+'</span></td>'
+          + '<td class="p-3">'
+          +   '<div class="font-semibold text-slate-800 leading-tight flex items-center gap-1.5">'
+          +   (atrasado?'<i class="fas fa-circle text-red-400" style="font-size:6px"></i>':'')
+          +   escaparHTML(a.titulo||a.assunto||'-')+'</div>'
+          +   (a.descricao?'<div class="text-[11px] text-slate-400 mt-0.5 truncate max-w-xs">'+escaparHTML(a.descricao)+'</div>':'')
+          + '</td>'
+          + '<td class="p-3"><span class="px-2 py-1 rounded-full text-[10px] font-black '+stCls+'">'+escaparHTML(a.status||'-')+'</span></td>'
+          + '<td class="p-3 text-[11px] '+(atrasado?'text-red-500 font-bold':'text-slate-500')+'">'+escaparHTML(a.prazo||'-')+'</td>'
+          + '<td class="p-3 text-[11px] text-slate-600">'+escaparHTML(a.responsavel||'-')+'</td>'
+          + '<td class="p-3 text-right"><div class="flex justify-end gap-1">'
+          + '<button onclick="event.stopPropagation();editarAtendimento(\''+escaparHTML(id)+'\')" class="w-7 h-7 flex items-center justify-center rounded-md bg-slate-100 text-slate-500 hover:bg-indigo-600 hover:text-white transition" title="Editar"><i class="fas fa-edit text-[10px]"></i></button>'
+          + '<button onclick="event.stopPropagation();excluirAtendimento(\''+escaparHTML(id)+'\')" class="w-7 h-7 flex items-center justify-center rounded-md bg-slate-100 text-slate-400 hover:bg-red-600 hover:text-white transition" title="Excluir"><i class="fas fa-trash text-[10px]"></i></button>'
+          + '<button onclick="event.stopPropagation();abrirSolicitacaoRevisao(\''+escaparHTML(id)+'\')" class="w-7 h-7 flex items-center justify-center rounded-md bg-amber-100 text-amber-600 hover:bg-amber-500 hover:text-white transition" title="Solicitar revisão"><i class="fas fa-pen text-[10px]"></i></button>'
+          + '</div></td>'
+          + '</tr>'
+          + '<tr id="balcao-detail-'+escaparHTML(id)+'" class="hidden bg-slate-50/50">'
+          +   '<td colspan="6" class="p-4"><div id="balcao-detail-content-'+escaparHTML(id)+'"></div></td>'
+          + '</tr>';
+      }).join('')
+    + '</tbody></table></div>';
 }
 
+// ══════════════════════════════════════════════════════
+// TOGGLE DETALHE DO PROCESSO
+// ══════════════════════════════════════════════════════
 function _balcaoToggle(id){
-
-  var row = document.getElementById('balcao-detail-' + id);
-
+  var row = document.getElementById('balcao-detail-'+id);
   if (!row) return;
-
   var aberto = !row.classList.contains('hidden');
-
-  if (aberto) {
-    row.classList.add('hidden');
-    return;
-  }
-
+  if (aberto){ row.classList.add('hidden'); return; }
   row.classList.remove('hidden');
-
   _renderDetalheProcesso(id);
-
 }
 
 function _renderDetalheProcesso(id){
+  var proc = _balcaoCache.find(function(a){ return a.id===id; });
+  var el   = document.getElementById('balcao-detail-content-'+id);
+  if (!proc||!el) return;
 
-  var proc = _balcaoCache.find(a => a.id === id);
-  var el = document.getElementById('balcao-detail-content-' + id);
-
-  if (!proc || !el) return;
-
-  el.innerHTML = `
-    <div class="grid md:grid-cols-2 gap-4">
-
-      <!-- INFO -->
-      <div class="bg-white border rounded-xl p-4">
-        <div class="text-[10px] uppercase text-slate-400 mb-1">Descrição</div>
-        <div class="text-sm text-slate-700">${proc.descricao || '-'}</div>
-
-        <div class="mt-3 text-[10px] uppercase text-slate-400">Origem</div>
-        <div class="text-sm">${proc.origem || '-'}</div>
-      </div>
-
-      <!-- AÇÕES -->
-      <div class="bg-white border rounded-xl p-4 flex flex-col gap-2">
-
-        <button 
-          onclick="abrirSolicitacaoRevisao('${proc.id}')"
-          class="text-xs font-bold px-3 py-2 rounded-lg bg-amber-100 text-amber-700 hover:bg-amber-500 hover:text-white">
-          Solicitar alteração
-        </button>
-
-      </div>
-
-    </div>
-
-    <!-- ENTREGAS -->
-    <div class="mt-4">
-      <div class="text-[10px] uppercase text-slate-400 mb-2">Entregas</div>
-      <div id="entregas-${id}"></div>
-    </div>
-
-    <!-- REVISÃO -->
-    <div class="mt-4">
-      <div class="text-[10px] uppercase text-slate-400 mb-2">Revisão</div>
-      <div id="revisao-${id}"></div>
-    </div>
-  `;
+  el.innerHTML =
+    '<div class="grid md:grid-cols-2 gap-4">'
+    + '<div class="bg-white border border-slate-200 rounded-xl p-4">'
+    +   '<div class="text-[10px] uppercase text-slate-400 mb-1 font-black">Descrição</div>'
+    +   '<div class="text-sm text-slate-700">'+escaparHTML(proc.descricao||'-')+'</div>'
+    +   '<div class="mt-3 text-[10px] uppercase text-slate-400 font-black">Origem</div>'
+    +   '<div class="text-sm text-slate-600">'+escaparHTML(proc.origem||'-')+'</div>'
+    + '</div>'
+    + '<div class="bg-white border border-slate-200 rounded-xl p-4 flex flex-col gap-2">'
+    +   '<button onclick="abrirSolicitacaoRevisao(\''+escaparHTML(id)+'\')" '
+    +     'class="text-xs font-bold px-3 py-2 rounded-lg bg-amber-100 text-amber-700 hover:bg-amber-500 hover:text-white transition">'
+    +     '<i class="fas fa-pen mr-1"></i>Solicitar revisão</button>'
+    + '</div>'
+    + '</div>'
+    + '<div class="mt-4">'
+    +   '<div class="text-[10px] uppercase text-slate-400 mb-2 font-black">Entregas</div>'
+    +   '<div id="entregas-'+escaparHTML(id)+'"><i class="fas fa-spinner animate-spin text-slate-300 text-xs"></i></div>'
+    + '</div>'
+    + '<div class="mt-4">'
+    +   '<div class="text-[10px] uppercase text-slate-400 mb-2 font-black">Revisão</div>'
+    +   '<div id="revisao-'+escaparHTML(id)+'"></div>'
+    + '</div>';
 
   _renderEntregas(id);
   _renderRevisao(proc);
-
 }
 
+// ══════════════════════════════════════════════════════
+// RENDER ENTREGAS
+// ══════════════════════════════════════════════════════
 function _renderEntregas(id){
-
   GAS.entregas.listarPorProcesso(id, function(lista){
-
-    var el = document.getElementById('entregas-' + id);
+    var el = document.getElementById('entregas-'+id);
     if (!el) return;
-
-    function esc(s){
-      return String(s||'')
-        .replace(/&/g,'&amp;')
-        .replace(/</g,'&lt;')
-        .replace(/>/g,'&gt;');
-    }
-
-    if (!lista || !lista.length) {
-      el.innerHTML = '<div class="text-xs text-slate-400">Sem entregas</div>';
+    if (!lista||!lista.length){
+      el.innerHTML = '<div class="text-xs text-slate-400 italic">Sem entregas registradas.</div>';
       return;
     }
-
     el.innerHTML = lista.map(function(e){
-
-      const idEntrega = e['ID Entrega'] || '';
-      const tipo = e['Tipo'] || '-';
-      const link = e['Link Entrega'] || '';
-
-      return `
-        <div class="flex items-center gap-2 mb-2">
-
-          <div class="flex-1 text-sm">
-            ${esc(tipo)}
-          </div>
-
-          <input
-            id="linkEntrega_${idEntrega}"
-            value="${esc(link)}"
-            placeholder="Link"
-            class="border px-2 py-1 text-xs rounded w-40"
-          >
-
-          <button
-            onclick="concluirEntrega('${idEntrega}')"
-            class="text-xs px-2 py-1 rounded bg-emerald-100 text-emerald-700 hover:bg-emerald-600 hover:text-white transition">
-            Concluir
-          </button>
-
-        </div>
-      `;
-
+      var idE    = e['ID Entrega']||'';
+      var tipo   = e['Tipo']||'-';
+      var link   = e['Link Entrega']||'';
+      var entregue = (e['Status']||'').toLowerCase()==='entregue';
+      return '<div class="flex items-center gap-2 mb-2 p-2 rounded-lg '+(entregue?'bg-emerald-50 border border-emerald-100':'bg-slate-50 border border-slate-100')+'">'
+        + '<span class="flex-1 text-xs font-semibold text-slate-700">'+escaparHTML(tipo)+'</span>'
+        + (entregue
+            ? '<span class="text-[10px] text-emerald-600 font-black"><i class="fas fa-check mr-1"></i>Entregue</span>'
+            : '<input id="linkEntrega_'+escaparHTML(idE)+'" value="'+escaparHTML(link)+'" placeholder="Cole o link aqui" '
+            + 'style="border:1.5px solid #e2e8f0;border-radius:8px;padding:4px 10px;font-size:11px;outline:none;width:180px"'
+            + ' onfocus="this.style.borderColor=\'#6366f1\'" onblur="this.style.borderColor=\'#e2e8f0\'">'
+            + '<button onclick="concluirEntrega(\''+escaparHTML(idE)+'\')" '
+            + 'class="text-xs px-2 py-1 rounded-lg bg-emerald-100 text-emerald-700 hover:bg-emerald-600 hover:text-white transition font-bold whitespace-nowrap">'
+            + 'Concluir</button>')
+        + '</div>';
     }).join('');
-
   });
-
 }
 
+// ══════════════════════════════════════════════════════
+// RENDER REVISÃO
+// ══════════════════════════════════════════════════════
 function _renderRevisao(proc){
-
-  var el = document.getElementById('revisao-' + proc.id);
-
-  if (!proc.revisaoStatus || proc.revisaoStatus !== 'Pendente') {
-    el.innerHTML = '<div class="text-xs text-slate-400">Sem solicitações</div>';
+  var el = document.getElementById('revisao-'+proc.id);
+  if (!el) return;
+  if (!proc.revisaoStatus||proc.revisaoStatus!=='Pendente'){
+    el.innerHTML = '<div class="text-xs text-slate-400 italic">Sem solicitações de revisão.</div>';
     return;
   }
-
-  el.innerHTML = `
-    <div class="bg-amber-50 border border-amber-200 rounded-lg p-3">
-
-      <div class="text-xs text-slate-600 mb-2">
-        ${proc.revisaoSolicitacao || ''}
-      </div>
-
-      <div class="flex gap-2">
-
-        <button
-          onclick="_responderRevisao('${proc.id}','Aprovado')"
-          class="text-xs px-3 py-1 bg-emerald-100 text-emerald-700 rounded">
-          Aprovar
-        </button>
-
-        <button
-          onclick="_responderRevisao('${proc.id}','Rejeitado')"
-          class="text-xs px-3 py-1 bg-red-100 text-red-700 rounded">
-          Rejeitar
-        </button>
-
-      </div>
-
-    </div>
-  `;
+  el.innerHTML =
+    '<div class="bg-amber-50 border border-amber-200 rounded-xl p-3">'
+    + '<div class="flex items-start gap-2 mb-3">'
+    +   '<i class="fas fa-pen text-amber-500 text-xs mt-0.5 flex-shrink-0"></i>'
+    +   '<div><p class="text-[10px] font-black text-amber-700 uppercase mb-1">Solicitação de revisão</p>'
+    +   '<p class="text-xs text-slate-700">'+escaparHTML(proc.revisaoSolicitacao||'')+'</p>'
+    +   (proc.revisaoSolicitante?'<p class="text-[10px] text-slate-400 mt-1">Por: '+escaparHTML(proc.revisaoSolicitante)+'</p>':'')
+    +   '</div>'
+    + '</div>'
+    + '<div class="flex gap-2">'
+    +   '<button onclick="_responderRevisao(\''+escaparHTML(proc.id)+'\',\'Aprovado\')" '
+    +     'class="text-xs px-3 py-1.5 bg-emerald-100 text-emerald-700 rounded-lg hover:bg-emerald-600 hover:text-white transition font-bold">'
+    +     '<i class="fas fa-check mr-1"></i>Aprovar</button>'
+    +   '<button onclick="_responderRevisao(\''+escaparHTML(proc.id)+'\',\'Rejeitado\')" '
+    +     'class="text-xs px-3 py-1.5 bg-red-100 text-red-700 rounded-lg hover:bg-red-600 hover:text-white transition font-bold">'
+    +     '<i class="fas fa-times mr-1"></i>Rejeitar</button>'
+    + '</div>'
+    + '</div>';
 }
 
 function _responderRevisao(id, status){
-
   Swal.fire({
-    title: 'Resposta',
-    input: 'textarea',
-    inputPlaceholder: 'Comentário...',
-    showCancelButton: true
+    title: status==='Aprovado' ? 'Aprovar revisão' : 'Rejeitar revisão',
+    input:'textarea', inputLabel:'Comentário (opcional)',
+    inputPlaceholder:'Descreva a resposta...',
+    showCancelButton:true,
+    confirmButtonText: status==='Aprovado'
+      ? '<i class="fas fa-check mr-1"></i>Aprovar'
+      : '<i class="fas fa-times mr-1"></i>Rejeitar',
+    confirmButtonColor: status==='Aprovado'?'#059669':'#ef4444',
+    cancelButtonText:'Cancelar',
+    customClass:{ popup:'rounded-3xl', confirmButton:'rounded-xl font-black text-sm', cancelButton:'rounded-xl font-bold text-sm' }
   }).then(function(r){
-
-    if (!r.value) return;
-
-    GAS.revisao.responder(
-      id,
-      status,
-      r.value,
-      function(){
-        carregarBalcao();
-      }
-    );
-
+    if (!r.isConfirmed) return;
+    showLoader(true);
+    GAS.revisao.responder(id, status, r.value||'', function(){
+      showLoader(false); carregarBalcao();
+    }, function(e){ showLoader(false); Swal.fire('Erro', String(e), 'error'); });
   });
-
 }
 
-function _sugerirEntregasPorTipo(tipo){
+// ══════════════════════════════════════════════════════
+// SOLICITAR REVISÃO
+// ══════════════════════════════════════════════════════
+function abrirSolicitacaoRevisao(id){
+  Swal.fire({
+    title:'Solicitar revisão',
+    input:'textarea', inputLabel:'Descreva a alteração necessária',
+    inputPlaceholder:'Ex: Preciso alterar a data do evento na arte...',
+    inputAttributes:{ rows:4 },
+    showCancelButton:true,
+    confirmButtonText:'<i class="fas fa-paper-plane mr-1"></i>Enviar',
+    cancelButtonText:'Cancelar',
+    confirmButtonColor:'#f59e0b',
+    customClass:{ popup:'rounded-3xl', confirmButton:'rounded-xl font-black text-sm', cancelButton:'rounded-xl font-bold text-sm' },
+    preConfirm:function(val){
+      if (!val||!val.trim()){ Swal.showValidationMessage('Descreva a solicitação'); return false; }
+      return val.trim();
+    }
+  }).then(function(r){
+    if (!r.isConfirmed) return;
+    showLoader(true);
+    GAS.revisao.solicitar(id, r.value, '', function(){
+      showLoader(false);
+      Swal.fire({ icon:'success', title:'Solicitação enviada', timer:1800,
+        showConfirmButton:false, customClass:{ popup:'rounded-3xl' } });
+      carregarBalcao();
+    }, function(e){ showLoader(false); Swal.fire('Erro', String(e), 'error'); });
+  });
+}
 
-  var mapa = {
+// ══════════════════════════════════════════════════════
+// MODAL NOVO/EDITAR PROCESSO
+// ══════════════════════════════════════════════════════
+var _balcTipoEntregas = {
+  grafico:   ['design','diagramacao'],
+  foto:      ['foto','ensaio_fotografico'],
+  video:     ['video','edicao_video'],
+  rece:      ['design','materia','divulgacao'],
+  cobertura: ['foto','video','stories'],
+  campanha:  ['design','video','materia','divulgacao']
+};
 
-    'Design / Diagramação': [
-      'design',
-      'diagramacao'
-    ],
-
-    'Fotografia': [
-      'foto',
-      'ensaio_fotografico'
-    ],
-
-    'Audiovisual': [
-      'video',
-      'edicao_video'
-    ],
-
-    'Cobertura': [
-      'foto',
-      'video',
-      'stories'
-    ],
-
-    'Redes Sociais': [
-      'design',
-      'stories',
-      'divulgacao'
-    ],
-
-    'Matéria / Jornalismo': [
-      'materia',
-      'foto'
-    ],
-
-    'Campanha': [
-      'design',
-      'video',
-      'materia',
-      'divulgacao'
-    ],
-
-    'Publicação RECE': [
-      'design',
-      'materia',
-      'divulgacao'
-    ]
-
-  };
-
-  return mapa[tipo] || [];
+function _balcSugerirEntregas(tipo){
+  var sugestoes = _balcTipoEntregas[tipo]||[];
+  document.querySelectorAll('#swal2-html-container input.balcEntrega').forEach(function(cb){
+    if (sugestoes.includes(cb.value)){
+      cb.checked = true;
+      var lbl = cb.closest('label');
+      if (lbl){ lbl.style.borderColor='#f97316'; lbl.style.background='#fff7ed'; }
+    }
+  });
 }
 
 function abrirModalAtendimento(atual){
-
-  atual = atual || {};
+  atual = atual||{};
+  var sugestoes = _balcTipoEntregas[atual.tipo]||[];
 
   Swal.fire({
-
     title: atual.id ? 'Editar Processo' : 'Novo Processo',
+    width: Math.min(720, window.innerWidth-32),
+    showCancelButton:true,
+    confirmButtonText:'<i class="fas fa-save mr-1"></i>Salvar',
+    cancelButtonText:'Cancelar',
+    confirmButtonColor:'#f97316',
+    customClass:{ popup:'rounded-3xl', confirmButton:'rounded-xl font-black text-sm', cancelButton:'rounded-xl font-bold text-sm' },
 
-    width: 720,
+    html: '<div style="display:flex;flex-direction:column;gap:10px;text-align:left;padding:0 4px">'
 
-    html: `
+      + '<div style="display:grid;grid-template-columns:1fr 160px;gap:8px">'
+      +   '<div><label style="display:block;font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px">Responsável</label>'
+      +   '<input id="balcSolicitante" style="width:100%;padding:9px 13px;font-size:12px;border:1.5px solid #e2e8f0;border-radius:12px;outline:none;box-sizing:border-box" value="'+escaparHTML(atual.responsavel||'')+'" placeholder="Nome ou e-mail"></div>'
+      +   '<div><label style="display:block;font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px">Status</label>'
+      +   '<select id="balcStatus" style="width:100%;padding:9px 13px;font-size:12px;border:1.5px solid #e2e8f0;border-radius:12px;outline:none">'
+      +   ['Solicitado','Em andamento','Concluído'].map(function(s){ return '<option'+(atual.status===s?' selected':'')+'>'+s+'</option>'; }).join('')
+      +   '</select></div>'
+      + '</div>'
 
-      <div style="display:flex;flex-direction:column;gap:10px;text-align:left">
+      + '<div><label style="display:block;font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px">Título *</label>'
+      + '<input id="balcAssunto" style="width:100%;padding:9px 13px;font-size:13px;border:1.5px solid #e2e8f0;border-radius:12px;outline:none;box-sizing:border-box" value="'+escaparHTML(atual.titulo||atual.assunto||'')+'" placeholder="Título do processo de comunicação"></div>'
 
-        <!-- LINHA 1 -->
-        <div style="display:flex;gap:8px">
-          <input id="balcSolicitante" class="swal2-input" style="flex:1"
-            placeholder="Responsável"
-            value="${atual.responsavel||''}">
-          
-          <select id="balcStatus" class="swal2-input" style="max-width:160px">
-            <option ${atual.status==='Solicitado'?'selected':''}>Solicitado</option>
-            <option ${atual.status==='Em andamento'?'selected':''}>Em andamento</option>
-            <option ${atual.status==='Concluído'?'selected':''}>Concluído</option>
-          </select>
-        </div>
+      + '<div><label style="display:block;font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px">Descrição</label>'
+      + '<textarea id="balcObs" style="width:100%;padding:9px 13px;font-size:12px;border:1.5px solid #e2e8f0;border-radius:12px;outline:none;resize:vertical;min-height:60px;box-sizing:border-box" placeholder="Detalhe a demanda, contexto e referências...">'+escaparHTML(atual.descricao||'')+'</textarea></div>'
 
-        <!-- LINHA 2 -->
-        <input id="balcAssunto" class="swal2-input"
-          placeholder="Título do processo"
-          value="${atual.titulo||atual.assunto||''}">
+      + '<div style="display:grid;grid-template-columns:1fr 150px;gap:8px">'
+      +   '<div><label style="display:block;font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px">Tipo</label>'
+      +   '<select id="balcCanal" style="width:100%;padding:9px 13px;font-size:12px;border:1.5px solid #e2e8f0;border-radius:12px;outline:none" onchange="_balcSugerirEntregas(this.value)">'
+      +   [['grafico','Design gráfico'],['foto','Fotografia'],['video','Audiovisual'],['rece','Publicação RECE'],['cobertura','Cobertura'],['campanha','Campanha']].map(function(t){
+            return '<option value="'+t[0]+'"'+(atual.tipo===t[0]?' selected':'')+'>'+t[1]+'</option>';
+          }).join('')
+      +   '</select></div>'
+      +   '<div><label style="display:block;font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px">Prazo</label>'
+      +   '<input id="balcPrazo" type="date" style="width:100%;padding:9px 13px;font-size:12px;border:1.5px solid #e2e8f0;border-radius:12px;outline:none;box-sizing:border-box" value="'+escaparHTML(atual.prazo||'')+'"></div>'
+      + '</div>'
 
-        <!-- LINHA 3 -->
-        <textarea id="balcObs" class="swal2-textarea"
-          placeholder="Descrição detalhada da demanda">${atual.descricao||''}</textarea>
+      + '<div><label style="display:block;font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">Entregas necessárias</label>'
+      + '<div id="balcEntregasGrid" style="display:flex;gap:7px;flex-wrap:wrap">'
+      + ENTREGAS_PADRAO.map(function(e){
+          var checked = (atual.entregas||[]).includes(e)||sugestoes.includes(e);
+          var style   = checked
+            ? 'font-size:11px;display:flex;align-items:center;gap:5px;background:#fff7ed;border:1.5px solid #f97316;border-radius:8px;padding:4px 10px;cursor:pointer;transition:all .1s'
+            : 'font-size:11px;display:flex;align-items:center;gap:5px;background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:8px;padding:4px 10px;cursor:pointer;transition:all .1s';
+          return '<label style="'+style+'" class="balcEntregaLabel">'
+            + '<input type="checkbox" class="balcEntrega" value="'+e+'"'+(checked?' checked':'')+'> '
+            + _labelEntrega(e)+'</label>';
+        }).join('')
+      + '</div></div>'
 
-        <!-- LINHA 4 -->
-        <div style="display:flex;gap:8px">
+      + '</div>',
 
-          <select id="balcCanal" class="swal2-input" style="flex:1">
-            <option value="grafico" ${atual.tipo==='grafico'?'selected':''}>Design gráfico</option>
-            <option value="foto" ${atual.tipo==='foto'?'selected':''}>Fotografia</option>
-            <option value="video" ${atual.tipo==='video'?'selected':''}>Audiovisual</option>
-            <option value="rece" ${atual.tipo==='rece'?'selected':''}>Publicação RECE</option>
-          </select>
+    didOpen: function(){
+      document.querySelectorAll('.balcEntregaLabel').forEach(function(lbl){
+        var cb = lbl.querySelector('input');
+        function _upd(){ lbl.style.borderColor=cb.checked?'#f97316':'#e2e8f0'; lbl.style.background=cb.checked?'#fff7ed':'#f8fafc'; }
+        cb.addEventListener('change', _upd);
+      });
+    },
 
-          <input id="balcPrazo" type="date" class="swal2-input" style="max-width:160px"
-            value="${atual.prazo||''}">
-        </div>
-
-        <!-- ENTREGAS -->
-        <div style="margin-top:6px">
-
-          <div style="font-size:11px;color:#64748b;margin-bottom:4px">
-            Entregas necessárias
-          </div>
-
-          <div style="display:flex;gap:6px;flex-wrap:wrap">
-
-            ${ENTREGAS_PADRAO.map(e => `
-              <label style="font-size:11px;display:flex;align-items:center;gap:4px">
-                <input type="checkbox" class="balcEntrega" value="${e}"
-                  ${(atual.entregas||[]).includes(e)?'checked':''}>
-                ${_labelEntrega(e)}
-              </label>
-            `).join('')}
-
-          </div>
-
-        </div>
-
-      </div>
-    `,
-
-    confirmButtonText: 'Salvar',
-    confirmButtonColor: '#4f46e5',
-
-    preConfirm: function(){
-
-      var entregas = Array.from(
-        document.querySelectorAll('#swal2-html-container input[type=checkbox]:checked')
-      ).map(e => e.value);
-
-      var titulo = document.getElementById('balcAssunto').value;
-
-      if (!titulo) {
-        Swal.showValidationMessage('Título obrigatório');
-        return false;
-      }
-
+    preConfirm:function(){
+      var titulo = (document.getElementById('balcAssunto').value||'').trim();
+      if (!titulo){ Swal.showValidationMessage('Título é obrigatório'); return false; }
+      var entregas = Array.from(document.querySelectorAll('#swal2-html-container input.balcEntrega:checked')).map(function(e){ return e.value; });
       return {
-
-        id: atual.id || null,
-
-        titulo: titulo,
-        descricao: document.getElementById('balcObs').value,
-
-        tipo: document.getElementById('balcCanal').value,
-        status: document.getElementById('balcStatus').value,
-        responsavel: document.getElementById('balcSolicitante').value,
-
-        prazo: document.getElementById('balcPrazo').value,
-
-        entregas: entregas,
-
-        origem: 'manual'
-
+        id: atual.id||null, titulo: titulo,
+        descricao: (document.getElementById('balcObs').value||'').trim(),
+        tipo:      document.getElementById('balcCanal').value,
+        status:    document.getElementById('balcStatus').value,
+        responsavel: (document.getElementById('balcSolicitante').value||'').trim(),
+        prazo:     document.getElementById('balcPrazo').value,
+        entregas:  entregas, origem:'manual'
       };
     }
-
   }).then(function(r){
-
-    if (!r.value) return;
-
-    if (r.value.id) {
-
-      GAS.comunicacaoProcessos.atualizar(
-        r.value.id,
-        r.value,
-        carregarBalcao
-      );
-
+    if (!r.isConfirmed||!r.value) return;
+    showLoader(true);
+    var dados = r.value;
+    var onOk  = function(){ showLoader(false); carregarBalcao(); };
+    var onErr = function(e){ showLoader(false); Swal.fire('Erro', String(e), 'error'); };
+    if (dados.id){
+      GAS.comunicacaoProcessos.atualizar(dados.id, dados, onOk, onErr);
     } else {
-
-      GAS.comunicacaoProcessos.criar(
-        r.value,
-        carregarBalcao
-      );
-
+      GAS.comunicacaoProcessos.criar(dados, onOk, onErr);
     }
-
   });
 }
 
-// ==========================
-// EDITAR
-// ==========================
 function editarAtendimento(id){
-  var atual = _balcaoCache.find(a => a.id === id);
+  var atual = _balcaoCache.find(function(a){ return a.id===id; });
   abrirModalAtendimento(atual);
 }
 
-// ==========================
-// EXCLUIR
-// ==========================
 function excluirAtendimento(id){
-  GAS.comunicacaoProcessos.excluir(id, carregarBalcao);
+  var proc = _balcaoCache.find(function(a){ return a.id===id; });
+  Swal.fire({
+    title:'Excluir processo?',
+    html: proc
+      ? '<p class="text-sm text-slate-600">Excluir "<b>'+escaparHTML(proc.titulo||proc.assunto||'')+'</b>"?</p>'
+        + '<p class="text-xs text-slate-400 mt-1">As entregas e tarefas vinculadas serão afetadas.</p>'
+      : 'Confirmar exclusão?',
+    icon:'warning', showCancelButton:true,
+    confirmButtonColor:'#ef4444',
+    confirmButtonText:'<i class="fas fa-trash mr-1"></i>Excluir',
+    cancelButtonText:'Cancelar',
+    customClass:{ popup:'rounded-3xl', confirmButton:'rounded-xl font-black text-sm', cancelButton:'rounded-xl font-bold text-sm' }
+  }).then(function(r){
+    if (!r.isConfirmed) return;
+    showLoader(true);
+    GAS.comunicacaoProcessos.excluir(id, function(){
+      showLoader(false); carregarBalcao();
+    }, function(e){ showLoader(false); Swal.fire('Erro', String(e), 'error'); });
+  });
 }
 
-// ==========================
+// ══════════════════════════════════════════════════════
+// ON SHOW
+// ══════════════════════════════════════════════════════
 window._onShow_aba_balcao = function(){
+  _renderFuncaoSelector();
   carregarBalcao();
-  renderFilaFuncao('design');
+  renderFilaFuncao(_balcaoFuncaoAtual);
 };
 
-// ==========================
 document.getElementById('balcaoBusca').addEventListener('input', _balcaoFiltrar);
 document.getElementById('balcaoFiltroStatus').addEventListener('change', _balcaoFiltrar);
 
+// ══════════════════════════════════════════════════════
+// CONCLUIR ENTREGA (no detalhe do processo)
+// ══════════════════════════════════════════════════════
+function concluirEntrega(idEntrega){
+  var input = document.getElementById('linkEntrega_'+idEntrega);
+  var link  = input ? input.value.trim() : '';
 
-// ==========================
-// CONCLUIR ENTREGA
-// ==========================
-function concluirEntrega(idEntrega) {
-
-  var input = document.getElementById('linkEntrega_' + idEntrega);
-  var link = input ? input.value.trim() : '';
-
-  if (!link) {
-    alert('Adicione o link do material antes de concluir.');
+  if (!link){
+    Swal.fire({ icon:'warning', title:'Link obrigatório',
+      text:'Adicione o link do material antes de concluir.',
+      timer:2200, showConfirmButton:false, customClass:{ popup:'rounded-3xl' } });
     return;
   }
 
-  GAS.entregas.atualizar(idEntrega, {
-    status: 'Entregue',
-    link: link
-  }, function() {
+  showLoader(true);
+  GAS.entregas.atualizar(idEntrega, { status:'Entregue', link:link }, function(){
+    showLoader(false);
+    // identificar o idProcesso pelo container pai no DOM
+    var detail = input ? input.closest('[id^="balcao-detail-content-"]') : null;
+    var pid    = detail ? detail.id.replace('balcao-detail-content-','') : null;
+    if (pid) _renderEntregas(pid);
+    else carregarBalcao();
+  }, function(err){ showLoader(false); Swal.fire('Erro', String(err), 'error'); });
+}
 
-    alert('Entrega concluída!');
-    
-    // recarregar UI
-    _renderDetalheProcesso(idProcesso);
+// ══════════════════════════════════════════════════════
+// SELETOR DE FUNÇÃO
+// ══════════════════════════════════════════════════════
+function _renderFuncaoSelector(){
+  var el = document.getElementById('balcaoFuncaoSelector');
+  if (!el) return;
+  el.innerHTML = _FUNCOES_BALCAO.map(function(f){
+    var ativo = f.key===_balcaoFuncaoAtual;
+    return '<button onclick="_selecionarFuncaoFila(\''+escaparHTML(f.key)+'\',\''+escaparHTML(f.label)+'\')" '
+      + 'id="funcbtn-'+escaparHTML(f.key)+'" class="balcao-func-btn'+(ativo?' ativo':'')+'">'
+      + escaparHTML(f.label)+'</button>';
+  }).join('');
+}
 
-  }, function(err) {
-    alert('Erro ao atualizar entrega: ' + err);
+function _selecionarFuncaoFila(funcao, label){
+  _balcaoFuncaoAtual = funcao;
+  document.querySelectorAll('.balcao-func-btn').forEach(function(b){ b.classList.remove('ativo'); });
+  var btn = document.getElementById('funcbtn-'+funcao);
+  if (btn) btn.classList.add('ativo');
+  var lbl = document.getElementById('balcaoFuncaoLabel');
+  if (lbl) lbl.textContent = label;
+  renderFilaFuncao(funcao);
+}
+
+// ══════════════════════════════════════════════════════
+// ATRIBUIR TAREFA
+// ══════════════════════════════════════════════════════
+function atribuirTarefa(idTarefa, funcao){
+  Swal.fire({
+    title:'Atribuir tarefa',
+    html:'<div class="text-left" style="padding:0 4px">'
+      + '<label style="display:block;font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">Executor(es) — e-mail institucional</label>'
+      + '<textarea id="atribEmails" style="width:100%;padding:9px 13px;font-size:12px;border:1.5px solid #e2e8f0;border-radius:12px;outline:none;resize:vertical;min-height:64px;box-sizing:border-box" placeholder="email1@ccbj.org&#10;email2@ccbj.org"></textarea>'
+      + '</div>',
+    showCancelButton:true,
+    confirmButtonText:'<i class="fas fa-user-check mr-1"></i>Atribuir',
+    cancelButtonText:'Cancelar',
+    confirmButtonColor:'#6366f1',
+    customClass:{ popup:'rounded-3xl', confirmButton:'rounded-xl font-black text-sm', cancelButton:'rounded-xl font-bold text-sm' },
+    preConfirm:function(){
+      var val = (document.getElementById('atribEmails').value||'').trim();
+      if (!val){ Swal.showValidationMessage('Informe ao menos um e-mail'); return false; }
+      return val.split(/[,\n\s]+/).map(function(e){ return e.trim(); }).filter(Boolean);
+    }
+  }).then(function(r){
+    if (!r.isConfirmed) return;
+    showLoader(true);
+    GAS.tarefas.atribuirExecutores(idTarefa, r.value, function(){
+      showLoader(false); renderFilaFuncaoAtual();
+    }, function(e){ showLoader(false); Swal.fire('Erro', String(e), 'error'); });
   });
 }
 
-
-// ==========================
-// MODIFICAÇÃO DA SOLICITAÇÃO
-// ==========================
-function solicitarAlteracaoProcesso(idProcesso, texto, email) {
-
-  var aba = _abaProcessos();
-  var dados = aba.getDataRange().getValues();
-  var headers = dados[0];
-
-  var map = {};
-  headers.forEach(function(h, i){ map[h] = i; });
-
-  for (var i = 1; i < dados.length; i++) {
-
-    if (dados[i][0] === idProcesso) {
-
-      dados[i][map['Revisao Status']] = 'Pendente';
-      dados[i][map['Revisao Solicitacao']] = texto;
-      dados[i][map['Revisao Solicitante']] = email;
-      dados[i][map['Revisao Data']] = new Date().toISOString();
-
-      aba.getRange(i + 1, 1, 1, dados[i].length).setValues([dados[i]]);
-
-      // cria tarefa para comunicação
-      criarTarefaPlanilha({
-        titulo: 'Revisão solicitada: ' + (dados[i][map['Título']] || ''),
-        tipo: 'comunicacao',
-        subtipo: 'revisao_pendente',
-        origem: 'comunicacao',
-        idOrigem: idProcesso,
-        responsavel: 'comunicacao@ccbj.org'
-      });
-
-      return { ok: true };
+// ══════════════════════════════════════════════════════
+// RESPONDER COMO FUNÇÃO
+// ══════════════════════════════════════════════════════
+function responderFuncao(idTarefa){
+  Swal.fire({
+    title:'Responder tarefa',
+    input:'textarea', inputLabel:'Mensagem',
+    inputPlaceholder:'Informe o andamento, dúvidas ou confirmação...',
+    showCancelButton:true,
+    confirmButtonText:'<i class="fas fa-paper-plane mr-1"></i>Enviar',
+    cancelButtonText:'Cancelar',
+    confirmButtonColor:'#f59e0b',
+    customClass:{ popup:'rounded-3xl', confirmButton:'rounded-xl font-black text-sm', cancelButton:'rounded-xl font-bold text-sm' },
+    preConfirm:function(val){
+      if (!val||!val.trim()){ Swal.showValidationMessage('Mensagem obrigatória'); return false; }
+      return val.trim();
     }
-  }
-
-  return { ok: false };
+  }).then(function(r){
+    if (!r.isConfirmed) return;
+    showLoader(true);
+    GAS.tarefas.responderComoFuncao(idTarefa, r.value, '', function(){
+      showLoader(false); renderFilaFuncaoAtual();
+    }, function(e){ showLoader(false); Swal.fire('Erro', String(e), 'error'); });
+  });
 }
 
-function responderRevisaoProcesso(idProcesso, status, resposta) {
-
-  var aba = _abaProcessos();
-  var dados = aba.getDataRange().getValues();
-  var headers = dados[0];
-
-  var map = {};
-  headers.forEach(function(h, i){ map[h] = i; });
-
-  for (var i = 1; i < dados.length; i++) {
-
-    if (dados[i][0] === idProcesso) {
-
-      dados[i][map['Revisao Status']] = status;
-      dados[i][map['Revisao Resposta']] = resposta;
-
-      aba.getRange(i + 1, 1, 1, dados[i].length).setValues([dados[i]]);
-
-      // notifica solicitante
-      criarTarefaPlanilha({
-        titulo: 'Revisão ' + status + ': ' + (dados[i][map['Título']] || ''),
-        tipo: 'comunicacao',
-        subtipo: 'revisao_resposta',
-        origem: 'comunicacao',
-        idOrigem: idProcesso,
-        responsavel: dados[i][map['Revisao Solicitante']]
-      });
-
-      return { ok: true };
-    }
-  }
-
-  return { ok: false };
-}
-
-function _labelEntrega(k){
-
-  var mapa = {
-    design: 'Peça gráfica',
-    diagramacao: 'Diagramação',
-    foto: 'Fotografia',
-    ensaio_fotografico: 'Ensaio fotográfico',
-    video: 'Captação de vídeo',
-    edicao_video: 'Edição de vídeo',
-    stories: 'Cobertura (stories)',
-    materia: 'Matéria / texto',
-    divulgacao: 'Publicação / divulgação'
-  };
-
-  return mapa[k] || k;
-}
-
-function renderFilaFuncao(funcao) {
+// ══════════════════════════════════════════════════════
+// FILA DA FUNÇÃO — renderização multi-modo
+// ══════════════════════════════════════════════════════
+function renderFilaFuncao(funcao){
+  var el = document.getElementById('fila-funcao');
+  if (el) el.innerHTML = '<div class="py-6 text-center"><i class="fas fa-spinner animate-spin text-slate-300 text-lg"></i></div>';
 
   GAS.tarefas.listarPorFuncao(funcao, function(lista){
-
-    var el = document.getElementById('fila-funcao');
     if (!el) return;
-
-    if (!lista || !lista.length){
-      el.innerHTML = '<div class="text-xs text-slate-400">Sem tarefas</div>';
+    if (!lista||!lista.length){
+      el.innerHTML = '<div class="py-10 text-center">'
+        + '<i class="fas fa-inbox text-slate-200 text-2xl mb-2"></i>'
+        + '<p class="text-xs text-slate-400 font-medium">Nenhuma tarefa na fila.</p>'
+        + '</div>';
       return;
     }
 
-    var modo = typeof _modoFila !== 'undefined' ? _modoFila : 'lista';
-
-    // =========================
-    // ORDENAÇÃO (ordem → prioridade → prazo)
-    // =========================
-    lista.sort(function(a, b){
-      var ordemA = a.ordem || 0;
-      var ordemB = b.ordem || 0;
-      if (ordemA !== ordemB) return ordemA - ordemB;
-
-      var p = { 'Alta':3, 'Média':2, 'Baixa':1 };
-      var pa = p[a.prioridade] || 0;
-      var pb = p[b.prioridade] || 0;
-      if (pb !== pa) return pb - pa;
-
-      var da = _parseData(a.prazo);
-      var db = _parseData(b.prazo);
-      if (da && db) return da - db;
-      if (da) return -1;
-      if (db) return 1;
-
-      return 0;
+    // Ordenação: ordem Kanban → prioridade → prazo
+    lista.sort(function(a,b){
+      var oa=a.ordem||0, ob=b.ordem||0;
+      if (oa!==ob) return oa-ob;
+      var p={'Alta':3,'Média':2,'Baixa':1};
+      var pa=p[a.prioridade]||0, pb=p[b.prioridade]||0;
+      if (pb!==pa) return pb-pa;
+      var da=a.prazo?new Date(a.prazo):null, db=b.prazo?new Date(b.prazo):null;
+      if (da&&db) return da-db; return da?-1:db?1:0;
     });
 
-    // =========================
-    // CARGA POR PESSOA
-    // =========================
+    // Carga por pessoa
     var carga = {};
     lista.forEach(function(t){
-      (t.executores || []).forEach(function(e){
-        carga[e] = (carga[e] || 0) + 1;
-      });
+      (t.executores||[]).forEach(function(e){ carga[e]=(carga[e]||0)+1; });
     });
 
-    // =========================
-    // HELPERS
-    // =========================
-    function isAtrasado(t){
-      if (!t.prazo) return false;
-      try {
-        return new Date(t.prazo) < new Date() &&
-          String(t.status || '').toLowerCase() !== 'concluído';
-      } catch(e){ return false; }
+    // ── HELPERS DE RENDERIZAÇÃO ─────────────────────
+    function _stPill(status){
+      var s=(status||'').toLowerCase();
+      var cls=s==='concluído'?'background:#d1fae5;color:#065f46'
+              :s==='em andamento'?'background:#fef3c7;color:#92400e'
+              :'background:#eff6ff;color:#1d4ed8';
+      return '<span style="font-size:9px;font-weight:900;padding:2px 8px;border-radius:99px;'+cls+'">'+escaparHTML(status||'-')+'</span>';
     }
 
-    function statusClass(status){
-      status = (status || '').toLowerCase();
-      return status === 'concluído' ? 'bg-emerald-100 text-emerald-700' :
-             status === 'em andamento' ? 'bg-amber-100 text-amber-700' :
-             'bg-slate-100 text-slate-600';
+    function _prioPill(p){
+      var cls=p==='Alta'?'background:#fee2e2;color:#991b1b'
+             :p==='Média'?'background:#fef3c7;color:#92400e'
+             :'background:#f1f5f9;color:#64748b';
+      return '<span style="font-size:9px;font-weight:900;padding:2px 8px;border-radius:99px;'+cls+'">'+escaparHTML(p||'—')+'</span>';
     }
 
-    function prioridadeClass(p){
-      return p === 'Alta' ? 'bg-red-100 text-red-700' :
-             p === 'Média' ? 'bg-amber-100 text-amber-700' :
-             'bg-slate-100 text-slate-600';
-    }
-
-    function executoresHtml(t){
-      return (t.executores && t.executores.length)
+    function _execHtml(t){
+      return (t.executores&&t.executores.length)
         ? t.executores.map(function(e){
-            return `<span class="px-2 py-1 bg-slate-100 rounded text-[10px]">
-              ${e.split('@')[0]} (${carga[e] || 0})
-            </span>`;
+            var n=carga[e]||0, cor=n>5?'#ef4444':n>3?'#f59e0b':'#6366f1';
+            return '<span style="font-size:9px;padding:2px 8px;border-radius:99px;background:#f1f5f9;color:'+cor+';font-weight:700">'+escaparHTML(e.split('@')[0])+'('+n+')</span>';
           }).join('')
-        : '<span class="text-[10px] text-slate-400">Sem responsável</span>';
+        : '<span style="font-size:9px;color:#94a3b8;font-style:italic">Sem responsável</span>';
     }
 
-    function entregasHtml(t){
-      return (t.entregas && t.entregas.length)
+    function _entHtml(t){
+      return (t.entregas&&t.entregas.length)
         ? t.entregas.map(function(e){
-            var statusE = (e['Status'] || '').toLowerCase();
-            var idEntrega = e['ID Entrega'];
-
-            var classe =
-              statusE === 'entregue' ? 'bg-emerald-100 text-emerald-700 line-through' :
-              statusE === 'em andamento' ? 'bg-amber-100 text-amber-700' :
-              'bg-slate-100 text-slate-500';
-
-            if (e['Prazo']) {
-              try {
-                var atraso = new Date(e['Prazo']) < new Date() && statusE !== 'entregue';
-                if (atraso) classe = 'bg-red-100 text-red-700';
-              } catch(e){}
-            }
-
-            return `
-              <span onclick="concluirEntregaFila('${idEntrega}')"
-                class="px-2 py-1 rounded text-[10px] cursor-pointer hover:opacity-80 transition ${classe}">
-                ${e['Tipo'] || '-'}
-              </span>
-            `;
+            var s=(e['Status']||'').toLowerCase();
+            var idE=e['ID Entrega']||'';
+            var atrE=e['Prazo']&&new Date(e['Prazo'])<new Date()&&s!=='entregue';
+            var cls=s==='entregue'?'background:#d1fae5;color:#065f46;text-decoration:line-through'
+                   :atrE?'background:#fee2e2;color:#991b1b'
+                   :s==='em andamento'?'background:#fef3c7;color:#92400e'
+                   :'background:#f1f5f9;color:#64748b';
+            return '<span onclick="concluirEntregaFila(\''+escaparHTML(idE)+'\')" style="font-size:9px;font-weight:700;padding:2px 8px;border-radius:99px;cursor:pointer;'+cls+'">'+escaparHTML(e['Tipo']||'-')+'</span>';
           }).join('')
-        : '<span class="text-[10px] text-slate-400">Sem entregas</span>';
+        : '<span style="font-size:9px;color:#94a3b8;font-style:italic">Sem entregas</span>';
     }
 
-    function cardHtml(t){
-      var atrasado = isAtrasado(t);
-
-      return `
-        <div class="kanban-item p-3 border rounded mb-2 bg-white shadow-sm text-xs cursor-move
-          ${atrasado ? 'border-red-300 bg-red-50' : ''}"
-          draggable="true"
-          data-id="${t.id}"
-          ondragstart="onDragStartKanban(event)">
-
-          <div class="font-semibold text-sm text-slate-800">
-            ${t.titulo || '-'}
-          </div>
-
-          <div class="mt-1 mb-2 flex gap-2 flex-wrap">
-            <span class="px-2 py-1 rounded-full text-[10px] font-bold ${statusClass(t.status)}">
-              ${t.status || '-'}
-            </span>
-            <span class="px-2 py-1 rounded-full text-[10px] font-bold ${prioridadeClass(t.prioridade)}">
-              ${t.prioridade || '-'}
-            </span>
-            ${t.prazo ? `<span class="text-[10px] text-slate-400">até ${t.prazo}</span>` : ''}
-          </div>
-
-          <div class="flex flex-wrap gap-1 mb-2">
-            ${executoresHtml(t)}
-          </div>
-
-          <div class="flex flex-wrap gap-1 mb-3">
-            ${entregasHtml(t)}
-          </div>
-
-          <div class="flex gap-2">
-            <button onclick="responderFuncao('${t.id}')"
-              class="text-xs px-2 py-1 bg-amber-100 text-amber-700 rounded">
-              Responder
-            </button>
-            <button onclick="atribuirTarefa('${t.id}', '${t.funcao}')"
-              class="text-xs px-2 py-1 bg-indigo-100 text-indigo-700 rounded">
-              Atribuir
-            </button>
-          </div>
-
-        </div>
-      `;
+    function _cardHtml(t){
+      var atrasado=_isAtrasadoBalcao(t.prazo,t.status);
+      return '<div class="kanban-item p-3 border rounded-xl mb-2 bg-white shadow-sm cursor-move'
+        +(atrasado?' border-red-200 bg-red-50/40':' border-slate-200')+'"'
+        +' draggable="true" data-id="'+escaparHTML(t.id||'')+'" ondragstart="onDragStartKanban(event)">'
+        +'<div class="font-semibold text-slate-800 text-xs mb-2 flex items-center gap-1.5">'
+        +(atrasado?'<i class="fas fa-exclamation-circle text-red-400" style="font-size:9px;flex-shrink:0"></i>':'')
+        +escaparHTML(t.titulo||'-')+'</div>'
+        +'<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px">'
+        +_stPill(t.status)+_prioPill(t.prioridade)
+        +(t.prazo?'<span style="font-size:9px;color:#94a3b8">até '+escaparHTML(t.prazo)+'</span>':'')
+        +'</div>'
+        +'<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px">'+_execHtml(t)+'</div>'
+        +'<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px">'+_entHtml(t)+'</div>'
+        +'<div style="display:flex;gap:6px">'
+        +'<button onclick="responderFuncao(\''+escaparHTML(t.id||'')+'\''+')" style="font-size:10px;padding:4px 10px;border-radius:8px;background:#fef3c7;color:#92400e;border:none;cursor:pointer;font-weight:700"><i class="fas fa-comment" style="margin-right:4px;font-size:9px"></i>Responder</button>'
+        +'<button onclick="atribuirTarefa(\''+escaparHTML(t.id||'')+'\',\''+escaparHTML(t.funcao||'')+'\''+')" style="font-size:10px;padding:4px 10px;border-radius:8px;background:#eff6ff;color:#1d4ed8;border:none;cursor:pointer;font-weight:700"><i class="fas fa-user-check" style="margin-right:4px;font-size:9px"></i>Atribuir</button>'
+        +'</div></div>';
     }
 
-    // =========================
-    // MODO: KANBAN (colunas por status + gargalo)
-    // =========================
-    if (modo === 'kanban') {
-
-      var colunas = {
-        'Solicitado': [],
-        'Em andamento': [],
-        'Concluído': []
+    // ── MODO KANBAN ─────────────────────────────────
+    if (_modoFila==='kanban'){
+      var cols={'Solicitado':[],'Em andamento':[],'Concluído':[]};
+      lista.forEach(function(t){ var s=t.status||'Solicitado'; if(!cols[s])cols[s]=[]; cols[s].push(t); });
+      var colDef={
+        'Solicitado':  { bg:'background:#eff6ff', border:'border:1.5px solid #dbeafe', txt:'color:#1d4ed8' },
+        'Em andamento':{ bg:'background:#fffbeb', border:'border:1.5px solid #fde68a', txt:'color:#92400e' },
+        'Concluído':   { bg:'background:#f0fdf4', border:'border:1.5px solid #bbf7d0', txt:'color:#065f46' }
       };
-
-      lista.forEach(function(t){
-        var s = t.status || 'Solicitado';
-        if (!colunas[s]) colunas[s] = [];
-        colunas[s].push(t);
-      });
-
-      el.innerHTML = `
-        <div class="grid grid-cols-3 gap-3">
-          ${Object.keys(colunas).map(function(status){
-
-            var total = colunas[status].length;
-            var limite = 5;
-
-            var alerta =
-              total > limite ? 'text-red-600' :
-              total > limite * 0.7 ? 'text-amber-600' :
-              'text-slate-500';
-
-            return `
-              <div class="kanban-col bg-slate-50 p-2 rounded-lg min-h-[300px]"
-                data-status="${status}"
-                ondragover="onDragOverKanban(event)"
-                ondrop="onDropKanban(event, '${status}')">
-
-                <div class="text-[10px] font-bold mb-2 ${alerta}">
-                  ${status} (${total})
-                </div>
-
-                <div class="kanban-list space-y-2">
-                  ${colunas[status].map(cardHtml).join('')}
-                </div>
-
-              </div>
-            `;
-          }).join('')}
-        </div>
-      `;
+      el.innerHTML = '<div class="grid grid-cols-3 gap-3">'
+        + Object.keys(cols).map(function(status){
+            var def=colDef[status]||{bg:'background:#f8fafc',border:'border:1.5px solid #e2e8f0',txt:'color:#475569'};
+            var n=cols[status].length, over=n>5;
+            return '<div class="kanban-col p-3 min-h-64" style="'+def.bg+';'+def.border+';border-radius:14px" data-status="'+escaparHTML(status)+'" ondragover="onDragOverKanban(event)" ondrop="onDropKanban(event,\''+escaparHTML(status)+'\')">'
+              +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">'
+              +'<span style="font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;'+def.txt+'">'+escaparHTML(status)+'</span>'
+              +'<span style="font-size:9px;font-weight:900;padding:1px 8px;border-radius:99px;'+(over?'background:#fee2e2;color:#991b1b':'background:rgba(0,0,0,.06);color:#64748b')+'">'+n+'</span>'
+              +'</div>'
+              +'<div class="kanban-list space-y-2">'+cols[status].map(_cardHtml).join('')+'</div>'
+              +'</div>';
+          }).join('')
+        + '</div>';
       return;
     }
 
-    // =========================
-    // MODO: CARDS
-    // =========================
-    if (modo === 'cards') {
-      el.innerHTML = `
-        <div class="grid grid-cols-2 gap-3">
-          ${lista.map(cardHtml).join('')}
-        </div>
-      `;
+    // ── MODO CARDS ──────────────────────────────────
+    if (_modoFila==='cards'){
+      el.innerHTML = '<div class="grid grid-cols-2 gap-3">'+lista.map(_cardHtml).join('')+'</div>';
       return;
     }
 
-    // =========================
-    // MODO: LISTA
-    // =========================
-    el.innerHTML = `
-      <div class="space-y-2">
-        ${lista.map(cardHtml).join('')}
-      </div>
-    `;
+    // ── MODO CARGA ──────────────────────────────────
+    if (_modoFila==='carga'){
+      if (!Object.keys(carga).length){
+        el.innerHTML = '<div class="py-8 text-center text-xs text-slate-400 italic">Nenhuma tarefa atribuída.</div>';
+        return;
+      }
+      var maxN=Math.max.apply(null, Object.values(carga).concat([1]));
+      el.innerHTML = '<div class="space-y-3 p-2">'
+        + Object.keys(carga).sort(function(a,b){ return carga[b]-carga[a]; }).map(function(p){
+            var n=carga[p], pct=Math.round(n/maxN*100);
+            var cor=n>5?'#ef4444':n>3?'#f59e0b':'#6366f1';
+            var label=n>5?' — sobrecarregado':n>3?' — atenção':'';
+            return '<div style="display:flex;align-items:center;gap:12px">'
+              +'<div style="width:120px;font-size:11px;font-weight:700;color:#334155;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+escaparHTML(p)+'">'+escaparHTML(p.split('@')[0])+'</div>'
+              +'<div style="flex:1;background:#f1f5f9;border-radius:99px;height:8px;overflow:hidden">'
+              +'<div style="width:'+pct+'%;height:100%;background:'+cor+';border-radius:99px;transition:width .4s ease"></div>'
+              +'</div>'
+              +'<div style="font-size:11px;font-weight:900;color:'+cor+';width:24px;text-align:right">'+n+'</div>'
+              +(label?'<div style="font-size:9px;color:'+cor+';white-space:nowrap">'+label+'</div>':'')
+              +'</div>';
+          }).join('')
+        +'</div>';
+      return;
+    }
 
+    // ── MODO TIMELINE ────────────────────────────────
+    if (_modoFila==='timeline'){
+      var comPrazo=lista.filter(function(t){ return !!t.prazo; });
+      var semPrazo=lista.filter(function(t){ return !t.prazo; });
+      comPrazo.sort(function(a,b){ return new Date(a.prazo)-new Date(b.prazo); });
+      var hoje=new Date(); hoje.setHours(0,0,0,0);
+      el.innerHTML = '<div class="space-y-1 p-1">'
+        + comPrazo.map(function(t){
+            var d=new Date(t.prazo); d.setHours(0,0,0,0);
+            var diff=Math.round((d-hoje)/(864e5));
+            var atrasado=diff<0&&(t.status||'').toLowerCase()!=='concluído';
+            var eHoje=diff===0;
+            var icon=atrasado?'<i class="fas fa-exclamation-circle" style="color:#ef4444;font-size:11px"></i>'
+                   :eHoje?'<i class="fas fa-dot-circle" style="color:#f59e0b;font-size:11px"></i>'
+                   :'<i class="fas fa-circle" style="color:#a5b4fc;font-size:8px"></i>';
+            var rowBg=atrasado?'background:#fff5f5;border-left:3px solid #ef4444'
+                     :eHoje?'background:#fffbeb;border-left:3px solid #f59e0b'
+                     :'background:#f8fafc;border-left:3px solid #e2e8f0';
+            var prazoFmt=atrasado?'<span style="color:#ef4444;font-weight:900">'+escaparHTML(t.prazo)+' ('+Math.abs(diff)+'d atraso)</span>'
+                        :eHoje?'<span style="color:#f59e0b;font-weight:900">Hoje</span>'
+                        :'<span style="color:#64748b">'+escaparHTML(t.prazo)+' (+'+diff+'d)</span>';
+            return '<div style="'+rowBg+';padding:8px 12px;border-radius:6px;display:flex;align-items:center;gap:10px;margin-bottom:4px">'
+              +'<div style="flex-shrink:0">'+icon+'</div>'
+              +'<div style="flex:1;min-width:0"><span style="font-size:12px;font-weight:600;color:'+(atrasado?'#991b1b':'#1e293b')+';display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escaparHTML(t.titulo||'-')+'</span></div>'
+              +'<div style="font-size:10px;flex-shrink:0">'+prazoFmt+'</div>'
+              +'</div>';
+          }).join('')
+        +(semPrazo.length?'<div style="padding:8px 12px;color:#94a3b8;font-size:10px;font-style:italic">'+semPrazo.length+' tarefa(s) sem prazo definido.</div>':'')
+        +'</div>';
+      return;
+    }
+
+    // ── MODO LISTA (padrão) ──────────────────────────
+    el.innerHTML = '<div class="space-y-2">'+lista.map(_cardHtml).join('')+'</div>';
+
+  }, function(){
+    var el2=document.getElementById('fila-funcao');
+    if (el2) el2.innerHTML='<div class="py-6 text-center text-red-400 text-xs"><i class="fas fa-exclamation-triangle mr-1"></i>Erro ao carregar fila.</div>';
   });
 }
 
-var _dragEl = null;
+// ══════════════════════════════════════════════════════
+// DRAG AND DROP KANBAN
+// ══════════════════════════════════════════════════════
+var _dragEl      = null;
 var _placeholder = null;
 
 function onDragStartKanban(e){
-  _dragEl = e.target;
-
-  setTimeout(function(){
-    _dragEl.classList.add('opacity-50');
-  }, 0);
-
+  _dragEl = e.currentTarget;
+  setTimeout(function(){ if (_dragEl) _dragEl.classList.add('opacity-50'); }, 0);
   _placeholder = document.createElement('div');
-  _placeholder.className = 'h-8 border-2 border-dashed border-indigo-300 rounded';
+  _placeholder.className = 'h-10 border-2 border-dashed border-indigo-300 rounded-xl';
 }
 
 function onDragOverKanban(e){
   e.preventDefault();
-
-  var container = e.currentTarget.querySelector('.kanban-list');
+  document.querySelectorAll('.kanban-col').forEach(function(c){ c.classList.remove('drag-over'); });
+  var col = e.currentTarget;
+  col.classList.add('drag-over');
+  var container = col.querySelector('.kanban-list');
+  if (!container) return;
   var after = getDragAfterElement(container, e.clientY);
-
-  if (!after){
-    container.appendChild(_placeholder);
-  } else {
-    container.insertBefore(_placeholder, after);
-  }
+  if (!after) container.appendChild(_placeholder);
+  else container.insertBefore(_placeholder, after);
 }
 
 function onDropKanban(e, novoStatus){
-
   e.preventDefault();
   if (!_dragEl) return;
-
+  document.querySelectorAll('.kanban-col').forEach(function(c){ c.classList.remove('drag-over'); });
   var lista = e.currentTarget.querySelector('.kanban-list');
-
-  if (_placeholder && lista){
-    lista.insertBefore(_dragEl, _placeholder);
-  }
-
+  if (_placeholder && lista) lista.insertBefore(_dragEl, _placeholder);
   _dragEl.classList.remove('opacity-50');
+  if (_placeholder && _placeholder.parentNode) _placeholder.remove();
 
-  // capturar nova ordem global
   var ordens = {};
-
   document.querySelectorAll('.kanban-col').forEach(function(col){
-    var status = col.getAttribute('data-status');
-
-    col.querySelectorAll('.kanban-item').forEach(function(el, index){
-      var id = el.getAttribute('data-id');
-      ordens[id] = { ordem: index, status: status };
+    var s = col.getAttribute('data-status');
+    col.querySelectorAll('.kanban-item').forEach(function(item, idx){
+      var id = item.getAttribute('data-id');
+      if (id) ordens[id] = { ordem:idx, status:s };
     });
   });
 
   GAS._call('salvarOrdemKanban', [ordens], function(){
+    // UI já reflete a nova ordem
+  }, function(err){
+    console.error('Erro ao salvar ordem Kanban:', err);
+    Swal.fire({ icon:'error', title:'Erro ao salvar ordem',
+      text:'A ordem não foi persistida. Recarregue a fila.',
+      timer:3000, showConfirmButton:false, customClass:{ popup:'rounded-3xl' } });
     renderFilaFuncaoAtual();
   });
 
-  _placeholder.remove();
   _dragEl = null;
 }
 
 function getDragAfterElement(container, y){
-  const els = [...container.querySelectorAll('.kanban-item:not(.opacity-50)')];
-
-  return els.reduce((closest, child) => {
-    const box = child.getBoundingClientRect();
-    const offset = y - box.top - box.height / 2;
-
-    if (offset < 0 && offset > closest.offset) {
-      return { offset: offset, element: child };
-    } else {
-      return closest;
-    }
-  }, { offset: Number.NEGATIVE_INFINITY }).element;
+  var els = Array.from(container.querySelectorAll('.kanban-item:not(.opacity-50)'));
+  return els.reduce(function(closest, child){
+    var box    = child.getBoundingClientRect();
+    var offset = y - box.top - box.height/2;
+    if (offset < 0 && offset > closest.offset) return { offset:offset, element:child };
+    return closest;
+  }, { offset:Number.NEGATIVE_INFINITY }).element;
 }
 
+// ══════════════════════════════════════════════════════
+// CONCLUIR ENTREGA — pelo chip na fila
+// ══════════════════════════════════════════════════════
 function concluirEntregaFila(idEntrega){
-
   Swal.fire({
-    title: 'Concluir entrega?',
-    text: 'Deseja marcar como entregue?',
-    icon: 'question',
-    showCancelButton: true,
-    confirmButtonText: 'Sim, concluir',
-    cancelButtonText: 'Cancelar'
+    title:'Concluir entrega',
+    html:'<div class="text-left" style="padding:0 4px">'
+      + '<label style="display:block;font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">Link do material *</label>'
+      + '<input id="linkEntregaFila" style="width:100%;padding:9px 13px;font-size:12px;border:1.5px solid #e2e8f0;border-radius:12px;outline:none;box-sizing:border-box" placeholder="https://drive.google.com/...">'
+      + '</div>',
+    showCancelButton:true,
+    confirmButtonText:'<i class="fas fa-check mr-1"></i>Concluir',
+    cancelButtonText:'Cancelar',
+    confirmButtonColor:'#059669',
+    customClass:{ popup:'rounded-3xl', confirmButton:'rounded-xl font-black text-sm', cancelButton:'rounded-xl font-bold text-sm' },
+    preConfirm:function(){
+      var link=(document.getElementById('linkEntregaFila').value||'').trim();
+      if (!link){ Swal.showValidationMessage('Informe o link do material'); return false; }
+      return link;
+    }
   }).then(function(r){
-
     if (!r.isConfirmed) return;
-
-    GAS.entregas.atualizar(idEntrega, {
-      status: 'Entregue'
-    }, function(){
-
-      renderFilaFuncaoAtual();
-
-    });
-
+    showLoader(true);
+    GAS.entregas.atualizar(idEntrega, { status:'Entregue', link:r.value }, function(){
+      showLoader(false); renderFilaFuncaoAtual();
+    }, function(e){ showLoader(false); Swal.fire('Erro', String(e), 'error'); });
   });
-
 }
 
+// ══════════════════════════════════════════════════════
+// MODO E NAVEGAÇÃO
+// ══════════════════════════════════════════════════════
 function renderFilaFuncaoAtual(){
-  renderFilaFuncao('design');
+  renderFilaFuncao(_balcaoFuncaoAtual);
 }
-
-var _modoFila = 'lista';
 
 function mudarModoFila(modo){
-
   _modoFila = modo;
-
-  // salva preferência
-  try {
-    localStorage.setItem('modoFila', modo);
-  } catch(e){}
-
-  // estado visual
-  try {
-    document.querySelectorAll('.modo-btn').forEach(function(btn){
-      btn.classList.remove('ativo');
-    });
-    var btnAtivo = document.querySelector(`[data-modo="${modo}"]`);
-    if (btnAtivo) btnAtivo.classList.add('ativo');
-  } catch(e){}
-
+  try { localStorage.setItem('modoFila', modo); } catch(e){}
+  document.querySelectorAll('.modo-btn').forEach(function(btn){ btn.classList.remove('ativo'); });
+  var btnAtivo = document.querySelector('[data-modo="'+modo+'"]');
+  if (btnAtivo) btnAtivo.classList.add('ativo');
   renderFilaFuncaoAtual();
 }
 
-function renderKanban(lista, el){
-
-  var colunas = {
-    'Solicitado': [],
-    'Em andamento': [],
-    'Concluído': []
-  };
-
-  lista.forEach(function(t){
-    colunas[t.status || 'Solicitado'].push(t);
-  });
-
-  el.innerHTML = `
-    <div class="grid grid-cols-3 gap-3">
-
-      ${Object.keys(colunas).map(function(status){
-
-        return `
-          <div class="bg-slate-50 p-2 rounded-lg">
-
-            <div class="text-[10px] font-bold text-slate-500 mb-2">
-              ${status}
-            </div>
-
-            ${colunas[status].map(function(t){
-              return `
-                <div class="bg-white p-2 rounded mb-2 shadow-sm text-xs">
-                  ${t.titulo}
-                </div>
-              `;
-            }).join('')}
-
-          </div>
-        `;
-
-      }).join('')}
-
-    </div>
-  `;
-}
-
-function renderCards(lista, el){
-
-  el.innerHTML = `
-    <div class="grid grid-cols-2 gap-3">
-
-      ${lista.map(function(t){
-
-        return `
-          <div class="p-4 bg-white rounded-xl border">
-
-            <div class="font-bold text-sm mb-1">
-              ${t.titulo}
-            </div>
-
-            <div class="text-[11px] text-slate-400 mb-2">
-              ${t.status} • ${t.prioridade}
-            </div>
-
-            <div class="text-[10px] text-slate-500">
-              ${t.prazo || 'Sem prazo'}
-            </div>
-
-          </div>
-        `;
-
-      }).join('')}
-
-    </div>
-  `;
-}
-
-function renderCarga(lista, el){
-
-  var carga = {};
-
-  lista.forEach(function(t){
-    (t.executores || []).forEach(function(e){
-      carga[e] = (carga[e] || 0) + 1;
-    });
-  });
-
-  el.innerHTML = `
-    <div class="space-y-2">
-
-      ${Object.keys(carga).map(function(p){
-
-        var total = carga[p];
-
-        return `
-          <div class="flex items-center gap-2">
-
-            <div class="w-32 text-xs">
-              ${p.split('@')[0]}
-            </div>
-
-            <div class="flex-1 bg-slate-100 rounded h-3">
-              <div class="bg-indigo-500 h-3 rounded" style="width:${total * 20}px"></div>
-            </div>
-
-            <div class="text-xs">
-              ${total}
-            </div>
-
-          </div>
-        `;
-      }).join('')}
-
-    </div>
-  `;
-}
-
-function renderTimeline(lista, el){
-
-  lista.sort(function(a,b){
-    return new Date(a.prazo) - new Date(b.prazo);
-  });
-
-  el.innerHTML = `
-    <div class="space-y-2">
-
-      ${lista.map(function(t){
-
-        var atraso = false;
-
-        if (t.prazo){
-          atraso = new Date(t.prazo) < new Date();
-        }
-
-        return `
-          <div class="flex items-center gap-3 text-xs">
-
-            <div class="w-20 text-slate-400">
-              ${t.prazo || '-'}
-            </div>
-
-            <div class="flex-1 ${atraso ? 'text-red-600 font-bold' : ''}">
-              ${t.titulo}
-            </div>
-
-          </div>
-        `;
-      }).join('')}
-
-    </div>
-  `;
-}
-
-var _dragTaskId = null;
-
-function dragKanban(ev, id){
-  _dragTaskId = id;
-}
-
-function dropKanban(ev, novoStatus){
-
-  if (!_dragTaskId) return;
-
-  GAS.tarefas.listar(function(lista){
-
-    var tarefa = lista.find(function(t){ return t.id === _dragTaskId; });
-    if (!tarefa) return;
-
-    tarefa.status = novoStatus;
-
-    GAS.tarefas.salvar(tarefa, function(){
-
-      _dragTaskId = null;
-      renderFilaFuncaoAtual();
-
-    });
-
-  });
-}
-
+// Restaura modo salvo sem disparar GAS call prematura
 document.addEventListener('DOMContentLoaded', function(){
-
   try {
     var salvo = localStorage.getItem('modoFila');
-    if (salvo) _modoFila = salvo;
+    if (salvo){
+      _modoFila = salvo;
+      document.querySelectorAll('.modo-btn').forEach(function(btn){ btn.classList.remove('ativo'); });
+      var btnAtivo = document.querySelector('[data-modo="'+_modoFila+'"]');
+      if (btnAtivo) btnAtivo.classList.add('ativo');
+    }
   } catch(e){}
-
-  mudarModoFila(_modoFila || 'lista');
 });
-
-
 
 </script>

@@ -395,18 +395,6 @@ const GAS = {
 
   },
 
-  entregas: {
-
-    listarPorProcesso: function(idProcesso, cb, err) {
-      GAS._call('listarEntregasPorProcesso', [idProcesso], cb, err);
-    },
-
-    atualizar: function(idEntrega, dados, cb, err) {
-      GAS._call('atualizarEntregaComunicacao', [idEntrega, dados], cb, err);
-    }
-
-  },
-
   /**
    * BLOCO: Equipes — colaboradores, escalas, férias (mod_equipes.gs)
    */
