@@ -304,7 +304,19 @@ const GAS = {
   tarefas: {
     listar:  function(cb, err)             { GAS._call('obterTarefas',  [], cb, err); },
     salvar:  function(dados, cb, err)      { GAS._call('salvarTarefa',  [dados], cb, err); },
-    excluir: function(id, cb, err)         { GAS._call('excluirTarefa', [id], cb, err); }
+    excluir: function(id, cb, err)         { GAS._call('excluirTarefa', [id], cb, err); },
+
+    listarPorFuncao: function(funcao, cb, err) {
+      GAS._call('listarTarefasPorFuncao', [funcao], cb, err);
+    },
+
+    atribuirExecutores: function(id, emails, cb, err) {
+      GAS._call('atribuirExecutoresTarefa', [id, emails], cb, err);
+    },
+
+    responderComoFuncao: function(id, mensagem, autor, cb, err) {
+      GAS._call('responderTarefaComoFuncao', [id, mensagem, autor], cb, err);
+    }
   },
 
   processos: {
@@ -334,7 +346,7 @@ const GAS = {
   },
 
   /**
- * BLOCO: Comunicação — processos de produção (mod_comunicacao_processos.gs)
+ * BLOCO: Comunicação — processos
  */
   comunicacaoProcessos: {
     listar: function(cb, err) {
@@ -354,8 +366,45 @@ const GAS = {
     },
 
     mudarStatus: function(id, status, cb, err) {
-      GAS._call('mudarStatusProcesso', [id, status], cb, err);
+      GAS._call('atualizarProcessoComunicacao', [id, { status: status }], cb, err);
+    },
+    
+  },
+
+  entregas: {
+
+    listarPorProcesso: function(idProcesso, cb, err) {
+      GAS._call('listarEntregasPorProcesso', [idProcesso], cb, err);
+    },
+
+    atualizar: function(idEntrega, dados, cb, err) {
+      GAS._call('atualizarEntregaComunicacao', [idEntrega, dados], cb, err);
     }
+
+  },
+
+  revisao: {
+
+    solicitar: function(id, texto, email, cb, err) {
+      GAS._call('solicitarAlteracaoProcesso', [id, texto, email], cb, err);
+    },
+
+    responder: function(id, status, resposta, cb, err) {
+      GAS._call('responderRevisaoProcesso', [id, status, resposta], cb, err);
+    }
+
+  },
+
+  entregas: {
+
+    listarPorProcesso: function(idProcesso, cb, err) {
+      GAS._call('listarEntregasPorProcesso', [idProcesso], cb, err);
+    },
+
+    atualizar: function(idEntrega, dados, cb, err) {
+      GAS._call('atualizarEntregaComunicacao', [idEntrega, dados], cb, err);
+    }
+
   },
 
   /**
@@ -370,7 +419,10 @@ const GAS = {
     obterAvaliacoes:   function(cb, err)        { GAS._call('obterAvaliacoes',    [], cb, err); },
     registrarAvaliacao:function(dados, cb, err) { GAS._call('registrarAvaliacao', [dados], cb, err); },
     obterFerias:       function(cb, err)        { GAS._call('obterFerias',        [], cb, err); },
-    solicitarFerias:   function(dados, cb, err) { GAS._call('solicitarFerias',    [dados], cb, err); }
+    solicitarFerias:   function(dados, cb, err) { GAS._call('solicitarFerias',    [dados], cb, err); },
+    listarPorFuncao: function(funcao, cb, err) {
+      GAS._call('listarEquipePorFuncao', [funcao], cb, err);
+    },
   },
 
   /**

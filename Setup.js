@@ -88,17 +88,52 @@ const MODULOS = {
     pasta: 'CCBJ — Comunicação',
     prop:  PROP.COMUNICACAO,
     abas: {
-      'ReservasRECE': [
-        'ID Reserva','Título','Data Início','Data Término',
-        'Horário Início','Horário Término','Espaço','Categorias',
-        'Parceiros/Organizadores','Acessibilidades',
-        'Classificação Indicativa','Público Alvo','Artista',
-        'Link Inscrição','Acesso','Descrição','Observações',
-        'Status','Responsável','Data Solicitação','Imagem URL',
-        'Convidados Internos','Evento Institucional',
-        'Convidados Externos','ID Reserva Geral'
-      ],
-    }
+
+    'ReservasRECE': [
+      'ID Reserva','Título','Data Início','Data Término',
+      'Horário Início','Horário Término','Espaço','Categorias',
+      'Parceiros/Organizadores','Acessibilidades',
+      'Classificação Indicativa','Público Alvo','Artista',
+      'Link Inscrição','Acesso','Descrição','Observações',
+      'Status','Responsável','Data Solicitação','Imagem URL',
+      'Convidados Internos','Evento Institucional',
+      'Convidados Externos','ID Reserva Geral'
+    ],
+
+    'ProcessosComunicacao': [
+      'ID',
+      'Título',
+      'Descrição',
+      'Status',
+      'Prioridade',
+      'Origem',
+      'ID Reserva',
+      'ID RECE',
+      'Solicitante',
+      'Responsável',
+      'Prazo',
+      'Data Criação',
+      'Data Atualização',
+      'Observações',
+      'Revisao Status',
+      'Revisao Solicitacao',
+      'Revisao Solicitante',
+      'Revisao Data',
+      'Revisao Resposta'
+    ],
+
+    'EntregasComunicacao': [
+      'ID Entrega',
+      'ID Processo',
+      'Tipo',
+      'Status',
+      'Responsável',
+      'Prazo',
+      'Data Entrega',
+      'Link Entrega' 
+    ]
+
+  }
   },
 
   RELATORIOS: {
@@ -140,15 +175,123 @@ const MODULOS = {
     }
   },
 
-  EQUIPES: {
+  'EQUIPES': {
     nome:  'CCBJ_EQUIPES',
     pasta: 'CCBJ — Equipes',
     prop:  PROP.EQUIPES,
     abas: {
-      'Funcionarios': ['ID','Nome','Email','CPF','Cargo','Setor','Tipo Vínculo','Data Admissão','Status'],
-      'Escalas':      ['ID','ID Funcionario','Data','Entrada','Saída','Tipo','Observações'],
-      'Avaliacoes':   ['ID','ID Funcionario','Período','Pontuação','Feedback','Avaliador','Data'],
-      'Ferias':       ['ID','ID Funcionario','Início','Fim','Tipo','Status','Aprovador'],
+
+      // =========================
+      // PESSOA (CADASTRO BASE)
+      // =========================
+      'Funcionarios': [
+        'ID',
+        'Nome',
+        'Email Institucional',
+        'Email Pessoal',
+        'CPF',
+        'Telefone',
+        'Contato Emergência',
+
+        'Setores',              // JSON
+        'Funcoes',              // JSON
+        'Substituicoes',        // JSON
+
+        'Cargo',
+        'Tipo Vínculo',         // CLT, PJ, Bolsista etc.
+        'Status',
+
+        'Dados Sensíveis',      // JSON (saúde, pronomes etc.)
+        'Criado Em',
+        'Atualizado Em'
+      ],
+
+      // =========================
+      // VÍNCULOS FINANCEIROS
+      // =========================
+      'Vinculos': [
+        'ID',
+        'ID Funcionario',
+        'Cargo',
+        'Enquadramento',
+        'Tipo Vínculo',
+
+        'Data Início',
+        'Data Fim',
+
+        'Salário Base',
+        'Reajuste %',
+        'Salário Ajustado',
+
+        'INSS',
+        'Sistema S + SAT',
+        'FGTS',
+        'PIS',
+
+        'Vale Transporte',
+        'Desconto VT',
+        'Vale Alimentação',
+        'Desconto VA',
+        'Plano Saúde',
+        'Desconto Plano',
+
+        'Férias Provisão',
+        '13º Provisão',
+        'FGTS Rescisão',
+
+        'Custo Total Mensal',
+        'Custo Total Contrato'
+      ],
+
+      // =========================
+      // OCORRÊNCIAS (RH REAL)
+      // =========================
+      'Ocorrencias': [
+        'ID',
+        'ID Funcionario',
+        'Tipo', // atestado, afastamento, advertência etc.
+        'Descrição',
+        'Data Início',
+        'Data Fim',
+        'Status',
+        'Anexo URL',
+        'Criado Em'
+      ],
+
+      // =========================
+      // FÉRIAS (mantido)
+      // =========================
+      'Ferias': [
+        'ID',
+        'ID Funcionario',
+        'Início',
+        'Fim',
+        'Tipo',
+        'Status',
+        'Aprovador'
+      ],
+
+      // =========================
+      // ESCALAS (mantido)
+      // =========================
+      'Escalas': [
+        'ID',
+        'ID Funcionario',
+        'Data',
+        'Entrada',
+        'Saída',
+        'Tipo',
+        'Observações'
+      ],
+
+      // =========================
+      // PARÂMETROS (CÁLCULO)
+      // =========================
+      'ParametrosRH': [
+        'Chave',
+        'Valor'
+      ]
+
     }
   },
 
@@ -157,7 +300,30 @@ const MODULOS = {
     pasta: 'CCBJ — Pessoal',
     prop:  PROP.PESSOAL,
     abas: {
-      'Tarefas':   ['ID','Título','Descrição','Responsável','Setor','Prioridade','Status','Data Criação','Data Limite','Data Conclusão','ID Referência','Tipo Referência'],
+      'Tarefas': [
+        'ID',
+        'Título',
+        'Tipo',
+        'Subtipo',
+        'Origem',
+        'ID Origem',
+        'Responsável',
+        'Status',
+        'Prioridade',
+        'Data Criação',
+        'Data Atualização',
+        'Função',        
+        'Status Interno',
+        'Executores'
+      ],
+      'InteracoesTarefas': [
+        'ID',
+        'ID Tarefa',
+        'Tipo',
+        'Mensagem',
+        'Autor',
+        'Data'
+      ],
       'Processos': ['ID','Nome','Descrição','Responsável','Etapa Atual','Status','Data Início','Data Fim Prevista','Observações'],
       'Demandas':  ['ID','Origem','Título','Descrição','Solicitante','Responsável','Status','Data Entrada','Data Resposta','Resposta'],
     }
@@ -209,12 +375,37 @@ function inicializarSistema() {
     if (confirm !== ui.Button.YES) return;
   }
 
+  // =====================================
+  // CRIA ESTRUTURA BASE
+  // =====================================
   const pastas = _criarEstruturaPastas();
   _criarTodasPlanilhas(pastas);
+
+  // =====================================
+  // INICIALIZA EQUIPE
+  // =====================================
+  try {
+    inicializarEquipePadrao();
+  } catch (e) {
+    console.warn('Falha ao inicializar equipe:', e.message);
+  }
+
+  // =====================================
+  // REGISTRA SUPERADMIN
+  // =====================================
   _registrarSuperadmin();
 
   if (usarUI) {
     ui.alert('Setup concluído!');
+  }
+
+  // =====================================
+  // REGISTRA DADOS RH
+  // =====================================
+  try {
+    inicializarParametrosRH();
+  } catch(e) {
+    console.warn('Falha ao iniciar parâmetros RH', e);
   }
 }
 
@@ -448,4 +639,75 @@ function debugProps() {
 function processarFilasAutomaticamente() {
   // Placeholder para trigger agendado — sem operação
   console.log('processarFilasAutomaticamente: noop');
+}
+
+// =====================================================
+// SETUP INICIAL — EQUIPE
+// =====================================================
+
+function inicializarEquipePadrao() {
+
+  var aba = _abrirAba('EQUIPES', 'Funcionarios');
+  var dados = aba.getDataRange().getValues();
+
+  // Se já tem dados reais, não mexe
+  if (dados.length > 1) {
+    console.log('Equipe já inicializada');
+    return { ok: true, msg: 'Equipe já existe' };
+  }
+
+  var agora = new Date().toISOString();
+
+  aba.appendRow([
+    'fun_' + Date.now(),
+    'Equipe Comunicação',
+    'comunicacao@ccbj.org',
+    '',
+    '',
+    '',
+    '',
+
+    JSON.stringify(['comunicacao']),
+
+    JSON.stringify([
+      { tipo: 'materia', ativo: true },
+      { tipo: 'divulgacao', ativo: true }
+    ]),
+
+    JSON.stringify([]),
+
+    'Equipe',
+    'Institucional',
+    '',
+    'Ativo',
+
+    JSON.stringify({
+      observacao: 'Cadastro inicial automático'
+    }),
+
+    agora,
+    agora
+  ]);
+
+  console.log('Equipe inicial criada');
+
+  return { ok: true };
+}
+
+function inicializarParametrosRH() {
+
+  var aba = _abrirAba('EQUIPES', 'ParametrosRH');
+  var dados = aba.getDataRange().getValues();
+
+  if (dados.length > 1) return;
+
+  aba.appendRow(['meses_contrato', 12]);
+  aba.appendRow(['reajuste_percentual', 0.05]);
+
+  aba.appendRow(['vale_transporte_A', 5.40]);
+  aba.appendRow(['vale_transporte_E', 4.80]);
+
+  aba.appendRow(['vale_alimentacao', 27.01]);
+  aba.appendRow(['desconto_vale_alimentacao', 1.00]);
+
 }
