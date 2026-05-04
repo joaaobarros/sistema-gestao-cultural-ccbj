@@ -153,30 +153,74 @@ function renderizarFavoritos() {
   const container = document.getElementById('favoritosContainer');
   if (!container) return;
 
-  if (!favoritos.length) {
+  container.innerHTML = '';
+
+  if (!favoritos || !favoritos.length) {
     container.innerHTML = '<div class="text-[9px] text-slate-600 italic px-2 py-1">Arraste abas para cá</div>';
     return;
   }
 
-  container.innerHTML = favoritos.map(function(f, index) {
-    return '<div'
-      +' class="flex items-center justify-between group bg-white/5 rounded-lg"'
-      +' draggable="true"'
-      +' ondragstart="iniciarDragFavorito(event,'+index+')"'
-      +' ondragover="onDragOverItem(event,'+index+')"'
-      +' ondrop="onDropReorder(event,'+index+')">'
-      +'<button data-aba="'+f.aba+'"'
-      +' onclick="mostrarAba(\''+f.aba+'\')"'
-      +' class="nav-item w-full bg-transparent">'
-      +'<i class="'+f.icon+' w-5 text-center text-xs"></i>'
-      +'<span class="text-xs font-semibold">'+f.nome+'</span>'
-      +'</button>'
-      +'<button onclick="removerFavorito('+index+')"'
-      +' class="opacity-0 group-hover:opacity-100 px-2 text-slate-400 hover:text-red-400 transition"'
-      +' title="Remover favorito">'
-      +'<i class="fas fa-times text-[10px]"></i>'
-      +'</button>'
-      +'</div>';
-  }).join('');
+  favoritos.slice(0, 12).forEach((fav, index) => {
+    const el = document.createElement('div');
+
+    el.className = 'favorito-item flex items-center justify-between group';
+    el.draggable = true;
+    el.dataset.index = index;
+
+    el.innerHTML = `
+      <button data-aba="${fav.aba}"
+        class="flex items-center gap-2 w-full text-left truncate">
+        <i class="${fav.icon} w-5 text-center text-xs"></i>
+        <span class="text-xs font-semibold truncate">${fav.nome}</span>
+      </button>
+
+      <button
+        class="opacity-0 group-hover:opacity-100 px-2 text-slate-400 hover:text-red-400 transition"
+        title="Remover favorito">
+        <i class="fas fa-times text-[10px]"></i>
+      </button>
+    `;
+
+    // abrir aba
+    el.querySelector('button[data-aba]').onclick = function() {
+      mostrarAba(fav.aba);
+    };
+
+    // remover
+    el.querySelector('button:last-child').onclick = function(e) {
+      e.stopPropagation();
+      removerFavorito(index);
+    };
+
+    // drag
+    el.addEventListener('dragstart', function() {
+      dragOrigem = 'favorito';
+      dragIndex = index;
+      el.classList.add('dragging');
+    });
+
+    el.addEventListener('dragend', function() {
+      el.classList.remove('dragging');
+    });
+
+    el.addEventListener('dragover', function(e) {
+      e.preventDefault();
+    });
+
+    el.addEventListener('drop', function(e) {
+      e.preventDefault();
+      const targetIndex = Number(el.dataset.index);
+
+      if (dragIndex === null || targetIndex === dragIndex) return;
+
+      const item = favoritos.splice(dragIndex, 1)[0];
+      favoritos.splice(targetIndex, 0, item);
+
+      salvarFavoritos();
+      renderizarFavoritos();
+    });
+
+    container.appendChild(el);
+  });
 }
 </script>
