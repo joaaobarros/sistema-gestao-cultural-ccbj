@@ -243,8 +243,51 @@ function popularSelectVolantesComEstoque() {
  * @sideEffects Cria e revoga URL temporária no navegador
  */
 function exportarAgendaCSV() {
-  const reservas = AppState.colecoes.reservas || [];
-  if (!reservas.length) { Swal.fire('Sem dados', 'Nenhuma reserva para exportar.', 'info'); return; }
+  const todasReservas = AppState.colecoes.reservas || [];
+  if (!todasReservas.length) { Swal.fire('Sem dados', 'Nenhuma reserva para exportar.', 'info'); return; }
+
+  const termoBusca   = (document.getElementById('filtroBusca')?.value  || '').toLowerCase().trim();
+  const setor        = document.getElementById('filtroSetor')?.value    || '';
+  const status       = document.getElementById('filtroStatus')?.value   || '';
+  const turno        = document.getElementById('filtroTurno')?.value    || '';
+  const salaId       = document.getElementById('filtroSala')?.value     || '';
+  const apenasMinhas = document.getElementById('filtroMinhas')?.checked;
+
+  const _parseDataObjCSV = r => {
+    try {
+      const raw = r[1];
+      if (raw instanceof Date) { const d = new Date(raw); d.setHours(0,0,0,0); return d; }
+      const s = String(raw||'').trim();
+      if (s.includes('/')) { const p=s.split('/'); if(p.length===3){ const d=new Date(p[2],p[1]-1,p[0]); d.setHours(0,0,0,0); return d; } }
+      else if (s.includes('-')) { const d=new Date(s); d.setHours(0,0,0,0); return d; }
+    } catch(e) {}
+    return null;
+  };
+
+  const reservas = todasReservas.filter(r => {
+    const nomeAcao    = (r[6]||'').toString().toLowerCase();
+    const idReserva   = (r[0]||'').toString().toLowerCase();
+    const responsavel = (r[8]||'').toString().toLowerCase();
+    const nomeSala    = (AppState.mapaSalas?.[r[4]]||r[4]||'').toString().toLowerCase();
+    const matchBusca  = !termoBusca || nomeAcao.includes(termoBusca) || idReserva.includes(termoBusca) || responsavel.includes(termoBusca) || nomeSala.includes(termoBusca);
+    const matchSala   = !salaId || String(r[4]).trim() === String(salaId).trim();
+    const matchSetor  = !setor  || r[9] === setor;
+    const matchStatus = !status || r[13] === status;
+    const matchTurno  = !turno  || r[5] === turno;
+    const matchUsuario = !apenasMinhas || String(r[8]||'').trim().toLowerCase() === String(AppState.usuario.email||'').trim().toLowerCase();
+    const data = _parseDataObjCSV(r);
+    let matchPeriodo = true;
+    if (data) {
+      const ini = AppState.filtros?.dataInicio;
+      const fim = AppState.filtros?.dataFim;
+      if (ini && fim) matchPeriodo = data >= ini && data <= fim;
+      else if (ini)   matchPeriodo = data >= ini;
+      else if (fim)   matchPeriodo = data <= fim;
+    }
+    return matchBusca && matchSala && matchSetor && matchStatus && matchTurno && matchUsuario && matchPeriodo;
+  });
+
+  if (!reservas.length) { Swal.fire('Sem dados', 'Nenhuma reserva para os filtros aplicados.', 'info'); return; }
 
   const cab = ['ID','Data','Início','Término','Sala','Turno','Ação','Tipo','Responsável','Setor','Co-resp','Release','Itens','Status','Solicitação','Lote'];
   const linhas = [cab.join(';')];

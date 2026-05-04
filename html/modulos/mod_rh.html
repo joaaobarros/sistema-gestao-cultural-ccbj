@@ -28,12 +28,6 @@
         <select id="rhFiltroSetor" onchange="_rhFiltrar()"
           style="padding:8px 12px;border:1.5px solid #e2e8f0;border-radius:12px;font-size:12px;outline:none;color:#475569">
           <option value="">Todos os setores</option>
-          <option value="Administração">Administração</option>
-          <option value="Comunicação">Comunicação</option>
-          <option value="Financeiro">Financeiro</option>
-          <option value="Operações">Operações</option>
-          <option value="Projetos">Projetos</option>
-          <option value="TI">TI</option>
         </select>
         <select id="rhFiltroStatus" onchange="_rhFiltrar()"
           style="padding:8px 12px;border:1.5px solid #e2e8f0;border-radius:12px;font-size:12px;outline:none;color:#475569">
@@ -154,7 +148,10 @@ function abrirModalColaborador(id) {
       + '<input id="rhCargo" style="width:100%;padding:9px 13px;font-size:12px;border:1.5px solid #e2e8f0;border-radius:12px;outline:none;box-sizing:border-box" value="' + escaparHTML(dado.cargo||'') + '" placeholder="Ex: Analista de Projetos"></div>'
       + '<div><label style="display:block;font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">Setor</label>'
       + '<select id="rhSetor" style="width:100%;padding:9px 13px;font-size:12px;border:1.5px solid #e2e8f0;border-radius:12px;outline:none">'
-      + ['Administração','Comunicação','Financeiro','Operações','Projetos','TI'].map(function(s){ return '<option'+(dado.setor===s?' selected':'')+'>'+s+'</option>'; }).join('')
+      + ((typeof AppState !== 'undefined' && AppState.colecoes?.setores?.length)
+          ? AppState.colecoes.setores.filter(Boolean)
+          : ['Administração','Comunicação','Financeiro','Operações','Projetos','TI'])
+        .map(function(s){ return '<option'+(dado.setor===s?' selected':'')+'>'+s+'</option>'; }).join('')
       + '</select></div></div>'
       + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">'
       + '<div><label style="display:block;font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">E-mail institucional</label>'
@@ -198,6 +195,16 @@ function _excluirColaborador(id) {
 }
 
 window._onShow_aba_rh = function() {
+  // Popula setores dinamicamente
+  var selSetor = document.getElementById('rhFiltroSetor');
+  if (selSetor && selSetor.options.length <= 1) {
+    var setores = (typeof AppState !== 'undefined' && AppState.colecoes?.setores) || [];
+    setores.filter(Boolean).forEach(function(s) {
+      var o = document.createElement('option');
+      o.value = s; o.textContent = s;
+      selSetor.appendChild(o);
+    });
+  }
   if (!_rhCache.length) carregarRH();
 };
 </script>

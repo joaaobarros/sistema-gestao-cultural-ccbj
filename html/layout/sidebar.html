@@ -79,7 +79,7 @@
           <i id="icon-mod-espacos" class="fas fa-chevron-down text-[8px] text-slate-600"></i>
         </button>
 
-        <div id="mod-espacos" class="space-y-0.5 pl-2">
+        <div id="mod-espacos" class="space-y-0.5 pl-2 hidden">
 
           <button data-aba="aba-lista-reservas" class="tab-btn nav-item w-full">
             <i class="fas fa-calendar-alt w-5 text-center text-xs"></i>
@@ -113,7 +113,7 @@
           <i id="icon-mod-comunicacao" class="fas fa-chevron-down text-[8px] text-slate-600"></i>
         </button>
 
-        <div id="mod-comunicacao" class="space-y-0.5 pl-2">
+        <div id="mod-comunicacao" class="space-y-0.5 pl-2 hidden">
 
           <button id="btn-aba-rece" data-aba="aba-agenda-rece" class="tab-btn nav-item w-full">
             <i class="fas fa-star w-5 text-center text-xs"></i>
@@ -136,7 +136,7 @@
           <i id="icon-mod-equipes" class="fas fa-chevron-down text-[8px] text-slate-600"></i>
         </button>
 
-        <div id="mod-equipes" class="space-y-0.5 pl-2">
+        <div id="mod-equipes" class="space-y-0.5 pl-2 hidden">
 
           <button data-aba="aba-rh" class="tab-btn nav-item w-full">
             <i class="fas fa-id-badge w-5 text-center text-xs"></i>
@@ -159,7 +159,7 @@
           <i id="icon-mod-financeiro" class="fas fa-chevron-down text-[8px] text-slate-600"></i>
         </button>
 
-        <div id="mod-financeiro" class="space-y-0.5 pl-2">
+        <div id="mod-financeiro" class="space-y-0.5 pl-2 hidden">
 
           <button data-aba="aba-contratos-fin" class="tab-btn nav-item w-full" id="btn-aba-contratos-fin">
             <i class="fas fa-file-contract w-5 text-center text-xs"></i>
@@ -182,7 +182,7 @@
           <i id="icon-mod-relatorios" class="fas fa-chevron-down text-[8px] text-slate-600"></i>
         </button>
 
-        <div id="mod-relatorios" class="space-y-0.5 pl-2">
+        <div id="mod-relatorios" class="space-y-0.5 pl-2 hidden">
 
           <button data-aba="aba-codip" class="tab-btn nav-item w-full">
             <i class="fas fa-chart-pie w-5 text-center text-xs"></i>
@@ -205,7 +205,7 @@
           <i id="icon-mod-estrategia" class="fas fa-chevron-down text-[8px] text-slate-600"></i>
         </button>
 
-        <div id="mod-estrategia" class="space-y-0.5 pl-2">
+        <div id="mod-estrategia" class="space-y-0.5 pl-2 hidden">
 
           <button data-aba="aba-dashboard" class="tab-btn nav-item w-full">
             <i class="fas fa-chart-bar w-5 text-center text-xs"></i>
@@ -229,7 +229,7 @@
           <span><i class="fas fa-server mr-2 text-slate-600"></i>Sistema</span>
           <i id="icon-mod-sistema" class="fas fa-chevron-down text-[8px] text-slate-600"></i>
         </button>
-        <div id="mod-sistema" class="space-y-0.5 pl-2">
+        <div id="mod-sistema" class="space-y-0.5 pl-2 hidden">
           <button id="btn-aba-gestao" data-aba="aba-gestao-admin" class="tab-btn nav-item w-full hidden">
             <i class="fas fa-cog w-5 text-center text-xs"></i>
             <span class="text-xs font-semibold">Configurações</span>
@@ -266,4 +266,46 @@
   </aside>
 
   <div id="sidebarOverlay" onclick="toggleSidebar()" class="fixed inset-0 bg-black/60 z-40 hidden md:hidden"></div>
+
+<script>
+(function() {
+  var STORE_KEY = 'sidebar_modules_v1';
+  function _salvarEstado() {
+    var estado = {};
+    ['mod-pessoal','mod-espacos','mod-comunicacao','mod-equipes','mod-financeiro','mod-relatorios','mod-estrategia','mod-sistema'].forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el) estado[id] = !el.classList.contains('hidden');
+    });
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(estado)); } catch(e) {}
+  }
+  function _restaurarEstado() {
+    try {
+      var estado = JSON.parse(localStorage.getItem(STORE_KEY) || 'null');
+      if (!estado) return;
+      Object.keys(estado).forEach(function(id) {
+        var el = document.getElementById(id);
+        var icon = document.getElementById('icon-' + id);
+        if (!el) return;
+        if (estado[id]) {
+          el.classList.remove('hidden');
+          if (icon) icon.className = 'fas fa-chevron-up text-[8px] text-slate-600';
+        } else {
+          el.classList.add('hidden');
+          if (icon) icon.className = 'fas fa-chevron-down text-[8px] text-slate-600';
+        }
+      });
+    } catch(e) {}
+  }
+  var _origToggle = window.toggleModulo;
+  window.toggleModulo = function(id) {
+    if (typeof _origToggle === 'function') _origToggle(id);
+    _salvarEstado();
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', _restaurarEstado);
+  } else {
+    _restaurarEstado();
+  }
+})();
+</script>
 

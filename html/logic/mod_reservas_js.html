@@ -1825,7 +1825,7 @@ function renderizarModoDiagrama() {
           +'color:#fff;background:#f59e0b;border-radius:3px;padding:1px 3px">HAB?</div>';
       }
       var op = 1;
-      return '<div onclick="abrirDetalheReserva(\''+escaparHTML(r[0])+'\')"'
+      return '<div onclick="event.stopPropagation();abrirDetalheReserva(\''+escaparHTML(r[0])+'\')"'
         +' style="position:absolute;left:'+minToPx(iniC)+'px;width:'+Math.max(durToPx(iniC,terC)-2,4)+'px;top:5px;bottom:5px;'
         +'background:'+bg+';border-radius:5px;cursor:pointer;overflow:hidden;border:'+bord+';'
         +'opacity:'+op+';transition:opacity 0.2s"'
@@ -1836,7 +1836,7 @@ function renderizarModoDiagrama() {
         +'</div>';
     }).join('');
 
-    return '<div style="height:52px;position:relative;border-bottom:1px solid #f8fafc;">'+gridLines+blocos+'</div>';
+    return '<div onclick="_diagramaCliqueVazio(event,this,\''+sid+'\')" style="height:52px;position:relative;border-bottom:1px solid #f8fafc;cursor:crosshair">'+gridLines+blocos+'</div>';
   }).join('');
 
   // ── Marcador "agora" (linha vermelha fina sobre o scroll) ──────────────
@@ -1857,39 +1857,46 @@ function renderizarModoDiagrama() {
       +'</div>'
       // Grid scrollável
       +'<div id="_diagScrollEl" style="flex:1;overflow-x:auto;overflow-y:hidden;position:relative">'
-        // Marcador "agora" fixo no viewport do scroll (via sticky)
-        +(nowPx>=0
-          ? '<div id="_diagNowMarker" style="position:sticky;left:40%;top:0;bottom:0;width:0;z-index:20;pointer-events:none;display:inline-block">'
-              +'<div style="width:2px;height:100%;background:rgba(239,68,68,0.7);position:absolute;left:0;top:0">'
-                +'<div style="width:8px;height:8px;background:#ef4444;border-radius:50%;position:absolute;top:-4px;left:-3px"></div>'
+        +'<div style="width:'+TOTAL_PX+'px;position:relative">'
+          // Marcador "agora" — linha vertical contínua dentro do conteúdo scrollável
+          +(nowPx>=0
+            ? '<div id="_diagNowMarker" style="position:absolute;left:'+nowPx+'px;top:0;bottom:0;width:2px;background:rgba(239,68,68,0.75);z-index:20;pointer-events:none">'
+                +'<div style="width:8px;height:8px;background:#ef4444;border-radius:50%;position:absolute;top:0;left:-3px"></div>'
                 +'<div style="position:absolute;top:4px;left:4px;background:#ef4444;color:#fff;font-size:8px;font-weight:900;padding:1px 4px;border-radius:4px;white-space:nowrap">'
                   +String(agora.getHours()).padStart(2,'0')+':'+String(agora.getMinutes()).padStart(2,'0')
                 +'</div>'
               +'</div>'
-            +'</div>'
-          : '')
-        +'<div style="width:'+TOTAL_PX+'px;position:relative">'
+            : '')
           // Régua de horas
           +'<div style="height:28px;border-bottom:2px solid #e2e8f0;position:relative;background:#fff;overflow:hidden">'+horasRua+'</div>'
           // Linhas por sala
-          +(temQualquer ? linhasGrid : '<div style="padding:40px;text-align:center;color:#cbd5e1;font-size:12px;font-weight:700">Sem reservas neste dia</div>')
+          +(temQualquer ? linhasGrid : '<div style="padding:40px;text-align:center;color:#cbd5e1;font-size:12px;font-weight:700">Sem reservas neste dia — clique em qualquer linha para agendar</div>')
         +'</div>'
       +'</div>'
     +'</div>';
 
-  // ── Auto-scroll: posiciona "agora" a 40% da largura visível ───────────
+  // ── Auto-scroll: centraliza na hora atual (30% do viewport) ───────────
   setTimeout(function(){
     const el = document.getElementById('_diagScrollEl');
     if (!el) return;
     if (nowPx >= 0) {
-      // Rola para que nowPx fique a 40% da largura visível do container
-      const alvo = nowPx - Math.round(el.clientWidth * 0.40);
-      el.scrollLeft = Math.max(0, alvo);
+      el.scrollLeft = Math.max(0, nowPx - Math.round(el.clientWidth * 0.30));
+      // Re-centraliza após scroll manual com debounce de 3s
+      var _reCenterTimer;
+      el.addEventListener('scroll', function() {
+        clearTimeout(_reCenterTimer);
+        _reCenterTimer = setTimeout(function() {
+          // só re-centraliza se o marcador "agora" saiu da vista
+          const nowX = nowPx - el.scrollLeft;
+          if (nowX < 0 || nowX > el.clientWidth) {
+            el.scrollLeft = Math.max(0, nowPx - Math.round(el.clientWidth * 0.30));
+          }
+        }, 3000);
+      }, { passive: true });
     } else {
-      // Dia não é hoje → rola para o início
       el.scrollLeft = 0;
     }
-  }, 60);
+  }, 80);
 
   // ── Atualiza relógio do marcador a cada minuto ─────────────────────────
   if (window._diagClockTimer) clearInterval(window._diagClockTimer);
@@ -1927,7 +1934,8 @@ function limparFiltrosDiagrama() {
 }
 
 function _diagramaCliqueVazio(event, el, salaId) {
-  if (event.target !== el && !event.target.style.background?.includes('rgba')) return;
+  // Blocos chamam stopPropagation; qualquer clique que chegue aqui é em área vazia
+  if (event.target !== el && event.target.tagName !== 'DIV') return;
   const rect = el.getBoundingClientRect();
   const x = event.clientX - rect.left;
   const pctX = x / rect.width;
@@ -2776,18 +2784,15 @@ function renderizarModoAgendaGoogle() {
           <!-- Grade vertical scroll -->
           <div id="_agGridScroll" style="flex:1;overflow-y:auto;overflow-x:auto" onscroll="_syncAgendaScroll(this)">
             <div style="display:grid;grid-template-columns:repeat(7,minmax(${isMobile?'80':'100'}px,1fr));min-width:${isMobile?560:700}px">
-          <div class="border-r border-slate-100 relative bg-white" style="height:${TOTAL_PX}px;">
-            ${colunaHoras}
-          </div>
-          ${colunasDias}
-        </div>
+              ${colunasDias}
+            </div>
           </div><!-- fim grid scroll -->
         </div><!-- fim flex col -->
       </div><!-- fim flex row -->
 
       ${legendaHTML}
     </div>`;
-  // Sincroniza scroll horizontal header ↔ grid
+  // Sincroniza scroll horizontal header ↔ grid + auto-scroll para hora atual
   setTimeout(function() {
     const gs = document.getElementById('_agGridScroll');
     const hs = document.getElementById('_agHeaderScroll');
@@ -2795,10 +2800,17 @@ function renderizarModoAgendaGoogle() {
     if (gs && hs) {
       gs.addEventListener('scroll', function() {
         hs.scrollLeft = gs.scrollLeft;
-        if (hc) hc.style.marginTop = '-'+gs.scrollTop+'px';
+        if (hc) hc.style.transform = 'translateY(-'+gs.scrollTop+'px)';
       });
+      // Centraliza na hora atual (30% do viewport a partir do topo)
+      const agora = new Date();
+      const nowMin = agora.getHours()*60+agora.getMinutes();
+      if (nowMin >= INICIO_MIN && nowMin <= FIM_MIN) {
+        const nowTop = ((nowMin-INICIO_MIN)/TOTAL_MIN)*TOTAL_PX;
+        gs.scrollTop = Math.max(0, nowTop - gs.clientHeight * 0.3);
+      }
     }
-  }, 50);
+  }, 80);
 
   // ── Listener toggle ───────────────────────────────────────────────────────
   document.getElementById('filtroMinhasAgenda')?.addEventListener('change', e => {
@@ -2896,16 +2908,25 @@ function bloquearDiaCCBJ() {
     return;
   }
 
+  const hoje = new Date().toISOString().slice(0,10);
+
   Swal.fire({
     title: '<i class="fas fa-lock text-red-500 mr-2"></i>CCBJ Fechado',
     html: `
       <div class="text-left space-y-3">
-        <div>
-          <label class="text-[10px] font-black text-slate-500 uppercase block mb-1">Data do fechamento</label>
-          <input type="date" id="swalDataFechamento"
-            class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm font-semibold outline-none focus:border-red-400"
-            value="${new Date().toISOString().slice(0,10)}"
-            min="${new Date().toISOString().slice(0,10)}">
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="text-[10px] font-black text-slate-500 uppercase block mb-1">Data início *</label>
+            <input type="date" id="swalDataInicio"
+              class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm font-semibold outline-none focus:border-red-400"
+              value="${hoje}" min="${hoje}">
+          </div>
+          <div>
+            <label class="text-[10px] font-black text-slate-500 uppercase block mb-1">Data fim (opcional)</label>
+            <input type="date" id="swalDataFim"
+              class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm font-semibold outline-none focus:border-red-400"
+              min="${hoje}" placeholder="Igual ao início se vazio">
+          </div>
         </div>
         <div>
           <label class="text-[10px] font-black text-slate-500 uppercase block mb-1">Motivo</label>
@@ -2920,82 +2941,168 @@ function bloquearDiaCCBJ() {
         </div>
       </div>`,
     showCancelButton: true,
-    confirmButtonText: '<i class="fas fa-lock mr-1"></i>Bloquear dia',
+    confirmButtonText: '<i class="fas fa-lock mr-1"></i>Bloquear',
     cancelButtonText: 'Cancelar',
     confirmButtonColor: '#dc2626',
     preConfirm: () => {
-      const data = document.getElementById('swalDataFechamento').value;
+      const inicio = document.getElementById('swalDataInicio').value;
+      const fim    = document.getElementById('swalDataFim').value || inicio;
       const motivo = document.getElementById('swalMotivoCCBJ').value.trim() || 'CCBJ Fechado';
-      if (!data) { Swal.showValidationMessage('Selecione uma data.'); return false; }
-      return { data, motivo };
+      if (!inicio) { Swal.showValidationMessage('Selecione uma data de início.'); return false; }
+      if (fim < inicio) { Swal.showValidationMessage('Data fim deve ser igual ou posterior ao início.'); return false; }
+      const diff = Math.round((new Date(fim)-new Date(inicio))/(86400000)) + 1;
+      if (diff > 30) { Swal.showValidationMessage('Intervalo máximo: 30 dias.'); return false; }
+      return { inicio, fim, motivo };
     }
   }).then(function(result) {
     if (!result.isConfirmed) return;
 
-    const { data, motivo } = result.value;
-    const dataFmt = (function() {
-      const p = data.split('-');
-      return p[2] + '/' + p[1] + '/' + p[0];
-    })();
+    const { inicio, fim, motivo } = result.value;
+    const datas = _gerarDatasRange(inicio, fim);
+    const total = salas.length * datas.length;
+    var processados = 0, erros = 0;
 
     showLoader(true);
 
-    var datas = salas.map(function() { return dataFmt; });
-    var promessas = salas.length;
-    var erros = 0;
+    datas.forEach(function(dataFmt) {
+      salas.forEach(function(sala) {
+        var dadosBloqueio = {
+          nomeAcao: '🔒 CCBJ FECHADO — ' + motivo.toUpperCase(),
+          sala: String(sala[0]),
+          horaInicio: '08:00',
+          horaTermino: '21:30',
+          turno: 'MULTITURNO',
+          setor: 'ADMINISTRAÇÃO',
+          responsavel: AppState.usuario.email,
+          coresponsavel: 'Não informado',
+          release: motivo,
+          itensVolantes: 'Nenhum',
+          tipoAcao: 'BLOQUEIO',
+          modoRece: false
+        };
+        GAS.reservas.criar(dadosBloqueio, [dataFmt], function() {
+          processados++;
+          _concluirBloqueiosCCBJ(processados, total, erros, datas, motivo);
+        }, function() {
+          erros++; processados++;
+          _concluirBloqueiosCCBJ(processados, total, erros, datas, motivo);
+        });
+      });
+    });
+  });
+}
 
-    salas.forEach(function(sala) {
-      var dadosBloqueio = {
-        nomeAcao: '🔒 CCBJ FECHADO — ' + motivo.toUpperCase(),
-        sala: String(sala[0]),
-        horaInicio: '08:00',
-        horaTermino: '21:30',
-        turno: 'MULTITURNO',
-        setor: 'ADMINISTRAÇÃO',
-        responsavel: AppState.usuario.email,
-        coresponsavel: 'Não informado',
-        release: motivo,
-        itensVolantes: 'Nenhum',
-        tipoAcao: 'BLOQUEIO',
-        modoRece: false
-      };
+function _gerarDatasRange(inicio, fim) {
+  var datas = [];
+  var cur = new Date(inicio + 'T00:00:00');
+  var end = new Date(fim + 'T00:00:00');
+  while (cur <= end) {
+    datas.push(String(cur.getDate()).padStart(2,'0')+'/'+String(cur.getMonth()+1).padStart(2,'0')+'/'+cur.getFullYear());
+    cur.setDate(cur.getDate()+1);
+  }
+  return datas;
+}
 
-      GAS.reservas.criar(dadosBloqueio, [dataFmt], function() {
-        promessas--;
-        if (promessas <= 0) {
+function _concluirBloqueiosCCBJ(processados, total, erros, datas, motivo) {
+  if (processados < total) return;
+  showLoader(false);
+
+  GAS.reservas.obter(function(reservas) {
+    AppState.colecoes.reservas = reservas || [];
+    indexarReservas();
+    renderizarReservas();
+    window._ultimosBloqueiosCCBJ = { datas: datas, motivo: motivo };
+
+    var totalSalas = (AppState.colecoes.salas || []).length;
+    var msg = erros > 0
+      ? (total - erros) + ' bloqueio(s) criados. ' + erros + ' com conflito (já ocupados).'
+      : datas.length === 1
+        ? 'Todas as ' + totalSalas + ' salas bloqueadas em ' + datas[0] + '.'
+        : datas.length + ' dias bloqueados em ' + totalSalas + ' sala(s).';
+
+    Swal.fire({
+      icon: erros > 0 ? 'warning' : 'success',
+      title: erros > 0 ? 'Bloqueio parcial' : 'Dias bloqueados!',
+      html: '<p class="text-sm">' + msg + '</p>'
+        + '<p class="text-xs text-slate-400 mt-2">Datas: ' + datas.join(', ') + '</p>',
+      showConfirmButton: true,
+      confirmButtonText: 'OK',
+      showDenyButton: true,
+      denyButtonText: '<i class="fas fa-undo mr-1"></i> Desfazer',
+      denyButtonColor: '#6b7280'
+    }).then(function(res) {
+      if (res.isDenied) _desfazerBloqueiosCCBJ();
+    });
+  });
+}
+
+function _desfazerBloqueiosCCBJ() {
+  var dados = window._ultimosBloqueiosCCBJ;
+  if (!dados || !dados.datas || !dados.datas.length) {
+    Swal.fire('Atenção', 'Nenhum bloqueio recente para desfazer.', 'info');
+    return;
+  }
+
+  Swal.fire({
+    title: 'Desfazer bloqueios?',
+    text: 'Cancela todos os bloqueios "CCBJ FECHADO" das datas: ' + dados.datas.join(', '),
+    icon: 'question',
+    showCancelButton: true,
+    confirmButtonText: 'Sim, desfazer',
+    cancelButtonText: 'Manter',
+    confirmButtonColor: '#dc2626'
+  }).then(function(res) {
+    if (!res.isConfirmed) return;
+    showLoader(true);
+
+    var paraDesfazer = (AppState.colecoes.reservas || []).filter(function(r) {
+      var dataFmt = _normDataFmt(r[1]);
+      return String(r[6]||'').includes('CCBJ FECHADO') &&
+             dados.datas.indexOf(dataFmt) >= 0 &&
+             String(r[13]||'').toUpperCase() !== 'CANCELADO';
+    });
+
+    if (!paraDesfazer.length) {
+      showLoader(false);
+      Swal.fire('Atenção', 'Bloqueios não encontrados (já removidos?).', 'info');
+      return;
+    }
+
+    var pendente = paraDesfazer.length;
+    paraDesfazer.forEach(function(r) {
+      GAS.reservas.cancelarComJustificativa(r[0], AppState.usuario.email, 'Desfazer CCBJ Fechado', function() {
+        pendente--;
+        if (pendente <= 0) {
           showLoader(false);
-          var msg = erros > 0
-            ? (salas.length - erros) + ' sala(s) bloqueada(s). ' + erros + ' com conflito (já ocupadas).'
-            : 'Todas as ' + salas.length + ' salas bloqueadas em ' + dataFmt + '.';
-          Swal.fire({
-            icon: erros > 0 ? 'warning' : 'success',
-            title: erros > 0 ? 'Bloqueio parcial' : 'Dia bloqueado!',
-            text: msg,
-            timer: 3500,
-            showConfirmButton: false
-          });
+          window._ultimosBloqueiosCCBJ = null;
           GAS.reservas.obter(function(reservas) {
             AppState.colecoes.reservas = reservas || [];
             indexarReservas();
             renderizarReservas();
           });
+          Swal.mixin({toast:true,position:'top-end',showConfirmButton:false,timer:3000,timerProgressBar:true})
+            .fire({icon:'success',title:'Bloqueios desfeitos com sucesso'});
         }
       }, function() {
-        erros++;
-        promessas--;
-        if (promessas <= 0) {
+        pendente--;
+        if (pendente <= 0) {
           showLoader(false);
-          var msg2 = (salas.length - erros) + ' sala(s) bloqueada(s). ' + erros + ' com conflito.';
-          Swal.fire({ icon: 'warning', title: 'Bloqueio parcial', text: msg2 });
-          GAS.reservas.obter(function(reservas) {
-            AppState.colecoes.reservas = reservas || [];
-            indexarReservas();
-            renderizarReservas();
-          });
+          Swal.fire('Aviso', 'Alguns bloqueios não puderam ser cancelados.', 'warning');
         }
       });
     });
   });
+}
+
+function _normDataFmt(d) {
+  if (d instanceof Date) {
+    var dd = new Date(d);
+    return String(dd.getDate()).padStart(2,'0')+'/'+String(dd.getMonth()+1).padStart(2,'0')+'/'+dd.getFullYear();
+  }
+  var s = String(d||'').trim();
+  if (s.includes('/')) return s.split('/').map(function(p,i){ return i<2?p.padStart(2,'0'):p; }).join('/');
+  if (s.includes('-')) { var p=s.split('-'); return p[2]+'/'+p[1]+'/'+p[0]; }
+  return s;
 }
 
 function fmtHoraMin(m) {
