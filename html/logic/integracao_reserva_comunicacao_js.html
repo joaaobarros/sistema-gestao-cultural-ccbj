@@ -1,0 +1,196 @@
+<!--
+@file html/logic/integracao_reserva_comunicacao_js.html
+@layer frontend/integration
+@description Integração entre o módulo de Reservas e o Balcão de Comunicação.
+             Controla o painel opcional no formulário de reserva, coleta os dados,
+             dispara a criação das demandas após o save e exibe rastreabilidade nos detalhes.
+@responsibility Estado e lógica de UI da seção "Gerar demanda de comunicação".
+@dependencies GAS.comunicacaoProcessos, escaparHTML, showLoader, AppState
+-->
+<script>
+
+// ══════════════════════════════════════════════════════
+// ESTADO
+// ══════════════════════════════════════════════════════
+var _rcGerarDemanda = false;
+
+// ══════════════════════════════════════════════════════
+// TOGGLE DO PAINEL
+// ══════════════════════════════════════════════════════
+function alternarModoComunicacao(checked) {
+  _rcGerarDemanda = !!checked;
+  var painel = document.getElementById('blocoComunicacao');
+  if (!painel) return;
+  if (_rcGerarDemanda) {
+    painel.classList.remove('hidden');
+    var tituloAcao = document.getElementById('inputNomeAcao');
+    var inputTitulo = document.getElementById('rcComTitulo');
+    if (inputTitulo && tituloAcao && !inputTitulo.value) {
+      inputTitulo.value = tituloAcao.value.trim();
+    }
+  } else {
+    painel.classList.add('hidden');
+  }
+}
+
+// ══════════════════════════════════════════════════════
+// SUGESTÃO DE ENTREGAS POR TIPO (mesma lógica do balcão)
+// ══════════════════════════════════════════════════════
+var _rcTipoEntregas = {
+  release:   ['materia', 'divulgacao'],
+  grafico:   ['design', 'diagramacao'],
+  foto:      ['foto', 'ensaio_fotografico'],
+  video:     ['video', 'edicao_video'],
+  rece:      ['design', 'materia', 'divulgacao'],
+  cobertura: ['foto', 'video', 'stories'],
+  campanha:  ['design', 'video', 'materia', 'divulgacao']
+};
+
+function _rcSugerirEntregas(tipo) {
+  var sugestoes = _rcTipoEntregas[tipo] || [];
+  document.querySelectorAll('#blocoComunicacao input.rcEntrega').forEach(function(cb) {
+    var lbl = cb.closest('label');
+    cb.checked = sugestoes.indexOf(cb.value) !== -1;
+    if (lbl) {
+      lbl.style.borderColor = cb.checked ? '#f97316' : '#e2e8f0';
+      lbl.style.background  = cb.checked ? '#fff7ed' : '#f8fafc';
+    }
+  });
+}
+
+// ══════════════════════════════════════════════════════
+// COLETA DE DADOS DO PAINEL
+// ══════════════════════════════════════════════════════
+function coletarDadosDemandaComunicacao() {
+  if (!_rcGerarDemanda) return null;
+  var titulo = (document.getElementById('rcComTitulo') ? document.getElementById('rcComTitulo').value : '').trim();
+  if (!titulo) return null;
+  var entregas = Array.from(
+    document.querySelectorAll('#blocoComunicacao input.rcEntrega:checked')
+  ).map(function(cb) { return cb.value; });
+  return {
+    titulo:      titulo,
+    descricao:   (document.getElementById('rcComDescricao') ? document.getElementById('rcComDescricao').value : '').trim(),
+    tipo:        (document.getElementById('rcComTipo') ? document.getElementById('rcComTipo').value : '') || 'grafico',
+    prazo:       (document.getElementById('rcComPrazo') ? document.getElementById('rcComPrazo').value : '') || '',
+    prioridade:  (document.getElementById('rcComPrioridade') ? document.getElementById('rcComPrioridade').value : '') || 'Média',
+    observacoes: (document.getElementById('rcComObs') ? document.getElementById('rcComObs').value : '').trim(),
+    entregas:    entregas
+  };
+}
+
+// ══════════════════════════════════════════════════════
+// CRIAÇÃO DE DEMANDAS APÓS SALVAR RESERVA
+// ══════════════════════════════════════════════════════
+function criarDemandasComunicacaoAposReserva(ids, dadosReserva, dadosCom) {
+  if (!dadosCom || !ids || !ids.length) return;
+  ids.forEach(function(idReserva) {
+    GAS._call(
+      'criarDemandaComunicacaoFromReserva',
+      [idReserva, dadosReserva, dadosCom],
+      function(res) {
+        if (res && !res.duplicado) {
+          console.info('[Comunicação] Demanda criada para reserva', idReserva, '→', res.id);
+        }
+      },
+      function(e) {
+        console.warn('[Comunicação] Falha ao criar demanda para reserva', idReserva, e);
+      }
+    );
+  });
+}
+
+// ══════════════════════════════════════════════════════
+// RESET DO PAINEL (chamado por resetarFormulario)
+// ══════════════════════════════════════════════════════
+function _rcResetarPainel() {
+  _rcGerarDemanda = false;
+  var checkCom = document.getElementById('checkComunicacao');
+  if (checkCom) checkCom.checked = false;
+  var painel = document.getElementById('blocoComunicacao');
+  if (painel) painel.classList.add('hidden');
+  ['rcComTitulo', 'rcComDescricao', 'rcComObs', 'rcComPrazo'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  var rcTipo = document.getElementById('rcComTipo');
+  if (rcTipo) rcTipo.value = 'release';
+  var rcPrio = document.getElementById('rcComPrioridade');
+  if (rcPrio) rcPrio.value = 'Média';
+  document.querySelectorAll('#blocoComunicacao input.rcEntrega').forEach(function(cb) {
+    cb.checked = false;
+    var lbl = cb.closest('label');
+    if (lbl) {
+      lbl.style.borderColor = '#e2e8f0';
+      lbl.style.background  = '#f8fafc';
+    }
+  });
+}
+
+// ══════════════════════════════════════════════════════
+// RASTREABILIDADE — detalhe da reserva
+// ══════════════════════════════════════════════════════
+function _rcCarregarDemandaNoDetalhe(idReserva) {
+  var el = document.getElementById('rc-detalhe-demanda-' + idReserva);
+  if (!el) return;
+
+  GAS._call('obterDemandaPorReservaId', [idReserva], function(demanda) {
+    if (!demanda) {
+      var btnGerar = (typeof abrirModalAtendimento === 'function')
+        ? '<button onclick="_rcGerarDemandaParaReserva(\'' + escaparHTML(idReserva) + '\')"'
+          + ' class="ml-2 px-2 py-0.5 bg-orange-100 text-orange-700 text-[9px] font-black rounded-lg hover:bg-orange-500 hover:text-white transition">'
+          + '<i class="fas fa-plus mr-1"></i>Gerar demanda</button>'
+        : '';
+      el.innerHTML = '<span class="text-[10px] text-slate-400 italic">Nenhuma demanda vinculada.</span>' + btnGerar;
+      return;
+    }
+    var stCls = (demanda.status || '').toLowerCase() === 'concluído'
+      ? 'bg-emerald-100 text-emerald-700'
+      : (demanda.status || '').toLowerCase() === 'em andamento'
+        ? 'bg-amber-100 text-amber-700'
+        : 'bg-slate-100 text-slate-600';
+    el.innerHTML = '<div class="flex items-center gap-2 flex-wrap">'
+      + '<span class="text-[11px] font-bold text-slate-700">' + escaparHTML(demanda.titulo || '') + '</span>'
+      + '<span class="px-2 py-0.5 rounded-full text-[9px] font-black ' + stCls + '">' + escaparHTML(demanda.status || '') + '</span>'
+      + '<button onclick="mostrarAba(\'aba-balcao\');var m=document.getElementById(\'modalDetalheRes\');if(m)m.remove();"'
+      + ' class="px-2 py-0.5 bg-orange-100 text-orange-700 text-[9px] font-black rounded-lg hover:bg-orange-500 hover:text-white transition">'
+      + '<i class="fas fa-external-link-alt mr-1"></i>Ver no Balcão</button>'
+      + '</div>';
+  }, function() {
+    el.innerHTML = '<span class="text-[10px] text-red-400 italic">Erro ao carregar demanda.</span>';
+  });
+}
+
+function _rcGerarDemandaParaReserva(idReserva) {
+  var reserva = (AppState.colecoes.reservas || []).find(function(r) { return r[0] === idReserva; });
+  var nomeAcao = reserva ? (reserva[6] || '') : '';
+  var modal = document.getElementById('modalDetalheRes');
+  if (modal) modal.remove();
+  if (typeof abrirModalAtendimento === 'function') {
+    abrirModalAtendimento({
+      titulo:    nomeAcao,
+      origem:    'reserva',
+      idReserva: idReserva
+    });
+  }
+}
+
+// ══════════════════════════════════════════════════════
+// INJEÇÃO DO BLOCO DE RASTREABILIDADE NO MODAL DE DETALHE
+// Chame _rcInjetarDetalheReserva(idReserva, containerEl)
+// para adicionar o bloco de demanda vinculada em qualquer modal.
+// ══════════════════════════════════════════════════════
+function _rcInjetarDetalheReserva(idReserva, containerEl) {
+  if (!idReserva || !containerEl) return;
+  var divId = 'rc-detalhe-demanda-' + idReserva;
+  if (document.getElementById(divId)) return; // já injetado
+  var wrapper = document.createElement('div');
+  wrapper.className = 'mt-3 pt-3 border-t border-slate-100';
+  wrapper.innerHTML = '<p class="text-[9px] font-black text-orange-600 uppercase tracking-widest mb-1">'
+    + '<i class="fas fa-bullhorn mr-1"></i>Demanda de Comunicação</p>'
+    + '<div id="' + divId + '" class="text-[10px] text-slate-400 italic">Carregando...</div>';
+  containerEl.appendChild(wrapper);
+  _rcCarregarDemandaNoDetalhe(idReserva);
+}
+
+</script>

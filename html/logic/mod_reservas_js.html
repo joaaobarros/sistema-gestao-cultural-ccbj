@@ -374,6 +374,23 @@ function resetarFormulario() {
 
   alternarModoCodip(false);
 
+  // Reset comunicação
+  var checkCom = document.getElementById('checkComunicacao');
+  if (checkCom) checkCom.checked = false;
+  if (typeof alternarModoComunicacao === 'function') alternarModoComunicacao(false);
+  ['rcComTitulo','rcComDescricao','rcComObs','rcComPrazo'].forEach(function(id) {
+    var el = document.getElementById(id); if (el) el.value = '';
+  });
+  document.querySelectorAll('#blocoComunicacao input.rcEntrega').forEach(function(cb) {
+    cb.checked = false;
+    var lbl = cb.closest('label');
+    if (lbl) { lbl.style.borderColor = '#e2e8f0'; lbl.style.background = '#f8fafc'; }
+  });
+  var rcTipo = document.getElementById('rcComTipo');
+  if (rcTipo) rcTipo.value = 'release';
+  var rcPrio = document.getElementById('rcComPrioridade');
+  if (rcPrio) rcPrio.value = 'Média';
+
 }
 
 

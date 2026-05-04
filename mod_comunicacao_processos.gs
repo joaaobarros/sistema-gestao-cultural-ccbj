@@ -47,6 +47,8 @@ function listarProcessosComunicacao() {
         prioridade: obj['Prioridade'],
         responsavel: obj['Responsável'],
         prazo: obj['Prazo'],
+        origem: obj['Origem'],
+        idReserva: obj['ID Reserva'],
         revisaoStatus: obj['Revisao Status'],
         revisaoSolicitacao: obj['Revisao Solicitacao'],
         revisaoSolicitante: obj['Revisao Solicitante'],
@@ -695,4 +697,51 @@ function responderTarefaComoFuncao(idTarefa, mensagem, autor) {
   _atualizarStatusInternoTarefa(idTarefa, 'em_gestao');
 
   return { ok: true };
+}
+
+// =====================================================
+// INTEGRAÇÃO RESERVA → COMUNICAÇÃO
+// =====================================================
+
+/**
+ * Cria demanda de comunicação a partir de uma reserva.
+ * Garante deduplicação: se já existe demanda para o idReserva, retorna ela sem criar nova.
+ */
+function criarDemandaComunicacaoFromReserva(idReserva, dadosReserva, dadosComunicacao) {
+  if (!idReserva) throw new Error('ID da reserva é obrigatório.');
+  if (!dadosComunicacao || !dadosComunicacao.titulo) throw new Error('Título da demanda é obrigatório.');
+
+  var existente = obterDemandaPorReservaId(idReserva);
+  if (existente) return { ok: true, id: existente.id, duplicado: true };
+
+  return criarProcessoComunicacao({
+    titulo:      dadosComunicacao.titulo,
+    descricao:   dadosComunicacao.descricao   || '',
+    prioridade:  dadosComunicacao.prioridade  || 'Média',
+    prazo:       dadosComunicacao.prazo       || '',
+    observacoes: dadosComunicacao.observacoes || '',
+    entregas:    dadosComunicacao.entregas    || [],
+    origem:      'reserva',
+    idReserva:   idReserva,
+    solicitante: (dadosReserva && dadosReserva.responsavel) || '',
+    responsavel: dadosComunicacao.responsavel || ''
+  });
+}
+
+/**
+ * Retorna a primeira demanda de comunicação vinculada ao idReserva, ou null.
+ */
+function obterDemandaPorReservaId(idReserva) {
+  if (!idReserva) return null;
+  var aba   = _abaProcessos();
+  var dados = aba.getDataRange().getValues();
+  if (dados.length <= 1) return null;
+  var headers = dados[0];
+  for (var i = 1; i < dados.length; i++) {
+    var obj = _toObj(headers, dados[i]);
+    if (String(obj['ID Reserva'] || '').trim() === String(idReserva).trim()) {
+      return { id: obj['ID'], titulo: obj['Título'], status: obj['Status'] };
+    }
+  }
+  return null;
 }

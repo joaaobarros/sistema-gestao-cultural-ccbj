@@ -1056,7 +1056,7 @@ function criarReservaController(dados, datas) {
     });
   }
 
-  return { sucesso: true };
+  return { sucesso: true, ids: idsGerados };
 }
 
 function atualizarReservaController(dados) {

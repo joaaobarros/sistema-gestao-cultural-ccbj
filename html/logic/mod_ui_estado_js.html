@@ -493,7 +493,7 @@ async function salvarAgendamento() {
   const btnSubmit = document.querySelector('#formReserva button[type="submit"]');
   if (btnSubmit) btnSubmit.disabled = true;
 
-  // 🔴 EDIÇÃO RECE
+  // EDIÇÃO RECE
   if (typeof modoEdicao !== 'undefined' && modoEdicao === "RECE") {
 
     if (!dados.id) {
@@ -558,9 +558,20 @@ async function salvarAgendamento() {
   }
 
   // 🔍 NOVA RESERVA (fluxo intacto)
-  GAS.reservas.criar(dados, datas, function() {
+  GAS.reservas.criar(dados, datas, function(res) {
       showLoader(false);
       if (btnSubmit) btnSubmit.disabled = false;
+
+      // Integração: demanda de comunicação vinculada à reserva
+      if (res && res.ids && res.ids.length) {
+        var dadosCom = (typeof coletarDadosDemandaComunicacao === 'function')
+          ? coletarDadosDemandaComunicacao() : null;
+        if (dadosCom) {
+          var dadosReserva = { responsavel: dados.responsavel };
+          criarDemandasComunicacaoAposReserva(res.ids, dadosReserva, dadosCom);
+        }
+      }
+
       resetarFormulario();
       mostrarAba('aba-lista-reservas');
 
@@ -586,6 +597,8 @@ async function salvarAgendamento() {
       if (btnSubmit) btnSubmit.disabled = false;
     });
 }
+
+
 
 /* REMOVIDO: processarMensagemIA, melhorarConteudoRelatorio, abrirEditorApresentacao,
    gerarInsightsAutomaticos — funcionalidades de IA/relatório removidas por não estarem
@@ -629,7 +642,7 @@ if (!resultadoBackend || resultadoBackend.temConflito === undefined) {
   return;
 }
 
-// 🟢 SEM CONFLITO → BLOQUEIA IA
+// SEM CONFLITO → BLOQUEIA IA
 if (resultadoBackend.temConflito === false) {
 
   executarIAReserva({
@@ -639,7 +652,7 @@ if (resultadoBackend.temConflito === false) {
   return;
 }
 
-// 🔴 COM CONFLITO → RESPOSTA DIRETA (SEM IA)
+// COM CONFLITO → RESPOSTA DIRETA (SEM IA)
 if (resultadoBackend.temConflito === true) {
 
   const c = resultadoBackend;
@@ -659,11 +672,11 @@ Atividade: ${c.reservaExistente?.nome || 'Não informado'}
 
 }
 
-// 🔽 A PARTIR DAQUI IA PODE RODAR (SEM RISCO)
+// A PARTIR DAQUI IA PODE RODAR (SEM RISCO)
 
 const texto = String(textoUsuario || '').toLowerCase();
 
-// 🧠 DETECÇÃO DE ANÁLISE / RELATÓRIO
+// DETECÇÃO DE ANÁLISE / RELATÓRIO
 if (
 texto.includes('gráfico') ||
 texto.includes('grafico') ||

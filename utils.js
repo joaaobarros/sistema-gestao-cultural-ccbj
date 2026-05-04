@@ -39,6 +39,8 @@ const ABA_PARA_MODULO = {
 
   // COMUNICACAO
   'ReservasRECE':         'COMUNICACAO',
+  'ProcessosComunicacao': 'COMUNICACAO',
+  'EntregasComunicacao':  'COMUNICACAO',
 
   // RELATORIOS
   'RelatoriosCODIP':      'RELATORIOS',
