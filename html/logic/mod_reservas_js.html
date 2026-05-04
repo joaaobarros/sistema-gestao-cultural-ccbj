@@ -2641,8 +2641,12 @@ function renderizarModoAgendaGoogle() {
       // No modo multi-sala, cor por sala; no modo sala única, cor por setor
       const _statusBloco = String(r[13]||'').toUpperCase();
       const _isHabBloco  = _statusBloco === 'HABILITADO';
+      const _isBloqueio  = String(r[7]||'').toUpperCase() === 'BLOQUEIO';
       let corBloco, corTexto;
-      if (_isHabBloco) {
+      if (_isBloqueio) {
+        corBloco = 'border-red-300 bg-red-50/70';
+        corTexto = 'text-red-700';
+      } else if (_isHabBloco) {
         corBloco = 'border-emerald-500 bg-emerald-50';
         corTexto = 'text-emerald-900';
       } else if (modoMultiSala) {
@@ -2678,19 +2682,29 @@ function renderizarModoAgendaGoogle() {
           ${escaparHTML(nomeSala)}
         </div>` : '';
 
+      const conteudoBloco = _isBloqueio ? `
+        <div class="text-[9px] font-black text-red-500 uppercase tracking-wide leading-none">🔒 CCBJ Fechado</div>
+        ${height > 28 ? `<div class="text-[10px] font-bold truncate leading-tight text-red-700 mt-0.5">${escaparHTML(r[11] || r[6])}</div>` : ''}
+        ${height > 44 ? `<div class="text-[9px] text-red-400 opacity-70">${fmtMin(ini)}–${fmtMin(ter)}</div>` : ''}
+      ` : `
+        <div class="text-[9px] font-black truncate opacity-60 ${corTexto}">${escaparHTML(r[9] || '—')}</div>
+        <div class="text-[10px] font-bold truncate leading-tight ${corTexto}">${escaparHTML(r[6])}</div>
+        ${height > 34 ? `<div class="text-[9px] opacity-50 ${corTexto}">${fmtMin(ini)}–${fmtMin(ter)}</div>` : ''}
+        ${_isHabBloco ? `<span style="font-size:8px;font-weight:900;color:#059669;background:#d1fae5;border-radius:4px;padding:0 3px;width:fit-content">✓ HAB</span>` : `<span style="font-size:7px;font-weight:900;color:#d97706;background:#fef3c7;border-radius:4px;padding:0 3px;width:fit-content">HAB?</span>`}
+        ${badgeSala}
+      `;
+
       return `
         <div
           class="absolute border-l-4 ${corBloco} rounded-r-lg shadow-sm cursor-pointer overflow-hidden
-                 transition-all hover:brightness-95 hover:shadow-md hover:z-20"
-          style="top:${top}px; height:${height}px; left:${left}%; width:calc(${width}% - 3px);"
+                 transition-all hover:brightness-95 hover:shadow-md hover:z-20
+                 ${_isBloqueio ? 'opacity-80' : ''}"
+          style="top:${top}px; height:${height}px; left:${left}%; width:calc(${width}% - 3px);
+                 ${_isBloqueio ? 'background:repeating-linear-gradient(45deg,transparent,transparent 4px,rgba(239,68,68,0.05) 4px,rgba(239,68,68,0.05) 8px)' : ''}"
           onclick="event.stopPropagation(); abrirDetalheReserva('${escaparHTML(r[0])}')"
-          title="${escaparHTML(r[6])} — ${escaparHTML(nomeSala)} — ${fmtMin(ini)}–${fmtMin(ter)}">
+          title="${escaparHTML(_isBloqueio ? ('CCBJ Fechado — ' + (r[11]||'')) : r[6])} — ${escaparHTML(nomeSala)} — ${fmtMin(ini)}–${fmtMin(ter)}">
           <div class="px-1.5 py-1 flex flex-col h-full">
-            <div class="text-[9px] font-black truncate opacity-60 ${corTexto}">${escaparHTML(r[9] || '—')}</div>
-            <div class="text-[10px] font-bold truncate leading-tight ${corTexto}">${escaparHTML(r[6])}</div>
-            ${height > 34 ? `<div class="text-[9px] opacity-50 ${corTexto}">${fmtMin(ini)}–${fmtMin(ter)}</div>` : ''}
-            ${_isHabBloco ? `<span style="font-size:8px;font-weight:900;color:#059669;background:#d1fae5;border-radius:4px;padding:0 3px;width:fit-content">✓ HAB</span>` : `<span style="font-size:7px;font-weight:900;color:#d97706;background:#fef3c7;border-radius:4px;padding:0 3px;width:fit-content">HAB?</span>`}
-            ${badgeSala}
+            ${conteudoBloco}
           </div>
         </div>`;
     }).join('');
@@ -2903,7 +2917,8 @@ function bloquearDiaCCBJ() {
   const hoje = new Date().toISOString().slice(0,10);
 
   Swal.fire({
-    title: '<i class="fas fa-lock text-red-500 mr-2"></i>CCBJ Fechado',
+    title: '<i class="fas fa-lock text-red-500 mr-2"></i>CCBJ Fechado — Bloqueio em Lote',
+    width: 540,
     html: `
       <div class="text-left space-y-3">
         <div class="grid grid-cols-2 gap-3">
@@ -2914,11 +2929,31 @@ function bloquearDiaCCBJ() {
               value="${hoje}" min="${hoje}">
           </div>
           <div>
-            <label class="text-[10px] font-black text-slate-500 uppercase block mb-1">Data fim (opcional)</label>
+            <label class="text-[10px] font-black text-slate-500 uppercase block mb-1">Data fim</label>
             <input type="date" id="swalDataFim"
               class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm font-semibold outline-none focus:border-red-400"
-              min="${hoje}" placeholder="Igual ao início se vazio">
+              min="${hoje}">
           </div>
+        </div>
+        <div>
+          <label class="text-[10px] font-black text-slate-500 uppercase block mb-2">Dias da semana</label>
+          <div class="flex flex-wrap gap-2">
+            ${[['Dom','0'],['Seg','1'],['Ter','2'],['Qua','3'],['Qui','4'],['Sex','5'],['Sáb','6']].map(([n,v]) =>
+              `<label class="flex items-center gap-1 cursor-pointer select-none px-2 py-1 rounded-lg border border-slate-200 hover:border-red-300 text-xs font-bold text-slate-600">
+                <input type="checkbox" class="dia-semana accent-red-600" value="${v}" ${v!=='0'?'checked':''}> ${n}
+              </label>`
+            ).join('')}
+          </div>
+        </div>
+        <div>
+          <label class="text-[10px] font-black text-slate-500 uppercase block mb-1">Turno</label>
+          <select id="swalTurnoCCBJ"
+            class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm font-semibold outline-none focus:border-red-400 bg-white">
+            <option value="integral">Integral — 08:00 às 22:00</option>
+            <option value="manha">Manhã — 08:00 às 12:00</option>
+            <option value="tarde">Tarde — 12:00 às 18:00</option>
+            <option value="noite">Noite — 18:00 às 22:00</option>
+          </select>
         </div>
         <div>
           <label class="text-[10px] font-black text-slate-500 uppercase block mb-1">Motivo</label>
@@ -2940,45 +2975,65 @@ function bloquearDiaCCBJ() {
       const inicio = document.getElementById('swalDataInicio').value;
       const fim    = document.getElementById('swalDataFim').value || inicio;
       const motivo = document.getElementById('swalMotivoCCBJ').value.trim() || 'CCBJ Fechado';
+      const turno  = document.getElementById('swalTurnoCCBJ').value;
+      const dias   = [...document.querySelectorAll('.dia-semana:checked')].map(el => parseInt(el.value));
       if (!inicio) { Swal.showValidationMessage('Selecione uma data de início.'); return false; }
       if (fim < inicio) { Swal.showValidationMessage('Data fim deve ser igual ou posterior ao início.'); return false; }
-      const diff = Math.round((new Date(fim)-new Date(inicio))/(86400000)) + 1;
-      if (diff > 30) { Swal.showValidationMessage('Intervalo máximo: 30 dias.'); return false; }
-      return { inicio, fim, motivo };
+      const diff = Math.round((new Date(fim) - new Date(inicio)) / 86400000) + 1;
+      if (diff > 60) { Swal.showValidationMessage('Intervalo máximo: 60 dias.'); return false; }
+      if (!dias.length) { Swal.showValidationMessage('Selecione pelo menos um dia da semana.'); return false; }
+      return { inicio, fim, motivo, turno, dias };
     }
   }).then(function(result) {
     if (!result.isConfirmed) return;
 
-    const { inicio, fim, motivo } = result.value;
-    const datas = _gerarDatasRange(inicio, fim);
+    const { inicio, fim, motivo, turno, dias } = result.value;
+    const _horasTurno = {
+      integral: { ini: '08:00', ter: '22:00', label: 'MULTITURNO' },
+      manha:    { ini: '08:00', ter: '12:00', label: 'MANHÃ' },
+      tarde:    { ini: '12:00', ter: '18:00', label: 'TARDE' },
+      noite:    { ini: '18:00', ter: '22:00', label: 'NOITE' }
+    };
+    const ht = _horasTurno[turno] || _horasTurno.integral;
+
+    const todasDatas = _gerarDatasRange(inicio, fim);
+    const datas = todasDatas.filter(function(dataFmt) {
+      const p = dataFmt.split('/');
+      const d = new Date(parseInt(p[2]), parseInt(p[1]) - 1, parseInt(p[0]));
+      return dias.includes(d.getDay());
+    });
+
+    if (!datas.length) {
+      Swal.fire('Atenção', 'Nenhum dia encontrado para o período e dias da semana selecionados.', 'warning');
+      return;
+    }
+
     const total = salas.length * datas.length;
     var processados = 0, erros = 0;
 
     showLoader(true);
 
-    datas.forEach(function(dataFmt) {
-      salas.forEach(function(sala) {
-        var dadosBloqueio = {
-          nomeAcao: '🔒 CCBJ FECHADO — ' + motivo.toUpperCase(),
-          sala: String(sala[0]),
-          horaInicio: '08:00',
-          horaTermino: '21:30',
-          turno: 'MULTITURNO',
-          setor: 'ADMINISTRAÇÃO',
-          responsavel: AppState.usuario.email,
-          coresponsavel: 'Não informado',
-          release: motivo,
-          itensVolantes: 'Nenhum',
-          tipoAcao: 'BLOQUEIO',
-          modoRece: false
-        };
-        GAS.reservas.criar(dadosBloqueio, [dataFmt], function() {
-          processados++;
-          _concluirBloqueiosCCBJ(processados, total, erros, datas, motivo);
-        }, function() {
-          erros++; processados++;
-          _concluirBloqueiosCCBJ(processados, total, erros, datas, motivo);
-        });
+    salas.forEach(function(sala) {
+      var dadosBloqueio = {
+        nomeAcao: '🔒 CCBJ FECHADO — ' + motivo.toUpperCase(),
+        sala: String(sala[0]),
+        horaInicio: ht.ini,
+        horaTermino: ht.ter,
+        turno: ht.label,
+        setor: 'ADMINISTRAÇÃO',
+        responsavel: AppState.usuario.email,
+        coresponsavel: 'Não informado',
+        release: motivo,
+        itensVolantes: 'Nenhum',
+        tipoAcao: 'BLOQUEIO',
+        modoRece: false
+      };
+      GAS.reservas.criar(dadosBloqueio, datas, function() {
+        processados += datas.length;
+        _concluirBloqueiosCCBJ(processados, total, erros, datas, motivo);
+      }, function() {
+        erros += datas.length; processados += datas.length;
+        _concluirBloqueiosCCBJ(processados, total, erros, datas, motivo);
       });
     });
   });
@@ -3049,7 +3104,8 @@ function _desfazerBloqueiosCCBJ() {
 
     var paraDesfazer = (AppState.colecoes.reservas || []).filter(function(r) {
       var dataFmt = _normDataFmt(r[1]);
-      return String(r[6]||'').includes('CCBJ FECHADO') &&
+      var eBloqueio = String(r[7]||'').toUpperCase() === 'BLOQUEIO' || String(r[6]||'').includes('CCBJ FECHADO');
+      return eBloqueio &&
              dados.datas.indexOf(dataFmt) >= 0 &&
              String(r[13]||'').toUpperCase() !== 'CANCELADO';
     });
