@@ -549,30 +549,23 @@ function _resolverResponsavel(tipo) {
 }
 
 function _mapearTipoParaFuncao(tipo){
-
-  var aba = _abrirAba('CONFIG', 'MapeamentoComunicacao');
-  var dados = aba.getDataRange().getValues();
-
-  if (dados.length <= 1) return 'comunicacao';
-
-  var headers = dados[0];
-  var idx = {};
-  headers.forEach(function(h,i){ idx[h]=i });
-
-  for (var i = 1; i < dados.length; i++){
-
-    var row = dados[i];
-
-    var ativo = String(row[idx['Ativo']]).toLowerCase() !== 'false';
-    if (!ativo) continue;
-
-    if (row[idx['Tipo Entrega']] === tipo){
-      return row[idx['Função']] || 'comunicacao';
-    }
-
-  }
-
-  return 'comunicacao';
+  var mapa = {
+    'design':            'design',
+    'diagramacao':       'design',
+    'foto':              'fotografia',
+    'ensaio_fotografico':'fotografia',
+    'video':             'audiovisual',
+    'edicao_video':      'audiovisual',
+    'stories':           'audiovisual',
+    'materia':           'redacao',
+    'divulgacao':        'comunicacao',
+    'release':           'redacao',
+    'grafico':           'design',
+    'rece':              'comunicacao',
+    'cobertura':         'audiovisual',
+    'campanha':          'comunicacao'
+  };
+  return mapa[String(tipo || '').toLowerCase()] || 'comunicacao';
 }
 
 // =====================================================
