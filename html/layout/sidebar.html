@@ -245,37 +245,61 @@
 
 <style>
 /* Scroll fino e discreto */
-#favoritosContainer::-webkit-scrollbar {
-  width: 4px;
-}
-#favoritosContainer::-webkit-scrollbar-thumb {
-  background: rgba(255,255,255,0.15);
-  border-radius: 4px;
-}
-
-/* Item de favorito */
-.favorito-item {
+#favoritosContainer .favorito-item {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 6px;
+
   padding: 6px 8px;
-  font-size: 10px;
-  font-weight: 700;
-  border-radius: 8px;
-  cursor: grab;
+  border-radius: 10px;
+
   background: rgba(255,255,255,0.04);
   transition: all .2s ease;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+
+  width: 100%;
 }
 
-.favorito-item:hover {
+#favoritosContainer .favorito-item:hover {
   background: rgba(255,255,255,0.08);
 }
 
-.favorito-item.dragging {
-  opacity: 0.5;
+#favoritosContainer .favorito-item button {
+  all: unset;
+  cursor: pointer;
+}
+
+/* garante padrão visual igual ao resto da sidebar */
+#favoritosContainer .favorito-item [data-aba] {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  width: 100%;
+  padding: 6px 6px;
+
+  font-size: 11px;
+  font-weight: 600;
+
+  color: #cbd5f5;
+}
+
+#favoritosContainer .favorito-item [data-aba] i {
+  width: 20px;
+  text-align: center;
+  font-size: 11px;
+}
+
+/* remover botão alinhado */
+#favoritosContainer .favorito-item button:last-child {
+  flex-shrink: 0;
+}
+
+/* texto truncado corretamente */
+#favoritosContainer .favorito-item span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 </style>
 

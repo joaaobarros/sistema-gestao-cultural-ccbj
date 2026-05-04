@@ -168,8 +168,7 @@ function renderizarFavoritos() {
     el.dataset.index = index;
 
     el.innerHTML = `
-      <button data-aba="${fav.aba}"
-        class="flex items-center gap-2 w-full text-left truncate">
+      <button data-aba="${fav.aba}" class="nav-item w-full bg-transparent">
         <i class="${fav.icon} w-5 text-center text-xs"></i>
         <span class="text-xs font-semibold truncate">${fav.nome}</span>
       </button>
