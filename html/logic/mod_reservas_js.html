@@ -877,7 +877,7 @@ function _gerarLinhaReserva(r) {
  * @context Chamado após qualquer mudança nos dados ou filtros da agenda
  * @inputs AppState.colecoes.reservas, AppState.mapaSalas, AppState.filtros, valores dos filtros DOM
  * @outputs HTML injetado em #corpoTabela; texto em #contadorResultados
- * @sideEffects Modifica DOM; pode chamar _initMiniCalAgenda para o mini calendário lateral
+ * @sideEffects Modifica DOM
  */
 function renderizarReservas() {
 
@@ -1991,7 +1991,7 @@ function _destacarReservaSalva(nomeAcao) {
  *          atualiza o badge de notificação e dispara alerta visual quando há novos pendentes.
  *          _codipAtualizarTotais: recalcula o total de público (presencial + virtual + visualizações).
  *          _codipColetarPayload: coleta todos os campos do formulário CODIP em um objeto estruturado.
- *          _atualizarMapaExterno / _syncAgendaScroll / _initMiniCalRece / _initMiniCalAgenda: utilitários de UI menores.
+ *          _atualizarMapaExterno / _syncAgendaScroll / _initDatePickerRece / _initDatePickerAgenda: utilitários de UI menores.
  * @inputs AppState.usuario.isAdmin/isSuperadmin/isHabilitador para determinar endpoint de listagem.
  * @outputs Badge de notificação atualizado; alerta Swal para novas solicitações; payload CODIP estruturado.
  * @sideEffects google.script.run.listarTodasSolicitacoes / listarSolicitacoesPendentes — polling periódico.
@@ -2128,52 +2128,44 @@ function _syncAgendaScroll(el) {
   if (hc) hc.style.transform = 'translateY(-'+el.scrollTop+'px)';
 }
 
-function _initMiniCalRece() {
-  const el = document.getElementById('miniCalRece');
+function _initDatePickerRece() {
+  const el = document.getElementById('agendaReceDatePicker');
   if (!el) return;
-  if (el._fpInst) { try { el._fpInst.destroy(); } catch(e){} el.innerHTML=''; }
+  if (el._fpInst) { try { el._fpInst.destroy(); } catch(e){} }
   el._fpInst = flatpickr(el, {
-    inline: true, locale: 'pt', dateFormat: 'd/m/Y',
+    locale: 'pt', dateFormat: 'd/m/Y', defaultDate: new Date(),
     onChange: function(sel) {
       if (!sel[0]) return;
-      const hoje=new Date(); hoje.setHours(0,0,0,0);
-      const dowH=hoje.getDay()===0?6:hoje.getDay()-1;
-      const semH=new Date(hoje); semH.setDate(hoje.getDate()-dowH);
-      const ds=new Date(sel[0]); ds.setHours(0,0,0,0);
-      const dowS=ds.getDay()===0?6:ds.getDay()-1;
-      const semS=new Date(ds); semS.setDate(ds.getDate()-dowS);
-      window._agendaReceSemana=Math.round((semS.getTime()-semH.getTime())/(7*864e5));
+      const hoje = new Date(); hoje.setHours(0,0,0,0);
+      const dowH = hoje.getDay()===0?6:hoje.getDay()-1;
+      const semH = new Date(hoje); semH.setDate(hoje.getDate()-dowH);
+      const ds = new Date(sel[0]); ds.setHours(0,0,0,0);
+      const dowS = ds.getDay()===0?6:ds.getDay()-1;
+      const semS = new Date(ds); semS.setDate(ds.getDate()-dowS);
+      window._agendaReceSemana = Math.round((semS.getTime()-semH.getTime())/(7*864e5));
       renderizarModoAgendaRece();
     }
   });
 }
 
-function _toggleMiniCalAgenda() {
-  const wrapper = document.getElementById('miniCalAgendaWrapper');
-  const lbl     = document.getElementById('lblToggleMiniCal');
-  if (!wrapper) return;
-  const visivel = !wrapper.classList.contains('hidden');
-  wrapper.classList.toggle('hidden', visivel);
-  wrapper.classList.toggle('block',  !visivel);
-  if (lbl) lbl.textContent = visivel ? 'Mostrar calendário' : 'Ocultar calendário';
-}
-
-function _initMiniCalAgenda() {
-  const el = document.getElementById('miniCalAgenda');
+function _initDatePickerAgenda() {
+  const el = document.getElementById('agendaGoogleDatePicker');
   if (!el) return;
-  if (el._fpInst) { try { el._fpInst.destroy(); } catch(e){} el.innerHTML = ''; }
-  const onMudanca = function(sel) {
-    if (!sel[0]) return;
-    const hoje = new Date(); hoje.setHours(0,0,0,0);
-    const dowH = hoje.getDay()===0?6:hoje.getDay()-1;
-    const semH = new Date(hoje); semH.setDate(hoje.getDate()-dowH);
-    const ds = new Date(sel[0]); ds.setHours(0,0,0,0);
-    const dowS = ds.getDay()===0?6:ds.getDay()-1;
-    const semS = new Date(ds); semS.setDate(ds.getDate()-dowS);
-    window._agendaGoogleSemana = Math.round((semS.getTime()-semH.getTime())/(7*864e5));
-    renderizarModoAgendaGoogle();
-  };
-  el._fpInst = flatpickr(el, { inline:true, locale:'pt', dateFormat:'d/m/Y', onChange: onMudanca });
+  if (el._fpInst) { try { el._fpInst.destroy(); } catch(e){} }
+  el._fpInst = flatpickr(el, {
+    locale: 'pt', dateFormat: 'd/m/Y', defaultDate: new Date(),
+    onChange: function(sel) {
+      if (!sel[0]) return;
+      const hoje = new Date(); hoje.setHours(0,0,0,0);
+      const dowH = hoje.getDay()===0?6:hoje.getDay()-1;
+      const semH = new Date(hoje); semH.setDate(hoje.getDate()-dowH);
+      const ds = new Date(sel[0]); ds.setHours(0,0,0,0);
+      const dowS = ds.getDay()===0?6:ds.getDay()-1;
+      const semS = new Date(ds); semS.setDate(ds.getDate()-dowS);
+      window._agendaGoogleSemana = Math.round((semS.getTime()-semH.getTime())/(7*864e5));
+      renderizarModoAgendaGoogle();
+    }
+  });
 }
 
 /**
@@ -2283,7 +2275,7 @@ function alternarModoVisualizacao(modo) {
     if (selAgenda && !selAgenda.value && selAgenda.options.length > 1) {
       selAgenda.value = selAgenda.options[1].value;
     }
-    _initMiniCalAgenda();
+    _initDatePickerAgenda();
     renderizarModoAgendaGoogle();
   } else if (modo === 'diagrama') {
     hideAll();
@@ -2461,13 +2453,11 @@ function abrirDetalheRece(id) {
  *          fmtHoraMin: formata minutos absolutos (ex: 540) para string HH:MM.
  * @inputs AppState.colecoes.reservas; semana atual de AppState.agendaSemana; filtros de sala/setor.
  * @outputs DOM: preenche #agendaGoogleContainer com grade responsiva de reservas por dia e sala.
- * @sideEffects Lê/escreve AppState.agendaSemana; mobile usa #agendaGoogleContainerMobile.
+ * @sideEffects Lê/escreve AppState.agendaSemana.
  */
 function renderizarModoAgendaGoogle() {
   const isMobile = window.innerWidth < 1024;
-  const container = isMobile
-    ? document.getElementById('agendaGoogleContainerMobile')
-    : document.getElementById('agendaGoogleContainer');
+  const container = document.getElementById('agendaGoogleContainer');
   if (!container) return;
 
   if (!AppState.colecoes.reservas || AppState.colecoes.reservas.length === 0) {
@@ -2494,6 +2484,8 @@ function renderizarModoAgendaGoogle() {
   const _mA=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
   const _lbl=document.getElementById('agendaGoogleSemanaLabel');
   if(_lbl)_lbl.textContent=dias[0].getDate()+' '+_mA[dias[0].getMonth()]+' – '+dias[6].getDate()+' '+_mA[dias[6].getMonth()]+' '+dias[6].getFullYear();
+  const _dpAg = document.getElementById('agendaGoogleDatePicker');
+  if (_dpAg && _dpAg._fpInst) _dpAg._fpInst.setDate(inicioSemana, false);
 
   const INICIO_MIN = 480, FIM_MIN = 1290, TOTAL_MIN = FIM_MIN - INICIO_MIN;
   const PX_POR_HORA = 60, TOTAL_PX = (TOTAL_MIN / 60) * PX_POR_HORA;
@@ -3290,7 +3282,7 @@ function alternarModoVisualizacaoRece(modo) {
     setInativo(btnLista);
     setAtivo(btnAgend);
     window._agendaReceSemana = window._agendaReceSemana || 0;
-    _initMiniCalRece();
+    _initDatePickerRece();
     renderizarModoAgendaRece();
   } else {
     if (tabelaWrap)  tabelaWrap.classList.remove('hidden');
@@ -3322,6 +3314,8 @@ function renderizarModoAgendaRece() {
   if (document.getElementById('agendaReceSemanaLabel'))
     document.getElementById('agendaReceSemanaLabel').textContent =
       `${d0.getDate()} ${meses[d0.getMonth()]} a ${d6.getDate()} ${meses[d6.getMonth()]} ${d6.getFullYear()}`;
+  const _dpRece = document.getElementById('agendaReceDatePicker');
+  if (_dpRece && _dpRece._fpInst) _dpRece._fpInst.setDate(inicioSemana, false);
 
   const normData = d => { const x = new Date(d); x.setHours(0,0,0,0); return x.getTime(); };
   const normHora = h => { if (!h) return 0; const p = String(h).split(':'); return parseInt(p[0])*60+parseInt(p[1]); };

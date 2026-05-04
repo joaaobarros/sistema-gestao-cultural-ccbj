@@ -136,6 +136,11 @@
                   <option value="">Selecione um espaço...</option>
                 </select>
               </div>
+              <div class="min-w-[160px]">
+                <label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Data</label>
+                <input type="text" id="agendaGoogleDatePicker" placeholder="Selecione uma data..."
+                  class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-purple-400 cursor-pointer">
+              </div>
               <div class="flex gap-2 shrink-0">
                 <button
                   onclick="window._agendaGoogleSemana=(window._agendaGoogleSemana||0)-1; renderizarModoAgendaGoogle()"
@@ -156,30 +161,10 @@
               <span id="agendaGoogleSemanaLabel" class="text-sm font-black text-slate-600 self-center"></span>
             </div>
           </div>
-          <!-- Toggle mini cal mobile -->
-          <div class="flex items-center gap-2 mb-2 lg:hidden">
-            <button onclick="_toggleMiniCalAgenda()" id="btnToggleMiniCal"
-              class="flex items-center gap-2 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-black rounded-xl uppercase transition-all">
-              <i class="fas fa-calendar-alt text-xs"></i>
-              <span id="lblToggleMiniCal">Mostrar calendário</span>
-            </button>
-          </div>
-          <!-- Mini cal colapsado no mobile -->
-          <div id="miniCalAgendaWrapper" class="hidden lg:block mb-0">
-            <div style="display:grid;grid-template-columns:204px minmax(0,1fr);gap:8px;align-items:start">
-              <div id="miniCalAgenda" style="width:204px;min-width:204px;max-width:204px;overflow:hidden;flex-shrink:0"></div>
-              <div id="agendaGoogleContainer" style="height:calc(100vh - 260px);overflow:hidden;min-width:0">
-                <div class="p-16 text-center text-slate-300">
-                  <i class="fas fa-calendar-week text-4xl mb-3"></i><br>
-                  <span class="text-sm font-bold">Selecione um espaço para visualizar</span>
-                </div>
-              </div>
-            </div>
-          </div>
-          <!-- Agenda sem mini cal no mobile -->
-          <div id="agendaGoogleContainerMobile" class="lg:hidden" style="height:calc(100vh - 220px);overflow:hidden">
+          <div id="agendaGoogleContainer" style="height:calc(100vh - 280px);overflow:hidden">
             <div class="p-16 text-center text-slate-300">
-              <i class="fas fa-calendar-week text-4xl mb-3"></i>
+              <i class="fas fa-calendar-week text-4xl mb-3"></i><br>
+              <span class="text-sm font-bold">Selecione um espaço para visualizar</span>
             </div>
           </div>
         </div>
