@@ -222,5 +222,22 @@ function renderizarFavoritos() {
 
     container.appendChild(el);
   });
+
+     setTimeout(() => {
+    const atual = document.querySelector('.tab-btn.active')?.dataset?.aba;
+    if (!atual) return;
+
+    document.querySelectorAll('#favoritosContainer [data-aba]')
+      .forEach(btn => {
+        const item = btn.closest('.favorito-item');
+
+        if (btn.dataset.aba === atual) {
+          item.classList.add('ativo');
+        } else {
+          item.classList.remove('ativo');
+        }
+      });
+  }, 0);
 }
-</script>
+
+  </script>
