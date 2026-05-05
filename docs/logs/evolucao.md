@@ -117,3 +117,15 @@ Identificação de controle híbrido (frontend + backend) com riscos de sincroni
 - Revisar centralização de regras no backend
 - Melhorar sincronização de inicialização
 
+## [Data]
+
+### Ação
+Análise da integração entre reservas e comunicação
+
+### Impacto
+Mapeamento do fluxo de geração de demandas vinculadas às reservas
+
+### Próximos Passos
+- Revisar fluxo salvarAgendamento
+- Validar consistência entre módulos integrados
+

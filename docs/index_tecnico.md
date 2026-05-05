@@ -29,5 +29,6 @@
 - itens_module_js → lookup de itens e salas (🟡 médio)
 - mod_ui_componentes_js → utilitários globais de interface (🔴 alto)
 - mod_permissoes_js → controle de acesso frontend (🔴 alto)
+- integracao_reserva_comunicacao_js → integração reservas-comunicação (🔴 alto)
 
 

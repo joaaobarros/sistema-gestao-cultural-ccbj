@@ -120,6 +120,7 @@ Gerenciar toda a camada de interação do usuário relacionada a reservas:
 - Sistema de lote (recorrência)
 - Integração com RECE
 - Integração com comunicação
+- Integração com módulo de comunicação (geração de demandas)
 
 ---
 

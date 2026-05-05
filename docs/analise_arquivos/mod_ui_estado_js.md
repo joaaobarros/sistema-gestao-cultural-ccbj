@@ -171,6 +171,10 @@ Centralizar a lógica operacional do sistema:
 
 ---
 
+- Dependência indireta de integração com comunicação (integracao_reserva_comunicacao_js)
+
+---
+
 ## 7. Qualidade do Código
 
 Pontos positivos:
