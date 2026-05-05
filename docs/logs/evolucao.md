@@ -105,3 +105,15 @@ Mapeamento da base de tratamento de erro, loader e segurança de interface
 ### Próximos Passos
 - Padronizar uso de UI em todos os módulos
 
+## [Data]
+
+### Ação
+Análise do sistema de permissões
+
+### Impacto
+Identificação de controle híbrido (frontend + backend) com riscos de sincronização
+
+### Próximos Passos
+- Revisar centralização de regras no backend
+- Melhorar sincronização de inicialização
+

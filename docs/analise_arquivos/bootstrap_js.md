@@ -155,6 +155,7 @@ Exemplos:
 ---
 
 - Dependência de múltiplos controladores de fluxo (mod_ui_estado_js e mod_reservas_js)
+- Uso indireto de polling para inicialização de permissões (dependência de timing)
 
 ---
 

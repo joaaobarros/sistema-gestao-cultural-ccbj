@@ -146,6 +146,11 @@ Gerenciar toda a camada de interação do usuário relacionada a reservas:
 
 ---
 
+- Dependência de permissões frontend (mod_permissoes_js) para controle de ações críticas
+
+
+---
+
 ## 7. Qualidade do Código
 
 Pontos positivos:
