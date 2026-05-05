@@ -57,20 +57,36 @@
             <div id="listaAdminSetores" class="p-2 max-h-[400px] overflow-y-auto custom-scrollbar bg-white"></div>
           </div>
 
+          <!-- ── USUÁRIOS E PERMISSÕES ─────────────────────────── -->
           <div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+
             <div class="p-6 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
               <div>
-                <h3 class="font-black text-slate-800 uppercase tracking-tighter text-sm">Gestão de Administradores</h3>
-                <p class="text-[10px] text-slate-400 font-medium">Níveis de acesso</p>
+                <h3 class="font-black text-slate-800 uppercase tracking-tighter text-sm">
+                  Usuários e Permissões
+                </h3>
+                <p class="text-[10px] text-slate-400 font-medium">
+                  Controle estrutural (nível) + permissões detalhadas
+                </p>
               </div>
-              <div class="flex gap-2">
-                <button onclick="abrirModalConfig('usuario')" class="bg-slate-800 text-white text-[10px] font-black px-4 py-2 rounded-xl hover:bg-slate-900 shadow-lg transition-all uppercase">
-                  <i class="fas fa-user-plus mr-1"></i> Novo
-                </button>
-                <button onclick="toggleCard('listaAdminUsuarios', this)" class="text-slate-400 px-2"><i class="fas fa-chevron-up"></i></button>
-              </div>
+
+              <button onclick="carregarUsuariosPermissoes()"
+                class="bg-purple-600 text-white text-[10px] font-black px-4 py-2 rounded-xl hover:bg-purple-700 uppercase">
+                Atualizar
+              </button>
             </div>
-            <div id="listaAdminUsuarios" class="p-2 max-h-[400px] overflow-y-auto custom-scrollbar bg-white"></div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 p-4">
+
+              <!-- LISTA -->
+              <div class="border rounded-xl p-2 max-h-[450px] overflow-y-auto" id="listaUsuariosPermissoes"></div>
+
+              <!-- EDITOR -->
+              <div class="md:col-span-2 border rounded-xl p-4" id="editorPermissoes">
+                <p class="text-xs text-slate-400">Selecione um usuário</p>
+              </div>
+
+            </div>
           </div>
         </div>
       </section>
