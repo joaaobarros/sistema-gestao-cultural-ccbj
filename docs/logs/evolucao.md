@@ -129,3 +129,38 @@ Mapeamento do fluxo de geração de demandas vinculadas às reservas
 - Revisar fluxo salvarAgendamento
 - Validar consistência entre módulos integrados
 
+## [Data]
+
+### Ação
+Definição do módulo de solicitações externas
+
+### Impacto
+Expansão do sistema para entrada estruturada de demandas do território
+
+### Próximos Passos
+- Modelar fluxo completo
+- Integrar com módulos existentes
+
+## [Data]
+
+### Ação
+Definição dos módulos de demandas internas e gestão de projetos
+
+### Impacto
+Estruturação da operação interna e criação do núcleo integrador do sistema (ações)
+
+### Próximos Passos
+- Integrar com contratos, reservas e tarefas
+- Refinar fluxos por tipo de demanda e ação
+
+## [Data]
+
+### Ação
+Definição do modelo estrutural da ação (núcleo do sistema)
+
+### Impacto
+Transformação da arquitetura em sistema centrado em ações, integrando pessoas, recursos, tarefas e entregas
+
+### Próximos Passos
+- Mapear dados e relações entre módulos
+- Estruturar backend baseado em ações
