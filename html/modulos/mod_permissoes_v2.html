@@ -1,0 +1,259 @@
+<!--
+@file mod_permissoes_v2.html
+@type module
+@description Painel de gestão de permissões v2 — lista de usuários + editor por usuário.
+@responsibility Estrutura HTML da aba #aba-permissoes-v2.
+@dependencies GAS.permissoesV2.*, temPermissao, AppState, mod_permissoes_v2_js
+-->
+<section id="aba-permissoes-v2" class="tab-content animate-fadeIn hidden pb-20">
+  <div class="flex gap-4" style="min-height:70vh">
+
+    <!-- ═══ PAINEL ESQUERDO: lista de usuários ═══ -->
+    <div class="w-72 flex-shrink-0 bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
+      <div class="p-4 border-b border-slate-100 bg-slate-50/50">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="font-black text-slate-800 uppercase tracking-tighter text-xs">Usuários</h3>
+          <button onclick="p2SincronizarUsuarios()" title="Sincronizar da planilha"
+            class="text-[10px] bg-purple-50 text-purple-600 hover:bg-purple-100 px-2 py-1 rounded-lg font-black transition-all flex items-center gap-1">
+            <i class="fas fa-sync-alt text-[9px]"></i> Sync
+          </button>
+        </div>
+        <div class="relative">
+          <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 text-[10px]"></i>
+          <input type="text" id="p2-busca" placeholder="Buscar usuário..."
+            oninput="p2FiltrarUsuarios(this.value)"
+            class="w-full text-xs pl-8 pr-3 py-2 border border-slate-200 rounded-xl outline-none focus:border-purple-400 transition-colors">
+        </div>
+        <div class="flex gap-1 mt-2">
+          <button onclick="p2FiltroStatus('')"    id="p2-f-todos"      class="p2-filtro-btn active flex-1 text-[9px] font-black uppercase py-1 rounded-lg transition-all">Todos</button>
+          <button onclick="p2FiltroStatus('ok')"  id="p2-f-config"     class="p2-filtro-btn flex-1 text-[9px] font-black uppercase py-1 rounded-lg transition-all">Config.</button>
+          <button onclick="p2FiltroStatus('new')" id="p2-f-naoconfig"  class="p2-filtro-btn flex-1 text-[9px] font-black uppercase py-1 rounded-lg transition-all">Novos</button>
+        </div>
+      </div>
+      <div id="p2-lista-usuarios" class="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-1">
+        <div class="p-4 text-center text-slate-300 text-xs">
+          <i class="fas fa-spinner animate-spin block text-2xl mb-2"></i>
+          Carregando...
+        </div>
+      </div>
+      <div class="p-3 border-t border-slate-100 bg-slate-50/50">
+        <p id="p2-total-label" class="text-[10px] text-slate-400 text-center font-medium"></p>
+      </div>
+    </div>
+
+    <!-- ═══ PAINEL DIREITO: detalhe do usuário ═══ -->
+    <div class="flex-1 min-w-0">
+
+      <!-- Estado: nenhum selecionado -->
+      <div id="p2-no-selection" class="bg-white rounded-3xl shadow-sm border border-slate-200 flex items-center justify-center" style="min-height:70vh">
+        <div class="text-center px-8">
+          <i class="fas fa-shield-alt text-5xl text-purple-100 mb-4 block"></i>
+          <p class="text-slate-400 text-sm font-semibold">Selecione um usuário</p>
+          <p class="text-slate-300 text-xs mt-1">para gerenciar permissões</p>
+        </div>
+      </div>
+
+      <!-- Detalhe (hidden até seleção) -->
+      <div id="p2-detail" class="hidden space-y-4">
+
+        <!-- Header do usuário -->
+        <div class="bg-white rounded-3xl shadow-sm border border-slate-200 p-5">
+          <div class="flex items-center justify-between gap-4 flex-wrap">
+            <div class="flex items-center gap-4">
+              <div id="p2-avatar" class="w-12 h-12 rounded-2xl bg-gradient-to-br from-purple-500 to-violet-600 flex items-center justify-center text-white font-black text-xl shadow-lg shadow-purple-200 uppercase flex-shrink-0"></div>
+              <div>
+                <div class="flex items-center gap-2 flex-wrap">
+                  <h3 id="p2-nome" class="font-black text-slate-800 text-base"></h3>
+                  <span id="p2-badge-naoconfig" class="hidden text-[9px] font-black uppercase bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full tracking-wide">Não configurado</span>
+                  <span id="p2-badge-sa"        class="hidden text-[9px] font-black uppercase bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full tracking-wide">Superadmin</span>
+                  <span id="p2-badge-bloq"      class="hidden text-[9px] font-black uppercase bg-red-100 text-red-600 px-2 py-0.5 rounded-full tracking-wide"><i class="fas fa-lock mr-0.5"></i>Bloqueado</span>
+                </div>
+                <p id="p2-email-label"  class="text-xs text-slate-400 font-medium mt-0.5"></p>
+                <p id="p2-acesso-label" class="text-[10px] text-slate-300 font-medium mt-0.5"></p>
+              </div>
+            </div>
+            <div class="flex items-center gap-2 flex-wrap">
+              <div class="flex flex-col gap-0.5">
+                <label class="text-[9px] text-slate-400 uppercase font-black ml-1">Perfil base</label>
+                <select id="p2-perfil-select"
+                  onchange="p2OnPerfilChange()"
+                  class="text-xs border border-slate-200 rounded-xl px-3 py-2 font-bold outline-none focus:border-purple-400 bg-white cursor-pointer transition-colors">
+                  <option value="superadmin">⚡ Superadmin</option>
+                  <option value="admin">🔑 Admin</option>
+                  <option value="gestor">📋 Gestor</option>
+                  <option value="tecnico">🔧 Técnico</option>
+                  <option value="rh">👥 RH</option>
+                  <option value="comunicacao">📢 Comunicação</option>
+                  <option value="visitante_controlado" selected>🔒 Visitante Controlado</option>
+                  <option value="visitante">👁 Visitante</option>
+                </select>
+              </div>
+              <button id="p2-btn-salvar" onclick="p2SalvarPermissoes()"
+                class="bg-purple-600 hover:bg-purple-700 text-white text-xs font-black px-5 py-2.5 rounded-xl shadow-lg shadow-purple-200 transition-all uppercase flex items-center gap-2 self-end">
+                <i class="fas fa-save"></i> Salvar
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Grid: Origem + Automáticas -->
+        <div class="grid grid-cols-2 gap-4">
+
+          <!-- Origem -->
+          <div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+            <div class="p-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+              <div>
+                <h4 class="font-black text-slate-700 uppercase tracking-tighter text-xs">Origem Organizacional</h4>
+                <p class="text-[9px] text-slate-400 mt-0.5">Base para permissões automáticas</p>
+              </div>
+              <button id="p2-origem-edit-btn" onclick="p2ToggleOrigemEdit()"
+                class="text-[9px] text-purple-500 hover:text-purple-700 font-black uppercase transition-colors">
+                <i class="fas fa-pen text-[8px] mr-0.5"></i> Editar
+              </button>
+            </div>
+            <div class="p-4 space-y-3" id="p2-origem-view">
+              <div>
+                <label class="text-[9px] text-slate-400 uppercase font-black block mb-1">Cargo</label>
+                <span id="p2-origem-cargo-view" class="text-xs text-slate-600 font-medium">—</span>
+              </div>
+              <div>
+                <label class="text-[9px] text-slate-400 uppercase font-black block mb-1">Funções</label>
+                <div id="p2-origem-funcoes-view" class="flex flex-wrap gap-1"></div>
+              </div>
+              <div>
+                <label class="text-[9px] text-slate-400 uppercase font-black block mb-1">Setores</label>
+                <div id="p2-origem-setores-view" class="flex flex-wrap gap-1"></div>
+              </div>
+              <div>
+                <label class="text-[9px] text-slate-400 uppercase font-black block mb-1">Espaços gerenciados</label>
+                <div id="p2-origem-espacos-view" class="flex flex-wrap gap-1"></div>
+              </div>
+            </div>
+            <div class="p-4 space-y-3 hidden" id="p2-origem-edit">
+              <div>
+                <label class="text-[9px] text-slate-400 uppercase font-black block mb-1">Cargo</label>
+                <select id="p2-cargo-input" onchange="p2OnOrigemChange()"
+                  class="w-full text-xs border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-purple-400">
+                  <option value="">— Sem cargo específico —</option>
+                  <option value="gestor">Gestor / Coordenador</option>
+                  <option value="diretor">Diretor</option>
+                  <option value="tecnico">Técnico / Operacional</option>
+                  <option value="rh">RH / Depto. Pessoal</option>
+                  <option value="comunicacao">Comunicação / Marketing</option>
+                  <option value="admin_tecnico">Admin Técnico / TI</option>
+                </select>
+              </div>
+              <div>
+                <label class="text-[9px] text-slate-400 uppercase font-black block mb-1">Funções <span class="font-normal text-slate-300">(separar por vírgula)</span></label>
+                <input type="text" id="p2-funcoes-input" placeholder="ex: reservas, comunicacao"
+                  oninput="p2OnOrigemChange()"
+                  class="w-full text-xs border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-purple-400">
+              </div>
+              <div>
+                <label class="text-[9px] text-slate-400 uppercase font-black block mb-1">Setores <span class="font-normal text-slate-300">(separar por vírgula)</span></label>
+                <input type="text" id="p2-setores-input" placeholder="ex: producao, administrativo"
+                  oninput="p2OnOrigemChange()"
+                  class="w-full text-xs border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-purple-400">
+              </div>
+              <div>
+                <label class="text-[9px] text-slate-400 uppercase font-black block mb-1">IDs de espaços gerenciados <span class="font-normal text-slate-300">(separar por vírgula)</span></label>
+                <input type="text" id="p2-espacos-input" placeholder="ex: sala-a, auditorio"
+                  oninput="p2OnOrigemChange()"
+                  class="w-full text-xs border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-purple-400">
+              </div>
+              <button onclick="p2RecalcularAuto()"
+                class="w-full text-[10px] font-black uppercase bg-violet-50 text-violet-600 hover:bg-violet-100 py-2 rounded-xl transition-all">
+                <i class="fas fa-bolt mr-1"></i> Recalcular automáticas
+              </button>
+            </div>
+          </div>
+
+          <!-- Automáticas -->
+          <div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+            <div class="p-4 border-b border-slate-100 bg-slate-50/50">
+              <h4 class="font-black text-slate-700 uppercase tracking-tighter text-xs">Permissões Automáticas</h4>
+              <p class="text-[9px] text-slate-400 mt-0.5">Derivadas do cargo, funções e setores — somente leitura</p>
+            </div>
+            <div id="p2-auto-lista" class="p-3 space-y-1 max-h-72 overflow-y-auto custom-scrollbar"></div>
+          </div>
+
+        </div>
+
+        <!-- Manuais -->
+        <div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+          <div class="p-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between flex-wrap gap-2">
+            <div>
+              <h4 class="font-black text-slate-700 uppercase tracking-tighter text-xs">Permissões Manuais</h4>
+              <p class="text-[9px] text-slate-400 mt-0.5">Override por módulo — sobreescreve perfil e automáticas</p>
+            </div>
+            <div class="flex items-center gap-3 text-[9px] text-slate-400 font-medium">
+              <span class="flex items-center gap-1.5"><span class="w-4 h-4 rounded-full bg-slate-200 inline-flex items-center justify-center text-slate-400"><i class="fas fa-minus text-[7px]"></i></span>Padrão</span>
+              <span class="flex items-center gap-1.5"><span class="w-4 h-4 rounded-full bg-emerald-500 inline-flex items-center justify-center text-white"><i class="fas fa-check text-[7px]"></i></span>Conceder</span>
+              <span class="flex items-center gap-1.5"><span class="w-4 h-4 rounded-full bg-red-400 inline-flex items-center justify-center text-white"><i class="fas fa-times text-[7px]"></i></span>Bloquear</span>
+            </div>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-xs border-collapse">
+              <thead>
+                <tr class="bg-slate-50 border-b border-slate-100">
+                  <th class="text-left py-2 px-4 text-[9px] font-black text-slate-400 uppercase">Módulo</th>
+                  <th class="py-2 px-3 text-[9px] font-black text-slate-400 uppercase text-center">Visualizar</th>
+                  <th class="py-2 px-3 text-[9px] font-black text-slate-400 uppercase text-center">Editar</th>
+                  <th class="py-2 px-3 text-[9px] font-black text-slate-400 uppercase text-center">Excluir</th>
+                </tr>
+              </thead>
+              <tbody id="p2-manual-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Finais -->
+        <div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+          <div class="p-4 border-b border-slate-100 bg-slate-50/50">
+            <h4 class="font-black text-slate-700 uppercase tracking-tighter text-xs">Permissões Finais</h4>
+            <p class="text-[9px] text-slate-400 mt-0.5">Resultado consolidado (perfil + automático + manual) — somente leitura</p>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-xs border-collapse">
+              <thead>
+                <tr class="bg-slate-50 border-b border-slate-100">
+                  <th class="text-left py-2 px-4 text-[9px] font-black text-slate-400 uppercase">Módulo</th>
+                  <th class="py-2 px-3 text-[9px] font-black text-slate-400 uppercase text-center">Vis.</th>
+                  <th class="py-2 px-3 text-[9px] font-black text-slate-400 uppercase text-center">Edit.</th>
+                  <th class="py-2 px-3 text-[9px] font-black text-slate-400 uppercase text-center">Excl.</th>
+                  <th class="py-2 px-4 text-[9px] font-black text-slate-400 uppercase">Origem</th>
+                </tr>
+              </thead>
+              <tbody id="p2-finais-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+
+      </div><!-- /p2-detail -->
+    </div><!-- /painel direito -->
+  </div><!-- /flex -->
+
+  <style>
+    .p2-filtro-btn { color:#94a3b8; background:transparent; border:1px solid transparent; }
+    .p2-filtro-btn:hover { background:#f1f5f9; color:#475569; }
+    .p2-filtro-btn.active { background:#ede9fe; color:#7c3aed; border-color:#c4b5fd; }
+    .p2-user-card { border-radius:12px; padding:10px 12px; cursor:pointer; transition:all 0.15s;
+                    border:1.5px solid transparent; }
+    .p2-user-card:hover { background:#faf5ff; border-color:#e9d5ff; }
+    .p2-user-card.selected { background:#ede9fe; border-color:#a78bfa; }
+    .p2-toggle { width:28px; height:28px; border-radius:50%; border:none; cursor:pointer;
+                 display:inline-flex; align-items:center; justify-content:center;
+                 transition:all 0.15s; font-size:10px; }
+    .p2-toggle[data-state="null"]  { background:#e2e8f0; color:#94a3b8; }
+    .p2-toggle[data-state="true"]  { background:#10b981; color:#fff; }
+    .p2-toggle[data-state="false"] { background:#f87171; color:#fff; }
+    .p2-toggle:hover { transform:scale(1.15); }
+    .p2-chip { display:inline-flex; align-items:center; gap:4px; padding:2px 8px;
+               border-radius:9999px; font-size:10px; font-weight:700; }
+    .p2-chip-auto { background:#ede9fe; color:#6d28d9; }
+    .p2-mod-row:nth-child(even) { background:#fafafa; }
+    .p2-dot { width:10px; height:10px; border-radius:50%; display:inline-block; }
+    .p2-dot-on  { background:#10b981; }
+    .p2-dot-off { background:#e2e8f0; }
+  </style>
+</section>
