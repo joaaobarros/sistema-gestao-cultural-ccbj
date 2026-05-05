@@ -26,3 +26,4 @@
 - mod_ui_estado_js → núcleo operacional (reservas + init + IA) (🔴 crítico)
 - mod_reservas_js → interface e controle de fluxo de reservas (🔴 crítico)
 - disponibilidade_module_js → lógica pura de disponibilidade (🔴 crítico)
+- itens_module_js → lookup de itens e salas (🟡 médio)

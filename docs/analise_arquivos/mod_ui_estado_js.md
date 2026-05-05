@@ -201,6 +201,7 @@ Pontos críticos:
 - Simplificar salvarAgendamento
 - Extrair inicializarApp
 - Extrair mais lógica para módulos puros como disponibilidade_module_js
+- Adotar padrão de módulos puros (como disponibilidade_module_js e itens_module_js) para reduzir acoplamento
 
 ---
 
@@ -250,3 +251,4 @@ Desalinhado:
 - baixa modularidade real
 - difícil escalabilidade SaaS
 - alto acoplamento estrutural
+

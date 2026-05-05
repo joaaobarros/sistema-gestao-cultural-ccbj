@@ -83,3 +83,14 @@ Identificação de um módulo bem estruturado com lógica pura e reutilizável
 ### Próximos Passos
 - Usar como referência para refatoração de outros módulos
 
+## [Data]
+
+### Ação
+Análise do módulo de itens
+
+### Impacto
+Identificação de padrão consistente de lógica pura, porém com fragilidade na estrutura de dados
+
+### Próximos Passos
+- Padronizar estrutura de dados dos itens
+

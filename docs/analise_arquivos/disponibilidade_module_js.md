@@ -107,6 +107,10 @@ Responsável por:
 
 ---
 
+- Mesmo padrão de uso de arrays indexados identificado em outros módulos (ex: itens_module_js)
+
+---
+
 ## 7. Qualidade do Código
 
 Pontos positivos:
