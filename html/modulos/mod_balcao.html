@@ -478,7 +478,8 @@ function abrirModalAtendimento(atual){
 
       + '<div style="display:grid;grid-template-columns:1fr 160px;gap:8px">'
       +   '<div><label style="display:block;font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px">Responsável</label>'
-      +   '<input id="balcSolicitante" style="width:100%;padding:9px 13px;font-size:12px;border:1.5px solid #e2e8f0;border-radius:12px;outline:none;box-sizing:border-box" value="'+escaparHTML(atual.responsavel||'')+'" placeholder="Nome ou e-mail"></div>'
+      +   '<datalist id="_balcSolicitanteList">'+Object.entries(AppState.mapaNomes||{}).map(function(e){ return '<option value="'+escaparHTML(e[0])+'">'+escaparHTML(e[1])+'</option>'; }).join('')+'</datalist>'
+      +   '<input id="balcSolicitante" list="_balcSolicitanteList" style="width:100%;padding:9px 13px;font-size:12px;border:1.5px solid #e2e8f0;border-radius:12px;outline:none;box-sizing:border-box" value="'+escaparHTML(atual.responsavel||'')+'" placeholder="Nome ou e-mail"></div>'
       +   '<div><label style="display:block;font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px">Status</label>'
       +   '<select id="balcStatus" style="width:100%;padding:9px 13px;font-size:12px;border:1.5px solid #e2e8f0;border-radius:12px;outline:none">'
       +   ['Solicitado','Em andamento','Concluído'].map(function(s){ return '<option'+(atual.status===s?' selected':'')+'>'+s+'</option>'; }).join('')

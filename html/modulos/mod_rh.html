@@ -531,6 +531,18 @@
 <script>
 // ── Estado ───────────────────────────────────────────────────────────────────
 var _rhCache = [];
+
+function _rhPopularSelectsColaboradores() {
+  ['rhHistColaborador','rhAvColaborador','rhPontoColaborador','rhDocColaborador'].forEach(function(selId) {
+    var sel = document.getElementById(selId);
+    if (!sel) return;
+    sel.innerHTML = '<option value="">Selecione...</option>';
+    _rhCache.forEach(function(p) {
+      var o = document.createElement('option');
+      o.value = p.id; o.textContent = p.nome; sel.appendChild(o);
+    });
+  });
+}
 var _rhCargosCache = [];
 var _rhHistCache = [];
 var _rhAvCache = [];
@@ -585,6 +597,7 @@ function carregarRH() {
   if (c) c.innerHTML = '<div class="p-8 text-center"><i class="fas fa-spinner animate-spin text-teal-300 text-xl"></i></div>';
   GAS.equipes.listar(function(lista) {
     _rhCache = lista || [];
+    _rhPopularSelectsColaboradores();
     _rhFiltrar();
   }, function() {
     if (c) c.innerHTML = '<div class="p-8 text-center text-red-400 text-sm"><i class="fas fa-exclamation-triangle mr-2"></i>Erro ao carregar.</div>';
@@ -1519,15 +1532,10 @@ window._onShow_aba_rh = function() {
       o.value = s; o.textContent = s; selSetor.appendChild(o);
     });
   }
-  ['rhHistColaborador','rhAvColaborador','rhPontoColaborador','rhDocColaborador'].forEach(function(selId) {
-    var sel = document.getElementById(selId);
-    if (sel && sel.options.length <= 1) {
-      _rhCache.forEach(function(p) {
-        var o = document.createElement('option');
-        o.value = p.id; o.textContent = p.nome; sel.appendChild(o);
-      });
-    }
-  });
-  if (!_rhCache.length) carregarRH();
+  if (_rhCache.length) {
+    _rhPopularSelectsColaboradores();
+  } else {
+    carregarRH();
+  }
 };
 </script>

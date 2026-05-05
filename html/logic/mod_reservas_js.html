@@ -2198,10 +2198,12 @@ function renderizarContainerDonos() {
     c.innerHTML = '<p class="text-[10px] text-slate-400 italic py-2 text-center">Nenhum responsável. Clique em + para adicionar.</p>';
     return;
   }
-  c.innerHTML = donos.map((d, i) => `
+  const _donoEmailOpts = Object.keys(AppState.mapaNomes || {}).map(e => `<option value="${escaparHTML(e)}">${escaparHTML(AppState.mapaNomes[e]||e)}</option>`).join('');
+  c.innerHTML = `<datalist id="_donoEmailList">${_donoEmailOpts}</datalist>`
+    + donos.map((d, i) => `
     <div class="bg-slate-50 rounded-xl p-3 border border-slate-100 space-y-2">
       <div class="flex gap-2">
-        <input type="email" value="${escaparHTML(d.email||'')}" placeholder="email@ccbj.org.br"
+        <input type="email" list="_donoEmailList" value="${escaparHTML(d.email||'')}" placeholder="email@ccbj.org.br"
           oninput="window._donosEspaco[${i}].email=this.value"
           class="flex-1 px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs outline-none focus:border-purple-400 font-semibold">
         <button type="button" onclick="removerDono(${i})" class="w-7 h-7 flex items-center justify-center text-red-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-all"><i class="fas fa-times text-xs"></i></button>

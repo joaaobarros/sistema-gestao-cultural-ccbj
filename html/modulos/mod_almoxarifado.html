@@ -28,12 +28,6 @@
         <select id="almFiltroCategoria" onchange="_almFiltrar()"
           style="padding:8px 12px;border:1.5px solid #e2e8f0;border-radius:12px;font-size:12px;outline:none;color:#475569">
           <option value="">Todas as categorias</option>
-          <option value="Limpeza">Limpeza</option>
-          <option value="Escritório">Escritório</option>
-          <option value="Manutenção">Manutenção</option>
-          <option value="Evento">Evento</option>
-          <option value="TI">TI</option>
-          <option value="Outro">Outro</option>
         </select>
         <select id="almFiltroStatus" onchange="_almFiltrar()"
           style="padding:8px 12px;border:1.5px solid #e2e8f0;border-radius:12px;font-size:12px;outline:none;color:#475569">
@@ -63,6 +57,25 @@
 
 <script>
 var _almoxCache = [];
+var _ALM_CATS_DEFAULT = ['Limpeza','Escritório','Manutenção','Evento','TI','Outro'];
+
+function _almGetCategorias() {
+  var fromCache = _almoxCache.map(function(i) { return i.categoria; }).filter(Boolean);
+  var merged = _ALM_CATS_DEFAULT.slice();
+  fromCache.forEach(function(c) { if (merged.indexOf(c) < 0) merged.push(c); });
+  return merged.sort();
+}
+
+function _almAtualizarFiltroCategoria() {
+  var sel = document.getElementById('almFiltroCategoria');
+  if (!sel) return;
+  var atual = sel.value;
+  sel.innerHTML = '<option value="">Todas as categorias</option>';
+  _almGetCategorias().forEach(function(c) {
+    var o = document.createElement('option');
+    o.value = c; o.textContent = c; if (c === atual) o.selected = true; sel.appendChild(o);
+  });
+}
 
 function _almStatus(item) {
   var qtd = Number(item.qtd) || 0;
@@ -83,6 +96,7 @@ function carregarAlmoxarifado() {
   if (c) c.innerHTML = '<div class="p-8 text-center"><i class="fas fa-spinner animate-spin text-emerald-300 text-xl"></i></div>';
   GAS.almoxarifado.listar(function(lista) {
     _almoxCache = lista || [];
+    _almAtualizarFiltroCategoria();
     _almRenderizar();
   }, function() {
     if (c) c.innerHTML = '<div class="p-8 text-center text-red-400 text-sm"><i class="fas fa-exclamation-triangle mr-2"></i>Erro ao carregar estoque.</div>';
@@ -155,7 +169,7 @@ function abrirModalAlmoxarifado(id) {
       + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">'
       + '<div><label style="display:block;font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">Categoria</label>'
       + '<select id="almCat" style="width:100%;padding:9px 13px;font-size:12px;border:1.5px solid #e2e8f0;border-radius:12px;outline:none">'
-      + ['Limpeza','Escritório','Manutenção','Evento','TI','Outro'].map(function(cat){ return '<option'+(dado.categoria===cat?' selected':'')+'>'+cat+'</option>'; }).join('')
+      + _almGetCategorias().map(function(cat){ return '<option'+(dado.categoria===cat?' selected':'')+'>'+cat+'</option>'; }).join('')
       + '</select></div>'
       + '<div><label style="display:block;font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">Unidade</label>'
       + '<input id="almUnid" style="width:100%;padding:9px 13px;font-size:12px;border:1.5px solid #e2e8f0;border-radius:12px;outline:none;box-sizing:border-box" value="' + escaparHTML(dado.unidade||'') + '" placeholder="un, caixa, kg..."></div></div>'

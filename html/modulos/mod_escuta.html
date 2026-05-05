@@ -351,7 +351,11 @@
     <!-- Config global -->
     <div id="escuta-gestao-config">
       <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
-        <h3 class="font-black text-slate-700 text-sm uppercase tracking-tight mb-5">Controle do Sistema</h3>
+        <div class="flex items-center gap-3 mb-5">
+          <h3 class="font-black text-slate-700 text-sm uppercase tracking-tight">Controle do Sistema</h3>
+          <span id="cfg-status-msg" class="hidden text-[10px] text-green-600 font-black"><i class="fas fa-check-circle mr-1"></i>Salvo</span>
+          <span id="cfg-erro-msg"   class="hidden text-[10px] text-red-500 font-black"><i class="fas fa-exclamation-circle mr-1"></i>Erro ao salvar</span>
+        </div>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
 
           <!-- Toggles de ativação -->
@@ -409,17 +413,17 @@
 
             <div>
               <label class="text-[10px] font-black text-slate-500">Limite de perguntas por dia por usuário</label>
-              <input type="number" id="cfg-limiteDia" min="1" max="10" onchange="_escutaSalvarConfig()"
+              <input type="number" id="cfg-limiteDia" min="1" max="10" onblur="_escutaSalvarConfig()"
                 style="width:100%;margin-top:4px;padding:8px 12px;border:1.5px solid #e2e8f0;border-radius:10px;font-size:12px;outline:none">
             </div>
             <div>
               <label class="text-[10px] font-black text-slate-500">Intervalo mínimo entre perguntas (horas)</label>
-              <input type="number" id="cfg-antiSpamHoras" min="1" max="24" onchange="_escutaSalvarConfig()"
+              <input type="number" id="cfg-antiSpamHoras" min="1" max="24" onblur="_escutaSalvarConfig()"
                 style="width:100%;margin-top:4px;padding:8px 12px;border:1.5px solid #e2e8f0;border-radius:10px;font-size:12px;outline:none">
             </div>
             <div>
               <label class="text-[10px] font-black text-slate-500">Grupo mínimo para análise estratificada</label>
-              <input type="number" id="cfg-grupoMinimo" min="3" max="20" onchange="_escutaSalvarConfig()"
+              <input type="number" id="cfg-grupoMinimo" min="3" max="20" onblur="_escutaSalvarConfig()"
                 style="width:100%;margin-top:4px;padding:8px 12px;border:1.5px solid #e2e8f0;border-radius:10px;font-size:12px;outline:none">
             </div>
           </div>
@@ -686,7 +690,7 @@
           <i class="fas fa-crosshairs text-violet-500 mr-1"></i>Direcionamento (opcional)
         </h4>
         <p class="text-[10px] text-slate-400 mb-3">Deixe em branco para aplicar a todos os usuários.</p>
-        <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
           <div>
             <label class="text-[10px] font-black text-slate-500">Vínculos</label>
             <select id="dir-vinculo" multiple size="4"
@@ -710,6 +714,12 @@
               style="width:100%;margin-top:4px;padding:6px 8px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:11px;outline:none">
               <option>Menos de 6 meses</option><option>6 meses – 1 ano</option>
               <option>1–3 anos</option><option>3–5 anos</option><option>Mais de 5 anos</option>
+            </select>
+          </div>
+          <div>
+            <label class="text-[10px] font-black text-slate-500">Setor</label>
+            <select id="dir-setor" multiple size="4"
+              style="width:100%;margin-top:4px;padding:6px 8px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:11px;outline:none">
             </select>
           </div>
         </div>
@@ -1293,10 +1303,13 @@ function _escutaSalvarConfig() {
     grupoMinimo:        document.getElementById('cfg-grupoMinimo').value
   };
   GAS._call('salvarConfiguracaoEscuta', [novosCfg], function(res) {
+    var ok = document.getElementById('cfg-status-msg');
+    var er = document.getElementById('cfg-erro-msg');
     if (res && res.ok) {
       Object.assign(_escutaCache.config, novosCfg);
+      if (ok) { ok.classList.remove('hidden'); setTimeout(function() { ok.classList.add('hidden'); }, 2000); }
     } else {
-      Swal.fire('Erro', res ? res.msg : 'Erro ao salvar.', 'error');
+      if (er) { er.classList.remove('hidden'); setTimeout(function() { er.classList.add('hidden'); }, 3000); }
     }
   });
 }
@@ -1345,30 +1358,75 @@ function _escutaTogglePergunta(id, ativo) {
 
 // ── Pesquisas personalizadas ──────────────────────────────────
 
+function _escutaDirLabel(dir) {
+  if (!dir) return '';
+  var partes = [];
+  var labels = { vinculo:'Vínculo', nivelFuncao:'Nível', tempoCasa:'Casa', setores:'Setor' };
+  Object.keys(labels).forEach(function(k) {
+    if (Array.isArray(dir[k]) && dir[k].length) partes.push(labels[k] + ': ' + dir[k].join(', '));
+  });
+  return partes.join(' · ');
+}
+
 function _escutaRenderPesquisas() {
   var el  = document.getElementById('escuta-pesqs-lista');
   if (!el) return;
   var lst = _escutaCache.pesquisas || [];
   if (!lst.length) {
-    el.innerHTML = '<div class="p-6 text-center text-xs text-slate-400">Nenhuma pesquisa personalizada.</div>';
+    el.innerHTML = '<div class="p-6 text-center text-xs text-slate-400">Nenhuma pesquisa personalizada. <button onclick="_escutaAbrirModalPesquisa()" class="text-violet-600 font-black underline">Criar primeira</button></div>';
     return;
   }
   el.innerHTML = lst.map(function(p) {
-    var ativa = p.status === 'ativo';
-    return '<div class="p-4 hover:bg-slate-50 transition-colors flex items-start gap-3">' +
-      '<span class="mt-0.5 w-2 h-2 rounded-full ' + (ativa ? 'bg-green-500' : 'bg-slate-300') + ' shrink-0"></span>' +
-      '<div class="flex-1">' +
-        '<p class="text-xs font-black text-slate-800">' + escaparHTML(p.titulo||'') + '</p>' +
-        '<p class="text-[10px] text-slate-400">' + (p.periodoInicio||'') + ' → ' + (p.periodoFim||'') +
-          ' · ' + (Array.isArray(p.perguntas) ? p.perguntas.length : 0) + ' perguntas' +
-          (p.direcionamento ? ' · <span class="text-violet-600 font-black">Direcionada</span>' : '') + '</p>' +
-      '</div>' +
-      '<div class="flex gap-1">' +
-        '<button onclick="_escutaEditarPesquisa(\'' + p.id + '\')" class="text-[9px] bg-blue-100 hover:bg-blue-200 text-blue-700 font-black px-2 py-1 rounded-lg">Editar</button>' +
-        '<button onclick="_escutaExcluirPesquisa(\'' + p.id + '\')" class="text-[9px] bg-red-100 hover:bg-red-200 text-red-700 font-black px-2 py-1 rounded-lg">Excluir</button>' +
+    var ativa   = p.status === 'ativo';
+    var novoSt  = ativa ? 'inativo' : 'ativo';
+    var dirInfo = _escutaDirLabel(p.direcionamento);
+    return '<div class="p-4 hover:bg-slate-50 transition-colors">' +
+      '<div class="flex items-start gap-3">' +
+        // Toggle de ativação inline
+        '<div class="relative inline-flex items-center mt-0.5 shrink-0">' +
+          '<input type="checkbox" ' + (ativa ? 'checked' : '') + ' class="sr-only peer" id="pesq-toggle-' + p.id + '"' +
+            ' onchange="_escutaToggleStatusPesquisa(\'' + escaparHTML(p.id) + '\', this.checked)">' +
+          '<div class="w-8 h-4 bg-slate-200 peer-checked:bg-violet-600 rounded-full transition-all peer-checked:after:translate-x-full after:content-[\'\'] after:absolute after:top-0 after:left-0 after:w-4 after:h-4 after:bg-white after:rounded-full after:transition-all after:shadow-sm"></div>' +
+        '</div>' +
+        '<div class="flex-1 min-w-0">' +
+          '<div class="flex items-center gap-2 flex-wrap">' +
+            '<p class="text-xs font-black text-slate-800">' + escaparHTML(p.titulo||'') + '</p>' +
+            (ativa
+              ? '<span class="text-[8px] bg-green-100 text-green-700 font-black px-1.5 py-0.5 rounded-full uppercase">Ativa</span>'
+              : '<span class="text-[8px] bg-slate-100 text-slate-500 font-black px-1.5 py-0.5 rounded-full uppercase">Inativa</span>') +
+            (p.direcionamento ? '<span class="text-[8px] bg-violet-100 text-violet-700 font-black px-1.5 py-0.5 rounded-full uppercase">Direcionada</span>' : '') +
+          '</div>' +
+          '<p class="text-[10px] text-slate-400 mt-0.5">' +
+            (p.periodoInicio||'—') + ' → ' + (p.periodoFim||'—') +
+            ' · ' + (Array.isArray(p.perguntas) ? p.perguntas.length : 0) + ' pergunta' + (Array.isArray(p.perguntas) && p.perguntas.length !== 1 ? 's' : '') +
+            ' · prioridade ' + (p.prioridade||1) +
+          '</p>' +
+          (dirInfo ? '<p class="text-[9px] text-violet-600 mt-1"><i class="fas fa-crosshairs mr-1"></i>' + escaparHTML(dirInfo) + '</p>' : '') +
+        '</div>' +
+        '<div class="flex gap-1 shrink-0">' +
+          '<button onclick="_escutaEditarPesquisa(\'' + escaparHTML(p.id) + '\')" class="text-[9px] bg-blue-100 hover:bg-blue-200 text-blue-700 font-black px-2 py-1 rounded-lg transition-all">Editar</button>' +
+          '<button onclick="_escutaExcluirPesquisa(\'' + escaparHTML(p.id) + '\')" class="text-[9px] bg-red-100 hover:bg-red-200 text-red-700 font-black px-2 py-1 rounded-lg transition-all">Excluir</button>' +
+        '</div>' +
       '</div>' +
     '</div>';
   }).join('');
+}
+
+function _escutaToggleStatusPesquisa(id, ativar) {
+  var p = (_escutaCache.pesquisas || []).find(function(x) { return x.id === id; });
+  if (!p) return;
+  var dados = Object.assign({}, p, { status: ativar ? 'ativo' : 'inativo' });
+  GAS._call('salvarPesquisaEscuta', [dados], function(res) {
+    if (res && res.ok) {
+      p.status = dados.status;
+      _escutaRenderPesquisas();
+    } else {
+      // Reverte o toggle visual em caso de erro
+      var chk = document.getElementById('pesq-toggle-' + id);
+      if (chk) chk.checked = !ativar;
+      Swal.fire('Erro', res ? res.msg : 'Erro ao salvar.', 'error');
+    }
+  });
 }
 
 function _escutaAbrirModalPesquisa(id) {
@@ -1382,6 +1440,20 @@ function _escutaAbrirModalPesquisa(id) {
   document.getElementById('modal-pesq-perguntas').innerHTML = '<p class="text-xs text-slate-400 italic">Nenhuma pergunta adicionada.</p>';
   _escutaAbaPesquisasPerguntas = [];
 
+  // Limpa todas as seleções de direcionamento
+  ['dir-vinculo','dir-nivel','dir-tempoCasa','dir-setor'].forEach(function(selId) {
+    var sel = document.getElementById(selId);
+    if (sel) Array.from(sel.options).forEach(function(o) { o.selected = false; });
+  });
+
+  // Popula dir-setor com setores da base de configuração (primeira vez)
+  var dirSetor = document.getElementById('dir-setor');
+  if (dirSetor && dirSetor.options.length === 0) {
+    (AppState.colecoes?.setores || []).filter(Boolean).forEach(function(s) {
+      var o = document.createElement('option'); o.value = s; o.textContent = s; dirSetor.appendChild(o);
+    });
+  }
+
   if (id) {
     var p = (_escutaCache.pesquisas || []).find(function(x) { return x.id === id; });
     if (p) {
@@ -1392,6 +1464,17 @@ function _escutaAbrirModalPesquisa(id) {
       document.getElementById('modal-pesq-prioridade').value = p.prioridade    || 1;
       _escutaAbaPesquisasPerguntas = Array.isArray(p.perguntas) ? p.perguntas.slice() : [];
       _escutaRenderPerguntasModal();
+
+      // Restaura seleções de direcionamento
+      var dir = p.direcionamento || {};
+      var mapa = { 'dir-vinculo': dir.vinculo, 'dir-nivel': dir.nivelFuncao, 'dir-tempoCasa': dir.tempoCasa, 'dir-setor': dir.setores };
+      Object.keys(mapa).forEach(function(selId) {
+        var vals = mapa[selId];
+        if (!Array.isArray(vals) || !vals.length) return;
+        var sel = document.getElementById(selId);
+        if (!sel) return;
+        Array.from(sel.options).forEach(function(o) { o.selected = vals.includes(o.value); });
+      });
     }
   }
   document.getElementById('escuta-modal-pesquisa').classList.remove('hidden');
@@ -1482,9 +1565,10 @@ function _escutaSalvarPesquisaModal() {
     return Array.from(sel.selectedOptions).map(function(o) { return o.value; });
   }
   var dir = {
-    vinculo:   _selVals('dir-vinculo'),
+    vinculo:     _selVals('dir-vinculo'),
     nivelFuncao: _selVals('dir-nivel'),
-    tempoCasa: _selVals('dir-tempoCasa')
+    tempoCasa:   _selVals('dir-tempoCasa'),
+    setores:     _selVals('dir-setor')
   };
   var temDir = Object.values(dir).some(function(v) { return v.length > 0; });
 
