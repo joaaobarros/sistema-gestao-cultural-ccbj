@@ -5,22 +5,17 @@
 @responsibility Exibir/ocultar botões de admin/superadmin; redirecionar usuários sem permissão.
 @dependencies core/app_state_js (AppState.usuario), ui/navegacao_ui_js (mostrarAba)
 -->
+
 <script>
 
 /**
  * ========================================
  * BLOCO: Interface por permissão de acesso
  * ========================================
- * @description Exibe/esconde elementos da UI conforme nível de acesso:
- *              - Admin/Superadmin: mostra botões de gestão e auditoria.
- *              - Superadmin: mostra também itens marcados como "em breve".
- *              - Usuários sem permissão em abas restritas são redirecionados para a agenda.
- * @context Chamado por inicializarApp() após confirmar o perfil do usuário no backend.
- * @inputs AppState.usuario.isAdmin, AppState.usuario.isSuperadmin.
- * @outputs DOM: esconde/exibe #btn-aba-gestao, #btn-aba-auditoria, #modulo-sistema.
- * @sideEffects Pode chamar mostrarAba('aba-lista-reservas') para redirecionar.
  */
 function configurarInterfacePorPermissao() {
+  if (!AppState || !AppState.usuario) return;
+
   const isAdmin      = AppState.usuario.isAdmin;
   const isSuperadmin = AppState.usuario.isSuperadmin;
 
@@ -36,7 +31,6 @@ function configurarInterfacePorPermissao() {
     if (modSistema)   modSistema.classList.add('hidden');
   }
 
-  // Abas "em breve" ocultas para não-superadmin
   document.querySelectorAll('.em-breve-badge').forEach(function(badge) {
     const btn = badge.closest('button');
     if (!btn) return;
@@ -50,5 +44,27 @@ function configurarInterfacePorPermissao() {
     }
   }
 }
+
+/**
+ * ========================================
+ * BLOCO: Execução segura (espera AppState)
+ * ========================================
+ */
+document.addEventListener('DOMContentLoaded', function() {
+
+  let tentativas = 0;
+
+  function esperarAppState() {
+    if (AppState && AppState.usuario && AppState.usuario.email) {
+      configurarInterfacePorPermissao();
+    } else if (tentativas < 30) {
+      tentativas++;
+      setTimeout(esperarAppState, 200);
+    }
+  }
+
+  esperarAppState();
+
+});
 
 </script>
