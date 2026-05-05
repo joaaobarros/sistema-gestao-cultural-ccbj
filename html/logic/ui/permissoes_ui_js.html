@@ -56,7 +56,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
   function esperarAppState() {
     if (AppState && AppState.usuario && AppState.usuario.email) {
-      configurarInterfacePorPermissao();
+
+      if (typeof carregarPermissoes === 'function') {
+        carregarPermissoes(function() {
+          configurarInterfacePorPermissao();
+        });
+      } else {
+        console.warn('carregarPermissoes não disponível ainda');
+      }
+
     } else if (tentativas < 30) {
       tentativas++;
       setTimeout(esperarAppState, 200);

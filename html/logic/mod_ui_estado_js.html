@@ -1197,7 +1197,7 @@ function analisarDisponibilidadeIA() {
         ? `Já existe "<b>${(typeof escaparHTML === 'function' ? escaparHTML(existente.nome || 'reserva') : (existente.nome || 'reserva'))}</b>" das ${existente.inicio}–${existente.fim}`
         : 'Conflito de horário detectado.';
 
-      // 🛡️ SUGESTÃO DE HORÁRIO (segura)
+      // SUGESTÃO DE HORÁRIO (segura)
       let sugestaoHorarioHTML = '';
 
       try {
@@ -1235,7 +1235,7 @@ function analisarDisponibilidadeIA() {
         console.warn('Erro sugestão de horário:', e);
       }
 
-      // 🛡️ SUGESTÃO DE SALAS (segura)
+      // SUGESTÃO DE SALAS (segura)
       try {
 
         if (typeof obterSalasDisponiveisBackend === 'function') {
@@ -1297,7 +1297,7 @@ function analisarDisponibilidadeIA() {
       return;
     }
 
-    // ✅ SEM CONFLITO
+    // SEM CONFLITO
     Swal.fire({
       icon: 'success',
       title: 'Disponível',
@@ -1320,7 +1320,7 @@ function analisarDisponibilidadeIA() {
 }
 
 /**
- * 🧠 ORQUESTRADOR DA IA
+ * ORQUESTRADOR DA IA
  * Decide comportamento: SUGESTÃO vs ANÁLISE
  */
 function processarIntencaoIA(contexto, callback) {
@@ -1332,7 +1332,7 @@ function processarIntencaoIA(contexto, callback) {
   const horaInicio  = contexto?.horaInicio;
   const horaTermino = contexto?.horaTermino;
 
-  // 🔴 VALIDAÇÃO FORTE (EVITA ANÁLISE FALSA)
+  // VALIDAÇÃO FORTE (EVITA ANÁLISE FALSA)
   if (!sala || !horaInicio || !horaTermino || datas.length === 0) {
 
     callback({
@@ -1359,7 +1359,7 @@ function processarIntencaoIA(contexto, callback) {
 
   GAS.reservas.analisarDisponibilidade(payload, function(res) {
 
-      // 🔴 PROTEÇÃO EXTRA
+      // PROTEÇÃO EXTRA
       if (!res || typeof res !== 'object') {
         callback({
           tipo: 'ERRO',
@@ -1368,7 +1368,7 @@ function processarIntencaoIA(contexto, callback) {
         return;
       }
 
-      // 🔴 CONFLITO REAL
+      // CONFLITO REAL
       if (res.conflito && res.conflitosDetalhados?.length) {
 
         callback({
@@ -1378,7 +1378,7 @@ function processarIntencaoIA(contexto, callback) {
         return;
       }
 
-      // 🟡 SUGESTÕES DISPONÍVEIS
+      // SUGESTÕES DISPONÍVEIS
       if (Array.isArray(res.sugestoes) && res.sugestoes.length > 0) {
 
         callback({
@@ -1388,7 +1388,7 @@ function processarIntencaoIA(contexto, callback) {
         return;
       }
 
-      // ✅ DISPONÍVEL (SEM CONFLITO)
+      // DISPONÍVEL (SEM CONFLITO)
       callback({
         tipo: 'DISPONIVEL',
         dados: res
@@ -1406,13 +1406,13 @@ function processarIntencaoIA(contexto, callback) {
 }
 
 /**
- * 🧠 INFERIR INTENÇÃO AUTOMATICAMENTE
+ * INFERIR INTENÇÃO AUTOMATICAMENTE
  */
 function inferirModoIA(contexto) {
 
   const texto = String(contexto?.mensagem || '').toLowerCase();
 
-  // 🔵 1. TEXTO DO USUÁRIO
+  // 1. TEXTO DO USUÁRIO
 
   if (texto) {
 
@@ -1441,7 +1441,7 @@ function inferirModoIA(contexto) {
       return 'ANALISE';
     }
 
-    // 🔴 IMPORTANTE: mesmo que diga "agendar"
+    // IMPORTANTE: mesmo que diga "agendar"
     // IA NÃO EXECUTA → apenas analisa
     if (
       texto.includes('agendar') ||
@@ -1453,7 +1453,7 @@ function inferirModoIA(contexto) {
     }
   }
 
-  // 🟡 2. ESTADO DO SISTEMA
+  // 2. ESTADO DO SISTEMA
 
   const temSala   = !!contexto?.sala;
   const temInicio = !!contexto?.horaInicio;
@@ -1471,14 +1471,14 @@ function inferirModoIA(contexto) {
 }
 
 /**
- * 🧠 IA FINAL — ORQUESTRA TUDO
+ * - IA FINAL — ORQUESTRA TUDO
  * - Decide comportamento
  * - Consulta backend
  * - APENAS analisa ou sugere (NUNCA preenche automaticamente)
  */
 function executarIAReserva(contexto) {
 
-  // 🟣 ANÁLISE COM GRÁFICO (chat ou gerar análise)
+  // ANÁLISE COM GRÁFICO (chat ou gerar análise)
   if (contexto?.tipo === 'ANALISE') {
 
     Swal.fire({
@@ -1500,7 +1500,7 @@ function executarIAReserva(contexto) {
 
     const modo = inferirModoIA(contexto);
 
-    // 🔴 DADOS INCOMPLETOS
+    // DADOS INCOMPLETOS
     if (resultado.tipo === 'INCOMPLETO') {
 
       Swal.fire({
@@ -1526,7 +1526,7 @@ function executarIAReserva(contexto) {
       return;
     }
 
-    // 🟣 GRAFICO DIRETO (futuro / backend)
+    // GRAFICO DIRETO (futuro / backend)
     if (resultado.tipo === 'GRAFICO') {
 
       if (typeof renderizarGraficoIA === 'function') {
@@ -1542,7 +1542,7 @@ function executarIAReserva(contexto) {
       return;
     }
 
-    // 🔴 CONFLITO
+    // CONFLITO
     if (resultado.tipo === 'CONFLITO_REAL') {
 
       const conflitos = resultado.dados.conflitosDetalhados || [];
@@ -1560,12 +1560,12 @@ function executarIAReserva(contexto) {
         `;
       });
 
-      // 🟡 BUFFER
+      // BUFFER
       if (conflitos.some(c => c.tipo === 'BUFFER')) {
         html += `<p class="text-xs text-amber-600 mt-2">Intervalo mínimo de 5min entre reservas (limpeza do espaço)</p>`;
       }
 
-      // 🔵 SUGESTÕES CLICÁVEIS
+      // SUGESTÕES CLICÁVEIS
       if (sugestoes.length) {
 
         html += `<hr class="my-2"><p class="text-xs font-bold">Clique em uma sugestão:</p>`;
@@ -1595,7 +1595,7 @@ function executarIAReserva(contexto) {
       return;
     }
 
-    // 🟡 SUGESTÃO
+    // SUGESTÃO
     if (resultado.tipo === 'SUGESTAO') {
 
       let sugestoes = resultado.dados.sugestoes || [];
@@ -1643,7 +1643,7 @@ function executarIAReserva(contexto) {
       return;
     }
 
-    // ✅ DISPONÍVEL
+    // DISPONÍVEL
     if (resultado.tipo === 'DISPONIVEL') {
 
       const itensSugeridos = sugerirItensParaReserva(contexto);
@@ -1674,7 +1674,7 @@ function executarIAReserva(contexto) {
 }
 
 /**
- * 🧠 APLICA SUGESTÃO COMPLETA (PADRÃO FINAL)
+ * APLICA SUGESTÃO COMPLETA (PADRÃO FINAL)
  */
 function aplicarSugestaoIA(data, horaInicio, horaTermino) {
   const horaIni = document.getElementById('horaInicio');
@@ -1710,7 +1710,7 @@ function inicializarApp() {
 
   const txtIdentificando = document.getElementById('statusUser');
 
-  // 🚀 TENTA USAR CACHE PRIMEIRO
+  // TENTA USAR CACHE PRIMEIRO
   try {
     const cache = localStorage.getItem('cacheReservas');
     const ts = localStorage.getItem('cacheReservas_ts');
@@ -1788,7 +1788,7 @@ function inicializarApp() {
         }
       });
 
-      // 🚀 LIBERA UI IMEDIATAMENTE
+      // LIBERA UI IMEDIATAMENTE
       if (typeof popularSelectsIniciais === 'function') {
         try { popularSelectsIniciais(); } catch(e) { console.warn(e); }
       }
@@ -1860,6 +1860,8 @@ function inicializarApp() {
       console.error('Erro ao obter dados iniciais:', err);
       Swal.fire('Falha na Conexão', 'Não foi possível validar seu login.', 'error');
     });
+
+  
 }
 
 

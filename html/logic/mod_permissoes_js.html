@@ -79,17 +79,26 @@ function aplicarPermissoesUI() {
 
 // Carrega permissões após todos os scripts e depois de o AppState estar pronto
 document.addEventListener('DOMContentLoaded', function() {
-  // Aguarda inicializarApp() setar AppState — usa evento custom ou polling leve
+
   var _tentativas = 0;
+
   function _tentarCarregar() {
     if (AppState && AppState.usuario && AppState.usuario.email) {
-      carregarPermissoes(aplicarPermissoesUI);
+
+      carregarPermissoes(function() {
+        aplicarPermissoesUI();
+
+        document.dispatchEvent(new Event('permissoes:ready'));
+      });
+
     } else if (_tentativas < 30) {
       _tentativas++;
       setTimeout(_tentarCarregar, 300);
     }
   }
-  setTimeout(_tentarCarregar, 500);
+
+  _tentarCarregar();
+
 });
 
 </script>

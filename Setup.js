@@ -64,23 +64,144 @@ const MODULOS = {
     nome:  'CCBJ_ESPACOS',
     pasta: 'CCBJ — Espaços e Infraestrutura',
     prop:  PROP.ESPACOS,
-    abas: {
-      'Reservas': [
-        'ID','Data Reserva','Início','Término','Sala','Turno',
-        'Nome da Ação','Tipo de Ação','Responsável','Setor',
-        'Co-responsável','Release','Itens Volantes','Status',
-        'Data Solicitação','ID Lote'
-      ],
-      'Itens': [
-        'ID Item','Nome','Categoria','Quantidade Total',
-        'Localização','Status de Uso'
-      ],
-      'Solicitacoes': [
-        'ID','Tipo','Subtipo','ID Reserva','Sala','Usuario',
-        'Justificativa','Payload','Status','Aprovador',
-        'Data Solicitação','Data Ação'
-      ],
-    }
+      abas: {
+
+    // =========================
+    // RESERVAS (mantido)
+    // =========================
+    'Reservas': [
+      'ID','Data Reserva','Início','Término','Sala','Turno',
+      'Nome da Ação','Tipo de Ação','Responsável','Setor',
+      'Co-responsável','Release','Itens Volantes','Status',
+      'Data Solicitação','ID Lote'
+    ],
+
+    // =========================
+    // ATIVOS (NOVO CORE)
+    // =========================
+    'Ativos': [
+      'ID',
+      'Nome',
+      'Codigo',
+      'Tipo',
+      'Categoria',
+      'Criticidade',
+
+      'LocalizacaoTipo',
+      'Sala',
+
+      'QtdTotal',
+      'QtdReservado',
+      'Unidade',
+
+      'DataEntrada',
+      'DataAtivacao',
+
+      'Status',
+      'FaseCicloVida',
+
+      'ContratoID',
+      'ContratacaoID',
+      'ValorAquisicao',
+
+      'CustoManutencao',
+      'CustoTotal',
+
+      'GrauPreservacao',
+      'IndiceSaude',
+
+      'Responsavel',
+      'Setor',
+
+      'CriadoEm',
+      'AtualizadoEm'
+    ],
+
+    // =========================
+    // MOVIMENTAÇÕES
+    // =========================
+    'MovimentacoesAtivos': [
+      'ID',
+      'ID Ativo',
+      'Tipo',
+      'Origem',
+      'Quantidade',
+      'Data',
+      'Responsavel',
+      'Observacao'
+    ],
+
+    // =========================
+    // MANUTENÇÃO
+    // =========================
+    'Manutencoes': [
+      'ID',
+      'ID Ativo',
+      'Tipo',
+      'Descricao',
+      'Custo',
+      'DuracaoHoras',
+      'DataExecucao',
+      'ProximaPrevista',
+      'Responsavel',
+      'Status'
+    ],
+
+    // =========================
+    // USO (RESERVAS)
+    // =========================
+    'UsoAtivos': [
+      'ID',
+      'ID Ativo',
+      'ID Reserva',
+      'DataInicio',
+      'DataFim',
+      'Quantidade',
+      'Confirmado'
+    ],
+
+    // =========================
+    // BAIXAS
+    // =========================
+    'BaixasAtivos': [
+      'ID',
+      'ID Ativo',
+      'Tipo',
+      'Motivo',
+      'ValorRecuperado',
+      'Data'
+    ],
+
+    // =========================
+    // ALERTAS
+    // =========================
+    'AlertasInfra': [
+      'ID',
+      'ID Ativo',
+      'Tipo',
+      'Descricao',
+      'Nivel',
+      'Status',
+      'CriadoEm'
+    ],
+
+    // =========================
+    // SOLICITAÇÕES (mantido)
+    // =========================
+    'Solicitacoes': [
+      'ID','Tipo','Subtipo','ID Reserva','Sala','Usuario',
+      'Justificativa','Payload','Status','Aprovador',
+      'Data Solicitação','Data Ação'
+    ],
+
+    // =========================
+    // LEGADO (não apagar ainda)
+    // =========================
+    'Itens': [
+      'ID Item','Nome','Categoria','Quantidade Total',
+      'Localização','Status de Uso'
+    ]
+
   },
 
   COMUNICACAO: {
