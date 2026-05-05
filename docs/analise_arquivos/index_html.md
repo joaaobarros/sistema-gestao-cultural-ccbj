@@ -105,10 +105,10 @@ Define a arquitetura real do sistema:
 ## 5. Funcionalidades
 
 - Composição completa do sistema
-- Definição de arquitetura de carregamento
-- Organização por camadas
-- Injeção dinâmica de módulos
-- Controle do ciclo de inicialização
+- Definição da ordem de carregamento
+- Orquestração indireta do boot (via bootstrap_js)
+- Estruturação da arquitetura por camadas
+- Controle do ciclo de inicialização via DOMContentLoaded
 
 ---
 

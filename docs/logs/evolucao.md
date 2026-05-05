@@ -35,3 +35,15 @@ Mapeamento da arquitetura real de carregamento e orquestração do sistema
 ### Próximos Passos
 - Revisar bootstrap
 - Mapear fluxo de inicialização completo
+
+## [Data]
+
+### Ação
+Análise do bootstrap do sistema
+
+### Impacto
+Identificação da orquestração real do sistema via eventos e DOM
+
+### Próximos Passos
+- Revisar mod_ui_estado_js (provável núcleo funcional)
+- Mapear fluxo completo de inicialização

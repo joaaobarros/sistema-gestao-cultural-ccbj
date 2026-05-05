@@ -22,3 +22,4 @@
 
 - server_bridge_js → camada de integração com backend (🔴 crítico)
 - index_html → orquestração e bootstrap do sistema (🔴 crítico)
+- bootstrap_js → inicialização e orquestração global (🔴 crítico)
