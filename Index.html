@@ -205,7 +205,6 @@ MÓDULOS HTML (incluídos no <main>, cada um com JS próprio inline):
     }
   </style>
 </head>
-
 <body class="bg-slate-50 text-slate-900 min-h-screen flex">
 
   <!-- Loader global -->
@@ -217,85 +216,74 @@ MÓDULOS HTML (incluídos no <main>, cada um com JS próprio inline):
     <p class="mt-4 font-bold text-purple-900 tracking-widest animate-pulse uppercase text-xs">Sincronizando CCBJ...</p>
   </div>
 
-  <?!= include('html/layout/sidebar'); ?>
+  <?!= include('sidebar'); ?>
 
   <!-- Main -->
   <main class="flex-1 flex flex-col h-screen overflow-hidden">
 
-    <?!= include('html/layout/header'); ?>
+    <?!= include('header'); ?>
 
     <div class="flex-1 overflow-y-auto p-4 lg:p-8 space-y-6">
 
-      <?!= include('html/modulos/mod_agenda_geral'); ?>
+      <?!= include('mod_agenda_geral'); ?>
+      <?!= include('mod_nova_reserva'); ?>
+      <?!= include('mod_configuracoes'); ?>
+      <?!= include('mod_auditoria'); ?>
+      <?!= include('mod_agenda_rece'); ?>
+      <?!= include('mod_dashboard'); ?>
+      <?!= include('mod_aprovacoes'); ?>
+      <?!= include('mod_codip'); ?>
+      <?!= include('mod_financeiro'); ?>
 
-      <?!= include('html/modulos/mod_nova_reserva'); ?>
+      <?!= include('mod_tarefas'); ?>
+      <?!= include('mod_processos'); ?>
+      <?!= include('mod_almoxarifado'); ?>
+      <?!= include('mod_balcao'); ?>
+      <?!= include('mod_rh'); ?>
+      <?!= include('mod_eficiencia'); ?>
+      <?!= include('mod_contratacoes'); ?>
+      <?!= include('mod_relatorios_financeiros'); ?>
+      <?!= include('mod_escuta'); ?>
 
-      <?!= include('html/modulos/mod_configuracoes'); ?>
-
-      <?!= include('html/modulos/mod_auditoria'); ?>
-
-      <?!= include('html/modulos/mod_agenda_rece'); ?>
-
-      <?!= include('html/modulos/mod_dashboard'); ?>
-
-      <?!= include('html/modulos/mod_aprovacoes'); ?>
-
-      <?!= include('html/modulos/mod_codip'); ?>
-
-      <?!= include('html/modulos/mod_financeiro'); ?>
-
-      <?!= include('html/modulos/mod_tarefas'); ?>
-      <?!= include('html/modulos/mod_processos'); ?>
-      <?!= include('html/modulos/mod_almoxarifado'); ?>
-      <?!= include('html/modulos/mod_balcao'); ?>
-      <?!= include('html/modulos/mod_rh'); ?>
-      <?!= include('html/modulos/mod_eficiencia'); ?>
-      <?!= include('html/modulos/mod_contratacoes'); ?>
-      <?!= include('html/modulos/mod_relatorios_financeiros'); ?>
-      <?!= include('html/modulos/mod_escuta'); ?>
-      <?!= include('html/modulos/mod_permissoes_v2'); ?>
+      <?!= include('mod_permissoes_v2'); ?>
 
     </div>
   </main>
 
-  <?!= include('html/modais/modal_config'); ?>
+  <?!= include('modal_config'); ?>
 
-  <!-- CORE: deve ser o primeiro script -->
-  <?!= include('html/logic/core/app_state_js'); ?>
+  <!-- CORE: sempre primeiro -->
+  <?!= include('app_state_js'); ?>
 
-  <!-- SERVICES: bridge para google.script.run -->
-  <?!= include('html/logic/services/server_bridge_js'); ?>
+  <!-- SERVICES -->
+  <?!= include('server_bridge_js'); ?>
 
-  <!-- MODULES: lógica pura sem DOM nem backend -->
-  <?!= include('html/logic/modules/disponibilidade_module_js'); ?>
-  <?!= include('html/logic/modules/itens_module_js'); ?>
+  <!-- MODULES -->
+  <?!= include('disponibilidade_module_js'); ?>
+  <?!= include('itens_module_js'); ?>
 
-  <!-- UI HELPERS: helpers de componentes e navegação -->
-  <?!= include('html/logic/mod_ui_componentes_js'); ?>
-  <?!= include('html/logic/ui/navegacao_ui_js'); ?>
-  <?!= include('html/logic/ui/permissoes_ui_js'); ?>
- 
+  <!-- UI HELPERS -->
+  <?!= include('mod_ui_componentes_js'); ?>
+  <?!= include('navegacao_ui_js'); ?>
+  <?!= include('permissoes_ui_js'); ?>
 
   <!-- DOMÍNIO / FEATURES -->
-<?!= include('html/logic/mod_ui_estado_js'); ?>
-<?!= include('html/logic/mod_reservas_js'); ?>
+  <?!= include('mod_permissoes_js'); ?> <!-- antes de quem usa -->
+  <?!= include('mod_ui_estado_js'); ?>
+  <?!= include('mod_reservas_js'); ?>
 
-<?!= include('html/logic/mod_permissoes_js'); ?> 
+  <?!= include('mod_admin_js'); ?>
+  <?!= include('mod_contratos_js'); ?>
+  <?!= include('mod_favoritos_js'); ?>
 
-<?!= include('html/logic/mod_admin_js'); ?>
-<?!= include('html/logic/mod_contratos_js'); ?>
-<?!= include('html/logic/mod_favoritos_js'); ?>
-
-<?!= include('html/logic/mod_permissoes_v2_js'); ?> 
-<?!= include('html/logic/integracao_reserva_comunicacao_js'); ?>
+  <?!= include('mod_permissoes_v2_js'); ?>
+  <?!= include('integracao_reserva_comunicacao_js'); ?>
 
   <!-- BOOTSTRAP: sempre por último -->
-  <?!= include('html/logic/bootstrap_js'); ?>
+  <?!= include('bootstrap_js'); ?>
 
-  <?!= include('html/modais/modal_manual'); ?>
-
+  <?!= include('modal_manual'); ?>
   <?!= include('PainelSolicitacoes'); ?>
-
   <?!= include('GestaoContratos'); ?>
 
 </body>
