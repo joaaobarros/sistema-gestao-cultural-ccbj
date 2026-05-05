@@ -27,3 +27,6 @@
 - mod_reservas_js → interface e controle de fluxo de reservas (🔴 crítico)
 - disponibilidade_module_js → lógica pura de disponibilidade (🔴 crítico)
 - itens_module_js → lookup de itens e salas (🟡 médio)
+- mod_ui_componentes_js → utilitários globais de interface (🔴 alto)
+
+

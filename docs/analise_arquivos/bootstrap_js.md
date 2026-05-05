@@ -205,6 +205,8 @@ Pontos críticos:
 - É dependência para:
   - toda interação do sistema
 
+- mod_ui_componentes_js (tratamento de erro e loader global)
+
 ---
 
 ## 12. Relação com Problemas Existentes

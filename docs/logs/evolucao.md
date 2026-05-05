@@ -94,3 +94,14 @@ Identificação de padrão consistente de lógica pura, porém com fragilidade n
 ### Próximos Passos
 - Padronizar estrutura de dados dos itens
 
+## [Data]
+
+### Ação
+Análise dos utilitários globais de UI
+
+### Impacto
+Mapeamento da base de tratamento de erro, loader e segurança de interface
+
+### Próximos Passos
+- Padronizar uso de UI em todos os módulos
+

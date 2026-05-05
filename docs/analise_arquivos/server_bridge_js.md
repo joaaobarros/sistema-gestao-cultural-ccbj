@@ -102,6 +102,7 @@ Cada bloco representa um domínio do sistema:
 - Crescimento excessivo do objeto GAS
 - Duplicidade entre financeiro e contratacoes
 - Uso de callbacks dificulta manutenção
+- Dependência indireta de mod_ui_componentes_js (_handleServerError)
 
 ---
 
