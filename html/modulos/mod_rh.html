@@ -1,72 +1,566 @@
 <!--
 @file mod_rh.html
 @type module
-@description Depto. Pessoal — gestão de colaboradores da equipe.
+@description Depto. Pessoal — gestão completa de RH: equipe, cargos, histórico,
+             avaliações, presença, documentos, folha de pagamento e indicadores.
 @responsibility Estrutura HTML + JS da aba #aba-rh.
-@dependencies GAS.equipes, showLoader, escaparHTML, temPermissao
+@dependencies GAS.equipes, GAS.rh, showLoader, escaparHTML, temPermissao, AppState
 -->
 <section id="aba-rh" class="tab-content hidden pb-20">
 
-  <div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+  <!-- Sub-navegação -->
+  <div class="flex gap-2 flex-wrap mb-4">
+    <button onclick="_rhSubAba('equipe')"      id="rh-nav-equipe"      class="rh-nav-btn px-4 py-2 text-xs font-black rounded-xl uppercase transition-all bg-teal-600 text-white">
+      <i class="fas fa-users mr-1"></i>Equipe
+    </button>
+    <button onclick="_rhSubAba('cargos')"      id="rh-nav-cargos"      class="rh-nav-btn px-4 py-2 text-xs font-black rounded-xl uppercase transition-all bg-slate-100 text-slate-600 hover:bg-slate-200">
+      <i class="fas fa-sitemap mr-1"></i>Cargos
+    </button>
+    <button onclick="_rhSubAba('historico')"   id="rh-nav-historico"   class="rh-nav-btn px-4 py-2 text-xs font-black rounded-xl uppercase transition-all bg-slate-100 text-slate-600 hover:bg-slate-200">
+      <i class="fas fa-history mr-1"></i>Histórico
+    </button>
+    <button onclick="_rhSubAba('avaliacoes')"  id="rh-nav-avaliacoes"  class="rh-nav-btn px-4 py-2 text-xs font-black rounded-xl uppercase transition-all bg-slate-100 text-slate-600 hover:bg-slate-200">
+      <i class="fas fa-star mr-1"></i>Avaliações
+    </button>
+    <button onclick="_rhSubAba('ponto')"       id="rh-nav-ponto"       class="rh-nav-btn px-4 py-2 text-xs font-black rounded-xl uppercase transition-all bg-slate-100 text-slate-600 hover:bg-slate-200">
+      <i class="fas fa-clock mr-1"></i>Presença
+    </button>
+    <button onclick="_rhSubAba('documentos')"  id="rh-nav-documentos"  class="rh-nav-btn px-4 py-2 text-xs font-black rounded-xl uppercase transition-all bg-slate-100 text-slate-600 hover:bg-slate-200">
+      <i class="fas fa-folder mr-1"></i>Documentos
+    </button>
+    <button onclick="_rhSubAba('folha')"       id="rh-nav-folha"       class="rh-nav-btn px-4 py-2 text-xs font-black rounded-xl uppercase transition-all bg-slate-100 text-slate-600 hover:bg-slate-200">
+      <i class="fas fa-file-invoice-dollar mr-1"></i>Folha
+    </button>
+    <button onclick="_rhSubAba('indicadores')" id="rh-nav-indicadores" class="rh-nav-btn px-4 py-2 text-xs font-black rounded-xl uppercase transition-all bg-slate-100 text-slate-600 hover:bg-slate-200">
+      <i class="fas fa-chart-pie mr-1"></i>Indicadores
+    </button>
+  </div>
 
-    <!-- HEADER -->
-    <div class="p-5 border-b border-slate-100 bg-slate-50/50 flex flex-wrap justify-between items-center gap-3">
-      <div>
-        <h3 class="font-black text-slate-800 uppercase tracking-tighter text-sm">
-          <i class="fas fa-id-badge text-teal-500 mr-2"></i>Depto. Pessoal
-        </h3>
-        <p class="text-[10px] text-slate-400 font-medium">Colaboradores e informações da equipe</p>
-      </div>
-      <div class="flex gap-2 items-center flex-wrap">
-        <div class="relative">
-          <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 text-xs"></i>
-          <input type="text" id="rhBusca" placeholder="Buscar colaborador..."
-            oninput="_rhFiltrar()"
-            style="padding:8px 12px 8px 30px;border:1.5px solid #e2e8f0;border-radius:12px;font-size:12px;outline:none;width:180px"
-            onfocus="this.style.borderColor='#14b8a6'" onblur="this.style.borderColor='#e2e8f0'">
+  <!-- ═══════════════════════════════════════════════════
+       PAINEL: EQUIPE
+       ═══════════════════════════════════════════════════ -->
+  <div id="rh-painel-equipe">
+    <div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+      <div class="p-5 border-b border-slate-100 bg-slate-50/50 flex flex-wrap justify-between items-center gap-3">
+        <div>
+          <h3 class="font-black text-slate-800 uppercase tracking-tighter text-sm">
+            <i class="fas fa-id-badge text-teal-500 mr-2"></i>Colaboradores
+          </h3>
+          <p class="text-[10px] text-slate-400 font-medium">Cadastro e gestão da equipe</p>
         </div>
-        <select id="rhFiltroSetor" onchange="_rhFiltrar()"
-          style="padding:8px 12px;border:1.5px solid #e2e8f0;border-radius:12px;font-size:12px;outline:none;color:#475569">
-          <option value="">Todos os setores</option>
-        </select>
-        <select id="rhFiltroStatus" onchange="_rhFiltrar()"
-          style="padding:8px 12px;border:1.5px solid #e2e8f0;border-radius:12px;font-size:12px;outline:none;color:#475569">
-          <option value="">Todos</option>
-          <option value="Ativo">Ativo</option>
-          <option value="Férias">Férias</option>
-          <option value="Afastado">Afastado</option>
-          <option value="Inativo">Inativo</option>
-        </select>
-        <button onclick="abrirModalColaborador()" data-requer-permissao="rh:editar"
-          class="bg-teal-600 hover:bg-teal-700 text-white text-[10px] font-black px-4 py-2 rounded-xl transition-all uppercase flex items-center gap-1.5">
-          <i class="fas fa-plus text-[9px]"></i>Novo Colaborador
+        <div class="flex gap-2 items-center flex-wrap">
+          <div class="relative">
+            <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 text-xs"></i>
+            <input type="text" id="rhBusca" placeholder="Buscar colaborador..."
+              oninput="_rhFiltrar()"
+              style="padding:8px 12px 8px 30px;border:1.5px solid #e2e8f0;border-radius:12px;font-size:12px;outline:none;width:180px"
+              onfocus="this.style.borderColor='#14b8a6'" onblur="this.style.borderColor='#e2e8f0'">
+          </div>
+          <select id="rhFiltroSetor" onchange="_rhFiltrar()"
+            style="padding:8px 12px;border:1.5px solid #e2e8f0;border-radius:12px;font-size:12px;outline:none;color:#475569">
+            <option value="">Todos os setores</option>
+          </select>
+          <select id="rhFiltroVinculo" onchange="_rhFiltrar()"
+            style="padding:8px 12px;border:1.5px solid #e2e8f0;border-radius:12px;font-size:12px;outline:none;color:#475569">
+            <option value="">Todos os vínculos</option>
+            <option>CLT</option><option>PJ</option><option>Bolsa</option>
+            <option>Estágio</option><option>Voluntário</option>
+          </select>
+          <select id="rhFiltroStatus" onchange="_rhFiltrar()"
+            style="padding:8px 12px;border:1.5px solid #e2e8f0;border-radius:12px;font-size:12px;outline:none;color:#475569">
+            <option value="">Todos</option>
+            <option>Ativo</option><option>Férias</option>
+            <option>Afastado</option><option>Inativo</option>
+          </select>
+          <button onclick="_rhAbrirModalColaborador()" data-requer-permissao="rh:editar"
+            class="bg-teal-600 hover:bg-teal-700 text-white text-[10px] font-black px-4 py-2 rounded-xl transition-all uppercase flex items-center gap-1.5">
+            <i class="fas fa-plus text-[9px]"></i>Novo
+          </button>
+        </div>
+      </div>
+      <div id="rhContainer" class="p-5">
+        <div class="p-8 text-center"><i class="fas fa-spinner animate-spin text-teal-300 text-xl"></i></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════
+       PAINEL: CARGOS
+       ═══════════════════════════════════════════════════ -->
+  <div id="rh-painel-cargos" class="hidden">
+    <div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+      <div class="p-5 border-b border-slate-100 flex justify-between items-center">
+        <div>
+          <h3 class="font-black text-slate-800 text-sm uppercase"><i class="fas fa-sitemap text-indigo-500 mr-2"></i>Cargos e Estrutura</h3>
+          <p class="text-[10px] text-slate-400">Posições, níveis e faixas salariais</p>
+        </div>
+        <button onclick="_rhAbrirModalCargo()" data-requer-permissao="rh:editar"
+          class="bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-black px-4 py-2 rounded-xl uppercase">
+          <i class="fas fa-plus mr-1"></i>Novo Cargo
         </button>
       </div>
-    </div>
-
-    <!-- GRID DE CARDS -->
-    <div id="rhContainer" class="p-5">
-      <div class="p-8 text-center">
-        <i class="fas fa-spinner animate-spin text-teal-300 text-xl"></i>
-        <p class="text-[11px] text-slate-400 mt-2">Carregando...</p>
+      <div id="rhCargosContainer" class="p-5">
+        <div class="p-8 text-center"><i class="fas fa-spinner animate-spin text-indigo-300 text-xl"></i></div>
       </div>
     </div>
+  </div>
 
+  <!-- ═══════════════════════════════════════════════════
+       PAINEL: HISTÓRICO
+       ═══════════════════════════════════════════════════ -->
+  <div id="rh-painel-historico" class="hidden">
+    <div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+      <div class="p-5 border-b border-slate-100 flex flex-wrap justify-between items-center gap-3">
+        <div>
+          <h3 class="font-black text-slate-800 text-sm uppercase"><i class="fas fa-history text-violet-500 mr-2"></i>Histórico</h3>
+          <p class="text-[10px] text-slate-400">Promoções, transferências, afastamentos</p>
+        </div>
+        <div class="flex gap-2 items-center">
+          <select id="rhHistColaborador" onchange="_rhCarregarHistorico()"
+            style="padding:8px 12px;border:1.5px solid #e2e8f0;border-radius:12px;font-size:12px;outline:none">
+            <option value="">Todos os colaboradores</option>
+          </select>
+          <button onclick="_rhAbrirModalEvento()" data-requer-permissao="rh:editar"
+            class="bg-violet-600 hover:bg-violet-700 text-white text-[10px] font-black px-4 py-2 rounded-xl uppercase">
+            <i class="fas fa-plus mr-1"></i>Registrar Evento
+          </button>
+        </div>
+      </div>
+      <div id="rhHistoricoContainer" class="p-5">
+        <div class="p-8 text-center"><i class="fas fa-spinner animate-spin text-violet-300 text-xl"></i></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════
+       PAINEL: AVALIAÇÕES
+       ═══════════════════════════════════════════════════ -->
+  <div id="rh-painel-avaliacoes" class="hidden">
+    <div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+      <div class="p-5 border-b border-slate-100 flex flex-wrap justify-between items-center gap-3">
+        <div>
+          <h3 class="font-black text-slate-800 text-sm uppercase"><i class="fas fa-star text-amber-500 mr-2"></i>Avaliações de Desempenho</h3>
+          <p class="text-[10px] text-slate-400">Ciclos, critérios e notas</p>
+        </div>
+        <div class="flex gap-2">
+          <select id="rhAvColaborador" onchange="_rhCarregarAvaliacoes()"
+            style="padding:8px 12px;border:1.5px solid #e2e8f0;border-radius:12px;font-size:12px;outline:none">
+            <option value="">Todos</option>
+          </select>
+          <button onclick="_rhAbrirModalAvaliacao()" data-requer-permissao="rh:editar"
+            class="bg-amber-500 hover:bg-amber-600 text-white text-[10px] font-black px-4 py-2 rounded-xl uppercase">
+            <i class="fas fa-plus mr-1"></i>Nova Avaliação
+          </button>
+        </div>
+      </div>
+      <div id="rhAvaliacoesContainer" class="p-5">
+        <div class="p-8 text-center"><i class="fas fa-spinner animate-spin text-amber-300 text-xl"></i></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════
+       PAINEL: PRESENÇA
+       ═══════════════════════════════════════════════════ -->
+  <div id="rh-painel-ponto" class="hidden">
+    <div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+      <div class="p-5 border-b border-slate-100 flex flex-wrap justify-between items-center gap-3">
+        <div>
+          <h3 class="font-black text-slate-800 text-sm uppercase"><i class="fas fa-clock text-emerald-500 mr-2"></i>Controle de Presença</h3>
+          <p class="text-[10px] text-slate-400">Entrada, saída e status diário</p>
+        </div>
+        <div class="flex gap-2 items-center">
+          <select id="rhPontoColaborador" onchange="_rhCarregarPonto()"
+            style="padding:8px 12px;border:1.5px solid #e2e8f0;border-radius:12px;font-size:12px;outline:none">
+            <option value="">Todos</option>
+          </select>
+          <input type="month" id="rhPontoMes"
+            style="padding:8px 12px;border:1.5px solid #e2e8f0;border-radius:12px;font-size:12px;outline:none"
+            onchange="_rhCarregarPonto()">
+          <button onclick="_rhAbrirModalPonto()" data-requer-permissao="rh:editar"
+            class="bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black px-4 py-2 rounded-xl uppercase">
+            <i class="fas fa-plus mr-1"></i>Registrar
+          </button>
+        </div>
+      </div>
+      <div id="rhPontoContainer" class="p-5">
+        <div class="p-8 text-center"><i class="fas fa-spinner animate-spin text-emerald-300 text-xl"></i></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════
+       PAINEL: DOCUMENTOS
+       ═══════════════════════════════════════════════════ -->
+  <div id="rh-painel-documentos" class="hidden">
+    <div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+      <div class="p-5 border-b border-slate-100 flex flex-wrap justify-between items-center gap-3">
+        <div>
+          <h3 class="font-black text-slate-800 text-sm uppercase"><i class="fas fa-folder text-blue-500 mr-2"></i>Documentos</h3>
+          <p class="text-[10px] text-slate-400">Contratos, documentos pessoais e arquivos</p>
+        </div>
+        <div class="flex gap-2 items-center">
+          <select id="rhDocColaborador" onchange="_rhCarregarDocs()"
+            style="padding:8px 12px;border:1.5px solid #e2e8f0;border-radius:12px;font-size:12px;outline:none">
+            <option value="">Todos</option>
+          </select>
+          <button onclick="_rhAbrirModalDoc()" data-requer-permissao="rh:editar"
+            class="bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-black px-4 py-2 rounded-xl uppercase">
+            <i class="fas fa-plus mr-1"></i>Adicionar
+          </button>
+        </div>
+      </div>
+      <div id="rhDocsContainer" class="p-5">
+        <div class="p-8 text-center"><i class="fas fa-spinner animate-spin text-blue-300 text-xl"></i></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════
+       PAINEL: FOLHA
+       ═══════════════════════════════════════════════════ -->
+  <div id="rh-painel-folha" class="hidden">
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div class="lg:col-span-2 bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+        <div class="p-5 border-b border-slate-100 flex flex-wrap justify-between items-center gap-3">
+          <div>
+            <h3 class="font-black text-slate-800 text-sm uppercase"><i class="fas fa-file-invoice-dollar text-purple-500 mr-2"></i>Folha de Pagamento</h3>
+            <p class="text-[10px] text-slate-400">Salários, encargos e provisões</p>
+          </div>
+          <div class="flex gap-2 items-center">
+            <input type="month" id="rhFolhaMes"
+              style="padding:8px 12px;border:1.5px solid #e2e8f0;border-radius:12px;font-size:12px;outline:none"
+              onchange="_rhCarregarFolha()">
+            <button onclick="_rhGerarFolhaMes()" data-requer-permissao="rh:editar"
+              class="bg-purple-600 hover:bg-purple-700 text-white text-[10px] font-black px-4 py-2 rounded-xl uppercase">
+              <i class="fas fa-calculator mr-1"></i>Gerar
+            </button>
+          </div>
+        </div>
+        <div id="rhFolhaContainer" class="p-5">
+          <div class="p-8 text-center text-slate-400 text-sm">Selecione um mês para visualizar a folha.</div>
+        </div>
+      </div>
+      <!-- Simulador -->
+      <div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+        <div class="p-5 border-b border-slate-100">
+          <h3 class="font-black text-slate-800 text-sm uppercase"><i class="fas fa-calculator text-purple-400 mr-2"></i>Simulador</h3>
+          <p class="text-[10px] text-slate-400">Calcule custos em tempo real</p>
+        </div>
+        <div class="p-5 space-y-3">
+          <div>
+            <label class="text-[10px] font-black text-slate-400 uppercase block mb-1">Vínculo</label>
+            <select id="simVinculo" onchange="_rhSimular()"
+              class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none">
+              <option>CLT</option><option>PJ</option><option>Bolsa</option>
+              <option>Estágio</option><option>Voluntário</option>
+            </select>
+          </div>
+          <div>
+            <label class="text-[10px] font-black text-slate-400 uppercase block mb-1">Salário Base (R$)</label>
+            <input type="number" id="simSalario" value="2000" min="0" step="100" oninput="_rhSimular()"
+              class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none">
+          </div>
+          <div>
+            <label class="text-[10px] font-black text-slate-400 uppercase block mb-1">Benefícios (R$)</label>
+            <input type="number" id="simBeneficios" value="0" min="0" oninput="_rhSimular()"
+              class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none">
+          </div>
+          <div>
+            <label class="text-[10px] font-black text-slate-400 uppercase block mb-1">Adicional (R$)</label>
+            <input type="number" id="simAdicional" value="0" min="0" oninput="_rhSimular()"
+              class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none">
+          </div>
+          <div id="simResultado" class="p-3 bg-purple-50 border border-purple-100 rounded-xl space-y-1.5 text-xs"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════
+       PAINEL: INDICADORES
+       ═══════════════════════════════════════════════════ -->
+  <div id="rh-painel-indicadores" class="hidden space-y-4">
+    <div id="rhKPIContainer" class="grid grid-cols-2 md:grid-cols-4 gap-4"></div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div class="bg-white rounded-3xl shadow-sm border border-slate-200 p-5">
+        <h4 class="font-black text-slate-700 text-xs uppercase mb-4">Por Setor</h4>
+        <div id="rhChartSetor"></div>
+      </div>
+      <div class="bg-white rounded-3xl shadow-sm border border-slate-200 p-5">
+        <h4 class="font-black text-slate-700 text-xs uppercase mb-4">Por Vínculo</h4>
+        <div id="rhChartVinculo"></div>
+      </div>
+    </div>
+    <div class="bg-white rounded-3xl shadow-sm border border-slate-200 p-5">
+      <div class="flex items-center gap-3 mb-4">
+        <h4 class="font-black text-slate-700 text-xs uppercase">Diversidade e Inclusão</h4>
+        <span class="text-[9px] bg-teal-50 text-teal-700 border border-teal-100 font-black px-2 py-0.5 rounded-full uppercase">Dados Agregados</span>
+      </div>
+      <p class="text-[10px] text-slate-400 mb-4 italic">Dados autodeclarados, confidenciais, exibidos apenas de forma agregada. Nenhuma informação individual é apresentada.</p>
+      <div id="rhDiversidadeContainer" class="grid grid-cols-1 md:grid-cols-3 gap-4"></div>
+    </div>
   </div>
 
 </section>
 
-<script>
-var _rhCache = [];
+<!-- ═══════════════════════════════════════════════════════════════
+     MODAL: Colaborador (overlay customizado)
+     ═══════════════════════════════════════════════════════════════ -->
+<div id="rhModalColaborador" class="hidden fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 pt-8">
+  <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" onclick="_rhFecharModal()"></div>
+  <div class="relative bg-white rounded-3xl shadow-2xl w-full max-w-2xl my-4 flex flex-col">
+    <div class="p-6 border-b border-slate-100 flex items-center justify-between">
+      <div>
+        <h2 class="font-black text-slate-800 text-base uppercase" id="rhModalTitulo">Novo Colaborador</h2>
+        <p class="text-[10px] text-slate-400 mt-0.5">Dados pessoais, financeiros e perfil social</p>
+      </div>
+      <button onclick="_rhFecharModal()" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center">
+        <i class="fas fa-times text-xs"></i>
+      </button>
+    </div>
+    <!-- Tabs internas -->
+    <div class="flex border-b border-slate-100 px-6">
+      <button onclick="_rhTabModal('basico')" id="rh-mtab-basico"
+        class="py-3 px-4 text-xs font-black uppercase border-b-2 border-teal-500 text-teal-600 transition-all">
+        Dados Básicos
+      </button>
+      <button onclick="_rhTabModal('financeiro')" id="rh-mtab-financeiro"
+        class="py-3 px-4 text-xs font-black uppercase border-b-2 border-transparent text-slate-400 hover:text-slate-600 transition-all">
+        Financeiro
+      </button>
+      <button onclick="_rhTabModal('social')" id="rh-mtab-social"
+        class="py-3 px-4 text-xs font-black uppercase border-b-2 border-transparent text-slate-400 hover:text-slate-600 transition-all">
+        Perfil Social
+      </button>
+    </div>
+    <!-- Tab: Básico -->
+    <div id="rh-mconteudo-basico" class="p-6 space-y-4">
+      <div>
+        <label class="text-[10px] font-black text-slate-400 uppercase block mb-1">Nome completo *</label>
+        <input id="rhMNome" type="text" placeholder="Nome do colaborador"
+          class="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm outline-none focus:border-teal-400">
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="text-[10px] font-black text-slate-400 uppercase block mb-1">Cargo</label>
+          <input id="rhMCargo" type="text" placeholder="Ex: Analista de Projetos"
+            class="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm outline-none focus:border-teal-400">
+        </div>
+        <div>
+          <label class="text-[10px] font-black text-slate-400 uppercase block mb-1">Setor *</label>
+          <select id="rhMSetor" class="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm outline-none focus:border-teal-400">
+            <option value="">Selecione...</option>
+          </select>
+        </div>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="text-[10px] font-black text-slate-400 uppercase block mb-1">E-mail</label>
+          <input id="rhMEmail" type="email" placeholder="nome@ccbj.org.br"
+            class="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm outline-none focus:border-teal-400">
+        </div>
+        <div>
+          <label class="text-[10px] font-black text-slate-400 uppercase block mb-1">Telefone</label>
+          <input id="rhMTel" type="text" placeholder="(85) 9xxxx-xxxx"
+            class="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm outline-none focus:border-teal-400">
+        </div>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="text-[10px] font-black text-slate-400 uppercase block mb-1">Data de Admissão</label>
+          <input id="rhMAdmissao" type="date"
+            class="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm outline-none focus:border-teal-400">
+        </div>
+        <div>
+          <label class="text-[10px] font-black text-slate-400 uppercase block mb-1">Status</label>
+          <select id="rhMStatus" class="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm outline-none focus:border-teal-400">
+            <option>Ativo</option><option>Férias</option>
+            <option>Afastado</option><option>Inativo</option>
+          </select>
+        </div>
+      </div>
+      <div>
+        <label class="text-[10px] font-black text-slate-400 uppercase block mb-1">Gestor Direto</label>
+        <select id="rhMGestor" class="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm outline-none focus:border-teal-400">
+          <option value="">Nenhum</option>
+        </select>
+      </div>
+    </div>
+    <!-- Tab: Financeiro -->
+    <div id="rh-mconteudo-financeiro" class="p-6 space-y-4 hidden">
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="text-[10px] font-black text-slate-400 uppercase block mb-1">Tipo de Vínculo</label>
+          <select id="rhMVinculo" class="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm outline-none focus:border-teal-400">
+            <option>CLT</option><option>PJ</option><option>Bolsa</option>
+            <option>Estágio</option><option>Voluntário</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-[10px] font-black text-slate-400 uppercase block mb-1">Salário Base (R$)</label>
+          <input id="rhMSalario" type="number" min="0" step="100" placeholder="0,00"
+            class="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm outline-none focus:border-teal-400">
+        </div>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="text-[10px] font-black text-slate-400 uppercase block mb-1">Benefícios (R$)</label>
+          <input id="rhMBeneficios" type="number" min="0" placeholder="0,00"
+            class="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm outline-none focus:border-teal-400">
+        </div>
+        <div>
+          <label class="text-[10px] font-black text-slate-400 uppercase block mb-1">Faixa Salarial</label>
+          <input id="rhMFaixa" type="text" placeholder="Ex: Júnior / Pleno / Sênior"
+            class="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm outline-none focus:border-teal-400">
+        </div>
+      </div>
+      <div class="p-3 bg-purple-50 border border-purple-100 rounded-xl text-xs text-purple-700">
+        <i class="fas fa-info-circle mr-1"></i>Dados financeiros visíveis apenas para admin e RH.
+      </div>
+    </div>
+    <!-- Tab: Perfil Social -->
+    <div id="rh-mconteudo-social" class="p-6 space-y-4 hidden">
+      <div class="p-3 bg-teal-50 border border-teal-100 rounded-xl text-xs text-teal-700 mb-2">
+        <i class="fas fa-shield-alt mr-1"></i><strong>Autodeclaração voluntária.</strong> Todas as informações são opcionais, confidenciais e usadas apenas para análise de diversidade.
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="text-[10px] font-black text-slate-400 uppercase block mb-1">Gênero</label>
+          <select id="rhMGenero" class="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm outline-none focus:border-teal-400">
+            <option value="">Prefiro não declarar</option>
+            <option>Feminino</option><option>Masculino</option>
+            <option>Não binário</option><option>Outro</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-[10px] font-black text-slate-400 uppercase block mb-1">Raça/Cor</label>
+          <select id="rhMRaca" class="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm outline-none focus:border-teal-400">
+            <option value="">Prefiro não declarar</option>
+            <option>Branca</option><option>Preta</option><option>Parda</option>
+            <option>Amarela</option><option>Indígena</option>
+          </select>
+        </div>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="text-[10px] font-black text-slate-400 uppercase block mb-1">Data de Nascimento</label>
+          <input id="rhMNascimento" type="date"
+            class="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm outline-none focus:border-teal-400">
+        </div>
+        <div>
+          <label class="text-[10px] font-black text-slate-400 uppercase block mb-1">Escolaridade</label>
+          <select id="rhMEscolaridade" class="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm outline-none focus:border-teal-400">
+            <option value="">Não informado</option>
+            <option>Ensino Fundamental</option><option>Ensino Médio</option>
+            <option>Ensino Superior Incompleto</option><option>Ensino Superior Completo</option>
+            <option>Pós-graduação</option><option>Mestrado/Doutorado</option>
+          </select>
+        </div>
+      </div>
+      <div class="grid grid-cols-3 gap-3">
+        <div>
+          <label class="text-[10px] font-black text-slate-400 uppercase block mb-1">Bairro</label>
+          <input id="rhMBairro" type="text" placeholder="Bairro"
+            class="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm outline-none focus:border-teal-400">
+        </div>
+        <div>
+          <label class="text-[10px] font-black text-slate-400 uppercase block mb-1">Cidade</label>
+          <input id="rhMCidade" type="text" placeholder="Cidade"
+            class="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm outline-none focus:border-teal-400">
+        </div>
+        <div>
+          <label class="text-[10px] font-black text-slate-400 uppercase block mb-1">Estado</label>
+          <input id="rhMEstado" type="text" placeholder="CE" maxlength="2"
+            class="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm outline-none focus:border-teal-400">
+        </div>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="text-[10px] font-black text-slate-400 uppercase block mb-1">Pessoa com Deficiência</label>
+          <select id="rhMPcd" class="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm outline-none focus:border-teal-400">
+            <option value="Não">Não</option>
+            <option>Sim — Física</option><option>Sim — Visual</option>
+            <option>Sim — Auditiva</option><option>Sim — Intelectual</option>
+            <option>Sim — Múltipla</option><option>Prefiro não declarar</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-[10px] font-black text-slate-400 uppercase block mb-1">Identidade de Gênero</label>
+          <input id="rhMIdentidade" type="text" placeholder="Opcional"
+            class="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm outline-none focus:border-teal-400">
+        </div>
+      </div>
+      <div>
+        <label class="text-[10px] font-black text-slate-400 uppercase block mb-1">Condição de Acesso / Políticas Afirmativas</label>
+        <input id="rhMAfirmativas" type="text" placeholder="Ex: Cota racial, vulnerabilidade social — opcional"
+          class="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm outline-none focus:border-teal-400">
+      </div>
+    </div>
+    <!-- Footer -->
+    <div class="p-6 border-t border-slate-100 flex justify-end gap-3">
+      <button onclick="_rhFecharModal()"
+        class="px-6 py-2.5 text-sm font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all">
+        Cancelar
+      </button>
+      <button onclick="_rhSalvarColaborador()"
+        class="px-6 py-2.5 text-sm font-black text-white bg-teal-600 hover:bg-teal-700 rounded-xl transition-all">
+        <i class="fas fa-save mr-1"></i>Salvar
+      </button>
+    </div>
+  </div>
+</div>
 
+<script>
+// ── Estado ───────────────────────────────────────────────────────────────────
+var _rhCache = [];
+var _rhCargosCache = [];
+var _rhHistCache = [];
+var _rhAvCache = [];
+var _rhPontoCache = [];
+var _rhDocsCache = [];
+var _rhFolhaCache = [];
+var _rhEditandoId = null;
+var _rhPerfilSocial = {};
+
+// ── Navegação entre sub-abas ─────────────────────────────────────────────────
+function _rhSubAba(nome) {
+  document.querySelectorAll('.rh-nav-btn').forEach(function(b) {
+    b.className = 'rh-nav-btn px-4 py-2 text-xs font-black rounded-xl uppercase transition-all bg-slate-100 text-slate-600 hover:bg-slate-200';
+  });
+  var nb = document.getElementById('rh-nav-' + nome);
+  if (nb) nb.className = 'rh-nav-btn px-4 py-2 text-xs font-black rounded-xl uppercase transition-all bg-teal-600 text-white';
+  document.querySelectorAll('[id^="rh-painel-"]').forEach(function(p) { p.classList.add('hidden'); });
+  var painel = document.getElementById('rh-painel-' + nome);
+  if (painel) painel.classList.remove('hidden');
+
+  if (nome === 'equipe'      && !_rhCache.length)     carregarRH();
+  else if (nome === 'cargos')     _rhCarregarCargos();
+  else if (nome === 'historico')  _rhCarregarHistorico();
+  else if (nome === 'avaliacoes') _rhCarregarAvaliacoes();
+  else if (nome === 'ponto')      _rhCarregarPonto();
+  else if (nome === 'documentos') _rhCarregarDocs();
+  else if (nome === 'folha')      _rhIniciarFolha();
+  else if (nome === 'indicadores') _rhCarregarIndicadores();
+}
+
+// ── Equipe ────────────────────────────────────────────────────────────────────
 function _rhStatusCls(s) {
   return { 'Ativo':'background:#d1fae5;color:#065f46', 'Férias':'background:#eff6ff;color:#1d4ed8',
            'Afastado':'background:#fef3c7;color:#92400e', 'Inativo':'background:#fee2e2;color:#991b1b' }[s]
     || 'background:#f1f5f9;color:#475569';
 }
-
 function _rhIniciais(nome) {
   return (nome||'?').split(' ').slice(0,2).map(function(n){ return n[0]||''; }).join('').toUpperCase();
+}
+function _rhCores(id) {
+  var cores = ['#6366f1','#14b8a6','#f59e0b','#ec4899','#8b5cf6','#06b6d4','#ef4444','#10b981'];
+  var n = 0;
+  for (var i = 0; i < (id||'').length; i++) n += (id.charCodeAt(i)||0);
+  return cores[n % cores.length];
+}
+function _rhFmt(n) {
+  return 'R$ ' + Number(n||0).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2});
 }
 
 function carregarRH() {
@@ -76,115 +570,198 @@ function carregarRH() {
     _rhCache = lista || [];
     _rhFiltrar();
   }, function() {
-    if (c) c.innerHTML = '<div class="p-8 text-center text-red-400 text-sm"><i class="fas fa-exclamation-triangle mr-2"></i>Erro ao carregar colaboradores.</div>';
+    if (c) c.innerHTML = '<div class="p-8 text-center text-red-400 text-sm"><i class="fas fa-exclamation-triangle mr-2"></i>Erro ao carregar.</div>';
   });
 }
 
 function _rhFiltrar() {
-  var busca = (document.getElementById('rhBusca')?.value||'').toLowerCase();
-  var setor = document.getElementById('rhFiltroSetor')?.value || '';
-  var st    = document.getElementById('rhFiltroStatus')?.value || '';
-  var c     = document.getElementById('rhContainer');
+  var busca   = (document.getElementById('rhBusca')?.value||'').toLowerCase();
+  var setor   = document.getElementById('rhFiltroSetor')?.value || '';
+  var vinculo = document.getElementById('rhFiltroVinculo')?.value || '';
+  var status  = document.getElementById('rhFiltroStatus')?.value || '';
+  var c       = document.getElementById('rhContainer');
   if (!c) return;
 
   var lista = _rhCache.filter(function(p) {
-    if (busca && !String(p.nome||'').toLowerCase().includes(busca) &&
-                 !String(p.cargo||'').toLowerCase().includes(busca)) return false;
-    if (setor && p.setor !== setor) return false;
-    if (st    && p.status !== st)  return false;
+    if (busca && !String(p.nome||'').toLowerCase().includes(busca) && !String(p.cargo||'').toLowerCase().includes(busca)) return false;
+    if (setor   && p.setor   !== setor)   return false;
+    if (vinculo && p.vinculo !== vinculo) return false;
+    if (status  && p.status  !== status)  return false;
     return true;
   });
 
   if (!lista.length) {
     c.innerHTML = '<div class="p-12 text-center"><i class="fas fa-users text-slate-200 text-4xl mb-3"></i>'
-      + '<p class="text-slate-400 font-bold text-sm">' + (_rhCache.length ? 'Nenhum colaborador encontrado.' : 'Nenhum colaborador cadastrado.') + '</p>'
-      + (temPermissao('rh','editar') ? '<button onclick="abrirModalColaborador()" class="mt-4 bg-teal-600 text-white text-xs font-black px-4 py-2 rounded-xl">+ Novo Colaborador</button>' : '')
+      + '<p class="text-slate-400 font-bold text-sm">' + (_rhCache.length ? 'Nenhum resultado.' : 'Nenhum colaborador cadastrado.') + '</p>'
+      + (temPermissao('rh','editar') ? '<button onclick="_rhAbrirModalColaborador()" class="mt-4 bg-teal-600 text-white text-xs font-black px-4 py-2 rounded-xl">+ Novo</button>' : '')
       + '</div>';
     return;
   }
 
-  c.innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px">'
+  c.innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px">'
     + lista.map(function(p) {
-        var st = p.status || 'Ativo';
-        var cores = ['#6366f1','#14b8a6','#f59e0b','#ec4899','#8b5cf6','#06b6d4'];
-        var cor = cores[Math.abs(p.id ? p.id.charCodeAt(4)||0 : 0) % cores.length];
+        var st  = p.status || 'Ativo';
+        var cor = _rhCores(p.id);
+        var vin = p.vinculo ? '<span style="font-size:8px;background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0;padding:1px 6px;border-radius:99px;font-weight:900">' + escaparHTML(p.vinculo) + '</span>' : '';
+        var sal = p.salarioBase ? '<span style="font-size:9px;color:#8b5cf6">' + _rhFmt(p.salarioBase) + '</span>' : '';
         return '<div style="background:#fff;border:1.5px solid #e2e8f0;border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:10px">'
           + '<div style="display:flex;align-items:center;gap:10px">'
-          + '<div style="width:40px;height:40px;border-radius:50%;background:' + cor + ';display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;font-weight:900;flex-shrink:0">'
+          + '<div style="width:44px;height:44px;border-radius:50%;background:' + cor + ';display:flex;align-items:center;justify-content:center;color:#fff;font-size:14px;font-weight:900;flex-shrink:0">'
           + escaparHTML(_rhIniciais(p.nome)) + '</div>'
           + '<div style="flex:1;min-width:0">'
           + '<p style="font-weight:800;font-size:12px;color:#1e293b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escaparHTML(p.nome||'') + '</p>'
           + '<p style="font-size:10px;color:#64748b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escaparHTML(p.cargo||'—') + '</p>'
           + '</div></div>'
-          + '<div style="display:flex;justify-content:space-between;align-items:center">'
+          + '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px">'
           + '<span style="font-size:9px;color:#94a3b8">' + escaparHTML(p.setor||'—') + '</span>'
+          + '<div style="display:flex;gap:4px;align-items:center">' + vin
           + '<span style="font-size:8px;font-weight:900;padding:2px 8px;border-radius:99px;' + _rhStatusCls(st) + '">' + st + '</span>'
-          + '</div>'
+          + '</div></div>'
+          + (sal ? '<div>' + sal + '</div>' : '')
           + (temPermissao('rh','editar') ? '<div style="display:flex;gap:6px;justify-content:flex-end">'
-            + '<button onclick="abrirModalColaborador(\'' + escaparHTML(p.id) + '\')" style="font-size:10px;color:#6366f1;background:#eef2ff;border:none;border-radius:8px;padding:4px 10px;cursor:pointer"><i class="fas fa-edit" style="margin-right:4px"></i>Editar</button>'
-            + (temPermissao('rh','excluir') ? '<button onclick="_excluirColaborador(\'' + escaparHTML(p.id) + '\')" style="font-size:10px;color:#ef4444;background:#fee2e2;border:none;border-radius:8px;padding:4px 10px;cursor:pointer"><i class="fas fa-trash" style="margin-right:4px"></i></button>' : '')
+            + '<button onclick="_rhAbrirModalColaborador(\'' + escaparHTML(p.id) + '\')" style="font-size:10px;color:#6366f1;background:#eef2ff;border:none;border-radius:8px;padding:4px 10px;cursor:pointer"><i class="fas fa-edit" style="margin-right:4px"></i>Editar</button>'
+            + (temPermissao('rh','excluir') ? '<button onclick="_rhExcluirColaborador(\'' + escaparHTML(p.id) + '\')" style="font-size:10px;color:#ef4444;background:#fee2e2;border:none;border-radius:8px;padding:4px 10px;cursor:pointer"><i class="fas fa-trash"></i></button>' : '')
             + '</div>' : '')
           + '</div>';
-      }).join('')
-    + '</div>';
+      }).join('') + '</div>';
 }
 
-function abrirModalColaborador(id) {
-  var dado = id ? _rhCache.find(function(p){ return p.id===id; }) : {};
-  dado = dado || {};
-  Swal.fire({
-    title: id ? 'Editar Colaborador' : 'Novo Colaborador',
-    width: Math.min(540, window.innerWidth-32),
-    showCancelButton: true,
-    confirmButtonText: '<i class="fas fa-save mr-1"></i>Salvar',
-    cancelButtonText: 'Cancelar',
-    confirmButtonColor: '#14b8a6',
-    customClass:{ popup:'rounded-3xl', confirmButton:'rounded-xl font-black text-sm', cancelButton:'rounded-xl font-bold text-sm' },
-    html: '<div class="text-left" style="padding:0 20px 16px">'
-      + '<div style="margin-bottom:10px"><label style="display:block;font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">Nome completo *</label>'
-      + '<input id="rhNome" style="width:100%;padding:9px 13px;font-size:13px;border:1.5px solid #e2e8f0;border-radius:12px;outline:none;box-sizing:border-box" value="' + escaparHTML(dado.nome||'') + '" placeholder="Nome do colaborador"></div>'
-      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">'
-      + '<div><label style="display:block;font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">Cargo</label>'
-      + '<input id="rhCargo" style="width:100%;padding:9px 13px;font-size:12px;border:1.5px solid #e2e8f0;border-radius:12px;outline:none;box-sizing:border-box" value="' + escaparHTML(dado.cargo||'') + '" placeholder="Ex: Analista de Projetos"></div>'
-      + '<div><label style="display:block;font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">Setor</label>'
-      + '<select id="rhSetor" style="width:100%;padding:9px 13px;font-size:12px;border:1.5px solid #e2e8f0;border-radius:12px;outline:none">'
-      + ((typeof AppState !== 'undefined' && AppState.colecoes?.setores?.length)
-          ? AppState.colecoes.setores.filter(Boolean)
-          : ['Administração','Comunicação','Financeiro','Operações','Projetos','TI'])
-        .map(function(s){ return '<option'+(dado.setor===s?' selected':'')+'>'+s+'</option>'; }).join('')
-      + '</select></div></div>'
-      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">'
-      + '<div><label style="display:block;font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">E-mail institucional</label>'
-      + '<input id="rhEmail" type="email" style="width:100%;padding:9px 13px;font-size:12px;border:1.5px solid #e2e8f0;border-radius:12px;outline:none;box-sizing:border-box" value="' + escaparHTML(dado.email||'') + '" placeholder="nome@ccbj.org.br"></div>'
-      + '<div><label style="display:block;font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">Status</label>'
-      + '<select id="rhStatus" style="width:100%;padding:9px 13px;font-size:12px;border:1.5px solid #e2e8f0;border-radius:12px;outline:none">'
-      + ['Ativo','Férias','Afastado','Inativo'].map(function(s){ return '<option'+(dado.status===s?' selected':'')+((!dado.status&&s==='Ativo')?' selected':'')+'>'+s+'</option>'; }).join('')
-      + '</select></div></div>'
-      + '<div><label style="display:block;font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">Telefone</label>'
-      + '<input id="rhTel" style="width:100%;padding:9px 13px;font-size:12px;border:1.5px solid #e2e8f0;border-radius:12px;outline:none;box-sizing:border-box" value="' + escaparHTML(dado.telefone||'') + '" placeholder="(85) 9xxxx-xxxx"></div></div>',
-    preConfirm: function() {
-      var n = (document.getElementById('rhNome')?.value||'').trim();
-      if (!n) { Swal.showValidationMessage('Nome obrigatório'); return false; }
-      return { id:dado.id||null, nome:n,
-               cargo:document.getElementById('rhCargo')?.value.trim(),
-               setor:document.getElementById('rhSetor')?.value,
-               email:document.getElementById('rhEmail')?.value.trim(),
-               status:document.getElementById('rhStatus')?.value,
-               telefone:document.getElementById('rhTel')?.value.trim() };
+// ── Modal colaborador ─────────────────────────────────────────────────────────
+function _rhAbrirModalColaborador(id) {
+  _rhEditandoId = id || null;
+  _rhPerfilSocial = {};
+  var dado = id ? (_rhCache.find(function(p){ return p.id===id; }) || {}) : {};
+
+  document.getElementById('rhModalTitulo').textContent = id ? 'Editar Colaborador' : 'Novo Colaborador';
+  document.getElementById('rhMNome').value      = dado.nome || '';
+  document.getElementById('rhMCargo').value     = dado.cargo || '';
+  document.getElementById('rhMEmail').value     = dado.email || '';
+  document.getElementById('rhMTel').value       = dado.telefone || '';
+  document.getElementById('rhMAdmissao').value  = dado.dataAdmissao || '';
+  document.getElementById('rhMVinculo').value   = dado.vinculo || 'CLT';
+  document.getElementById('rhMSalario').value   = dado.salarioBase || '';
+  document.getElementById('rhMBeneficios').value= dado.beneficios || '';
+  document.getElementById('rhMFaixa').value     = dado.faixaSalarial || '';
+
+  var selSetor = document.getElementById('rhMSetor');
+  selSetor.innerHTML = '<option value="">Selecione...</option>';
+  (AppState.colecoes?.setores || []).filter(Boolean).forEach(function(s) {
+    var o = document.createElement('option');
+    o.value = s; o.textContent = s;
+    if (dado.setor === s) o.selected = true;
+    selSetor.appendChild(o);
+  });
+
+  var selGestor = document.getElementById('rhMGestor');
+  selGestor.innerHTML = '<option value="">Nenhum</option>';
+  _rhCache.filter(function(p) { return p.id !== id; }).forEach(function(p) {
+    var o = document.createElement('option');
+    o.value = p.id; o.textContent = p.nome;
+    if (dado.gestorDireto === p.id) o.selected = true;
+    selGestor.appendChild(o);
+  });
+
+  document.getElementById('rhMStatus').value = dado.status || 'Ativo';
+
+  if (id) {
+    GAS.rh.obterPerfilSocial(id, function(perfil) {
+      _rhPerfilSocial = perfil || {};
+      _rhPreencherSocial(_rhPerfilSocial);
+    });
+  }
+
+  _rhTabModal('basico');
+  document.getElementById('rhModalColaborador').classList.remove('hidden');
+}
+
+function _rhPreencherSocial(p) {
+  document.getElementById('rhMGenero').value      = p.genero || '';
+  document.getElementById('rhMRaca').value        = p.racaCor || '';
+  document.getElementById('rhMNascimento').value  = p.dataNascimento || '';
+  document.getElementById('rhMEscolaridade').value= p.escolaridade || '';
+  document.getElementById('rhMBairro').value      = p.bairro || '';
+  document.getElementById('rhMCidade').value      = p.cidade || '';
+  document.getElementById('rhMEstado').value      = p.estado || '';
+  document.getElementById('rhMPcd').value         = p.pcd || 'Não';
+  document.getElementById('rhMIdentidade').value  = p.identidadeGenero || '';
+  document.getElementById('rhMAfirmativas').value = p.politicasAfirmativas || '';
+}
+
+function _rhTabModal(tab) {
+  ['basico','financeiro','social'].forEach(function(t) {
+    var btn = document.getElementById('rh-mtab-' + t);
+    var con = document.getElementById('rh-mconteudo-' + t);
+    if (t === tab) {
+      btn.className = 'py-3 px-4 text-xs font-black uppercase border-b-2 border-teal-500 text-teal-600 transition-all';
+      con.classList.remove('hidden');
+    } else {
+      btn.className = 'py-3 px-4 text-xs font-black uppercase border-b-2 border-transparent text-slate-400 hover:text-slate-600 transition-all';
+      con.classList.add('hidden');
     }
-  }).then(function(r) {
-    if (!r.isConfirmed) return;
-    showLoader(true);
-    GAS.equipes.salvar(r.value, function() {
-      showLoader(false); carregarRH();
-    }, function(e) { showLoader(false); Swal.fire('Erro', e.message,'error'); });
   });
 }
 
-function _excluirColaborador(id) {
+function _rhFecharModal() {
+  document.getElementById('rhModalColaborador').classList.add('hidden');
+  _rhEditandoId = null;
+}
+
+function _rhSalvarColaborador() {
+  var nome = (document.getElementById('rhMNome')?.value||'').trim();
+  if (!nome) { Swal.fire('Atenção','Nome é obrigatório.','warning'); return; }
+  var setor = document.getElementById('rhMSetor')?.value;
+  if (!setor) { Swal.fire('Atenção','Selecione um setor.','warning'); return; }
+
+  var dados = {
+    id: _rhEditandoId || null,
+    nome: nome,
+    cargo:        document.getElementById('rhMCargo')?.value.trim(),
+    setor:        setor,
+    email:        document.getElementById('rhMEmail')?.value.trim(),
+    telefone:     document.getElementById('rhMTel')?.value.trim(),
+    dataAdmissao: document.getElementById('rhMAdmissao')?.value,
+    status:       document.getElementById('rhMStatus')?.value,
+    vinculo:      document.getElementById('rhMVinculo')?.value,
+    salarioBase:  parseFloat(document.getElementById('rhMSalario')?.value)||0,
+    beneficios:   parseFloat(document.getElementById('rhMBeneficios')?.value)||0,
+    faixaSalarial:document.getElementById('rhMFaixa')?.value.trim(),
+    gestorDireto: document.getElementById('rhMGestor')?.value
+  };
+
+  var perfil = {
+    idColaborador:      dados.id,
+    genero:             document.getElementById('rhMGenero')?.value,
+    racaCor:            document.getElementById('rhMRaca')?.value,
+    dataNascimento:     document.getElementById('rhMNascimento')?.value,
+    escolaridade:       document.getElementById('rhMEscolaridade')?.value,
+    bairro:             document.getElementById('rhMBairro')?.value.trim(),
+    cidade:             document.getElementById('rhMCidade')?.value.trim(),
+    estado:             document.getElementById('rhMEstado')?.value.trim().toUpperCase(),
+    pcd:                document.getElementById('rhMPcd')?.value,
+    identidadeGenero:   document.getElementById('rhMIdentidade')?.value.trim(),
+    politicasAfirmativas: document.getElementById('rhMAfirmativas')?.value.trim()
+  };
+
+  _rhFecharModal();
+  showLoader(true);
+
+  GAS.equipes.salvar(dados, function(res) {
+    var idFinal = (res && res.id) ? res.id : dados.id;
+    perfil.idColaborador = idFinal;
+    GAS.rh.salvarPerfilSocial(perfil, function() {
+      showLoader(false);
+      carregarRH();
+    }, function() { showLoader(false); carregarRH(); });
+  }, function(e) {
+    showLoader(false);
+    Swal.fire('Erro', e && e.message ? e.message : 'Erro ao salvar.', 'error');
+  });
+}
+
+function _rhExcluirColaborador(id) {
   Swal.fire({ title:'Remover colaborador?', icon:'warning', showCancelButton:true,
     confirmButtonColor:'#ef4444', confirmButtonText:'Remover', cancelButtonText:'Cancelar',
-    customClass:{popup:'rounded-3xl',confirmButton:'rounded-xl font-black text-sm',cancelButton:'rounded-xl font-bold text-sm'}
+    customClass:{popup:'rounded-3xl'}
   }).then(function(r) {
     if (!r.isConfirmed) return;
     showLoader(true);
@@ -194,17 +771,721 @@ function _excluirColaborador(id) {
   });
 }
 
+// ── Cargos ────────────────────────────────────────────────────────────────────
+function _rhCarregarCargos() {
+  var c = document.getElementById('rhCargosContainer');
+  if (c) c.innerHTML = '<div class="p-8 text-center"><i class="fas fa-spinner animate-spin text-indigo-300 text-xl"></i></div>';
+  GAS.rh.obterCargos(function(lista) {
+    _rhCargosCache = lista || [];
+    _rhRenderCargos();
+  });
+}
+
+function _rhRenderCargos() {
+  var c = document.getElementById('rhCargosContainer');
+  if (!c) return;
+  if (!_rhCargosCache.length) {
+    c.innerHTML = '<div class="p-12 text-center text-slate-400 text-sm">Nenhum cargo cadastrado.</div>';
+    return;
+  }
+  c.innerHTML = '<div class="overflow-x-auto"><table class="w-full text-left text-xs border-collapse">'
+    + '<thead><tr class="bg-indigo-50">'
+    + '<th class="p-3 font-black text-indigo-700 uppercase text-[9px]">Cargo</th>'
+    + '<th class="p-3 font-black text-indigo-700 uppercase text-[9px]">Setor</th>'
+    + '<th class="p-3 font-black text-indigo-700 uppercase text-[9px]">Nível</th>'
+    + '<th class="p-3 font-black text-indigo-700 uppercase text-[9px]">Faixa</th>'
+    + '<th class="p-3 font-black text-indigo-700 uppercase text-[9px] text-right">Ações</th>'
+    + '</tr></thead><tbody class="divide-y divide-slate-50">'
+    + _rhCargosCache.map(function(g) {
+        var faixa = (g.faixaMin && g.faixaMax) ? _rhFmt(g.faixaMin) + ' – ' + _rhFmt(g.faixaMax) : '—';
+        return '<tr class="hover:bg-slate-50">'
+          + '<td class="p-3 font-semibold text-slate-800">' + escaparHTML(g.nome||'') + '</td>'
+          + '<td class="p-3 text-slate-500">' + escaparHTML(g.setor||'—') + '</td>'
+          + '<td class="p-3 text-slate-500">' + escaparHTML(g.nivel||'—') + '</td>'
+          + '<td class="p-3 text-slate-500">' + faixa + '</td>'
+          + '<td class="p-3 text-right">'
+          + (temPermissao('rh','editar') ? '<button onclick="_rhAbrirModalCargo(\'' + g.id + '\')" class="text-indigo-600 hover:underline text-xs mr-2">Editar</button>' : '')
+          + (temPermissao('rh','excluir') ? '<button onclick="_rhExcluirCargo(\'' + g.id + '\')" class="text-red-500 hover:underline text-xs">Excluir</button>' : '')
+          + '</td></tr>';
+      }).join('')
+    + '</tbody></table></div>';
+}
+
+function _rhAbrirModalCargo(id) {
+  var dado = id ? (_rhCargosCache.find(function(c){ return c.id===id; })||{}) : {};
+  var setores = (AppState.colecoes?.setores||[]).filter(Boolean);
+  Swal.fire({
+    title: id ? 'Editar Cargo' : 'Novo Cargo',
+    width: 480,
+    showCancelButton: true,
+    confirmButtonText: 'Salvar',
+    cancelButtonText: 'Cancelar',
+    confirmButtonColor: '#6366f1',
+    customClass:{popup:'rounded-3xl'},
+    html: '<div class="text-left space-y-3 px-2">'
+      + '<div><label class="text-[10px] font-black text-slate-400 uppercase block mb-1">Nome do Cargo *</label>'
+      + '<input id="cNome" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none" value="' + escaparHTML(dado.nome||'') + '"></div>'
+      + '<div class="grid grid-cols-2 gap-3">'
+      + '<div><label class="text-[10px] font-black text-slate-400 uppercase block mb-1">Setor</label>'
+      + '<select id="cSetor" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none">'
+      + '<option value="">—</option>' + setores.map(function(s){ return '<option'+(dado.setor===s?' selected':'')+'>'+s+'</option>'; }).join('')
+      + '</select></div>'
+      + '<div><label class="text-[10px] font-black text-slate-400 uppercase block mb-1">Nível</label>'
+      + '<input id="cNivel" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none" value="' + escaparHTML(dado.nivel||'') + '" placeholder="Júnior/Pleno/Sênior"></div>'
+      + '</div>'
+      + '<div class="grid grid-cols-2 gap-3">'
+      + '<div><label class="text-[10px] font-black text-slate-400 uppercase block mb-1">Faixa Mín (R$)</label>'
+      + '<input id="cFaixaMin" type="number" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none" value="' + (dado.faixaMin||'') + '"></div>'
+      + '<div><label class="text-[10px] font-black text-slate-400 uppercase block mb-1">Faixa Máx (R$)</label>'
+      + '<input id="cFaixaMax" type="number" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none" value="' + (dado.faixaMax||'') + '"></div>'
+      + '</div></div>',
+    preConfirm: function() {
+      var n = (document.getElementById('cNome')?.value||'').trim();
+      if (!n) { Swal.showValidationMessage('Nome obrigatório'); return false; }
+      return { id:dado.id||null, nome:n,
+               setor: document.getElementById('cSetor')?.value,
+               nivel: document.getElementById('cNivel')?.value.trim(),
+               faixaMin: parseFloat(document.getElementById('cFaixaMin')?.value)||0,
+               faixaMax: parseFloat(document.getElementById('cFaixaMax')?.value)||0 };
+    }
+  }).then(function(r) {
+    if (!r.isConfirmed) return;
+    showLoader(true);
+    GAS.rh.salvarCargo(r.value, function() { showLoader(false); _rhCarregarCargos(); },
+      function() { showLoader(false); Swal.fire('Erro','Erro ao salvar cargo.','error'); });
+  });
+}
+
+function _rhExcluirCargo(id) {
+  Swal.fire({ title:'Excluir cargo?', icon:'warning', showCancelButton:true,
+    confirmButtonColor:'#ef4444', confirmButtonText:'Excluir', cancelButtonText:'Cancelar',
+    customClass:{popup:'rounded-3xl'}
+  }).then(function(r) {
+    if (!r.isConfirmed) return;
+    showLoader(true);
+    GAS.rh.excluirCargo(id, function() { showLoader(false); _rhCarregarCargos(); });
+  });
+}
+
+// ── Histórico ─────────────────────────────────────────────────────────────────
+var _TIPOS_EVENTO = ['admissao','promocao','mudancaSetor','alteracaoSalarial','afastamento','retorno','desligamento','outro'];
+
+function _rhCarregarHistorico() {
+  var sel = document.getElementById('rhHistColaborador');
+  var id  = sel ? sel.value : '';
+  var c   = document.getElementById('rhHistoricoContainer');
+  if (c) c.innerHTML = '<div class="p-8 text-center"><i class="fas fa-spinner animate-spin text-violet-300 text-xl"></i></div>';
+  GAS.rh.obterHistorico(id, function(lista) {
+    _rhHistCache = lista || [];
+    _rhRenderHistorico();
+  });
+}
+
+function _rhRenderHistorico() {
+  var c = document.getElementById('rhHistoricoContainer');
+  if (!c) return;
+  if (!_rhHistCache.length) {
+    c.innerHTML = '<div class="p-12 text-center text-slate-400 text-sm">Nenhum evento registrado.</div>';
+    return;
+  }
+  var icones = { admissao:'fa-user-plus', promocao:'fa-arrow-up', mudancaSetor:'fa-arrows-alt-h',
+    alteracaoSalarial:'fa-dollar-sign', afastamento:'fa-pause', retorno:'fa-play', desligamento:'fa-user-minus', outro:'fa-circle' };
+  var cores = { admissao:'#10b981', promocao:'#6366f1', mudancaSetor:'#f59e0b',
+    alteracaoSalarial:'#8b5cf6', afastamento:'#f97316', retorno:'#14b8a6', desligamento:'#ef4444', outro:'#94a3b8' };
+
+  c.innerHTML = '<div class="space-y-3">' + _rhHistCache.map(function(h) {
+    var col = cores[h.tipo] || '#94a3b8';
+    var ico = icones[h.tipo] || 'fa-circle';
+    var nome = _rhNomeColaborador(h.idColaborador);
+    return '<div style="display:flex;gap:12px;padding:12px;border:1px solid #e2e8f0;border-radius:12px;align-items:flex-start">'
+      + '<div style="width:32px;height:32px;border-radius:50%;background:' + col + '20;display:flex;align-items:center;justify-content:center;flex-shrink:0">'
+      + '<i class="fas ' + ico + '" style="color:' + col + ';font-size:11px"></i></div>'
+      + '<div style="flex:1">'
+      + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">'
+      + '<span style="font-size:11px;font-weight:800;color:#1e293b">' + escaparHTML(nome) + '</span>'
+      + '<span style="font-size:9px;color:#94a3b8">' + escaparHTML(h.dataEvento||'') + '</span>'
+      + '</div>'
+      + '<p style="font-size:11px;color:#475569">' + escaparHTML(h.descricao||'') + '</p>'
+      + (h.registradoPor ? '<p style="font-size:9px;color:#94a3b8;margin-top:2px">Por: ' + escaparHTML(h.registradoPor) + '</p>' : '')
+      + '</div>'
+      + (temPermissao('rh','excluir') ? '<button onclick="_rhExcluirEvento(\'' + h.id + '\')" style="font-size:10px;color:#ef4444;background:none;border:none;cursor:pointer;flex-shrink:0"><i class="fas fa-times"></i></button>' : '')
+      + '</div>';
+  }).join('') + '</div>';
+}
+
+function _rhNomeColaborador(id) {
+  var p = _rhCache.find(function(c){ return c.id===id; });
+  return p ? p.nome : (id||'—');
+}
+
+function _rhAbrirModalEvento() {
+  Swal.fire({
+    title: 'Registrar Evento',
+    width: 480,
+    showCancelButton: true,
+    confirmButtonText: 'Registrar',
+    cancelButtonText: 'Cancelar',
+    confirmButtonColor: '#7c3aed',
+    customClass:{popup:'rounded-3xl'},
+    html: '<div class="text-left space-y-3 px-2">'
+      + '<div><label class="text-[10px] font-black text-slate-400 uppercase block mb-1">Colaborador *</label>'
+      + '<select id="evColab" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none">'
+      + '<option value="">Selecione...</option>'
+      + _rhCache.map(function(p){ return '<option value="'+escaparHTML(p.id)+'">'+escaparHTML(p.nome)+'</option>'; }).join('')
+      + '</select></div>'
+      + '<div class="grid grid-cols-2 gap-3">'
+      + '<div><label class="text-[10px] font-black text-slate-400 uppercase block mb-1">Tipo *</label>'
+      + '<select id="evTipo" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none">'
+      + _TIPOS_EVENTO.map(function(t){ return '<option value="'+t+'">'+t+'</option>'; }).join('')
+      + '</select></div>'
+      + '<div><label class="text-[10px] font-black text-slate-400 uppercase block mb-1">Data *</label>'
+      + '<input type="date" id="evData" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none" value="'
+      + new Date().toISOString().slice(0,10) + '"></div></div>'
+      + '<div><label class="text-[10px] font-black text-slate-400 uppercase block mb-1">Descrição *</label>'
+      + '<textarea id="evDesc" rows="2" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none resize-none" placeholder="Ex: Promoção para Analista Sênior..."></textarea></div></div>',
+    preConfirm: function() {
+      var colab = document.getElementById('evColab')?.value;
+      var desc  = (document.getElementById('evDesc')?.value||'').trim();
+      if (!colab) { Swal.showValidationMessage('Selecione o colaborador'); return false; }
+      if (!desc)  { Swal.showValidationMessage('Descrição obrigatória'); return false; }
+      return { idColaborador: colab,
+               tipo: document.getElementById('evTipo')?.value,
+               dataEvento: document.getElementById('evData')?.value,
+               descricao: desc };
+    }
+  }).then(function(r) {
+    if (!r.isConfirmed) return;
+    showLoader(true);
+    GAS.rh.registrarEvento(r.value, function() { showLoader(false); _rhCarregarHistorico(); },
+      function() { showLoader(false); Swal.fire('Erro','Erro ao registrar.','error'); });
+  });
+}
+
+function _rhExcluirEvento(id) {
+  Swal.fire({ title:'Excluir evento?', icon:'warning', showCancelButton:true,
+    confirmButtonColor:'#ef4444', confirmButtonText:'Excluir', customClass:{popup:'rounded-3xl'}
+  }).then(function(r) {
+    if (!r.isConfirmed) return;
+    showLoader(true);
+    GAS.rh.excluirEvento(id, function() { showLoader(false); _rhCarregarHistorico(); });
+  });
+}
+
+// ── Avaliações ────────────────────────────────────────────────────────────────
+function _rhCarregarAvaliacoes() {
+  var sel = document.getElementById('rhAvColaborador');
+  var id  = sel ? sel.value : '';
+  var c   = document.getElementById('rhAvaliacoesContainer');
+  if (c) c.innerHTML = '<div class="p-8 text-center"><i class="fas fa-spinner animate-spin text-amber-300 text-xl"></i></div>';
+  GAS.rh.obterAvaliacoes(id, function(lista) {
+    _rhAvCache = lista || [];
+    _rhRenderAvaliacoes();
+  });
+}
+
+function _rhRenderAvaliacoes() {
+  var c = document.getElementById('rhAvaliacoesContainer');
+  if (!c) return;
+  if (!_rhAvCache.length) {
+    c.innerHTML = '<div class="p-12 text-center text-slate-400 text-sm">Nenhuma avaliação registrada.</div>';
+    return;
+  }
+  c.innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px">'
+    + _rhAvCache.map(function(a) {
+        var estrelas = '';
+        for (var i = 1; i <= 5; i++) estrelas += '<i class="fas fa-star" style="color:' + (i<=Math.round(a.nota||0)?'#f59e0b':'#e2e8f0') + ';font-size:11px"></i>';
+        var nome = _rhNomeColaborador(a.idColaborador);
+        return '<div style="border:1.5px solid #e2e8f0;border-radius:16px;padding:16px">'
+          + '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">'
+          + '<div><p style="font-weight:800;font-size:12px;color:#1e293b">' + escaparHTML(nome) + '</p>'
+          + '<p style="font-size:10px;color:#94a3b8">' + escaparHTML(a.ciclo||'') + ' · ' + escaparHTML(a.criadoEm?.slice(0,10)||'') + '</p></div>'
+          + '<div>' + estrelas + '</div></div>'
+          + (a.observacao ? '<p style="font-size:11px;color:#475569;border-top:1px solid #f1f5f9;padding-top:8px;margin-top:4px">' + escaparHTML(a.observacao) + '</p>' : '')
+          + (temPermissao('rh','excluir') ? '<button onclick="_rhExcluirAvaliacao(\'' + a.id + '\')" style="margin-top:8px;font-size:10px;color:#ef4444;background:none;border:none;cursor:pointer">Excluir</button>' : '')
+          + '</div>';
+      }).join('') + '</div>';
+}
+
+function _rhAbrirModalAvaliacao() {
+  Swal.fire({
+    title: 'Nova Avaliação',
+    width: 480,
+    showCancelButton: true,
+    confirmButtonText: 'Salvar',
+    cancelButtonText: 'Cancelar',
+    confirmButtonColor: '#f59e0b',
+    customClass:{popup:'rounded-3xl'},
+    html: '<div class="text-left space-y-3 px-2">'
+      + '<div><label class="text-[10px] font-black text-slate-400 uppercase block mb-1">Colaborador *</label>'
+      + '<select id="avColab" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none">'
+      + '<option value="">Selecione...</option>'
+      + _rhCache.map(function(p){ return '<option value="'+escaparHTML(p.id)+'">'+escaparHTML(p.nome)+'</option>'; }).join('')
+      + '</select></div>'
+      + '<div class="grid grid-cols-2 gap-3">'
+      + '<div><label class="text-[10px] font-black text-slate-400 uppercase block mb-1">Ciclo</label>'
+      + '<input id="avCiclo" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none" placeholder="Ex: 2025/1"></div>'
+      + '<div><label class="text-[10px] font-black text-slate-400 uppercase block mb-1">Nota (1-5)</label>'
+      + '<input id="avNota" type="number" min="1" max="5" step="0.5" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none"></div>'
+      + '</div>'
+      + '<div><label class="text-[10px] font-black text-slate-400 uppercase block mb-1">Observações</label>'
+      + '<textarea id="avObs" rows="3" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none resize-none"></textarea></div></div>',
+    preConfirm: function() {
+      var colab = document.getElementById('avColab')?.value;
+      if (!colab) { Swal.showValidationMessage('Selecione o colaborador'); return false; }
+      return { idColaborador: colab,
+               ciclo: document.getElementById('avCiclo')?.value.trim(),
+               nota:  parseFloat(document.getElementById('avNota')?.value)||0,
+               observacao: document.getElementById('avObs')?.value.trim() };
+    }
+  }).then(function(r) {
+    if (!r.isConfirmed) return;
+    showLoader(true);
+    GAS.rh.salvarAvaliacao(r.value, function() { showLoader(false); _rhCarregarAvaliacoes(); },
+      function() { showLoader(false); Swal.fire('Erro','Erro ao salvar.','error'); });
+  });
+}
+
+function _rhExcluirAvaliacao(id) {
+  Swal.fire({ title:'Excluir avaliação?', icon:'warning', showCancelButton:true,
+    confirmButtonColor:'#ef4444', confirmButtonText:'Excluir', customClass:{popup:'rounded-3xl'}
+  }).then(function(r) {
+    if (!r.isConfirmed) return;
+    showLoader(true);
+    GAS.rh.excluirAvaliacao(id, function() { showLoader(false); _rhCarregarAvaliacoes(); });
+  });
+}
+
+// ── Presença ──────────────────────────────────────────────────────────────────
+function _rhCarregarPonto() {
+  var id  = document.getElementById('rhPontoColaborador')?.value || '';
+  var mes = document.getElementById('rhPontoMes')?.value || '';
+  var c   = document.getElementById('rhPontoContainer');
+  if (c) c.innerHTML = '<div class="p-8 text-center"><i class="fas fa-spinner animate-spin text-emerald-300 text-xl"></i></div>';
+  GAS.rh.obterPonto(id, mes, function(lista) {
+    _rhPontoCache = lista || [];
+    _rhRenderPonto();
+  });
+}
+
+function _rhRenderPonto() {
+  var c = document.getElementById('rhPontoContainer');
+  if (!c) return;
+  if (!_rhPontoCache.length) {
+    c.innerHTML = '<div class="p-12 text-center text-slate-400 text-sm">Nenhum registro encontrado.</div>';
+    return;
+  }
+  var clsStatus = { 'Presente':'background:#d1fae5;color:#065f46', 'Ausente':'background:#fee2e2;color:#991b1b',
+    'Férias':'background:#eff6ff;color:#1d4ed8', 'Afastado':'background:#fef3c7;color:#92400e' };
+  c.innerHTML = '<div class="overflow-x-auto"><table class="w-full text-left text-xs border-collapse">'
+    + '<thead><tr class="bg-emerald-50"><th class="p-3 text-[9px] font-black text-emerald-700 uppercase">Colaborador</th>'
+    + '<th class="p-3 text-[9px] font-black text-emerald-700 uppercase">Data</th>'
+    + '<th class="p-3 text-[9px] font-black text-emerald-700 uppercase">Entrada</th>'
+    + '<th class="p-3 text-[9px] font-black text-emerald-700 uppercase">Saída</th>'
+    + '<th class="p-3 text-[9px] font-black text-emerald-700 uppercase">Status</th>'
+    + '<th class="p-3 text-[9px] font-black text-emerald-700 uppercase text-right">Ações</th></tr></thead>'
+    + '<tbody class="divide-y divide-slate-50">'
+    + _rhPontoCache.map(function(p) {
+        var nome = _rhNomeColaborador(p.idColaborador);
+        var sc = clsStatus[p.status] || 'background:#f1f5f9;color:#475569';
+        return '<tr class="hover:bg-slate-50">'
+          + '<td class="p-3 font-semibold text-slate-700">' + escaparHTML(nome) + '</td>'
+          + '<td class="p-3 text-slate-500">' + escaparHTML(p.data||'') + '</td>'
+          + '<td class="p-3 text-slate-500">' + escaparHTML(p.entrada||'—') + '</td>'
+          + '<td class="p-3 text-slate-500">' + escaparHTML(p.saida||'—') + '</td>'
+          + '<td class="p-3"><span style="font-size:8px;font-weight:900;padding:2px 8px;border-radius:99px;' + sc + '">' + escaparHTML(p.status||'') + '</span></td>'
+          + '<td class="p-3 text-right">'
+          + (temPermissao('rh','excluir') ? '<button onclick="_rhExcluirPonto(\'' + p.id + '\')" class="text-red-500 hover:underline text-xs">Excluir</button>' : '')
+          + '</td></tr>';
+      }).join('')
+    + '</tbody></table></div>';
+}
+
+function _rhAbrirModalPonto() {
+  Swal.fire({
+    title: 'Registrar Presença',
+    width: 480,
+    showCancelButton: true,
+    confirmButtonText: 'Salvar',
+    cancelButtonText: 'Cancelar',
+    confirmButtonColor: '#10b981',
+    customClass:{popup:'rounded-3xl'},
+    html: '<div class="text-left space-y-3 px-2">'
+      + '<div><label class="text-[10px] font-black text-slate-400 uppercase block mb-1">Colaborador *</label>'
+      + '<select id="ptColab" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none">'
+      + '<option value="">Selecione...</option>'
+      + _rhCache.filter(function(p){ return p.status==='Ativo'; })
+               .map(function(p){ return '<option value="'+escaparHTML(p.id)+'">'+escaparHTML(p.nome)+'</option>'; }).join('')
+      + '</select></div>'
+      + '<div class="grid grid-cols-3 gap-3">'
+      + '<div><label class="text-[10px] font-black text-slate-400 uppercase block mb-1">Data *</label>'
+      + '<input type="date" id="ptData" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none" value="' + new Date().toISOString().slice(0,10) + '"></div>'
+      + '<div><label class="text-[10px] font-black text-slate-400 uppercase block mb-1">Entrada</label>'
+      + '<input type="time" id="ptEntrada" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none"></div>'
+      + '<div><label class="text-[10px] font-black text-slate-400 uppercase block mb-1">Saída</label>'
+      + '<input type="time" id="ptSaida" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none"></div></div>'
+      + '<div><label class="text-[10px] font-black text-slate-400 uppercase block mb-1">Status</label>'
+      + '<select id="ptStatus" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none">'
+      + '<option>Presente</option><option>Ausente</option><option>Férias</option><option>Afastado</option>'
+      + '</select></div></div>',
+    preConfirm: function() {
+      var colab = document.getElementById('ptColab')?.value;
+      var data  = document.getElementById('ptData')?.value;
+      if (!colab || !data) { Swal.showValidationMessage('Colaborador e data são obrigatórios'); return false; }
+      return { idColaborador: colab, data: data,
+               entrada: document.getElementById('ptEntrada')?.value,
+               saida:   document.getElementById('ptSaida')?.value,
+               status:  document.getElementById('ptStatus')?.value };
+    }
+  }).then(function(r) {
+    if (!r.isConfirmed) return;
+    showLoader(true);
+    GAS.rh.registrarPonto(r.value, function() { showLoader(false); _rhCarregarPonto(); },
+      function() { showLoader(false); Swal.fire('Erro','Erro ao salvar.','error'); });
+  });
+}
+
+function _rhExcluirPonto(id) {
+  Swal.fire({ title:'Excluir registro?', icon:'warning', showCancelButton:true,
+    confirmButtonColor:'#ef4444', confirmButtonText:'Excluir', customClass:{popup:'rounded-3xl'}
+  }).then(function(r) {
+    if (!r.isConfirmed) return;
+    showLoader(true);
+    GAS.rh.excluirPonto(id, function() { showLoader(false); _rhCarregarPonto(); });
+  });
+}
+
+// ── Documentos ────────────────────────────────────────────────────────────────
+function _rhCarregarDocs() {
+  var id = document.getElementById('rhDocColaborador')?.value || '';
+  var c  = document.getElementById('rhDocsContainer');
+  if (c) c.innerHTML = '<div class="p-8 text-center"><i class="fas fa-spinner animate-spin text-blue-300 text-xl"></i></div>';
+  GAS.rh.obterDocumentos(id, function(lista) {
+    _rhDocsCache = lista || [];
+    _rhRenderDocs();
+  });
+}
+
+function _rhRenderDocs() {
+  var c = document.getElementById('rhDocsContainer');
+  if (!c) return;
+  if (!_rhDocsCache.length) {
+    c.innerHTML = '<div class="p-12 text-center text-slate-400 text-sm">Nenhum documento cadastrado.</div>';
+    return;
+  }
+  var ticoIcone = { 'Contrato':'fa-file-contract', 'RG':'fa-id-card', 'CPF':'fa-id-card',
+    'CNH':'fa-car', 'Certidão':'fa-certificate', 'Comprovante':'fa-file-alt', 'Outro':'fa-file' };
+  c.innerHTML = '<div class="space-y-2">' + _rhDocsCache.map(function(d) {
+    var ico = ticoIcone[d.tipo] || 'fa-file';
+    var nome = _rhNomeColaborador(d.idColaborador);
+    return '<div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border:1px solid #e2e8f0;border-radius:12px">'
+      + '<i class="fas ' + ico + '" style="color:#3b82f6;font-size:16px;width:20px;text-align:center"></i>'
+      + '<div style="flex:1">'
+      + '<p style="font-weight:700;font-size:12px;color:#1e293b">' + escaparHTML(d.descricao||d.tipo||'Documento') + '</p>'
+      + '<p style="font-size:10px;color:#94a3b8">' + escaparHTML(nome) + ' · ' + escaparHTML(d.tipo||'') + ' · ' + escaparHTML((d.criadoEm||'').slice(0,10)) + '</p>'
+      + '</div>'
+      + (d.driveUrl ? '<a href="' + escaparHTML(d.driveUrl) + '" target="_blank" style="font-size:10px;color:#3b82f6;font-weight:700">Abrir</a>' : '')
+      + (temPermissao('rh','excluir') ? '<button onclick="_rhExcluirDoc(\'' + d.id + '\')" style="font-size:10px;color:#ef4444;background:none;border:none;cursor:pointer;margin-left:8px"><i class="fas fa-trash"></i></button>' : '')
+      + '</div>';
+  }).join('') + '</div>';
+}
+
+function _rhAbrirModalDoc() {
+  Swal.fire({
+    title: 'Adicionar Documento',
+    width: 480,
+    showCancelButton: true,
+    confirmButtonText: 'Salvar',
+    cancelButtonText: 'Cancelar',
+    confirmButtonColor: '#3b82f6',
+    customClass:{popup:'rounded-3xl'},
+    html: '<div class="text-left space-y-3 px-2">'
+      + '<div><label class="text-[10px] font-black text-slate-400 uppercase block mb-1">Colaborador *</label>'
+      + '<select id="dColab" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none">'
+      + '<option value="">Selecione...</option>'
+      + _rhCache.map(function(p){ return '<option value="'+escaparHTML(p.id)+'">'+escaparHTML(p.nome)+'</option>'; }).join('')
+      + '</select></div>'
+      + '<div class="grid grid-cols-2 gap-3">'
+      + '<div><label class="text-[10px] font-black text-slate-400 uppercase block mb-1">Tipo</label>'
+      + '<select id="dTipo" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none">'
+      + ['Contrato','RG','CPF','CNH','Certidão','Comprovante','Outro'].map(function(t){ return '<option>'+t+'</option>'; }).join('')
+      + '</select></div>'
+      + '<div><label class="text-[10px] font-black text-slate-400 uppercase block mb-1">Descrição</label>'
+      + '<input id="dDesc" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none" placeholder="Ex: Contrato CLT 2024"></div></div>'
+      + '<div><label class="text-[10px] font-black text-slate-400 uppercase block mb-1">Link Google Drive</label>'
+      + '<input id="dUrl" type="url" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none" placeholder="https://drive.google.com/..."></div></div>',
+    preConfirm: function() {
+      var colab = document.getElementById('dColab')?.value;
+      if (!colab) { Swal.showValidationMessage('Selecione o colaborador'); return false; }
+      return { idColaborador: colab,
+               tipo: document.getElementById('dTipo')?.value,
+               descricao: document.getElementById('dDesc')?.value.trim(),
+               driveUrl: document.getElementById('dUrl')?.value.trim() };
+    }
+  }).then(function(r) {
+    if (!r.isConfirmed) return;
+    showLoader(true);
+    GAS.rh.salvarDocumento(r.value, function() { showLoader(false); _rhCarregarDocs(); },
+      function() { showLoader(false); Swal.fire('Erro','Erro ao salvar.','error'); });
+  });
+}
+
+function _rhExcluirDoc(id) {
+  Swal.fire({ title:'Excluir documento?', icon:'warning', showCancelButton:true,
+    confirmButtonColor:'#ef4444', confirmButtonText:'Excluir', customClass:{popup:'rounded-3xl'}
+  }).then(function(r) {
+    if (!r.isConfirmed) return;
+    showLoader(true);
+    GAS.rh.excluirDocumento(id, function() { showLoader(false); _rhCarregarDocs(); });
+  });
+}
+
+// ── Folha ─────────────────────────────────────────────────────────────────────
+function _rhIniciarFolha() {
+  var input = document.getElementById('rhFolhaMes');
+  if (input && !input.value) {
+    var d = new Date();
+    input.value = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+  }
+  _rhSimular();
+  _rhCarregarFolha();
+}
+
+function _rhCarregarFolha() {
+  var mes = document.getElementById('rhFolhaMes')?.value || '';
+  if (!mes) return;
+  var c = document.getElementById('rhFolhaContainer');
+  if (c) c.innerHTML = '<div class="p-8 text-center"><i class="fas fa-spinner animate-spin text-purple-300 text-xl"></i></div>';
+  GAS.rh.obterFolha(mes, function(lista) {
+    _rhFolhaCache = lista || [];
+    _rhRenderFolha();
+  });
+}
+
+function _rhRenderFolha() {
+  var c = document.getElementById('rhFolhaContainer');
+  if (!c) return;
+  if (!_rhFolhaCache.length) {
+    c.innerHTML = '<div class="p-12 text-center text-slate-400 text-sm">Nenhuma folha para este mês. Clique em "Gerar".</div>';
+    return;
+  }
+  var total = _rhFolhaCache.reduce(function(acc, f){ return acc + (f.custoTotal||0); }, 0);
+  c.innerHTML = '<div class="overflow-x-auto">'
+    + '<div class="mb-3 p-3 bg-purple-50 border border-purple-100 rounded-xl text-sm font-black text-purple-700">'
+    + 'Custo total folha: ' + _rhFmt(total) + '</div>'
+    + '<table class="w-full text-left text-xs border-collapse">'
+    + '<thead><tr class="bg-purple-50">'
+    + '<th class="p-3 text-[9px] font-black text-purple-700 uppercase">Colaborador</th>'
+    + '<th class="p-3 text-[9px] font-black text-purple-700 uppercase">Vínculo</th>'
+    + '<th class="p-3 text-[9px] font-black text-purple-700 uppercase text-right">Bruto</th>'
+    + '<th class="p-3 text-[9px] font-black text-purple-700 uppercase text-right">INSS</th>'
+    + '<th class="p-3 text-[9px] font-black text-purple-700 uppercase text-right">IRRF</th>'
+    + '<th class="p-3 text-[9px] font-black text-purple-700 uppercase text-right">Líquido</th>'
+    + '<th class="p-3 text-[9px] font-black text-purple-700 uppercase text-right">Custo Total</th>'
+    + '<th class="p-3 text-[9px] font-black text-purple-700 uppercase text-center">Status</th></tr></thead>'
+    + '<tbody class="divide-y divide-slate-50">'
+    + _rhFolhaCache.map(function(f) {
+        var nome = _rhNomeColaborador(f.idColaborador);
+        var stBg = f.status==='Pago' ? 'background:#d1fae5;color:#065f46' : 'background:#fef3c7;color:#92400e';
+        return '<tr class="hover:bg-slate-50">'
+          + '<td class="p-3 font-semibold text-slate-700">' + escaparHTML(nome) + '</td>'
+          + '<td class="p-3 text-slate-500">' + escaparHTML(f.vinculo||'—') + '</td>'
+          + '<td class="p-3 text-right">' + _rhFmt(f.salarioBase||0) + '</td>'
+          + '<td class="p-3 text-right text-red-600">' + _rhFmt(f.inss||0) + '</td>'
+          + '<td class="p-3 text-right text-red-600">' + _rhFmt(f.irrf||0) + '</td>'
+          + '<td class="p-3 text-right font-bold text-emerald-700">' + _rhFmt(f.liquidoColaborador||0) + '</td>'
+          + '<td class="p-3 text-right font-bold text-purple-700">' + _rhFmt(f.custoTotal||0) + '</td>'
+          + '<td class="p-3 text-center"><span style="font-size:8px;font-weight:900;padding:2px 8px;border-radius:99px;' + stBg + '">' + escaparHTML(f.status||'Calculado') + '</span></td>'
+          + '</tr>';
+      }).join('')
+    + '</tbody></table></div>';
+}
+
+function _rhGerarFolhaMes() {
+  var mes = document.getElementById('rhFolhaMes')?.value;
+  if (!mes) { Swal.fire('Atenção','Selecione um mês.','warning'); return; }
+  var ativos = _rhCache.filter(function(p){ return p.status==='Ativo' && p.salarioBase > 0; });
+  if (!ativos.length) { Swal.fire('Atenção','Nenhum colaborador ativo com salário configurado.','info'); return; }
+
+  showLoader(true);
+  var pendentes = ativos.length;
+  ativos.forEach(function(colab) {
+    var dados = { idColaborador: colab.id, mes: mes, vinculo: colab.vinculo||'CLT',
+                  salarioBase: colab.salarioBase||0, beneficios: colab.beneficios||0, adicional: 0 };
+    GAS.rh.simular(dados, function(res) {
+      var folha = Object.assign({}, dados, res, { status: 'Calculado' });
+      GAS.rh.salvarFolha(folha, function() {
+        pendentes--;
+        if (pendentes <= 0) { showLoader(false); _rhCarregarFolha(); }
+      }, function() { pendentes--; if (pendentes <= 0) { showLoader(false); _rhCarregarFolha(); } });
+    }, function() { pendentes--; if (pendentes <= 0) { showLoader(false); _rhCarregarFolha(); } });
+  });
+}
+
+// ── Simulador de folha (client-side) ──────────────────────────────────────────
+function _rhSimular() {
+  var salario   = parseFloat(document.getElementById('simSalario')?.value)||0;
+  var vinculo   = document.getElementById('simVinculo')?.value || 'CLT';
+  var beneficios= parseFloat(document.getElementById('simBeneficios')?.value)||0;
+  var adicional = parseFloat(document.getElementById('simAdicional')?.value)||0;
+  var c = document.getElementById('simResultado');
+  if (!c) return;
+
+  var inss=0, irrf=0, fgts=0, encargos=0, prov13=0, provFer=0, liquido=0, custo=0;
+
+  if (vinculo === 'CLT') {
+    var bruto = salario + adicional;
+    if (bruto <= 1412)       inss = bruto*0.075;
+    else if (bruto <= 2666.68) inss = 105.90 + (bruto-1412)*0.09;
+    else if (bruto <= 4000.03) inss = 105.90+113.40+(bruto-2666.68)*0.12;
+    else if (bruto <= 7786.02) inss = 105.90+113.40+160+(bruto-4000.03)*0.14;
+    else inss = 908.86;
+    inss = Math.round(inss*100)/100;
+    var baseI = bruto - inss;
+    if (baseI > 5855.60)       irrf = baseI*0.275-869.36;
+    else if (baseI > 4664.68)  irrf = baseI*0.225-636.13;
+    else if (baseI > 3751.05)  irrf = baseI*0.15-354.80;
+    else if (baseI > 2824)     irrf = baseI*0.075-142.80;
+    irrf = Math.max(0, Math.round(irrf*100)/100);
+    fgts    = Math.round(bruto*0.08*100)/100;
+    encargos= Math.round(bruto*0.348*100)/100;
+    prov13  = Math.round((bruto/12)*100)/100;
+    provFer = Math.round((bruto*4/3/12)*100)/100;
+    liquido = Math.round((bruto-inss-irrf+beneficios)*100)/100;
+    custo   = Math.round((bruto+encargos+prov13+provFer+beneficios)*100)/100;
+  } else if (vinculo === 'PJ') {
+    liquido = custo = Math.round((salario+adicional+beneficios)*100)/100;
+  } else {
+    liquido = custo = Math.round((salario+beneficios)*100)/100;
+  }
+
+  var linha = function(label, val, cls) {
+    return '<div style="display:flex;justify-content:space-between;font-size:11px'+(cls?';'+cls:'')+'"><span>'+label+'</span><span style="font-weight:700">'+_rhFmt(val)+'</span></div>';
+  };
+  var html = linha('Salário Base', salario);
+  if (adicional)   html += linha('Adicional', adicional);
+  if (beneficios)  html += linha('Benefícios', beneficios);
+  if (vinculo==='CLT') {
+    html += '<div style="border-top:1px solid #e9d5ff;margin:4px 0"></div>';
+    html += linha('INSS (desc.)', inss, 'color:#dc2626');
+    html += linha('IRRF (desc.)', irrf, 'color:#dc2626');
+    html += '<div style="border-top:1px solid #e9d5ff;margin:4px 0"></div>';
+    html += linha('Líquido Colaborador', liquido, 'color:#16a34a;font-weight:900');
+    html += '<div style="border-top:1px solid #e9d5ff;margin:4px 0"></div>';
+    html += linha('FGTS (emp.)', fgts, 'color:#9333ea');
+    html += linha('Encargos patronais', encargos, 'color:#9333ea');
+    html += linha('Provisão 13°', prov13, 'color:#9333ea');
+    html += linha('Provisão férias', provFer, 'color:#9333ea');
+  } else {
+    html += '<div style="border-top:1px solid #e9d5ff;margin:4px 0"></div>';
+    html += linha('Líquido / Repasse', liquido, 'color:#16a34a;font-weight:900');
+  }
+  html += '<div style="border-top:2px solid #e9d5ff;margin:6px 0"></div>';
+  html += linha('Custo total empresa', custo, 'color:#7c3aed;font-weight:900;font-size:13px');
+  c.innerHTML = html;
+}
+
+// ── Indicadores ───────────────────────────────────────────────────────────────
+function _rhCarregarIndicadores() {
+  var kpi = document.getElementById('rhKPIContainer');
+  var div = document.getElementById('rhDiversidadeContainer');
+  if (kpi) kpi.innerHTML = '<div class="col-span-4 p-8 text-center"><i class="fas fa-spinner animate-spin text-teal-300 text-xl"></i></div>';
+  GAS.rh.indicadores(function(dados) {
+    _rhRenderKPI(dados);
+    GAS.rh.diversidade(function(div2) { _rhRenderDiversidade(div2); });
+  });
+}
+
+function _rhRenderKPI(d) {
+  var kpi = document.getElementById('rhKPIContainer');
+  if (!kpi) return;
+  var card = function(icon, label, val, cor) {
+    return '<div style="background:#fff;border:1.5px solid #e2e8f0;border-radius:20px;padding:20px">'
+      + '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">'
+      + '<div style="width:36px;height:36px;border-radius:12px;background:'+cor+'20;display:flex;align-items:center;justify-content:center">'
+      + '<i class="fas '+icon+'" style="color:'+cor+';font-size:14px"></i></div>'
+      + '<span style="font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase">' + label + '</span></div>'
+      + '<p style="font-size:22px;font-weight:900;color:#1e293b">' + val + '</p>'
+      + '</div>';
+  };
+  kpi.innerHTML = card('fa-users','Total',d.total,'#14b8a6')
+    + card('fa-check-circle','Ativos',d.ativos,'#10b981')
+    + card('fa-exchange-alt','Turnover',d.turnover+'%','#f59e0b')
+    + card('fa-file-invoice-dollar','Folha/Mês',_rhFmt(d.custoFolhaMes||0),'#8b5cf6');
+
+  _rhRenderBarChart('rhChartSetor', d.porSetor, '#6366f1');
+  _rhRenderBarChart('rhChartVinculo', d.porVinculo, '#14b8a6');
+}
+
+function _rhRenderBarChart(containerId, mapa, cor) {
+  var c = document.getElementById(containerId);
+  if (!c) return;
+  var total = Object.values(mapa||{}).reduce(function(a,b){ return a+b; }, 0) || 1;
+  var itens = Object.keys(mapa||{}).sort(function(a,b){ return (mapa[b]||0)-(mapa[a]||0); });
+  if (!itens.length) { c.innerHTML = '<p class="text-slate-400 text-xs">Sem dados.</p>'; return; }
+  c.innerHTML = '<div class="space-y-2">' + itens.map(function(k) {
+    var v = mapa[k]||0;
+    var pct = Math.round(v/total*100);
+    return '<div>'
+      + '<div style="display:flex;justify-content:space-between;margin-bottom:3px">'
+      + '<span style="font-size:11px;color:#475569;font-weight:600">' + escaparHTML(k) + '</span>'
+      + '<span style="font-size:10px;color:#94a3b8;font-weight:700">' + v + ' (' + pct + '%)</span></div>'
+      + '<div style="background:#f1f5f9;border-radius:99px;height:7px">'
+      + '<div style="width:'+pct+'%;background:'+cor+';height:7px;border-radius:99px;transition:width 0.5s"></div>'
+      + '</div></div>';
+  }).join('') + '</div>';
+}
+
+function _rhRenderDiversidade(d) {
+  var c = document.getElementById('rhDiversidadeContainer');
+  if (!c) return;
+  if (!d || d.total === 0) {
+    c.innerHTML = '<div class="col-span-3 p-8 text-center text-slate-400 text-sm">Nenhum dado de perfil social cadastrado ainda.</div>';
+    return;
+  }
+  var pcdInfo = d.pcd + ' colaborador(es) PCD (' + d.pctPcd + '%)';
+  c.innerHTML = '<div>'
+      + '<h5 style="font-size:10px;font-weight:900;color:#64748b;text-transform:uppercase;margin-bottom:8px">Raça/Cor</h5>'
+      + _rhMiniChart(d.racaCor, '#6366f1') + '</div>'
+    + '<div>'
+      + '<h5 style="font-size:10px;font-weight:900;color:#64748b;text-transform:uppercase;margin-bottom:8px">Gênero</h5>'
+      + _rhMiniChart(d.genero, '#ec4899') + '</div>'
+    + '<div>'
+      + '<h5 style="font-size:10px;font-weight:900;color:#64748b;text-transform:uppercase;margin-bottom:8px">Escolaridade</h5>'
+      + _rhMiniChart(d.escolaridade, '#10b981')
+      + '<div style="margin-top:8px;padding:8px;background:#f0fdf4;border-radius:10px;font-size:10px;color:#16a34a;font-weight:700">'
+      + '<i class="fas fa-wheelchair mr-1"></i>' + escaparHTML(pcdInfo) + '</div></div>';
+}
+
+function _rhMiniChart(mapa, cor) {
+  var total = Object.values(mapa||{}).reduce(function(a,b){ return a+b; }, 0) || 1;
+  return '<div class="space-y-1.5">' + Object.keys(mapa||{}).map(function(k) {
+    var v = mapa[k]||0;
+    var pct = Math.round(v/total*100);
+    return '<div><div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:2px">'
+      + '<span style="color:#475569">' + escaparHTML(k) + '</span><span style="color:#94a3b8">' + pct + '%</span></div>'
+      + '<div style="background:#f1f5f9;border-radius:99px;height:5px">'
+      + '<div style="width:'+pct+'%;background:'+cor+';height:5px;border-radius:99px"></div></div></div>';
+  }).join('') + '</div>';
+}
+
+// ── onShow ────────────────────────────────────────────────────────────────────
 window._onShow_aba_rh = function() {
-  // Popula setores dinamicamente
   var selSetor = document.getElementById('rhFiltroSetor');
   if (selSetor && selSetor.options.length <= 1) {
-    var setores = (typeof AppState !== 'undefined' && AppState.colecoes?.setores) || [];
-    setores.filter(Boolean).forEach(function(s) {
+    (AppState.colecoes?.setores || []).filter(Boolean).forEach(function(s) {
       var o = document.createElement('option');
-      o.value = s; o.textContent = s;
-      selSetor.appendChild(o);
+      o.value = s; o.textContent = s; selSetor.appendChild(o);
     });
   }
+  ['rhHistColaborador','rhAvColaborador','rhPontoColaborador','rhDocColaborador'].forEach(function(selId) {
+    var sel = document.getElementById(selId);
+    if (sel && sel.options.length <= 1) {
+      _rhCache.forEach(function(p) {
+        var o = document.createElement('option');
+        o.value = p.id; o.textContent = p.nome; sel.appendChild(o);
+      });
+    }
+  });
   if (!_rhCache.length) carregarRH();
 };
 </script>

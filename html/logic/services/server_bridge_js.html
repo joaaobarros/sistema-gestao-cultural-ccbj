@@ -443,6 +443,34 @@ const GAS = {
   },
 
   /**
+   * BLOCO: RH expandido (mod_rh.gs)
+   */
+  rh: {
+    obterCargos:        function(cb, err)        { GAS._call('obterCargosRH',       [], cb, err); },
+    salvarCargo:        function(dados, cb, err) { GAS._call('salvarCargoRH',       [dados], cb, err); },
+    excluirCargo:       function(id, cb, err)    { GAS._call('excluirCargoRH',      [id], cb, err); },
+    obterHistorico:     function(id, cb, err)    { GAS._call('obterHistoricoRH',    [id], cb, err); },
+    registrarEvento:    function(dados, cb, err) { GAS._call('registrarEventoRH',   [dados], cb, err); },
+    excluirEvento:      function(id, cb, err)    { GAS._call('excluirEventoRH',     [id], cb, err); },
+    obterAvaliacoes:    function(id, cb, err)    { GAS._call('obterAvaliacoesRH',   [id], cb, err); },
+    salvarAvaliacao:    function(dados, cb, err) { GAS._call('salvarAvaliacaoRH',   [dados], cb, err); },
+    excluirAvaliacao:   function(id, cb, err)    { GAS._call('excluirAvaliacaoRH',  [id], cb, err); },
+    obterPonto:         function(id, mes, cb, err){ GAS._call('obterPontoRH',       [id, mes], cb, err); },
+    registrarPonto:     function(dados, cb, err) { GAS._call('registrarPontoRH',    [dados], cb, err); },
+    excluirPonto:       function(id, cb, err)    { GAS._call('excluirPontoRH',      [id], cb, err); },
+    obterDocumentos:    function(id, cb, err)    { GAS._call('obterDocumentosRH',   [id], cb, err); },
+    salvarDocumento:    function(dados, cb, err) { GAS._call('salvarDocumentoRH',   [dados], cb, err); },
+    excluirDocumento:   function(id, cb, err)    { GAS._call('excluirDocumentoRH',  [id], cb, err); },
+    obterFolha:         function(mes, cb, err)   { GAS._call('obterFolhaRH',        [mes], cb, err); },
+    salvarFolha:        function(dados, cb, err) { GAS._call('salvarFolhaRH',       [dados], cb, err); },
+    simular:            function(dados, cb, err) { GAS._call('simularFolhaRH',      [dados], cb, err); },
+    obterPerfilSocial:  function(id, cb, err)    { GAS._call('obterPerfilSocialRH', [id], cb, err); },
+    salvarPerfilSocial: function(dados, cb, err) { GAS._call('salvarPerfilSocialRH',[dados], cb, err); },
+    indicadores:        function(cb, err)        { GAS._call('obterIndicadoresRH',  [], cb, err); },
+    diversidade:        function(cb, err)        { GAS._call('obterDiversidadeRH',  [], cb, err); }
+  },
+
+  /**
    * BLOCO: Permissões modulares (mod_permissoes.gs)
    */
   permissoes: {
