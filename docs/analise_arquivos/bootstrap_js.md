@@ -92,19 +92,17 @@ Exemplos:
 ## 4. Conexões
 
 - Quem chama:
-  - Index.html (último script carregado)
+  - Index.html
 
 - Quem é chamado:
-  - inicializarApp()
+  - inicializarApp (mod_ui_estado_js)
   - módulos de UI
-  - módulos de reserva
   - GAS (backend)
 
 - Integrações:
   - AppState
   - server_bridge (GAS)
   - DOM
-  - bibliotecas externas (Flatpickr, Swal)
 
 ---
 

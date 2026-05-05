@@ -47,3 +47,15 @@ Identificação da orquestração real do sistema via eventos e DOM
 ### Próximos Passos
 - Revisar mod_ui_estado_js (provável núcleo funcional)
 - Mapear fluxo completo de inicialização
+
+## [Data]
+
+### Ação
+Análise do núcleo funcional do sistema
+
+### Impacto
+Identificação do principal ponto de acoplamento e concentração de lógica
+
+### Próximos Passos
+- Separar responsabilidades por domínio
+- Mapear fluxo completo de reservas

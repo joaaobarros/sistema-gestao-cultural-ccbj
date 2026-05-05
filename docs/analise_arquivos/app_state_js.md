@@ -68,6 +68,7 @@ Atua como:
 - Função indexarVinculos não implementada (integração incompleta)
 - Uso de variáveis globais com var (risco de poluição de escopo)
 - Falta de ciclo de vida do estado (init, update, listeners)
+- Forte acoplamento com mod_ui_estado_js (núcleo operacional depende diretamente do estado global)
 
 ---
 
