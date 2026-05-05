@@ -129,6 +129,7 @@ Centralizar a lógica operacional do sistema:
 
 ### 🔴 CRÍTICO — excesso de responsabilidades
 - UI + domínio + backend + IA no mesmo arquivo
+- Sobreposição de responsabilidades com mod_reservas_js (UI também executa lógica de domínio)
 
 ---
 

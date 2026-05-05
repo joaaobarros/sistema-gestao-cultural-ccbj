@@ -59,3 +59,15 @@ Identificação do principal ponto de acoplamento e concentração de lógica
 ### Próximos Passos
 - Separar responsabilidades por domínio
 - Mapear fluxo completo de reservas
+
+## [Data]
+
+### Ação
+Análise da camada de UI de reservas
+
+### Impacto
+Identificação da sobreposição entre UI e lógica de domínio
+
+### Próximos Passos
+- Mapear fluxo salvarAgendamento
+- Avaliar separação entre UI e domínio

@@ -154,6 +154,10 @@ Exemplos:
 
 ---
 
+- Dependência de múltiplos controladores de fluxo (mod_ui_estado_js e mod_reservas_js)
+
+---
+
 ## 7. Qualidade do Código
 
 Pontos positivos:
