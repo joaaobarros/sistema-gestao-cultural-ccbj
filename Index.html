@@ -277,16 +277,17 @@ MÓDULOS HTML (incluídos no <main>, cada um com JS próprio inline):
  
 
   <!-- DOMÍNIO / FEATURES -->
-  <?!= include('html/logic/mod_ui_estado_js'); ?>
-  <?!= include('html/logic/mod_reservas_js'); ?>
-  <?!= include('html/logic/mod_admin_js'); ?>
-  <?!= include('html/logic/mod_contratos_js'); ?>
-  <?!= include('html/logic/mod_favoritos_js'); ?>
-  <?!= include('html/logic/mod_permissoes_js'); ?>
-  <?!= include('html/logic/mod_permissoes_v2_js'); ?>
-  <?!= include('html/logic/integracao_reserva_comunicacao_js'); ?>
-  <?!= include('html/modulos/mod_permissoes_v2'); ?>
-  <?!= include('html/logic/mod_permissoes_v2_js'); ?>
+<?!= include('html/logic/mod_ui_estado_js'); ?>
+<?!= include('html/logic/mod_reservas_js'); ?>
+
+<?!= include('html/logic/mod_permissoes_js'); ?> 
+
+<?!= include('html/logic/mod_admin_js'); ?>
+<?!= include('html/logic/mod_contratos_js'); ?>
+<?!= include('html/logic/mod_favoritos_js'); ?>
+
+<?!= include('html/logic/mod_permissoes_v2_js'); ?> 
+<?!= include('html/logic/integracao_reserva_comunicacao_js'); ?>
 
   <!-- BOOTSTRAP: sempre por último -->
   <?!= include('html/logic/bootstrap_js'); ?>
