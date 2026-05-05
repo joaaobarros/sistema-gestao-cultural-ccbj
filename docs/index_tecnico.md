@@ -19,3 +19,5 @@
 
 ## Tags
 #ui #backend #integracao #dados #bug #reservas #rh #financeiro
+
+- server_bridge_js → camada de integração com backend (🔴 crítico)
