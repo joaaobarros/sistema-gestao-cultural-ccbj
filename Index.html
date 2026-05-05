@@ -49,6 +49,7 @@ MÓDULOS HTML (incluídos no <main>, cada um com JS próprio inline):
   - mod_eficiencia                     — métricas derivadas das reservas (GAS.eficiencia)
   - mod_contratacoes                   — CRUD contratações PF/PJ (GAS.contratacoes)
   - mod_relatorios_financeiros         — consolidação financeira cruzada (GAS.contratos + GAS.contratacoes)
+  - mod_escuta                         — escuta institucional contínua, pulse, alertas NR-1 (GAS.escuta)
   Todos auto-registram: window._onShow_aba_xxx para carregamento lazy.
 -->
 
@@ -251,6 +252,7 @@ MÓDULOS HTML (incluídos no <main>, cada um com JS próprio inline):
       <?!= include('html/modulos/mod_eficiencia'); ?>
       <?!= include('html/modulos/mod_contratacoes'); ?>
       <?!= include('html/modulos/mod_relatorios_financeiros'); ?>
+      <?!= include('html/modulos/mod_escuta'); ?>
 
     </div>
   </main>

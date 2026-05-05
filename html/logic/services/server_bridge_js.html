@@ -471,6 +471,34 @@ const GAS = {
   },
 
   /**
+   * BLOCO: Escuta Institucional Contínua (mod_escuta.gs)
+   * @context Pesquisas pulse, escuta espontânea, indicadores, alertas e relatórios.
+   */
+  escuta: {
+    obterDados:            function(cb, err)         { GAS._call('obterDadosEscuta',               [],        cb, err); },
+    obterPergunta:         function(cb, err)         { GAS._call('obterPerguntaPulse',              [],        cb, err); },
+    responderPulse:        function(dados, cb, err)  { GAS._call('registrarRespostaPulse',          [dados],   cb, err); },
+    registrarEspontanea:   function(dados, cb, err)  { GAS._call('registrarEscutaEspontanea',       [dados],   cb, err); },
+    obterDashboard:        function(filtros, cb, err){ GAS._call('obterDashboardEscuta',            [filtros], cb, err); },
+    obterAlertas:          function(cb, err)         { GAS._call('obterAlertasEscuta',              [],        cb, err); },
+    resolverAlerta:        function(id, acao, cb, err){ GAS._call('resolverAlertaEscuta',           [id, acao],cb, err); },
+    obterPesquisas:        function(cb, err)         { GAS._call('obterPesquisasEscuta',            [],        cb, err); },
+    salvarPesquisa:        function(dados, cb, err)  { GAS._call('salvarPesquisaEscuta',            [dados],   cb, err); },
+    excluirPesquisa:       function(id, cb, err)     { GAS._call('excluirPesquisaEscuta',           [id],      cb, err); },
+    obterBanco:            function(cb, err)         { GAS._call('obterBancoPesquisas',             [],        cb, err); },
+    salvarTemplate:        function(dados, cb, err)  { GAS._call('salvarTemplateBancoPesquisas',    [dados],   cb, err); },
+    obterConfig:           function(cb, err)         { GAS._call('obterConfiguracaoEscuta',         [],        cb, err); },
+    salvarConfig:          function(cfg, cb, err)    { GAS._call('salvarConfiguracaoEscuta',        [cfg],     cb, err); },
+    obterPerguntas:        function(cb, err)         { GAS._call('obterPerguntasEscuta',            [],        cb, err); },
+    atualizarPergunta:     function(id, c, cb, err)  { GAS._call('atualizarPerguntaEscuta',         [id, c],   cb, err); },
+    obterPerfil:           function(cb, err)         { GAS._call('obterPerfilAnaliticoEscuta',      [],        cb, err); },
+    salvarPerfil:          function(dados, cb, err)  { GAS._call('salvarPerfilAnaliticoEscuta',     [dados],   cb, err); },
+    gerarRelatorio:        function(tipo, p, cb, err){ GAS._call('gerarRelatorioEscuta',            [tipo, p], cb, err); },
+    obterFeedback:         function(cb, err)         { GAS._call('obterFeedbackEscuta',             [],        cb, err); },
+    obterSaturacao:        function(cb, err)         { GAS._call('obterSaturacaoEscuta',            [],        cb, err); }
+  },
+
+  /**
    * BLOCO: Permissões modulares (mod_permissoes.gs)
    */
   permissoes: {

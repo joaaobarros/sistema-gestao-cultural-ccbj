@@ -79,6 +79,39 @@ const AppState = {
   }
 };
 
+
 AppState.cacheReservasIndex = {};
+
+function indexarVinculos() {
+  // conecta RH + financeiro + reservas
+}
+
+AppState.vinculos = {
+  colaboradorPorEmail: {},
+  contratosPorColaborador: {},
+  reservasPorResponsavel: {},
+  folhaPorColaborador: {}
+};
+
+AppState.rh.aniversariantesMes = []
+
+AppState.pesquisas = {
+  modelos: [],
+  respostas: [],
+  campanhas: [],
+  sinais: []
+};
+
+AppState.escuta = {
+  dashboard:      null,
+  alertas:        [],
+  pesquisas:      [],
+  banco:          [],
+  perguntas:      [],
+  config:         { ativo: 'true', ativoPadrao: 'true', ativoPersonalizado: 'true', ativoEspontanea: 'true' },
+  perfil:         null,
+  saturacao:      [],
+  widgetAtivo:    false
+};
 
 </script>

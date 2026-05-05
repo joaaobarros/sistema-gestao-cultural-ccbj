@@ -222,6 +222,25 @@
         </div>
       </div>
 
+      <!-- ── INSTITUCIONAL ──────────────────────────────────── -->
+      <div class="mb-1">
+        <button onclick="toggleModulo('mod-institucional')"
+          class="w-full flex items-center justify-between px-3 py-2 text-[9px] font-black text-slate-500 uppercase tracking-widest hover:text-purple-300 transition-colors">
+          <span><i class="fas fa-ear-listen mr-2 text-slate-600"></i>Institucional</span>
+          <i id="icon-mod-institucional" class="fas fa-chevron-down text-[8px] text-slate-600"></i>
+        </button>
+
+        <div id="mod-institucional" class="space-y-0.5 pl-2 hidden">
+
+          <button data-aba="aba-escuta" class="tab-btn nav-item w-full">
+            <i class="fas fa-ear-listen w-5 text-center text-xs"></i>
+            <span class="text-xs font-semibold">Escuta Institucional</span>
+            <span id="badge-escuta-alertas" class="hidden ml-auto min-w-[16px] h-[16px] bg-red-500 text-white text-[8px] font-black rounded-full flex items-center justify-center px-1">0</span>
+          </button>
+
+        </div>
+      </div>
+
       <!-- ── SISTEMA (superadmin/admin) ───────────────────── -->
       <div class="mb-1" id="modulo-sistema">
         <button onclick="toggleModulo('mod-sistema')"
@@ -320,7 +339,7 @@
   var STORE_KEY = 'sidebar_modules_v1';
   function _salvarEstado() {
     var estado = {};
-    ['mod-pessoal','mod-espacos','mod-comunicacao','mod-equipes','mod-financeiro','mod-relatorios','mod-estrategia','mod-sistema'].forEach(function(id) {
+    ['mod-pessoal','mod-espacos','mod-comunicacao','mod-equipes','mod-financeiro','mod-relatorios','mod-estrategia','mod-institucional','mod-sistema'].forEach(function(id) {
       var el = document.getElementById(id);
       if (el) estado[id] = !el.classList.contains('hidden');
     });
