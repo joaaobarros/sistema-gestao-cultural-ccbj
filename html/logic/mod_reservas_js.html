@@ -2902,139 +2902,331 @@ function abrirFormularioNoSlot(salaId, dataStr, event) {
   }, 350);
 }
 
+var ccbjCalendarInstance = null;
+var _ccbjLoteSubModoMensal = 'diaFixo';
+
 function bloquearDiaCCBJ() {
   if (!AppState.usuario.isAdmin && !AppState.usuario.isSuperadmin) {
     Swal.fire('Sem permissão', 'Apenas administradores podem bloquear dias.', 'warning');
     return;
   }
-
   const salas = AppState.colecoes.salas || [];
   if (!salas.length) {
     Swal.fire('Atenção', 'Nenhuma sala cadastrada.', 'warning');
     return;
   }
-
+  const el = document.getElementById('ccbjSalasInfo');
+  if (el) el.textContent = salas.map(function(s){ return s[1]; }).join(', ');
+  document.getElementById('ccbjModal')?.classList.remove('hidden');
   const hoje = new Date().toISOString().slice(0,10);
+  ['ccbjSemanalInicio','ccbjSemanalFim','ccbjIntervaloInicio','ccbjIntervaloFim',
+   'ccbjMensalInicio','ccbjMensalUtilInicio','ccbjMensalSemanaInicio'].forEach(function(id) {
+    const el = document.getElementById(id);
+    if (el) { if (!el.value) el.value = hoje; el.min = hoje; }
+  });
+  setTimeout(function() {
+    _ccbjInicializarCalendario();
+    _ccbjSelecionarModo('manual');
+  }, 50);
+}
 
-  Swal.fire({
-    title: '<i class="fas fa-lock text-red-500 mr-2"></i>CCBJ Fechado — Bloqueio em Lote',
-    width: 540,
-    html: `
-      <div class="text-left space-y-3">
-        <div class="grid grid-cols-2 gap-3">
-          <div>
-            <label class="text-[10px] font-black text-slate-500 uppercase block mb-1">Data início *</label>
-            <input type="date" id="swalDataInicio"
-              class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm font-semibold outline-none focus:border-red-400"
-              value="${hoje}" min="${hoje}">
-          </div>
-          <div>
-            <label class="text-[10px] font-black text-slate-500 uppercase block mb-1">Data fim</label>
-            <input type="date" id="swalDataFim"
-              class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm font-semibold outline-none focus:border-red-400"
-              min="${hoje}">
-          </div>
-        </div>
-        <div>
-          <label class="text-[10px] font-black text-slate-500 uppercase block mb-2">Dias da semana</label>
-          <div class="flex flex-wrap gap-2">
-            ${[['Dom','0'],['Seg','1'],['Ter','2'],['Qua','3'],['Qui','4'],['Sex','5'],['Sáb','6']].map(([n,v]) =>
-              `<label class="flex items-center gap-1 cursor-pointer select-none px-2 py-1 rounded-lg border border-slate-200 hover:border-red-300 text-xs font-bold text-slate-600">
-                <input type="checkbox" class="dia-semana accent-red-600" value="${v}" ${v!=='0'?'checked':''}> ${n}
-              </label>`
-            ).join('')}
-          </div>
-        </div>
-        <div>
-          <label class="text-[10px] font-black text-slate-500 uppercase block mb-1">Turno</label>
-          <select id="swalTurnoCCBJ"
-            class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm font-semibold outline-none focus:border-red-400 bg-white">
-            <option value="integral">Integral — 08:00 às 22:00</option>
-            <option value="manha">Manhã — 08:00 às 12:00</option>
-            <option value="tarde">Tarde — 12:00 às 18:00</option>
-            <option value="noite">Noite — 18:00 às 22:00</option>
-          </select>
-        </div>
-        <div>
-          <label class="text-[10px] font-black text-slate-500 uppercase block mb-1">Motivo</label>
-          <input type="text" id="swalMotivoCCBJ" placeholder="Ex: Feriado, Recesso, Manutenção..."
-            class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm font-semibold outline-none focus:border-red-400">
-        </div>
-        <div class="p-3 bg-red-50 border border-red-100 rounded-xl">
-          <p class="text-[10px] font-black text-red-600 uppercase tracking-wide mb-1">
-            <i class="fas fa-info-circle mr-1"></i>Salas que serão bloqueadas
-          </p>
-          <p class="text-xs text-red-500">${salas.map(s => s[1]).join(', ')}</p>
-        </div>
-      </div>`,
-    showCancelButton: true,
-    confirmButtonText: '<i class="fas fa-lock mr-1"></i>Bloquear',
-    cancelButtonText: 'Cancelar',
-    confirmButtonColor: '#dc2626',
-    preConfirm: () => {
-      const inicio = document.getElementById('swalDataInicio').value;
-      const fim    = document.getElementById('swalDataFim').value || inicio;
-      const motivo = document.getElementById('swalMotivoCCBJ').value.trim() || 'CCBJ Fechado';
-      const turno  = document.getElementById('swalTurnoCCBJ').value;
-      const dias   = [...document.querySelectorAll('.dia-semana:checked')].map(el => parseInt(el.value));
-      if (!inicio) { Swal.showValidationMessage('Selecione uma data de início.'); return false; }
-      if (fim < inicio) { Swal.showValidationMessage('Data fim deve ser igual ou posterior ao início.'); return false; }
-      const diff = Math.round((new Date(fim) - new Date(inicio)) / 86400000) + 1;
-      if (diff > 60) { Swal.showValidationMessage('Intervalo máximo: 60 dias.'); return false; }
-      if (!dias.length) { Swal.showValidationMessage('Selecione pelo menos um dia da semana.'); return false; }
-      return { inicio, fim, motivo, turno, dias };
+function _ccbjFecharModal() {
+  document.getElementById('ccbjModal')?.classList.add('hidden');
+  if (ccbjCalendarInstance) {
+    try { ccbjCalendarInstance.destroy(); } catch(e) {}
+    ccbjCalendarInstance = null;
+  }
+  const motivo = document.getElementById('ccbjMotivo');
+  if (motivo) motivo.value = '';
+  const turno = document.getElementById('ccbjTurno');
+  if (turno) turno.value = 'integral';
+}
+
+function _ccbjInicializarCalendario() {
+  const el = document.getElementById('ccbjCalInput');
+  if (!el) return;
+  if (ccbjCalendarInstance) {
+    try { ccbjCalendarInstance.destroy(); } catch(e) {}
+    ccbjCalendarInstance = null;
+  }
+  ccbjCalendarInstance = flatpickr(el, {
+    locale: 'pt',
+    inline: true,
+    mode: 'multiple',
+    dateFormat: 'd/m/Y',
+    minDate: 'today',
+    onChange: function() {
+      _ccbjRenderizarPreview();
     }
-  }).then(function(result) {
-    if (!result.isConfirmed) return;
+  });
+  _ccbjRenderizarPreview();
+}
 
-    const { inicio, fim, motivo, turno, dias } = result.value;
-    const _horasTurno = {
-      integral: { ini: '08:00', ter: '22:00', label: 'MULTITURNO' },
-      manha:    { ini: '08:00', ter: '12:00', label: 'MANHÃ' },
-      tarde:    { ini: '12:00', ter: '18:00', label: 'TARDE' },
-      noite:    { ini: '18:00', ter: '22:00', label: 'NOITE' }
-    };
-    const ht = _horasTurno[turno] || _horasTurno.integral;
+function _ccbjSelecionarModo(modo) {
+  const modal = document.getElementById('ccbjModal');
+  if (!modal) return;
+  modal.querySelectorAll('.lote-modo-btn').forEach(function(b) { b.classList.remove('lote-modo-ativo'); });
+  const btn = document.getElementById('ccbj-btn-' + modo);
+  if (btn) btn.classList.add('lote-modo-ativo');
+  modal.querySelectorAll('.lote-painel').forEach(function(p) { p.classList.add('hidden'); });
+  const painel = document.getElementById('ccbj-painel-' + modo);
+  if (painel) painel.classList.remove('hidden');
+}
 
-    const todasDatas = _gerarDatasRange(inicio, fim);
-    const datas = todasDatas.filter(function(dataFmt) {
-      const p = dataFmt.split('/');
-      const d = new Date(parseInt(p[2]), parseInt(p[1]) - 1, parseInt(p[0]));
-      return dias.includes(d.getDay());
+function _ccbjSelecionarSubModoMensal(sub) {
+  _ccbjLoteSubModoMensal = sub;
+  const modal = document.getElementById('ccbjModal');
+  if (!modal) return;
+  modal.querySelectorAll('.mensal-sub-btn').forEach(function(b) { b.classList.remove('mensal-sub-ativo'); });
+  const btn = document.getElementById('ccbj-mensal-btn-' + sub);
+  if (btn) btn.classList.add('mensal-sub-ativo');
+  modal.querySelectorAll('.sub-mensal').forEach(function(p) { p.classList.add('hidden'); });
+  const painel = document.getElementById('ccbj-sub-mensal-' + sub);
+  if (painel) painel.classList.remove('hidden');
+}
+
+function _ccbjGerarDatas(tipo) {
+  const datas = [];
+  const hoje  = new Date(); hoje.setHours(0,0,0,0);
+
+  const parseDate = function(str) {
+    if (!str) return null;
+    const d = new Date(str + 'T00:00:00');
+    return isNaN(d) ? null : d;
+  };
+  const fmtData = function(d) {
+    return String(d.getDate()).padStart(2,'0') + '/' +
+           String(d.getMonth()+1).padStart(2,'0') + '/' +
+           d.getFullYear();
+  };
+
+  if (tipo === 'semanal') {
+    const modal = document.getElementById('ccbjModal');
+    const diasMarcados = Array.from(
+      modal ? modal.querySelectorAll('#ccbj-painel-semanal input[type=checkbox]:checked') : []
+    ).map(function(c) { return Number(c.value); });
+    if (!diasMarcados.length) { Swal.fire('Atenção','Selecione pelo menos um dia da semana.','warning'); return; }
+    const inicio = parseDate(document.getElementById('ccbjSemanalInicio')?.value);
+    const fim    = parseDate(document.getElementById('ccbjSemanalFim')?.value);
+    if (!inicio || !fim) { Swal.fire('Atenção','Preencha as datas de início e fim.','warning'); return; }
+    if (fim < inicio)    { Swal.fire('Atenção','A data fim deve ser posterior ao início.','warning'); return; }
+    const cursor = new Date(inicio);
+    while (cursor <= fim) {
+      if (diasMarcados.includes(cursor.getDay())) datas.push(fmtData(cursor));
+      cursor.setDate(cursor.getDate() + 1);
+    }
+  }
+
+  else if (tipo === 'intervalo') {
+    const intervalo = parseInt(document.getElementById('ccbjIntervaloN')?.value) || 7;
+    const inicio    = parseDate(document.getElementById('ccbjIntervaloInicio')?.value);
+    const fimStr    = document.getElementById('ccbjIntervaloFim')?.value;
+    const fim       = fimStr ? parseDate(fimStr) : null;
+    const qtd       = parseInt(document.getElementById('ccbjIntervaloQtd')?.value) || 4;
+    if (!inicio) { Swal.fire('Atenção','Informe a data de início.','warning'); return; }
+    if (intervalo < 1) { Swal.fire('Atenção','O intervalo deve ser de pelo menos 1 dia.','warning'); return; }
+    const cursor = new Date(inicio);
+    let count = 0;
+    const maxIt = fim ? 3650 : qtd;
+    while (count < maxIt) {
+      if (fim && cursor > fim) break;
+      datas.push(fmtData(cursor));
+      cursor.setDate(cursor.getDate() + intervalo);
+      count++;
+      if (!fim && count >= qtd) break;
+    }
+  }
+
+  else if (tipo === 'mensal') {
+    if (_ccbjLoteSubModoMensal === 'diaFixo') {
+      const dia    = parseInt(document.getElementById('ccbjMensalDia')?.value) || 1;
+      const inicio = parseDate(document.getElementById('ccbjMensalInicio')?.value);
+      const qtd    = parseInt(document.getElementById('ccbjMensalQtd')?.value) || 3;
+      if (!inicio) { Swal.fire('Atenção','Informe o mês inicial.','warning'); return; }
+      let ano = inicio.getFullYear(), mes = inicio.getMonth();
+      for (let i = 0; i < qtd; i++) {
+        const d = new Date(ano, mes + i, dia);
+        if (d.getMonth() !== ((mes + i) % 12 + 12) % 12) {
+          const ultimo = new Date(ano, mes + i + 1, 0);
+          if (ultimo >= hoje) datas.push(fmtData(ultimo));
+        } else if (d >= hoje) {
+          datas.push(fmtData(d));
+        }
+      }
+    } else if (_ccbjLoteSubModoMensal === 'diaUtil') {
+      const nUtil  = parseInt(document.getElementById('ccbjMensalNUtil')?.value) || 1;
+      const inicio = parseDate(document.getElementById('ccbjMensalUtilInicio')?.value);
+      const qtd    = parseInt(document.getElementById('ccbjMensalUtilQtd')?.value) || 3;
+      if (!inicio) { Swal.fire('Atenção','Informe o mês inicial.','warning'); return; }
+      const ehUtil = function(d) { return d.getDay() !== 0 && d.getDay() !== 6; };
+      let ano = inicio.getFullYear(), mes = inicio.getMonth();
+      for (let i = 0; i < qtd; i++) {
+        const cursor = new Date(ano, mes + i, 1);
+        const mesAlvo = new Date(ano, mes + i, 1).getMonth();
+        let contUtil = 0;
+        while (cursor.getMonth() === mesAlvo) {
+          if (ehUtil(cursor)) {
+            contUtil++;
+            if (contUtil === nUtil) {
+              if (cursor >= hoje) datas.push(fmtData(cursor));
+              break;
+            }
+          }
+          cursor.setDate(cursor.getDate() + 1);
+        }
+      }
+    } else if (_ccbjLoteSubModoMensal === 'semanaMes') {
+      const nSemana   = parseInt(document.getElementById('ccbjMensalNSemana')?.value);
+      const diaSemana = parseInt(document.getElementById('ccbjMensalDiaSemana')?.value);
+      const inicio    = parseDate(document.getElementById('ccbjMensalSemanaInicio')?.value);
+      const qtd       = parseInt(document.getElementById('ccbjMensalSemanaQtd')?.value) || 3;
+      if (!inicio) { Swal.fire('Atenção','Informe o mês inicial.','warning'); return; }
+      let ano = inicio.getFullYear(), mes = inicio.getMonth();
+      for (let i = 0; i < qtd; i++) {
+        const mesAtual = (mes + i) % 12;
+        const anoAtual = ano + Math.floor((mes + i) / 12);
+        let resultado = null;
+        if (nSemana === -1) {
+          const ultimoDia = new Date(anoAtual, mesAtual + 1, 0);
+          const cursor = new Date(ultimoDia);
+          while (cursor.getDay() !== diaSemana) cursor.setDate(cursor.getDate() - 1);
+          resultado = cursor;
+        } else {
+          const cursor = new Date(anoAtual, mesAtual, 1);
+          let count = 0;
+          while (cursor.getMonth() === mesAtual) {
+            if (cursor.getDay() === diaSemana) {
+              count++;
+              if (count === nSemana) { resultado = new Date(cursor); break; }
+            }
+            cursor.setDate(cursor.getDate() + 1);
+          }
+        }
+        if (resultado && resultado >= hoje) datas.push(fmtData(resultado));
+      }
+    }
+  }
+
+  if (!datas.length) {
+    Swal.fire('Sem resultados','Nenhuma data gerada com esses parâmetros. Verifique se as datas não estão no passado.','info');
+    return;
+  }
+  _ccbjAplicarDatasNoCalendario(datas);
+}
+
+function _ccbjAplicarDatasNoCalendario(datas) {
+  if (!ccbjCalendarInstance) return;
+  const objs = datas.map(function(s) {
+    const p = s.split('/');
+    return new Date(p[2], p[1]-1, p[0]);
+  });
+  setTimeout(function() {
+    ccbjCalendarInstance.setDate(objs, true);
+    _ccbjRenderizarPreview();
+  }, 30);
+}
+
+function _ccbjRenderizarPreview() {
+  const container = document.getElementById('ccbjListaDatas');
+  const painel    = document.getElementById('ccbjPreviewDatas');
+  const contador  = document.getElementById('ccbjContadorDatas');
+  if (!container || !ccbjCalendarInstance) return;
+
+  const datas = ccbjCalendarInstance.selectedDates || [];
+
+  if (!datas.length) {
+    painel?.classList.add('hidden');
+    if (contador) contador.textContent = '0 datas selecionadas';
+    return;
+  }
+
+  painel?.classList.remove('hidden');
+  const diasSemana = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+  container.innerHTML = datas
+    .slice()
+    .sort(function(a,b){ return a-b; })
+    .map(function(d, i) {
+      const str = flatpickr.formatDate(d, 'd/m/Y');
+      const nomeDia = diasSemana[d.getDay()];
+      return '<span class="lote-data-chip">'
+        + '<span class="text-[8px] text-red-400 font-black">' + nomeDia + '</span>'
+        + str
+        + '<button type="button" onclick="_ccbjRemoverData(' + i + ')" title="Remover">×</button>'
+        + '</span>';
+    }).join('');
+
+  if (contador) contador.textContent = datas.length + (datas.length === 1 ? ' data selecionada' : ' datas selecionadas');
+}
+
+function _ccbjRemoverData(index) {
+  if (!ccbjCalendarInstance) return;
+  const datas = [...(ccbjCalendarInstance.selectedDates || [])].sort(function(a,b){ return a-b; });
+  datas.splice(index, 1);
+  ccbjCalendarInstance.setDate(datas, true);
+  _ccbjRenderizarPreview();
+}
+
+function _ccbjLimparDatas() {
+  if (!ccbjCalendarInstance) return;
+  ccbjCalendarInstance.clear();
+  _ccbjRenderizarPreview();
+}
+
+function _ccbjConfirmar() {
+  const salas  = AppState.colecoes.salas || [];
+  const turno  = document.getElementById('ccbjTurno')?.value || 'integral';
+  const motivo = (document.getElementById('ccbjMotivo')?.value || '').trim() || 'CCBJ Fechado';
+
+  if (!ccbjCalendarInstance || !ccbjCalendarInstance.selectedDates.length) {
+    Swal.fire('Atenção','Selecione pelo menos uma data para bloquear.','warning');
+    return;
+  }
+
+  const diasSemana = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+  const datas = ccbjCalendarInstance.selectedDates
+    .slice()
+    .sort(function(a,b){ return a-b; })
+    .map(function(d) {
+      return String(d.getDate()).padStart(2,'0') + '/' +
+             String(d.getMonth()+1).padStart(2,'0') + '/' +
+             d.getFullYear();
     });
 
-    if (!datas.length) {
-      Swal.fire('Atenção', 'Nenhum dia encontrado para o período e dias da semana selecionados.', 'warning');
-      return;
-    }
+  const _horasTurno = {
+    integral: { ini: '08:00', ter: '22:00', label: 'MULTITURNO' },
+    manha:    { ini: '08:00', ter: '12:00', label: 'MANHÃ' },
+    tarde:    { ini: '12:00', ter: '18:00', label: 'TARDE' },
+    noite:    { ini: '18:00', ter: '22:00', label: 'NOITE' }
+  };
+  const ht = _horasTurno[turno] || _horasTurno.integral;
 
-    const total = salas.length * datas.length;
-    var processados = 0, erros = 0;
+  _ccbjFecharModal();
 
-    showLoader(true);
+  const total = salas.length * datas.length;
+  var processados = 0, erros = 0;
+  showLoader(true);
 
-    salas.forEach(function(sala) {
-      var dadosBloqueio = {
-        nomeAcao: '🔒 CCBJ FECHADO — ' + motivo.toUpperCase(),
-        sala: String(sala[0]),
-        horaInicio: ht.ini,
-        horaTermino: ht.ter,
-        turno: ht.label,
-        setor: 'ADMINISTRAÇÃO',
-        responsavel: AppState.usuario.email,
-        coresponsavel: 'Não informado',
-        release: motivo,
-        itensVolantes: 'Nenhum',
-        tipoAcao: 'BLOQUEIO',
-        modoRece: false
-      };
-      GAS.reservas.criar(dadosBloqueio, datas, function() {
-        processados += datas.length;
-        _concluirBloqueiosCCBJ(processados, total, erros, datas, motivo);
-      }, function() {
-        erros += datas.length; processados += datas.length;
-        _concluirBloqueiosCCBJ(processados, total, erros, datas, motivo);
-      });
+  salas.forEach(function(sala) {
+    var dadosBloqueio = {
+      nomeAcao: '🔒 CCBJ FECHADO — ' + motivo.toUpperCase(),
+      sala: String(sala[0]),
+      horaInicio: ht.ini,
+      horaTermino: ht.ter,
+      turno: ht.label,
+      setor: 'ADMINISTRAÇÃO',
+      responsavel: AppState.usuario.email,
+      coresponsavel: 'Não informado',
+      release: motivo,
+      itensVolantes: 'Nenhum',
+      tipoAcao: 'BLOQUEIO',
+      modoRece: false
+    };
+    GAS.reservas.criar(dadosBloqueio, datas, function() {
+      processados += datas.length;
+      _concluirBloqueiosCCBJ(processados, total, erros, datas, motivo);
+    }, function() {
+      erros += datas.length; processados += datas.length;
+      _concluirBloqueiosCCBJ(processados, total, erros, datas, motivo);
     });
   });
 }
