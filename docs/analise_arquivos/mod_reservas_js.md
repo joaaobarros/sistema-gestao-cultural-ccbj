@@ -170,6 +170,7 @@ Pontos críticos:
 - Centralizar estado (eliminar variáveis globais)
 - Substituir arrays indexados por objetos
 - Modularizar renderização
+- Delegar totalmente lógica de disponibilidade para disponibilidade_module_js
 
 ---
 

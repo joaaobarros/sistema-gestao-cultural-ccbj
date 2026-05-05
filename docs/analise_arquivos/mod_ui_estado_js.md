@@ -200,6 +200,7 @@ Pontos críticos:
 - Criar contratos de dados
 - Simplificar salvarAgendamento
 - Extrair inicializarApp
+- Extrair mais lógica para módulos puros como disponibilidade_module_js
 
 ---
 
