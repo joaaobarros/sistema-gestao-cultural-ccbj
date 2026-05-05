@@ -23,3 +23,15 @@ Mapeamento da comunicação frontend-backend e identificação de riscos crític
 ### Próximos Passos
 - Revisar impacto no AppState
 - Mapear fluxo de dados completo
+
+## [Data]
+
+### Ação
+Análise do arquivo raiz (Index)
+
+### Impacto
+Mapeamento da arquitetura real de carregamento e orquestração do sistema
+
+### Próximos Passos
+- Revisar bootstrap
+- Mapear fluxo de inicialização completo

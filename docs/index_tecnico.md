@@ -21,3 +21,4 @@
 #ui #backend #integracao #dados #bug #reservas #rh #financeiro
 
 - server_bridge_js → camada de integração com backend (🔴 crítico)
+- index_html → orquestração e bootstrap do sistema (🔴 crítico)

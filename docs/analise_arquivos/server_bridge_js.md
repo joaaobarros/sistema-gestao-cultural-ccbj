@@ -72,7 +72,7 @@ Cada bloco representa um domínio do sistema:
 ## 4. Conexões
 
 - Quem chama:
-  - Todos os módulos frontend
+  - Todos os módulos frontend (via Index.html)
 
 - Quem é chamado:
   - Backend (.gs)
@@ -80,6 +80,7 @@ Cada bloco representa um domínio do sistema:
 - Integrações:
   - google.script.run
   - _handleServerError (UI)
+  - Inicializado via ordem definida em Index.html
 
 ---
 
