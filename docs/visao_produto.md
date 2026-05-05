@@ -180,3 +180,102 @@ Toda evolução deve responder:
 (em construção)
 
 Este documento será atualizado continuamente com base na evolução real do sistema.
+
+---
+
+## 13. Tradução Técnica da Visão
+
+Esta seção conecta a visão do produto com decisões de arquitetura e desenvolvimento.
+
+### 13.1 Modularidade (Técnico)
+
+- Cada módulo deve ter:
+  - Responsabilidade clara
+  - Baixo acoplamento
+  - Interface definida (entrada/saída)
+- Evitar dependência direta entre módulos
+- Comunicação preferencial via camada de serviço
+
+---
+
+### 13.2 Integração
+
+- Deve existir um ponto central de orquestração (core/app_state)
+- Fluxos não devem ser duplicados em múltiplos arquivos
+- Dados devem ter fonte única (single source of truth)
+
+---
+
+### 13.3 Estrutura de Dados
+
+- Padronização de entidades (projetos, usuários, atividades, etc.)
+- Evitar múltiplas versões do mesmo dado
+- Preparação para futura migração de banco (Sheets → DB real)
+
+---
+
+### 13.4 Backend (Apps Script)
+
+- Deve atuar como camada de serviço (API)
+- Evitar lógica distribuída no frontend
+- Centralizar regras críticas
+
+---
+
+### 13.5 Frontend
+
+- Separação entre:
+  - UI (visual)
+  - Lógica
+- Evitar JS espalhado em múltiplos HTML sem padrão
+
+---
+
+### 13.6 Escalabilidade SaaS
+
+- Preparar:
+  - multiusuário
+  - multi-organização
+  - controle de permissões
+- Evitar hardcode de contexto (ex: CCBJ fixo)
+
+---
+
+### 13.7 Observabilidade
+
+- Sistema deve permitir:
+  - rastrear ações
+  - identificar erros
+  - entender fluxos
+
+---
+
+## 14. Critério Técnico de Qualidade
+
+Um trecho do sistema é considerado adequado quando:
+
+- Possui responsabilidade clara
+- Não duplica lógica
+- Está integrado ao fluxo geral
+- Não quebra outros módulos
+- Pode ser reutilizado
+- Está preparado para evolução SaaS
+
+---
+
+## 15. Uso na Análise do Sistema
+
+Este documento deve ser utilizado como referência para:
+
+- Avaliação de arquivos
+- Identificação de falhas
+- Priorização de refatoração
+- Tomada de decisão técnica
+
+Cada análise de arquivo deve considerar:
+
+→ Está alinhado com a visão?  
+→ Está neutro?  
+→ Está desviando o sistema?
+
+---
