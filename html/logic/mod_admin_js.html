@@ -2022,19 +2022,19 @@ function carregarDashboard() {
  */
 function confirmarLogout() {
   Swal.fire({
-    title: 'Sair do sistema?',
-    text: 'Você será redirecionado para trocar de conta.',
+    title: 'Sair?',
     icon: 'question',
     showCancelButton: true,
-    confirmButtonColor: '#ef4444',
-    confirmButtonText: '<i class="fas fa-right-from-bracket mr-1"></i> Sair',
-    cancelButtonText: 'Cancelar'
-  }).then(result => {
-    if (!result.isConfirmed) return;
-    showLoader(true);
-    GAS.admin.obterUrlLogout(
-      url => { window.top.location.href = url; },
-      () => { window.top.location.href = 'https://accounts.google.com/logout'; });
+    confirmButtonText: 'Sair'
+  }).then(r => {
+    if (!r.isConfirmed) return;
+
+    sessionStorage.clear();
+
+    google.accounts.id.disableAutoSelect();
+
+    window.top.location.href =
+      'https://accounts.google.com/Logout?continue=https://accounts.google.com/AccountChooser';
   });
 }
 

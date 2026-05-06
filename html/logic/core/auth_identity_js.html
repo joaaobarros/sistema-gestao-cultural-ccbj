@@ -57,78 +57,46 @@ function _getEmailInicial() {
 // ═══════════════════════════════════════════════════════════════
 
 const Auth = {
-  sessaoId: '',
   email: '',
-  nivel: '',
   pronto: false,
   _callbacks: [],
 
   iniciar: function() {
-    if (typeof google === 'undefined' || !google.accounts) {
-      console.error('[Auth] GSI não carregado');
+    const email = window.__EMAIL_INICIAL__ || '';
+
+    if (!email) {
+      console.error('[Auth] Sem email');
       return;
     }
 
-    google.accounts.id.initialize({
-      client_id: 'SEU_CLIENT_ID_AQUI',
-      callback: this._onGoogle.bind(this),
-      auto_select: true
-    });
+    this.email = email;
+    this.pronto = true;
 
-    google.accounts.id.prompt();
+    if (typeof AppState !== 'undefined') {
+      AppState.usuario.email = email;
+    }
+
+    this._callbacks.forEach(cb => cb(email));
+    this._callbacks = [];
   },
-
-  _onGoogle: function(response) {
-  if (!response || !response.credential) {
-    console.error('[Auth] Falha no Google');
-    return;
-  }
-
-  google.script.run
-    .withSuccessHandler(function(res) {
-      if (!res || !res.ok) {
-        console.error('[Auth] Sessão inválida:', res);
-        return;
-      }
-
-      Auth.email    = res.email;
-      Auth.sessaoId = res.sessao;
-      Auth.pronto   = true;
-
-      AppState.usuario.email   = res.email;
-      AppState.usuario._sessao = res.sessao;
-
-      sessionStorage.setItem('ccbj_sessao', res.sessao);
-      sessionStorage.setItem('ccbj_email', res.email);
-      sessionStorage.setItem('ccbj_sessao_ts', String(Date.now()));
-
-      console.log('[Auth] Logado:', res.email);
-
-      Auth._disparar();
-    })
-    .withFailureHandler(function(err) {
-      console.error('[Auth] Erro backend:', err);
-    })
-    .iniciarSessaoGAS(response.credential);
-},
 
   quandoPronto: function(cb) {
-    if (this.pronto) {
-      cb(this.email, this.sessaoId);
-      return;
-    }
+    if (this.pronto) return cb(this.email);
     this._callbacks.push(cb);
-  },
-
-  _disparar: function() {
-    this.pronto = true;
-    this._callbacks.forEach((cb) => {
-      try { cb(this.email, this.sessaoId); } catch(e) {}
-    });
-    this._callbacks = [];
   }
 };
 
+document.addEventListener('DOMContentLoaded', () => Auth.iniciar());
+
+document.addEventListener('DOMContentLoaded', () => Auth.iniciar());
+
+document.addEventListener('DOMContentLoaded', function() {
+  Auth.iniciar();
+});
+
+document.addEventListener('DOMContentLoaded', function() {
+  Auth.iniciar();
+});
 
 // ═══════════════════════════════════════════════════════════════
 // SESSÃO PERSISTIDA (sessionStorage entre abas da mesma sessão)
@@ -153,51 +121,9 @@ const Auth = {
   } catch(e) {}
 })();
 
-// ═══════════════════════════════════════════════════════════════
-// GOOGLE IDENTITY SERVICES (GSI)
-// ═══════════════════════════════════════════════════════════════
 
-function _inicializarGSI() {
-  if (typeof google === 'undefined' || !google.accounts || !google.accounts.id) {
-    // GSI ainda não carregou — tentar novamente
-    setTimeout(_inicializarGSI, 300);
-    return;
-  }
 
-  // Client ID configurado via PropertiesService (admin deve configurar GOOGLE_CLIENT_ID)
-  google.script.run
-    .withSuccessHandler(function(info) {
-      const clientId = info && info.googleClientIdConf
-        ? '' // Se configurado, buscar o valor real via função separada
-        : '';
 
-      _tentarGSI(clientId);
-    })
-    .withFailureHandler(function() {
-      _tentarGSI('');
-    })
-    .obterInfoAutenticacao();
-}
-
-function _tentarGSI(clientId) {
-  console.warn('[Auth] GSI desativado');
-}
-
-function _onCredencialGSI(response) {
-  if (!response || !response.credential) {
-     
-    return;
-  }
-
-  // Extrair email do JWT para exibição (o servidor vai verificar criptograficamente)
-  try {
-    const parts   = response.credential.split('.');
-    const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
-    Auth._emailGSIPreview = payload.email || '';
-  } catch(e) {}
-
-  _estabelecerSessao(response.credential, Auth._emailGSIPreview || '');
-}
 
 // ═══════════════════════════════════════════════════════════════
 // ESTABELECIMENTO DE SESSÃO NO SERVIDOR

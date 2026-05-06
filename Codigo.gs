@@ -105,54 +105,28 @@ function testeVSCode() {
  *              doPost: chama recusarSolicitacao
  */
 function doGet(e) {
-  const acao = e && e.parameter && e.parameter.acao;
-  const id   = e && e.parameter && e.parameter.id;
+  let email = '';
 
-  if (acao && id) {
-    if (acao === "aprovar") {
-      try {
-        const email = Session.getActiveUser().getEmail();
-        aprovarSolicitacao(id, email);
-        return HtmlService.createHtmlOutput(
-          '<h2 style="font-family:sans-serif;color:green">✅ Solicitação aprovada com sucesso.</h2>',
-        );
-      } catch (e) {
-        return HtmlService.createHtmlOutput(
-          `<h2 style="font-family:sans-serif;color:red">Erro: ${e.message}</h2>`,
-        );
-      }
-    }
+  try {
+    email = Session.getActiveUser().getEmail() || '';
+  } catch(e) {}
 
-    if (acao === "recusar") {
-      return HtmlService.createHtmlOutput(`
-        <!DOCTYPE html><html><body style="font-family:sans-serif;max-width:500px;margin:40px auto;padding:20px">
-        <h2>❌ Recusar solicitação</h2>
-        <form method="post">
-          <input type="hidden" name="id" value="${id}">
-          <label>Motivo da recusa:</label><br>
-          <textarea name="justificativa" required rows="4" style="width:100%;margin-top:8px;padding:8px;border:1px solid #ccc;border-radius:4px"></textarea><br><br>
-          <button type="submit" style="background:#dc2626;color:white;padding:10px 24px;border:none;border-radius:6px;cursor:pointer;font-size:14px">Confirmar Recusa</button>
-        </form>
-        </body></html>
-      `);
-    }
+  if (!email) {
+    return HtmlService.createHtmlOutput(`
+      <h2 style="font-family:sans-serif;text-align:center;margin-top:60px">
+        🔒 Você precisa estar logado no Google
+      </h2>
+    `);
   }
 
-  // Capturar email do usuário no momento do doGet.
-  // Em "Execute as: User": Session.getActiveUser() retorna o email real do usuário.
-  // Em "Execute as: Me":  Session.getActiveUser() retorna string vazia.
-  let emailDoGet = '';
-  let sessaoInicial = '';
+  const tmpl = HtmlService.createTemplateFromFile('Index');
 
-  const tmpl = HtmlService.createTemplateFromFile("Index");
-  tmpl.emailInicial  = emailDoGet;
-  tmpl.sessaoInicial = sessaoInicial;
-  tmpl.emailDonoScript = ''; // mantido para compatibilidade com template
+  tmpl.emailInicial  = email;
+  tmpl.sessaoInicial = ''; // não precisa mais
 
   return tmpl.evaluate()
-    .setTitle("Sistema de Gestão Cultural — CCBJ")
-    .addMetaTag("viewport", "width=device-width, initial-scale=1")
-    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+    .setTitle("Sistema CCBJ")
+    .addMetaTag("viewport", "width=device-width, initial-scale=1");
 }
 
 function doPost(e) {
