@@ -810,8 +810,8 @@ function _gerarLinhaReserva(r) {
   };
   var corTurno = turnos[r[5]] || 'bg-slate-100 text-slate-700';
   var salaNome = (AppState.mapaSalas && AppState.mapaSalas[r[4]]) ? AppState.mapaSalas[r[4]] : (r[4] || '—');
-  var podeEditar   = AppState.usuario.isAdmin || AppState.usuario.isSuperadmin || AppState.usuario.email === r[8];
-  var podeCancelar = !isCancelado && (AppState.usuario.isAdmin || AppState.usuario.isSuperadmin || AppState.usuario.email === r[8]);
+  var podeEditar   = temPermissao('reservas','editar') || AppState.usuario.email === r[8];
+  var podeCancelar = !isCancelado && (temPermissao('reservas','editar') || AppState.usuario.email === r[8]);
   var podeExcluir  = false;
 
   var itensHTML = '<span class="text-[9px] text-slate-300 italic">Nenhum</span>';
@@ -860,7 +860,7 @@ function _gerarLinhaReserva(r) {
     +'<p class="text-[10px] text-slate-500 break-words"><b>Release:</b> '+escaparHTML(r[11]||'---')+'</p>'
     +'<div class="flex flex-wrap gap-1 mt-1">'+itensHTML+'</div>'
     +'</div></td>'
-    +(function(){var _s=String(r[13]||'').toUpperCase(),_c=_s==='CANCELADO'?'bg-red-100 text-red-600':_s==='HABILITADO'?'bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200':'bg-green-100 text-green-600',_b=(_s!=='CANCELADO'&&_s!=='HABILITADO'&&(AppState.usuario.isAdmin||AppState.usuario.isSuperadmin||AppState.usuario.isHabilitador))?'<br><button data-acao="habilitar-reserva" data-id="'+escaparHTML(r[0])+'" class="mt-1 px-2 py-0.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[8px] font-black rounded-lg uppercase transition-all">Habilitar</button>':'';return'<td class="p-4 text-center"><span class="px-3 py-1 rounded-full text-[10px] font-black uppercase '+_c+'">'+escaparHTML(r[13])+'</span>'+_b+'</td>'})()
+    +(function(){var _s=String(r[13]||'').toUpperCase(),_c=_s==='CANCELADO'?'bg-red-100 text-red-600':_s==='HABILITADO'?'bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200':'bg-green-100 text-green-600',_b=(_s!=='CANCELADO'&&_s!=='HABILITADO'&&(temPermissao('reservas','editar')||AppState.usuario.isHabilitador))?'<br><button data-acao="habilitar-reserva" data-id="'+escaparHTML(r[0])+'" class="mt-1 px-2 py-0.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[8px] font-black rounded-lg uppercase transition-all">Habilitar</button>':'';return'<td class="p-4 text-center"><span class="px-3 py-1 rounded-full text-[10px] font-black uppercase '+_c+'">'+escaparHTML(r[13])+'</span>'+_b+'</td>'})()
     +'<td class="p-4 text-right"><div class="flex justify-end gap-2">'+btnEditar+btnCancelar+btnExcluir+'</div></td>'
     +'</tr>';
 }
@@ -2002,7 +2002,7 @@ var _pollSolicitacoesUltimoPendente = 0;
 function _pollSolicitacoes(primeiro) {
   if (_pollSolicitacoesTimer) clearTimeout(_pollSolicitacoesTimer);
   try {
-    const _pollFn = (AppState.usuario.isAdmin || AppState.usuario.isSuperadmin || AppState.usuario.isHabilitador)
+    const _pollFn = (temPermissao('reservas','visualizar') || AppState.usuario.isHabilitador)
       ? GAS.solicitacoes.listarTodas
       : GAS.solicitacoes.listarPendentes;
     _pollFn(AppState.usuario.email, function(lista) {
@@ -2302,7 +2302,7 @@ function abrirDetalheReserva(id) {
   const salaNome = AppState.mapaSalas?.[r[4]] || r[4];
   const isCancelado = String(r[13]).toUpperCase() === 'CANCELADO';
 
-  const podeEditar  = AppState.usuario.isAdmin || AppState.usuario.isSuperadmin || AppState.usuario.email === r[8];
+  const podeEditar  = temPermissao('reservas','editar') || AppState.usuario.email === r[8];
   const podeExcluir = false;
 
   const mId = 'modalDetalheRes';
@@ -2374,7 +2374,7 @@ function abrirDetalheReserva(id) {
         ${(() => {
           const _s = String(r[13]||'').toUpperCase();
           const _canHab = _s !== 'CANCELADO' && _s !== 'HABILITADO' &&
-            (AppState.usuario.isAdmin || AppState.usuario.isSuperadmin || AppState.usuario.isHabilitador);
+            (temPermissao('reservas','editar') || AppState.usuario.isHabilitador);
           return _canHab ? `
             <button onclick="document.getElementById('${mId}').remove();habilitarReserva('${id}')"
               class="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black rounded-xl transition-all flex items-center justify-center gap-2">
@@ -2410,8 +2410,8 @@ function abrirDetalheRece(id) {
   const r = AppState.colecoes.reservasRece?.find(x => x[0] === id);
   if (!r) return;
   const isCancelado = String(r[17]).toUpperCase() === 'CANCELADO';
-  const podeEditar  = AppState.usuario.isAdmin || AppState.usuario.isSuperadmin || AppState.usuario.isComunicacao || AppState.usuario.email === r[18];
-  const podeExcluir = AppState.usuario.isAdmin || AppState.usuario.isSuperadmin;
+  const podeEditar  = temPermissao('reservas','editar') || AppState.usuario.isComunicacao || AppState.usuario.email === r[18];
+  const podeExcluir = temPermissao('reservas','excluir');
   const mId = 'modalDetalheRece';
   document.getElementById(mId)?.remove();
   const o = document.createElement('div');
@@ -2908,7 +2908,7 @@ var ccbjCalendarInstance = null;
 var _ccbjLoteSubModoMensal = 'diaFixo';
 
 function bloquearDiaCCBJ() {
-  if (!AppState.usuario.isAdmin && !AppState.usuario.isSuperadmin) {
+  if (!temPermissao('espacos','editar')) {
     Swal.fire('Sem permissão', 'Apenas administradores podem bloquear dias.', 'warning');
     return;
   }
@@ -3660,8 +3660,7 @@ function renderizarModoAgendaRece() {
           const height = Math.max(18, ((ter - ini) / TOTAL_MIN) * TOTAL_PX);
 
           const podeEditar =
-            AppState.usuario.isAdmin ||
-            AppState.usuario.isSuperadmin ||
+            temPermissao('reservas','editar') ||
             AppState.usuario.isComunicacao ||
             AppState.usuario.email === r[18];
 

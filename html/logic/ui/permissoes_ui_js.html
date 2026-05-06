@@ -60,6 +60,9 @@ document.addEventListener('DOMContentLoaded', function() {
       if (typeof carregarPermissoes === 'function') {
         carregarPermissoes(function() {
           configurarInterfacePorPermissao();
+          if (AppState.colecoes.reservas && AppState.colecoes.reservas.length) {
+            if (typeof renderizarReservas === 'function') renderizarReservas();
+          }
         });
       } else {
         console.warn('carregarPermissoes não disponível ainda');
