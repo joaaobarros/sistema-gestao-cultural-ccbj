@@ -463,7 +463,7 @@ function obterPermissoesUsuario(email) {
     var p2 = obterPermissoesUsuarioV2(em);
 
     if (!p2 || !p2.permissoes_finais) {
-      throw new Error('Permissões V2 inválidas');
+      throw new Error('Permissões inválidas');
     }
 
     var modulos = {};

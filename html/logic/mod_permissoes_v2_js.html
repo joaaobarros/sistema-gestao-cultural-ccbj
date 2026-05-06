@@ -623,24 +623,6 @@ function aplicarPermissoesUI() {
   });
 }
 
-// ── Sidebar injection ────────────────────────────────────────
-
-document.addEventListener('permissoes:ready', function() {
-  if (!AppState || !AppState.usuario || !AppState.usuario.isAdmin) return;
-  var modSistema = document.getElementById('modulo-sistema');
-  if (!modSistema) return;
-  if (document.getElementById('btn-aba-permissoes-v2')) return;
-  var btn = document.createElement('button');
-  btn.id = 'btn-aba-permissoes-v2';
-  btn.setAttribute('data-aba', 'aba-permissoes-v2');
-  btn.className = 'tab-btn nav-item w-full';
-  btn.innerHTML = '<i class="fas fa-shield-alt w-5 text-center text-xs"></i><span class="text-xs font-semibold">Permissões v2</span>';
-  modSistema.appendChild(btn);
-  btn.addEventListener('click', function() {
-    if (typeof mostrarAba === 'function') mostrarAba('aba-permissoes-v2');
-  });
-});
-
 // ── Helpers DOM ──────────────────────────────────────────────
 
 function _p2El(id)         { return document.getElementById(id); }
