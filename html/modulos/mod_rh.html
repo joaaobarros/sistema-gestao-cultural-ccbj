@@ -657,13 +657,20 @@ function _rhFiltrar() {
 }
 
 function _rhPodeVerFinanceiro() {
-  return temPermissao('rh:financeiro') || temPermissao('superadmin');
+  return typeof temPermissao === 'function'
+    ? temPermissao('rh', 'editar')
+    : (AppState && AppState.usuario && (AppState.usuario.isSuperadmin || AppState.usuario.isAdmin));
 }
 
-var podeFinanceiro = _rhPodeVerFinanceiro();
+function _rhAplicarPermissaoFinanceiro() {
+  var ok  = _rhPodeVerFinanceiro();
+  var tab = document.getElementById('rh-mtab-financeiro');
+  var cnt = document.getElementById('rh-mconteudo-financeiro');
+  if (tab) tab.style.display = ok ? '' : 'none';
+  if (cnt) cnt.style.display = ok ? '' : 'none';
+}
 
-document.getElementById('rh-mtab-financeiro').style.display = podeFinanceiro ? '' : 'none';
-document.getElementById('rh-mconteudo-financeiro').style.display = podeFinanceiro ? '' : 'none';
+document.addEventListener('permissoes:ready', _rhAplicarPermissaoFinanceiro);
 
 // ── Modal colaborador ─────────────────────────────────────────────────────────
 function _rhAbrirModalColaborador(id) {
