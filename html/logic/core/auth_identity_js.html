@@ -1,239 +1,59 @@
 <!--
 @file core/auth_identity_js.html
 @layer frontend/auth
-@description Sistema de identidade real para GAS com "Execute as: Me".
-
-  PROBLEMA: Em "Execute as: Me", Session.getActiveUser() retorna vazio no servidor.
-            Todos os usuários aparecem como o dono do script ("EU").
-
-  SOLUÇÃO EM CAMADAS:
-    1. Template doGet injeta emailInicial + sessaoInicial se o servidor capturou o email
-    2. Google Identity Services (GSI) captura JWT assinado pelo Google → verificação segura
-    3. Fallback: tela de login simples onde o usuário confirma seu email
-
-  FLUXO:
-    1. Ler emailInicial/sessaoInicial injetados pelo doGet (quando disponível)
-    2. Se não disponível → inicializar GSI (auto_select: true — sem popup se já logado)
-    3. Se GSI falhar → exibir tela de login com confirmação de email
-    4. Chamar iniciarSessaoGAS() no servidor → obter sessaoId
-    5. Armazenar sessaoId em AppState + sessionStorage
-    6. Todos os GAS._call passam sessaoId automaticamente
-
-@dependencies google.accounts.id (GSI — carregado assincronamente)
+@description Identidade do usuário via email injetado pelo doGet.
+             doGet captura Session.getActiveUser().getEmail() e injeta como
+             window.__EMAIL_INICIAL__. Não usa GSI nem entrada manual.
 -->
-
 <script>
   window.__EMAIL_INICIAL__ = '<?= emailInicial ?>';
 </script>
 <script>
- 
-
-
-// inicialização
-document.addEventListener('DOMContentLoaded', function() {
-  Auth.iniciar();
-});
-
-function callSeguro(fn, args, cb) {
-  var sessao = sessionStorage.getItem('sessao');
-
-  google.script.run
-    .withSuccessHandler(cb)
-    [fn](sessao, ...args);
-}
 
 function _getEmailInicial() {
   try {
-    return (typeof window !== 'undefined' && window.__EMAIL_INICIAL__) 
-      ? String(window.__EMAIL_INICIAL__).toLowerCase().trim()
-      : '';
-  } catch(e) {
-    return '';
-  }
+    var raw = window.__EMAIL_INICIAL__;
+    return raw ? String(raw).toLowerCase().trim() : '';
+  } catch(e) { return ''; }
 }
 
 // ═══════════════════════════════════════════════════════════════
-// ESTADO DE AUTENTICAÇÃO
+// AUTH — identidade única via template doGet
 // ═══════════════════════════════════════════════════════════════
 
 const Auth = {
-  email: '',
-  pronto: false,
+  email:      '',
+  pronto:     false,
   _callbacks: [],
 
   iniciar: function() {
-    const email = window.__EMAIL_INICIAL__ || '';
+    if (this.pronto) return;
 
-    if (!email) {
-      console.error('[Auth] Sem email');
+    var email = _getEmailInicial();
+
+    if (!email || email.indexOf('@') < 0) {
+      console.error('[Auth] Email não disponível — Session.getActiveUser() não retornou identidade.');
       return;
     }
 
-    this.email = email;
+    this.email  = email;
     this.pronto = true;
 
-    if (typeof AppState !== 'undefined') {
+    if (typeof AppState !== 'undefined' && AppState.usuario) {
       AppState.usuario.email = email;
     }
 
-    this._callbacks.forEach(cb => cb(email));
+    var cbs = this._callbacks.slice();
     this._callbacks = [];
+    cbs.forEach(function(cb) { try { cb(email); } catch(e) { console.error('[Auth] Callback erro:', e); } });
   },
 
   quandoPronto: function(cb) {
-    if (this.pronto) return cb(this.email);
-    this._callbacks.push(cb);
+    if (this.pronto) cb(this.email);
+    else this._callbacks.push(cb);
   }
 };
 
-document.addEventListener('DOMContentLoaded', () => Auth.iniciar());
-
-document.addEventListener('DOMContentLoaded', () => Auth.iniciar());
-
-document.addEventListener('DOMContentLoaded', function() {
-  Auth.iniciar();
-});
-
-document.addEventListener('DOMContentLoaded', function() {
-  Auth.iniciar();
-});
-
-// ═══════════════════════════════════════════════════════════════
-// SESSÃO PERSISTIDA (sessionStorage entre abas da mesma sessão)
-// ═══════════════════════════════════════════════════════════════
-
-(function() {
-  try {
-    if (Auth._sessaoDoGetPronta) return; // já tem do doGet
-    const sessaoSalva = sessionStorage.getItem('ccbj_sessao');
-    const emailSalvo  = sessionStorage.getItem('ccbj_email');
-    const tsSalvo     = parseInt(sessionStorage.getItem('ccbj_sessao_ts') || '0');
-    const TTL = 8 * 60 * 60 * 1000; // 8h em ms
-
-    if (sessaoSalva && emailSalvo && (Date.now() - tsSalvo) < TTL) {
-      Auth.email    = emailSalvo;
-      Auth.sessaoId = sessaoSalva;
-      AppState.usuario.email   = emailSalvo;
-      AppState.usuario._sessao = sessaoSalva;
-      Auth._sessaoRecuperada = true;
-      console.log('[Auth] Sessão recuperada do sessionStorage:', emailSalvo);
-    }
-  } catch(e) {}
-})();
-
-
-
-
-
-// ═══════════════════════════════════════════════════════════════
-// ESTABELECIMENTO DE SESSÃO NO SERVIDOR
-// ═══════════════════════════════════════════════════════════════
-
-function _estabelecerSessao(credencialJWT, emailFallback) {
-
-  google.script.run
-    .withSuccessHandler(function(resultado) {
-
-      if (!resultado || !resultado.ok || !resultado.email || !resultado.sessao) {
-        console.error('[Auth] Sessão inválida');
-        return;
-      }
-
-      Auth.email    = String(resultado.email).toLowerCase().trim();
-      Auth.sessaoId = resultado.sessao;
-      Auth.nivel    = resultado.nivel || '';
-
-      // atualizar AppState
-      AppState.usuario.email   = Auth.email;
-      AppState.usuario._sessao = Auth.sessaoId;
-
-      // persistência segura
-      try {
-        sessionStorage.setItem('ccbj_sessao',    Auth.sessaoId);
-        sessionStorage.setItem('ccbj_email',     Auth.email);
-        sessionStorage.setItem('ccbj_sessao_ts', String(Date.now()));
-      } catch(e) {
-        console.warn('[Auth] Falha ao persistir sessão');
-      }
-
-      console.log('[Auth] Sessão estabelecida:', Auth.email);
-
-      Auth._disparar();
-    })
-
-    .withFailureHandler(function(err) {
-      console.error('[Auth] Falha ao estabelecer sessão:', err);
-      console.warn('[Auth] Sistema não inicializado');
-    })
-
-    .iniciarSessaoGAS('', emailFallback || '');
-}
-
-// ═══════════════════════════════════════════════════════════════
-// ORQUESTRADOR DE BOOT DE AUTENTICAÇÃO
-// ═══════════════════════════════════════════════════════════════
-
-function _bootAutenticacao() {
-
-  // 1. sessão já existente
-  if (Auth._sessaoRecuperada) {
-    Auth._disparar();
-    return;
-  }
-
-  // 2. email vindo do template
-  const emailInicial = _getEmailInicial();
-
-  if (emailInicial && emailInicial.indexOf('@') > 0) {
-    console.log('[Auth] Email via template:', emailInicial);
-    _estabelecerSessao('', emailInicial);
-    return;
-  }
-
-  // 3. fallback bloqueado
-  console.error('[Auth] Nenhuma identidade disponível');
-}
-
-function _tentarGSIouLogin() {
-  console.warn('[Auth] Nenhuma identidade disponível — acesso bloqueado');
-}
-
-// ═══════════════════════════════════════════════════════════════
-// RENOVAÇÃO AUTOMÁTICA DE SESSÃO
-// ═══════════════════════════════════════════════════════════════
-
-function _agendarRenovacaoSessao() {
-  // Renovar 30 minutos antes de expirar (sessão dura 8h, renovar em 7h30)
-  const RENOVAR_EM_MS = (7 * 60 + 30) * 60 * 1000;
-  setTimeout(function() {
-    if (!Auth.sessaoId) return;
-    google.script.run
-      .withSuccessHandler(function(resultado) {
-        if (resultado && resultado.ok) {
-          Auth.sessaoId = resultado.sessao;
-          AppState.usuario._sessao = resultado.sessao;
-          try {
-            sessionStorage.setItem('ccbj_sessao', resultado.sessao);
-            sessionStorage.setItem('ccbj_sessao_ts', String(Date.now()));
-          } catch(e) {}
-          _agendarRenovacaoSessao();
-        }
-      })
-      .renovarSessaoGAS(Auth.sessaoId);
-  }, RENOVAR_EM_MS);
-}
-
-// ═══════════════════════════════════════════════════════════════
-// INICIALIZAÇÃO
-// ═══════════════════════════════════════════════════════════════
-
-document.addEventListener('DOMContentLoaded', function() {
-  _bootAutenticacao();
-
-  // Agendar renovação de sessão após estabelecida
-  Auth.quandoPronto(function() {
-    _agendarRenovacaoSessao();
-  });
-});
+document.addEventListener('DOMContentLoaded', function() { Auth.iniciar(); });
 
 </script>

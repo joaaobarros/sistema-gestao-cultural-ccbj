@@ -625,21 +625,6 @@ function carregarPermissoes(cb) {
       });
 
       AppState.usuario.permissoes = modulos;
-      if (!AppState.usuario.permissoes || Object.keys(AppState.usuario.permissoes).length === 0) {
-
-        AppState.usuario.permissoes = {};
-
-        _P2_MODULOS_ORDEM.forEach(function(m) {
-          var b = _p2baseLocal(AppState.usuario.perfil || 'visitante_controlado', m);
-          AppState.usuario.permissoes[m] = {
-            visualizar: !!b.v,
-            editar:     !!b.e,
-            excluir:    !!b.x
-          };
-        });
-
-      }
-
       AppState.usuario.perfil     = data.perfil_base || 'visitante_controlado';
 
       var idx = _p2S.permissoes.findIndex(function(p) { return p.email === em; });

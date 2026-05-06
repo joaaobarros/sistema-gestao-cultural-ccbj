@@ -42,8 +42,7 @@ document.addEventListener('DOMContentLoaded', function () {
       inicializarApp();
     });
   } else {
-    // Fallback: Auth não disponível (ambiente de preview local)
-    inicializarApp();
+    console.error('[Bootstrap] Auth não disponível — sistema bloqueado. Verifique o carregamento de auth_identity_js.');
   }
 
   /**
