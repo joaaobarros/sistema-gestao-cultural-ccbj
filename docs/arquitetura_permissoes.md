@@ -138,3 +138,23 @@ mod_permissoes_v2_js   ← define temPermissao, carregarPermissoes, aplicarPermi
 integracao_reserva_comunicacao_js
 bootstrap_js           ← ÚLTIMO: dispara DOMContentLoaded handlers
 ```
+
+---
+
+## Função `_getSheet` — backend (utils.js)
+
+`_getSheet(nomeAba)` é a única função backend para acessar abas. Definida em `utils.js` linha 84.
+
+**`ABA_PARA_MODULO` — mapeamento completo:**
+
+| Aba | Módulo |
+|-----|--------|
+| Administradores, Configuracoes, Listas, Logs, LogAcessos, PreferenciasUsuarios | MASTER |
+| Reservas, Itens, Ativos, Solicitacoes | ESPACOS |
+| ReservasRECE, ProcessosComunicacao, EntregasComunicacao | COMUNICACAO |
+| RelatoriosCODIP, Contratos, Metas, Indicadores, Rubricas, RubricasMemoria, RubricasHistorico, ContratosVersoes | RELATORIOS |
+| Contratacoes, Pagamentos, FluxoCaixa, RubricasFinanceiro | FINANCEIRO |
+| Funcionarios, Escalas, Avaliacoes, Ferias | EQUIPES |
+| Tarefas, Processos, Demandas | PESSOAL |
+
+**Bug corrigido (refactor-fase2, 2026-05):** Existia uma segunda definição de `_getSheet` em `utils.js` (linha 923) que sobrescrevia a correta (linha 84). A versão duplicada retornava `[]` (array vazio) para abas não mapeadas, causando `TypeError: getLastRow is not a function` quando `obterDadosIniciais()` chamava `_getSheet("Administradores")`. Isso impedia o boot completo e mantinha `isAdmin = false`, ocultando Configurações e Auditoria.
