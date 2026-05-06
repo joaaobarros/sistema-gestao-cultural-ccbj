@@ -10,7 +10,7 @@ var _P2_MODULOS = [
 ];
 
 var _P2_SENSIVEIS     = ['rh','contratacoes','financeiro'];
-var _P2_VC_MODS       = ['agenda','estrategia','comunicacao','espacos'];
+var _P2_VC_MODS       = ['espacos','comunicacao','relatorios','estrategia'];
 var _P2_PERFIS_VALIDOS = ['superadmin','admin','gestor','tecnico','rh','comunicacao','visitante_controlado','visitante'];
 
 function _p2p(v,e,x) { return {visualizar:!!v,editar:!!e,excluir:!!x}; }
@@ -487,12 +487,12 @@ function obterPermissoesUsuario(email) {
     };
 
   } catch(e) {
-
-    return {
-      perfil: 'visitante',
-      modulos: _permModulosPadrao('visitante')
-    };
-
+    var _vcModulos = {};
+    _P2_MODULOS.forEach(function(m) {
+      var b = (_P2_BASE.visitante_controlado || {})[m] || { visualizar: false, editar: false, excluir: false };
+      _vcModulos[m] = { visualizar: !!b.visualizar, editar: false, excluir: false };
+    });
+    return { perfil: 'visitante_controlado', modulos: _vcModulos };
   }
 }
 

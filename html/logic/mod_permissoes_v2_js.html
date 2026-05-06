@@ -640,7 +640,22 @@ function carregarPermissoes(cb) {
 
   }, function() {
 
-    // mesmo em erro, dispara (pra não travar sistema)
+    // Em erro de rede/backend: aplicar visitante_controlado para garantir entrada segura sem crash.
+    if (AppState && AppState.usuario) {
+      var _vcPermitidos = ['espacos','comunicacao','relatorios','estrategia'];
+      var _vcModulos = {};
+      _P2_MODULOS_ORDEM.forEach(function(m) {
+        _vcModulos[m] = {
+          visualizar: _vcPermitidos.indexOf(m) !== -1,
+          editar:     false,
+          excluir:    false
+        };
+      });
+      AppState.usuario.permissoes = _vcModulos;
+      AppState.usuario.perfil     = 'visitante_controlado';
+      if (typeof aplicarPermissoesUI === 'function') aplicarPermissoesUI();
+    }
+
     document.dispatchEvent(new Event('permissoes:ready'));
 
     if (typeof cb === 'function') cb();

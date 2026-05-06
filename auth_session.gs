@@ -287,17 +287,16 @@ function _validarEmailAutorizado(email) {
     }
   }
 
-  // Verificar lista de usuários conhecidos (Administradores + Funcionários)
-  // Esta verificação é opcional — se não houver lista, aceitar qualquer domínio válido
+  // Verificar domínio permitido apenas — qualquer usuário autenticado pode entrar.
+  // Restrição de funcionalidades é responsabilidade do sistema de permissões (visitante_controlado).
   try {
     var shAdm = typeof _getSheet === 'function' ? _getSheet('Administradores') : null;
     if (shAdm && shAdm.getLastRow() > 1) {
       var admins = shAdm.getRange(2, 1, shAdm.getLastRow() - 1, 1).getValues()
         .map(function(r) { return String(r[0]).toLowerCase().trim(); });
       if (admins.indexOf(emailLimpo) >= 0) return emailLimpo;
-      // Se há lista mas o email não está nela → negar apenas se RESTRINGIR_A_ADMINS=true
-      var restringir = PropertiesService.getScriptProperties().getProperty('RESTRINGIR_A_ADMINS') || 'false';
-      if (restringir === 'true') return '';
+      // Usuário fora da lista de admins: permitir entrada com perfil visitante_controlado.
+      // NÃO bloquear aqui — o motor de permissões trata o acesso restrito.
     }
   } catch(e) {}
 
@@ -345,11 +344,11 @@ function _resolverNivelAcesso(email) {
     }
     if (typeof obterPermissoesUsuario === 'function') {
       var perms = obterPermissoesUsuario(email);
-      return perms.perfil || 'usuario';
+      return perms.perfil || 'visitante_controlado';
     }
-    return 'usuario';
+    return 'visitante_controlado';
   } catch(e) {
-    return 'usuario';
+    return 'visitante_controlado';
   }
 }
 
