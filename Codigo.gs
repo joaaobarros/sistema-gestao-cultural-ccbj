@@ -138,9 +138,32 @@ function doGet(e) {
     }
   }
 
-  return HtmlService.createTemplateFromFile("Index")
-    .evaluate()
-    .setTitle("Sistema de Reservas — CCBJ")
+  // Tentar capturar email do usuário no momento do doGet
+  // Em alguns deployments Google Workspace, Session.getActiveUser() funciona aqui
+  let emailDoGet = '';
+  try { emailDoGet = Session.getActiveUser().getEmail() || ''; } catch(e_) {}
+
+  // Se getActiveUser retornou o email do dono (Execute as: Me), descartar
+  let emailEfetivo = '';
+  try { emailEfetivo = Session.getEffectiveUser().getEmail() || ''; } catch(e_) {}
+  if (emailDoGet && emailDoGet === emailEfetivo) emailDoGet = '';
+
+  // Gerar token de sessão se temos email real no doGet
+  let sessaoInicial = '';
+  if (emailDoGet && typeof iniciarSessaoGAS === 'function') {
+    try {
+      const res = iniciarSessaoGAS('', emailDoGet);
+      if (res && res.ok) sessaoInicial = res.sessao;
+    } catch(e_) {}
+  }
+
+  const tmpl = HtmlService.createTemplateFromFile("Index");
+  tmpl.emailInicial  = emailDoGet;
+  tmpl.sessaoInicial = sessaoInicial;
+  tmpl.emailDonoScript = emailEfetivo; // Frontend usa para detectar "Execute as: Me"
+
+  return tmpl.evaluate()
+    .setTitle("Sistema de Gestão Cultural — CCBJ")
     .addMetaTag("viewport", "width=device-width, initial-scale=1")
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }

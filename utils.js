@@ -69,6 +69,17 @@ const ABA_PARA_MODULO = {
   'Tarefas':              'PESSOAL',
   'Processos':            'PESSOAL',
   'Demandas':             'PESSOAL',
+
+  // ESCUTA
+  'EscutaConfig':         'ESCUTA',
+  'EscutaPerguntas':      'ESCUTA',
+  'EscutaRespostas':      'ESCUTA',
+  'EscutaEspontanea':     'ESCUTA',
+  'EscutaPesquisas':      'ESCUTA',
+  'EscutaTemplates':      'ESCUTA',
+  'EscutaAlertas':        'ESCUTA',
+  'EscutaPerfis':         'ESCUTA',
+  'LogsEscuta':           'ESCUTA',
 };
 
 // ══════════════════════════════════════════════════════

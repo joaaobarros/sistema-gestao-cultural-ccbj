@@ -683,7 +683,9 @@ function registrarRespostaPulse(dados) {
   try {
     if (!lock.tryLock(5000)) return { ok: false, msg: 'Sistema ocupado. Tente novamente.' };
 
-    var email = Session.getActiveUser().getEmail();
+    var email = typeof _resolverEmailReal === 'function'
+      ? _resolverEmailReal(dados.sessao || dados.email || '')
+      : (Session.getActiveUser().getEmail() || '');
     var cfg   = obterConfiguracaoEscuta().dados || {};
     if (cfg.ativo === 'false') return { ok: false, msg: 'Sistema inativo.' };
     if (cfg.ativoPadrao === 'false' && !dados.sourcePesquisaId) return { ok: false, msg: 'Pesquisas padrão inativas.' };
@@ -730,7 +732,9 @@ function registrarRespostaPulse(dados) {
 
 function registrarEscutaEspontanea(dados) {
   try {
-    var email = Session.getActiveUser().getEmail();
+    var email = typeof _resolverEmailReal === 'function'
+      ? _resolverEmailReal(dados.sessao || dados.email || '')
+      : (Session.getActiveUser().getEmail() || '');
     var cfg   = obterConfiguracaoEscuta().dados || {};
     if (cfg.ativo === 'false' || cfg.ativoEspontanea === 'false') {
       return { ok: false, msg: 'Escuta espontânea inativa.' };
@@ -893,7 +897,9 @@ function salvarPesquisaEscuta(dados) {
   try {
     if (!lock.tryLock(8000)) return { ok: false, msg: 'Sistema ocupado. Tente novamente.' };
 
-    var email = Session.getActiveUser().getEmail();
+    var email = typeof _resolverEmailReal === 'function'
+      ? _resolverEmailReal(dados.sessao || dados.email || '')
+      : (Session.getActiveUser().getEmail() || '');
     if (!verificarPermissaoEscuta(email, 'editar')) return { ok: false, msg: 'Permissão negada.' };
 
     // Normalizar e validar antes de salvar
@@ -947,9 +953,11 @@ function salvarPesquisaEscuta(dados) {
   }
 }
 
-function excluirPesquisaEscuta(id) {
+function excluirPesquisaEscuta(id, sessaoOuEmail) {
   try {
-    var email = Session.getActiveUser().getEmail();
+    var email = typeof _resolverEmailReal === 'function'
+      ? _resolverEmailReal(sessaoOuEmail || '')
+      : (Session.getActiveUser().getEmail() || '');
     if (!verificarPermissaoEscuta(email, 'excluir')) return { ok: false, msg: 'Permissão negada.' };
 
     var sh   = _escutaSheet(_ESCUTA_SHEETS.PESQUISAS);
@@ -1370,9 +1378,11 @@ function _escutaRegistrarAlerta(a) {
   return id;
 }
 
-function resolverAlertaEscuta(id, acao) {
+function resolverAlertaEscuta(id, acao, sessaoOuEmail) {
   try {
-    var email = Session.getActiveUser().getEmail();
+    var email = typeof _resolverEmailReal === 'function'
+      ? _resolverEmailReal(sessaoOuEmail || '')
+      : (Session.getActiveUser().getEmail() || '');
     if (!verificarPermissaoEscuta(email, 'editar')) return { ok: false, msg: 'Permissão negada.' };
 
     var sh   = _escutaSheet(_ESCUTA_SHEETS.ALERTAS);
@@ -1409,11 +1419,13 @@ function obterPerfilAnaliticoEscuta() {
 }
 
 function salvarPerfilAnaliticoEscuta(dados) {
-  var lock = LockService.getUserLock();
+  var lock = LockService.getScriptLock();
   try {
     if (!lock.tryLock(5000)) return { ok: false, msg: 'Sistema ocupado. Tente novamente.' };
 
-    var email = Session.getActiveUser().getEmail();
+    var email = typeof _resolverEmailReal === 'function'
+      ? _resolverEmailReal(dados.sessao || dados.email || '')
+      : (Session.getActiveUser().getEmail() || '');
     var sh    = _escutaSheet(_ESCUTA_SHEETS.PERFIL_ANALITICO);
     var rows  = _escutaSheetToArray(sh);
     var idx   = rows.findIndex(function(r) { return r.email === email; });

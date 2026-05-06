@@ -40,6 +40,7 @@ const PROP = {
   FINANCEIRO:   'SHEET_ID_FINANCEIRO',
   EQUIPES:      'SHEET_ID_EQUIPES',
   PESSOAL:      'SHEET_ID_PESSOAL',
+  ESCUTA:       'SHEET_ID_ESCUTA',
   FOLDER_ROOT:  'FOLDER_ID_ROOT',
 };
 
@@ -416,6 +417,51 @@ const MODULOS = {
     }
   },
 
+  ESCUTA: {
+    nome:  'CCBJ_ESCUTA',
+    pasta: 'CCBJ — Escuta Institucional',
+    prop:  PROP.ESCUTA,
+    abas: {
+      'EscutaConfig': [
+        'chave', 'valor', 'descricao', 'atualizadoEm'
+      ],
+      'EscutaPerguntas': [
+        'id', 'texto', 'dimensao', 'tipo', 'tipoTempo', 'peso',
+        'elegibilidade', 'prioridade', 'ativo', 'criadoEm'
+      ],
+      'EscutaRespostas': [
+        'id', 'perguntaId', 'hashUsuario', 'email', 'resposta',
+        'dimensao', 'tipo', 'tipoTempo', 'respondidoEm', 'turno',
+        'progressoTurno', 'periodo', 'setor', 'anonimo', 'sourcePesquisaId'
+      ],
+      'EscutaEspontanea': [
+        'id', 'hashUsuario', 'email', 'categoria', 'texto',
+        'sentimento', 'anonimo', 'registradoEm', 'setor'
+      ],
+      'EscutaPesquisas': [
+        'id', 'titulo', 'perguntas', 'criadoPor', 'periodoInicio',
+        'periodoFim', 'status', 'prioridade', 'padrao', 'elegibilidade',
+        'regras_saturacao', 'criadoEm'
+      ],
+      'EscutaTemplates': [
+        'id', 'titulo', 'perguntas', 'categoria', 'descricao',
+        'publico', 'criadoEm', 'criadoPor'
+      ],
+      'EscutaAlertas': [
+        'id', 'tipo', 'dimensao', 'nivel', 'mensagem',
+        'periodo', 'criadoEm', 'dados', 'status',
+        'resolvidoPor', 'acaoTomada', 'resolvidoEm'
+      ],
+      'EscutaPerfis': [
+        'email', 'genero', 'raca', 'orientacaoSexual', 'faixaSalarial',
+        'vinculo', 'nivel', 'tempoCasa', 'regiao', 'distancia', 'atualizadoEm'
+      ],
+      'LogsEscuta': [
+        'timestamp', 'acao', 'autor', 'alvo', 'modulo', 'detalhes'
+      ],
+    }
+  },
+
   PESSOAL: {
     nome:  'CCBJ_PESSOAL',
     pasta: 'CCBJ — Pessoal',
@@ -463,6 +509,7 @@ const COR_MODULO = {
   FINANCEIRO:  '#065F46',
   EQUIPES:     '#7C2D12',
   PESSOAL:     '#3B0764',
+  ESCUTA:      '#0F4C75',
 }
 
 

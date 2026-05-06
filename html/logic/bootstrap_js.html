@@ -34,7 +34,17 @@ if (typeof toggleSidebar === 'undefined') {
 document.addEventListener('DOMContentLoaded', function () {
 
   console.log('Iniciando Sistema CCBJ...');
-  inicializarApp();
+
+  // Aguardar identidade do usuário antes de carregar dados do servidor.
+  // Auth é definido em core/auth_identity_js.html (carregado antes deste arquivo).
+  if (typeof Auth !== 'undefined' && typeof Auth.quandoPronto === 'function') {
+    Auth.quandoPronto(function() {
+      inicializarApp();
+    });
+  } else {
+    // Fallback: Auth não disponível (ambiente de preview local)
+    inicializarApp();
+  }
 
   /**
    * ========================================

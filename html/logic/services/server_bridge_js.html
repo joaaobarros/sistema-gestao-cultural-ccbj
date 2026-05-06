@@ -40,6 +40,13 @@ const GAS = {
     if (typeof cb === 'function') cb({ ok: false, stub: true, msg: 'Funcionalidade em desenvolvimento' });
   },
 
+  // Retorna o token de sessão atual (AppState deve estar inicializado)
+  _sessao: function() {
+    return (typeof AppState !== 'undefined' && AppState.usuario && AppState.usuario._sessao)
+      ? AppState.usuario._sessao
+      : '';
+  },
+
   /**
    * BLOCO: Serviços de reserva
    * @context CRUD e disponibilidade de reservas.
@@ -83,7 +90,7 @@ const GAS = {
    */
   admin: {
     obterDados: function(cb, err) {
-      GAS._call('obterDadosIniciais', [], cb, err);
+      GAS._call('obterDadosIniciais', [GAS._sessao()], cb, err);
     },
     salvarConfig: function(dados, cb, err) {
       GAS._call('processarSalvarConfig', [dados], cb, err);
@@ -475,27 +482,59 @@ const GAS = {
    * @context Pesquisas pulse, escuta espontânea, indicadores, alertas e relatórios.
    */
   escuta: {
-    obterDados:            function(cb, err)         { GAS._call('obterDadosEscuta',               [],        cb, err); },
-    obterPergunta:         function(cb, err)         { GAS._call('obterPerguntaPulse',              [],        cb, err); },
-    responderPulse:        function(dados, cb, err)  { GAS._call('registrarRespostaPulse',          [dados],   cb, err); },
-    registrarEspontanea:   function(dados, cb, err)  { GAS._call('registrarEscutaEspontanea',       [dados],   cb, err); },
-    obterDashboard:        function(filtros, cb, err){ GAS._call('obterDashboardEscuta',            [filtros], cb, err); },
-    obterAlertas:          function(cb, err)         { GAS._call('obterAlertasEscuta',              [],        cb, err); },
-    resolverAlerta:        function(id, acao, cb, err){ GAS._call('resolverAlertaEscuta',           [id, acao],cb, err); },
-    obterPesquisas:        function(cb, err)         { GAS._call('obterPesquisasEscuta',            [],        cb, err); },
-    salvarPesquisa:        function(dados, cb, err)  { GAS._call('salvarPesquisaEscuta',            [dados],   cb, err); },
-    excluirPesquisa:       function(id, cb, err)     { GAS._call('excluirPesquisaEscuta',           [id],      cb, err); },
-    obterBanco:            function(cb, err)         { GAS._call('obterBancoPesquisas',             [],        cb, err); },
-    salvarTemplate:        function(dados, cb, err)  { GAS._call('salvarTemplateBancoPesquisas',    [dados],   cb, err); },
-    obterConfig:           function(cb, err)         { GAS._call('obterConfiguracaoEscuta',         [],        cb, err); },
-    salvarConfig:          function(cfg, cb, err)    { GAS._call('salvarConfiguracaoEscuta',        [cfg],     cb, err); },
-    obterPerguntas:        function(cb, err)         { GAS._call('obterPerguntasEscuta',            [],        cb, err); },
-    atualizarPergunta:     function(id, c, cb, err)  { GAS._call('atualizarPerguntaEscuta',         [id, c],   cb, err); },
-    obterPerfil:           function(cb, err)         { GAS._call('obterPerfilAnaliticoEscuta',      [],        cb, err); },
-    salvarPerfil:          function(dados, cb, err)  { GAS._call('salvarPerfilAnaliticoEscuta',     [dados],   cb, err); },
-    gerarRelatorio:        function(tipo, p, cb, err){ GAS._call('gerarRelatorioEscuta',            [tipo, p], cb, err); },
-    obterFeedback:         function(cb, err)         { GAS._call('obterFeedbackEscuta',             [],        cb, err); },
-    obterSaturacao:        function(cb, err)         { GAS._call('obterSaturacaoEscuta',            [],        cb, err); }
+    obterDados:            function(cb, err)          { GAS._call('obterDadosEscuta',               [],                          cb, err); },
+    obterPergunta:         function(cb, err)          { GAS._call('obterPerguntaPulse',              [],                          cb, err); },
+    responderPulse:        function(dados, cb, err)   {
+      if (dados && !dados.sessao) dados.sessao = GAS._sessao();
+      GAS._call('registrarRespostaPulse', [dados], cb, err);
+    },
+    registrarEspontanea:   function(dados, cb, err)   {
+      if (dados && !dados.sessao) dados.sessao = GAS._sessao();
+      GAS._call('registrarEscutaEspontanea', [dados], cb, err);
+    },
+    obterDashboard:        function(filtros, cb, err) { GAS._call('obterDashboardEscuta',            [filtros],                   cb, err); },
+    obterAlertas:          function(cb, err)          { GAS._call('obterAlertasEscuta',              [],                          cb, err); },
+    resolverAlerta:        function(id, acao, cb, err){ GAS._call('resolverAlertaEscuta',            [id, acao, GAS._sessao()],   cb, err); },
+    obterPesquisas:        function(cb, err)          { GAS._call('obterPesquisasEscuta',            [],                          cb, err); },
+    salvarPesquisa:        function(dados, cb, err)   {
+      if (dados && !dados.sessao) dados.sessao = GAS._sessao();
+      GAS._call('salvarPesquisaEscuta', [dados], cb, err);
+    },
+    excluirPesquisa:       function(id, cb, err)      { GAS._call('excluirPesquisaEscuta',           [id, GAS._sessao()],         cb, err); },
+    obterBanco:            function(cb, err)          { GAS._call('obterBancoPesquisas',             [],                          cb, err); },
+    salvarTemplate:        function(dados, cb, err)   { GAS._call('salvarTemplateBancoPesquisas',    [dados],                     cb, err); },
+    obterConfig:           function(cb, err)          { GAS._call('obterConfiguracaoEscuta',         [],                          cb, err); },
+    salvarConfig:          function(cfg, cb, err)     { GAS._call('salvarConfiguracaoEscuta',        [cfg],                       cb, err); },
+    obterPerguntas:        function(cb, err)          { GAS._call('obterPerguntasEscuta',            [],                          cb, err); },
+    atualizarPergunta:     function(id, c, cb, err)   { GAS._call('atualizarPerguntaEscuta',         [id, c],                     cb, err); },
+    obterPerfil:           function(cb, err)          { GAS._call('obterPerfilAnaliticoEscuta',      [],                          cb, err); },
+    salvarPerfil:          function(dados, cb, err)   {
+      if (dados && !dados.sessao) dados.sessao = GAS._sessao();
+      GAS._call('salvarPerfilAnaliticoEscuta', [dados], cb, err);
+    },
+    gerarRelatorio:        function(tipo, p, cb, err) { GAS._call('gerarRelatorioEscuta',            [tipo, p],                   cb, err); },
+    obterFeedback:         function(cb, err)          { GAS._call('obterFeedbackEscuta',             [],                          cb, err); },
+    obterSaturacao:        function(cb, err)          { GAS._call('obterSaturacaoEscuta',            [],                          cb, err); },
+
+    // ── Governança e Motor Metodológico ───────────────────────
+    obterGovernanca:       function(cb, err)          { GAS._call('obterGovernancaEscuta',           [],                          cb, err); },
+    simularImpacto:        function(pesquisa, cb, err){ GAS._call('simularImpactoPesquisa',          [pesquisa],                  cb, err); },
+    construirFluxo:        function(etapa, d, cb, err){ GAS._call('construirFluxoPesquisa',          [etapa, d],                  cb, err); },
+    obterMapa:             function(periodo, cb, err) { GAS._call('obterMapaDadosEscuta',            [periodo],                   cb, err); },
+    obterManual:           function(secao, cb, err)   { GAS._call('obterManualEscuta',               [secao],                     cb, err); },
+    normalizarPesquisa:    function(p, cb, err)       { GAS._call('normalizarPesquisaEscuta',        [p],                         cb, err); },
+    sugerirParametros:     function(obj, pub, cb, err){ GAS._call('sugerirParametrosPesquisa',       [obj, pub],                  cb, err); },
+    definirTotalColab:     function(total, cb, err)   { GAS._call('definirTotalColaboradoresEscuta', [total],                     cb, err); }
+  },
+
+  /**
+   * BLOCO: Autenticação / identidade (auth_session.gs)
+   */
+  auth: {
+    obterInfo:   function(cb, err)              { GAS._call('obterInfoAutenticacao',   [],          cb, err); },
+    iniciar:     function(jwt, email, cb, err)  { GAS._call('iniciarSessaoGAS',        [jwt, email],cb, err); },
+    renovar:     function(sessaoId, cb, err)    { GAS._call('renovarSessaoGAS',        [sessaoId],  cb, err); },
+    encerrar:    function(sessaoId, cb, err)    { GAS._call('encerrarSessaoGAS',       [sessaoId],  cb, err); }
   },
 
   /**

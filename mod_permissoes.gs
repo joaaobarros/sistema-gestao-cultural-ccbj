@@ -16,19 +16,19 @@
 var _PERFIS_PADRAO = {
   superadmin: { reservas:true, contratos:true, financeiro:true, tarefas:true,
                 processos:true, almoxarifado:true, balcao:true, rh:true,
-                eficiencia:true, contratacoes:true, relatorios:true },
+                eficiencia:true, contratacoes:true, relatorios:true, escuta:true },
   admin:      { reservas:true, contratos:true, financeiro:true, tarefas:true,
                 processos:true, almoxarifado:true, balcao:true, rh:false,
-                eficiencia:true, contratacoes:true, relatorios:true },
+                eficiencia:true, contratacoes:true, relatorios:true, escuta:true },
   gestor:     { reservas:true, contratos:true, financeiro:false, tarefas:true,
                 processos:true, almoxarifado:false, balcao:true, rh:false,
-                eficiencia:true, contratacoes:false, relatorios:true },
+                eficiencia:true, contratacoes:false, relatorios:true, escuta:true },
   tecnico:    { reservas:true, contratos:false, financeiro:false, tarefas:true,
                 processos:false, almoxarifado:false, balcao:true, rh:false,
-                eficiencia:false, contratacoes:false, relatorios:false },
+                eficiencia:false, contratacoes:false, relatorios:false, escuta:true },
   visitante:  { reservas:true, contratos:false, financeiro:false, tarefas:false,
                 processos:false, almoxarifado:false, balcao:false, rh:false,
-                eficiencia:false, contratacoes:false, relatorios:false }
+                eficiencia:false, contratacoes:false, relatorios:false, escuta:false }
 };
 
 function _permModulosPadrao(perfil, acao) {
