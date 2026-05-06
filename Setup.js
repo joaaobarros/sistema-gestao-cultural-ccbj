@@ -450,7 +450,9 @@ const MODULOS = {
     }
   },
 
-};
+},
+
+}
 
 // ── Cores de cabeçalho por módulo ────────────────────────────────────────
 const COR_MODULO = {
@@ -461,7 +463,8 @@ const COR_MODULO = {
   FINANCEIRO:  '#065F46',
   EQUIPES:     '#7C2D12',
   PESSOAL:     '#3B0764',
-};
+}
+
 
 /**
  * ========================================

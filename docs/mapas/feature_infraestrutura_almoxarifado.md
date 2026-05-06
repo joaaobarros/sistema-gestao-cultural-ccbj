@@ -337,3 +337,298 @@ Sem isso:
 → sistema não funciona na prática  
 
 ---
+
+---
+
+## 🧩 MODELO — ATIVO (Entidade Central)
+
+Ativo
+
+→ Identificação  
+→ nome  
+→ código  
+→ tipo (consumível | móvel | fixo)  
+→ categoria  
+→ criticidade  
+
+→ Localização  
+→ tipo (estoque | balcão | fixo | emprestado)  
+→ sala  
+→ histórico  
+
+→ Estoque  
+→ qtdTotal  
+→ qtdReservado  
+→ disponível = total - reservado  
+
+→ Ciclo de vida  
+→ fase (aquisição | operação | manutenção | baixa)  
+→ status (ativo | inativo | descartado)  
+→ datas  
+
+→ Financeiro  
+→ contrato  
+→ valor aquisição  
+→ custo manutenção  
+→ custo total  
+
+→ Condição  
+→ grau preservação  
+→ índice saúde  
+
+→ Manutenção  
+→ última  
+→ próxima  
+→ periodicidade  
+
+→ Uso  
+→ total usos  
+→ último uso  
+→ taxa utilização  
+
+→ Governança  
+→ responsável  
+→ setor  
+
+---
+
+## 🔄 MODELO — MOVIMENTAÇÃO
+
+Movimentação
+
+→ ativo  
+→ tipo  
+→ entrada  
+→ saída  
+→ transferência  
+→ ajuste  
+
+→ origem  
+→ reserva  
+→ manutenção  
+→ manual  
+
+→ quantidade  
+→ data  
+→ responsável  
+→ observação  
+
+---
+
+## 📅 MODELO — USO (RESERVAS)
+
+UsoAtivo
+
+→ ativo  
+→ reserva  
+
+→ período  
+→ início  
+→ fim  
+
+→ quantidade  
+
+→ confirmação  
+→ retirada confirmada  
+→ devolução confirmada  
+
+→ responsáveis  
+→ retirada  
+→ devolução  
+
+---
+
+## 🔧 MODELO — MANUTENÇÃO
+
+Manutenção
+
+→ ativo  
+→ tipo  
+→ preventiva  
+→ corretiva  
+→ inspeção  
+
+→ descrição  
+→ custo  
+→ duração  
+
+→ datas  
+→ execução  
+→ próxima prevista  
+
+→ responsável  
+→ status  
+
+---
+
+## 📉 MODELO — BAIXA
+
+BaixaAtivo
+
+→ ativo  
+
+→ tipo  
+→ venda  
+→ doação  
+→ perda  
+→ descarte  
+
+→ motivo  
+→ valor recuperado  
+
+→ data  
+→ responsável  
+
+---
+
+## ⚠️ MODELO — ALERTA
+
+AlertaInfra
+
+→ ativo  
+
+→ tipo  
+→ manutenção atrasada  
+→ risco  
+→ estoque baixo  
+→ ociosidade  
+
+→ nível  
+→ baixo  
+→ médio  
+→ alto  
+→ crítico  
+
+→ status  
+→ ativo  
+→ resolvido  
+
+→ data  
+
+---
+
+## 🔁 MODELO — FLUXO RESERVA + ATIVO
+
+Reserva
+
+→ solicita ativos  
+
+↓
+
+Validação
+
+→ disponibilidade (ativo + sala)  
+
+↓
+
+Bloqueio lógico
+
+→ qtdReservado  
+
+↓
+
+Retirada (manual)
+
+→ movimentação saída  
+
+↓
+
+Uso
+
+→ registro de uso  
+
+↓
+
+Devolução
+
+→ movimentação entrada  
+
+↓
+
+Atualização
+
+→ condição  
+→ métricas  
+→ histórico  
+
+---
+
+## 📦 MODELO — DISPONIBILIDADE
+
+DisponibilidadeAtivo
+
+→ disponível = qtdTotal - qtdReservado  
+
+→ bloqueios  
+→ reservas futuras  
+
+→ estados  
+→ disponível  
+→ reservado  
+→ indisponível  
+
+---
+
+## 🧠 MODELO — MÉTRICAS
+
+Indicadores
+
+→ utilização  
+→ uso / tempo  
+
+→ custo total  
+→ aquisição + manutenção  
+
+→ saúde  
+→ condição + falhas  
+
+→ risco  
+→ probabilidade × impacto  
+
+---
+
+## 🔮 MODELO — INTELIGÊNCIA
+
+Regras
+
+→ se uso ↑ → antecipar manutenção  
+
+→ se custo manutenção > aquisição  
+→ sugerir substituição  
+
+→ se tempo sem uso ↑  
+→ sugerir realocação  
+
+→ se consumo recorrente ↑  
+→ prever compra  
+
+---
+
+## 🔗 MODELO — INTEGRAÇÃO
+
+Reservas  
+→ gera uso  
+
+Financeiro  
+→ cria ativo  
+→ alimenta custo  
+
+RH  
+→ define responsável  
+
+Espaços  
+→ define ativos fixos  
+
+---
+
+## 🧭 MODELO — MIGRAÇÃO
+
+Itens (legado)
+
+→ converter em ativos  
+
+→ manter temporariamente  
+
+→ eliminar dependência  
+
+---
