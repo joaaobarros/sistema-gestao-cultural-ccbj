@@ -835,3 +835,8 @@ function inicializarParametrosRH() {
   aba.appendRow(['desconto_vale_alimentacao', 1.00]);
 
 }
+
+function debugItens() {
+  var aba = _abrirAba('ESPACOS', 'Itens');
+  Logger.log(aba.getName());
+}

@@ -824,3 +824,160 @@ function isMesmoDia(dataReserva) {
   data.setHours(0, 0, 0, 0);
   return hoje.getTime() === data.getTime();
 }
+
+/**
+ * ========================================
+ * COMPAT: Camada de compatibilidade Itens ↔ Ativos
+ * ========================================
+ * Fonte única para consumo no frontend
+ */
+
+function obterItensNormalizados() {
+  try {
+    var ativos = _getSheetSafe('Ativos');
+    if (ativos && ativos.length > 1) {
+      return _normalizarAtivos(ativos);
+    }
+  } catch (e) {}
+
+  try {
+    var itens = _getSheetSafe('Itens');
+    if (itens && itens.length > 1) {
+      return _normalizarItens(itens);
+    }
+  } catch (e) {}
+
+  return [];
+}
+
+/**
+ * ----------------------------------------
+ * SAFE GET SHEET
+ * evita crash do _getSheet
+ */
+function _getSheetSafe(nome) {
+  try {
+    return _getSheet(nome);
+  } catch (e) {
+    console.warn('Sheet não encontrada:', nome);
+    return null;
+  }
+}
+
+/**
+ * ----------------------------------------
+ * NORMALIZA: ATIVOS → formato padrão
+ */
+function _normalizarAtivos(dados) {
+  var header = dados[0];
+
+  var idx = {
+    id: header.indexOf('ID'),
+    nome: header.indexOf('Nome'),
+    categoria: header.indexOf('Categoria'),
+    qtd: header.indexOf('QtdTotal'),
+    local: header.indexOf('Sala'),
+    status: header.indexOf('Status')
+  };
+
+  return dados.slice(1).map(function(l) {
+    return {
+      id: l[idx.id],
+      nome: l[idx.nome],
+      categoria: l[idx.categoria],
+      quantidade: Number(l[idx.qtd] || 0),
+      localizacao: l[idx.local],
+      status: l[idx.status]
+    };
+  });
+}
+
+/**
+ * ----------------------------------------
+ * NORMALIZA: ITENS → formato padrão
+ */
+function _normalizarItens(dados) {
+  var header = dados[0];
+
+  var idx = {
+    id: header.indexOf('ID Item'),
+    nome: header.indexOf('Nome'),
+    categoria: header.indexOf('Categoria'),
+    qtd: header.indexOf('Quantidade Total'),
+    local: header.indexOf('Localização'),
+    status: header.indexOf('Status de Uso')
+  };
+
+  return dados.slice(1).map(function(l) {
+    return {
+      id: l[idx.id],
+      nome: l[idx.nome],
+      categoria: l[idx.categoria],
+      quantidade: Number(l[idx.qtd] || 0),
+      localizacao: l[idx.local],
+      status: l[idx.status]
+    };
+  });
+}
+
+function _getSheet(nome) {
+  var mapa = {
+    'Reservas': 'ESPACOS',
+    'Itens': 'ESPACOS',
+    'Ativos': 'ESPACOS',
+    'Solicitacoes': 'ESPACOS'
+  };
+
+  var modulo = mapa[nome];
+
+  if (!modulo) {
+    console.warn('Aba não mapeada:', nome);
+    return [];
+  }
+
+  try {
+    var aba = _abrirAba(modulo, nome);
+    return aba.getDataRange().getValues();
+  } catch (e) {
+    console.error('Erro ao abrir aba:', nome, e);
+    return [];
+  }
+}
+
+function sincronizarAtivosParaItens() {
+  var ativos = _getSheet('Ativos');
+  if (!ativos || ativos.length < 2) return;
+
+  var abaItens = _abrirAba('ESPACOS', 'Itens');
+
+  var normalizados = _normalizarAtivos(ativos);
+
+  var linhas = normalizados.map(function(i) {
+    return [
+      i.id,
+      i.nome,
+      i.categoria,
+      i.quantidade,
+      i.localizacao,
+      i.status
+    ];
+  });
+
+  abaItens.clearContents();
+  abaItens.appendRow([
+    'ID Item','Nome','Categoria','Quantidade Total',
+    'Localização','Status de Uso'
+  ]);
+
+  if (linhas.length) {
+    abaItens.getRange(2,1,linhas.length,linhas[0].length).setValues(linhas);
+  }
+}
+
+function _escutaGarantirDados() {
+  var itens = obterItensNormalizados();
+
+  if (!itens || !itens.length) {
+    console.warn('Escuta sem base de dados de itens');
+  }
+}
