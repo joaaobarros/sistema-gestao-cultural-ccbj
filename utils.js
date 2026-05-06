@@ -35,6 +35,7 @@ const ABA_PARA_MODULO = {
   // ESPACOS
   'Reservas':             'ESPACOS',
   'Itens':                'ESPACOS',
+  'Ativos':               'ESPACOS',
   'Solicitacoes':         'ESPACOS',
 
   // COMUNICACAO
@@ -49,6 +50,7 @@ const ABA_PARA_MODULO = {
   'Indicadores':          'RELATORIOS',
   'Rubricas':             'RELATORIOS',
   'RubricasMemoria':      'RELATORIOS',
+  'RubricasHistorico':    'RELATORIOS',
   'ContratosVersoes':     'RELATORIOS',
 
   // FINANCEIRO
@@ -920,32 +922,10 @@ function _normalizarItens(dados) {
   });
 }
 
-function _getSheet(nome) {
-  var mapa = {
-    'Reservas': 'ESPACOS',
-    'Itens': 'ESPACOS',
-    'Ativos': 'ESPACOS',
-    'Solicitacoes': 'ESPACOS'
-  };
-
-  var modulo = mapa[nome];
-
-  if (!modulo) {
-    console.warn('Aba não mapeada:', nome);
-    return [];
-  }
-
-  try {
-    var aba = _abrirAba(modulo, nome);
-    return aba.getDataRange().getValues();
-  } catch (e) {
-    console.error('Erro ao abrir aba:', nome, e);
-    return [];
-  }
-}
-
 function sincronizarAtivosParaItens() {
-  var ativos = _getSheet('Ativos');
+  var abaAtivos = _abrirAba('ESPACOS', 'Ativos');
+  if (!abaAtivos) return;
+  var ativos = abaAtivos.getDataRange().getValues();
   if (!ativos || ativos.length < 2) return;
 
   var abaItens = _abrirAba('ESPACOS', 'Itens');
