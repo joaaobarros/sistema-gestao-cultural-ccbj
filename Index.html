@@ -33,7 +33,7 @@ ORDEM DE CARREGAMENTO DOS SCRIPTS (obrigatória):
   10. mod_admin_js             — painéis admin, RECE, dashboard, manual
   11. mod_contratos_js         — CRUD de contratos, metas, rubricas, indicadores
   12. mod_favoritos_js         — drag-and-drop de favoritos na sidebar
-  13. mod_permissoes_js        — temPermissao(), carregarPermissoes(), aplicarPermissoesUI()
+  13. mod_permissoes_v2_js     — temPermissao(), carregarPermissoes(), aplicarPermissoesUI() [v2 unificado]
   14. bootstrap_js             — DOMContentLoaded, event listeners (SEMPRE POR ÚLTIMO)
 
 MÓDULOS INLINE (incluídos fora da tag logic/):
@@ -274,9 +274,7 @@ MÓDULOS HTML (incluídos no <main>, cada um com JS próprio inline):
   <?!= include('html/logic/mod_contratos_js'); ?>
   <?!= include('html/logic/mod_favoritos_js'); ?>
 
-  <!-- 🔥 PERMISSÕES V2 DEPOIS DOS MÓDULOS -->
-  <?!= include('html/logic/mod_permissoes_v2_js'); ?>
-
+  <!-- PERMISSÕES V2 — fonte única de temPermissao/carregarPermissoes/aplicarPermissoesUI -->
   <?!= include('html/logic/mod_permissoes_v2_js'); ?>
   <?!= include('html/logic/integracao_reserva_comunicacao_js'); ?>
 

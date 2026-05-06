@@ -592,6 +592,8 @@ function carregarPermissoes(cb) {
       var idx = _p2S.permissoes.findIndex(function(p) { return p.email === em; });
       if (idx === -1) _p2S.permissoes.push(data);
       else _p2S.permissoes[idx] = data;
+
+      aplicarPermissoesUI();
     }
 
     document.dispatchEvent(new Event('permissoes:ready'));
@@ -607,24 +609,36 @@ function carregarPermissoes(cb) {
   });
 }
 
+// ── Aplicar permissões a atributos data-requer-permissao ────
+
+function aplicarPermissoesUI() {
+  document.querySelectorAll('[data-requer-permissao]').forEach(function(el) {
+    var val = el.getAttribute('data-requer-permissao') || '';
+    var partes = val.split(':');
+    var modulo = partes[0];
+    var acao   = partes[1] || 'visualizar';
+    if (!temPermissao(modulo, acao)) {
+      el.style.display = 'none';
+    }
+  });
+}
+
 // ── Sidebar injection ────────────────────────────────────────
 
-document.addEventListener('DOMContentLoaded', function() {
-  setTimeout(function() {
-    if (!AppState || !AppState.usuario || !AppState.usuario.isAdmin) return;
-    var modSistema = document.getElementById('modulo-sistema');
-    if (!modSistema) return;
-    if (document.getElementById('btn-aba-permissoes-v2')) return;
-    var btn = document.createElement('button');
-    btn.id = 'btn-aba-permissoes-v2';
-    btn.setAttribute('data-aba', 'aba-permissoes-v2');
-    btn.className = 'tab-btn nav-item w-full';
-    btn.innerHTML = '<i class="fas fa-shield-alt w-5 text-center text-xs"></i><span class="text-xs font-semibold">Permissões v2</span>';
-    modSistema.appendChild(btn);
-    btn.addEventListener('click', function() {
-      if (typeof mostrarAba === 'function') mostrarAba('aba-permissoes-v2');
-    });
-  }, 1500);
+document.addEventListener('permissoes:ready', function() {
+  if (!AppState || !AppState.usuario || !AppState.usuario.isAdmin) return;
+  var modSistema = document.getElementById('modulo-sistema');
+  if (!modSistema) return;
+  if (document.getElementById('btn-aba-permissoes-v2')) return;
+  var btn = document.createElement('button');
+  btn.id = 'btn-aba-permissoes-v2';
+  btn.setAttribute('data-aba', 'aba-permissoes-v2');
+  btn.className = 'tab-btn nav-item w-full';
+  btn.innerHTML = '<i class="fas fa-shield-alt w-5 text-center text-xs"></i><span class="text-xs font-semibold">Permissões v2</span>';
+  modSistema.appendChild(btn);
+  btn.addEventListener('click', function() {
+    if (typeof mostrarAba === 'function') mostrarAba('aba-permissoes-v2');
+  });
 });
 
 // ── Helpers DOM ──────────────────────────────────────────────

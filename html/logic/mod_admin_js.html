@@ -331,6 +331,50 @@ function renderizarSetoresAdmin() {
 }
 
 /**
+ * BLOCO: Painel de usuários e permissões na aba de Configurações
+ * @context Chamado pelo botão "Atualizar" e ao navegar para aba-gestao-admin.
+ *          Exibe lista de admins em #listaUsuariosPermissoes + link para painel v2 completo.
+ */
+function carregarUsuariosPermissoes() {
+  var lista  = document.getElementById('listaUsuariosPermissoes');
+  var editor = document.getElementById('editorPermissoes');
+  if (!lista) return;
+
+  var admins = (AppState.colecoes.administradores || []).filter(function(a) {
+    var email = Array.isArray(a) ? a[0] : a;
+    return email && String(email).indexOf('@') !== -1 && String(email).toLowerCase() !== 'email';
+  });
+
+  if (!admins.length) {
+    lista.innerHTML = '<p class="p-4 text-xs text-slate-400 text-center">Nenhum administrador encontrado.</p>';
+  } else {
+    lista.innerHTML = admins.map(function(a) {
+      var email = escaparHTML(Array.isArray(a) ? String(a[0]).trim() : String(a).trim());
+      var nivel = escaparHTML(Array.isArray(a) ? String(a[1] || 'Admin').trim() : 'Admin');
+      return '<div class="flex items-center gap-2 p-2 border-b border-slate-50 hover:bg-slate-50 cursor-pointer rounded-lg" onclick="selecionarUsuarioConfig(\'' + email + '\')">' +
+        '<div class="w-7 h-7 bg-slate-100 rounded-lg flex items-center justify-center"><i class="fas fa-user-shield text-[10px] text-slate-500"></i></div>' +
+        '<div><p class="text-xs font-bold text-slate-700 truncate">' + email + '</p>' +
+        '<span class="text-[9px] text-indigo-500 font-bold uppercase">' + nivel + '</span></div>' +
+      '</div>';
+    }).join('');
+  }
+
+  if (editor) {
+    editor.innerHTML = '<p class="text-xs text-slate-400 mb-3">Selecione um usuário para ver detalhes ou acesse o painel completo.</p>' +
+      '<button onclick="if(typeof mostrarAba===\'function\')mostrarAba(\'aba-permissoes-v2\')" ' +
+      'class="text-[10px] font-black text-purple-600 bg-purple-50 hover:bg-purple-100 px-3 py-2 rounded-xl transition-all">' +
+      '<i class="fas fa-shield-alt mr-1"></i>Abrir painel completo de permissões v2</button>';
+  }
+}
+
+function selecionarUsuarioConfig(email) {
+  if (typeof mostrarAba === 'function') mostrarAba('aba-permissoes-v2');
+  setTimeout(function() {
+    if (typeof p2SelecionarUsuario === 'function') p2SelecionarUsuario(email);
+  }, 300);
+}
+
+/**
  * BLOCO: Renderização de administradores do sistema (admin)
  * @context Chamado ao abrir a aba de configurações; filtra header "email" e entradas inválidas.
  * @inputs AppState.colecoes.administradores — array de [email, nível] ou apenas email.

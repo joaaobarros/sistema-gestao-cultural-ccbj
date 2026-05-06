@@ -88,10 +88,11 @@ function mostrarAba(idAba) {
    * @sideEffects Pode chamar o backend, atualizar AppState e re-renderizar componentes.
    */
   if (idAba === 'aba-gestao-admin') {
-    if (typeof renderizarEspacosAdmin === 'function') renderizarEspacosAdmin();
-    if (typeof renderizarItensAdmin   === 'function') renderizarItensAdmin();
-    if (typeof renderizarSetoresAdmin === 'function') renderizarSetoresAdmin();
-    if (typeof renderizarAdmins       === 'function') renderizarAdmins();
+    if (typeof renderizarEspacosAdmin        === 'function') renderizarEspacosAdmin();
+    if (typeof renderizarItensAdmin          === 'function') renderizarItensAdmin();
+    if (typeof renderizarSetoresAdmin        === 'function') renderizarSetoresAdmin();
+    if (typeof renderizarAdmins             === 'function') renderizarAdmins();
+    if (typeof carregarUsuariosPermissoes    === 'function') carregarUsuariosPermissoes();
 
     if (typeof _ctrCache === 'undefined' || !_ctrCache || !_ctrCache.contratos || !_ctrCache.contratos.length) {
       if (typeof carregarDadosContratos === 'function') carregarDadosContratos(renderizarContratos);
