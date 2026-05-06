@@ -64,144 +64,23 @@ const MODULOS = {
     nome:  'CCBJ_ESPACOS',
     pasta: 'CCBJ — Espaços e Infraestrutura',
     prop:  PROP.ESPACOS,
-      abas: {
-
-    // =========================
-    // RESERVAS (mantido)
-    // =========================
-    'Reservas': [
-      'ID','Data Reserva','Início','Término','Sala','Turno',
-      'Nome da Ação','Tipo de Ação','Responsável','Setor',
-      'Co-responsável','Release','Itens Volantes','Status',
-      'Data Solicitação','ID Lote'
-    ],
-
-    // =========================
-    // ATIVOS (NOVO CORE)
-    // =========================
-    'Ativos': [
-      'ID',
-      'Nome',
-      'Codigo',
-      'Tipo',
-      'Categoria',
-      'Criticidade',
-
-      'LocalizacaoTipo',
-      'Sala',
-
-      'QtdTotal',
-      'QtdReservado',
-      'Unidade',
-
-      'DataEntrada',
-      'DataAtivacao',
-
-      'Status',
-      'FaseCicloVida',
-
-      'ContratoID',
-      'ContratacaoID',
-      'ValorAquisicao',
-
-      'CustoManutencao',
-      'CustoTotal',
-
-      'GrauPreservacao',
-      'IndiceSaude',
-
-      'Responsavel',
-      'Setor',
-
-      'CriadoEm',
-      'AtualizadoEm'
-    ],
-
-    // =========================
-    // MOVIMENTAÇÕES
-    // =========================
-    'MovimentacoesAtivos': [
-      'ID',
-      'ID Ativo',
-      'Tipo',
-      'Origem',
-      'Quantidade',
-      'Data',
-      'Responsavel',
-      'Observacao'
-    ],
-
-    // =========================
-    // MANUTENÇÃO
-    // =========================
-    'Manutencoes': [
-      'ID',
-      'ID Ativo',
-      'Tipo',
-      'Descricao',
-      'Custo',
-      'DuracaoHoras',
-      'DataExecucao',
-      'ProximaPrevista',
-      'Responsavel',
-      'Status'
-    ],
-
-    // =========================
-    // USO (RESERVAS)
-    // =========================
-    'UsoAtivos': [
-      'ID',
-      'ID Ativo',
-      'ID Reserva',
-      'DataInicio',
-      'DataFim',
-      'Quantidade',
-      'Confirmado'
-    ],
-
-    // =========================
-    // BAIXAS
-    // =========================
-    'BaixasAtivos': [
-      'ID',
-      'ID Ativo',
-      'Tipo',
-      'Motivo',
-      'ValorRecuperado',
-      'Data'
-    ],
-
-    // =========================
-    // ALERTAS
-    // =========================
-    'AlertasInfra': [
-      'ID',
-      'ID Ativo',
-      'Tipo',
-      'Descricao',
-      'Nivel',
-      'Status',
-      'CriadoEm'
-    ],
-
-    // =========================
-    // SOLICITAÇÕES (mantido)
-    // =========================
-    'Solicitacoes': [
-      'ID','Tipo','Subtipo','ID Reserva','Sala','Usuario',
-      'Justificativa','Payload','Status','Aprovador',
-      'Data Solicitação','Data Ação'
-    ],
-
-    // =========================
-    // LEGADO (não apagar ainda)
-    // =========================
-    'Itens': [
-      'ID Item','Nome','Categoria','Quantidade Total',
-      'Localização','Status de Uso'
-    ]
-
+    abas: {
+      'Reservas': [
+        'ID','Data Reserva','Início','Término','Sala','Turno',
+        'Nome da Ação','Tipo de Ação','Responsável','Setor',
+        'Co-responsável','Release','Itens Volantes','Status',
+        'Data Solicitação','ID Lote'
+      ],
+      'Itens': [
+        'ID Item','Nome','Categoria','Quantidade Total',
+        'Localização','Status de Uso'
+      ],
+      'Solicitacoes': [
+        'ID','Tipo','Subtipo','ID Reserva','Sala','Usuario',
+        'Justificativa','Payload','Status','Aprovador',
+        'Data Solicitação','Data Ação'
+      ],
+    }
   },
 
   COMUNICACAO: {
@@ -450,9 +329,7 @@ const MODULOS = {
     }
   },
 
-},
-
-}
+};
 
 // ── Cores de cabeçalho por módulo ────────────────────────────────────────
 const COR_MODULO = {
@@ -463,8 +340,7 @@ const COR_MODULO = {
   FINANCEIRO:  '#065F46',
   EQUIPES:     '#7C2D12',
   PESSOAL:     '#3B0764',
-}
-
+};
 
 /**
  * ========================================
@@ -834,9 +710,4 @@ function inicializarParametrosRH() {
   aba.appendRow(['vale_alimentacao', 27.01]);
   aba.appendRow(['desconto_vale_alimentacao', 1.00]);
 
-}
-
-function debugItens() {
-  var aba = _abrirAba('ESPACOS', 'Itens');
-  Logger.log(aba.getName());
 }
