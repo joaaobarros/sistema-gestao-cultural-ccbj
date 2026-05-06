@@ -71,16 +71,20 @@ const Auth = {
       .withSuccessHandler(function(result) {
         if (result && result.ok && result.email && result.email.indexOf('@') >= 0) {
           console.log('[Auth] Email resolvido via servidor:', result.email);
+          try { sessionStorage.removeItem('_ccbj_login_attempt'); } catch(_) {}
           self._definirEmail(result.email);
         } else {
-          // Session.getActiveUser() vazio — "Execute as: Me" sem contexto propagado.
-          // Tentar GSI; se não configurado, mostrar login AccountChooser.
-          // Se o usuário já passou pelo AccountChooser e voltou mas getActiveUser()
-          // ainda é vazio, o deployment é "Anyone" (não "Anyone with Google Account")
-          // e só GSI ou trocar para "Execute as: User" resolve.
-          var executeAsMe = result && result.executeAsMe;
-          console.warn('[Auth] Servidor não identificou o usuário.', executeAsMe ? '(Execute as: Me)' : '');
-          self._tentarGSI();
+          console.warn('[Auth] Servidor não identificou o usuário.');
+          // Se o usuário já passou pelo AccountChooser mas o servidor ainda não reconhece,
+          // o deployment é "Execute as: Me" sem propagação de identidade.
+          // Mostrar formulário de email para criar sessão manual (visitante_controlado).
+          var jaFezLogin = false;
+          try { jaFezLogin = !!sessionStorage.getItem('_ccbj_login_attempt'); } catch(_) {}
+          if (jaFezLogin) {
+            self._mostrarFormEmail();
+          } else {
+            self._tentarGSI();
+          }
         }
       })
       .withFailureHandler(function(err) {
@@ -196,13 +200,83 @@ const Auth = {
       '</div>';
   },
 
+  // Formulário de email para usuários externos que o GAS não consegue identificar.
+  // Acionado após AccountChooser (usuário provou ter conta Google, mas GAS não propaga identidade).
+  // Cria sessão via iniciarSessaoGAS → usuário entra como visitante_controlado.
+  _mostrarFormEmail: function() {
+    var self = this;
+    document.body.innerHTML =
+      '<div style="font-family:sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;background:#f1f5f9">' +
+        '<div style="background:#fff;border-radius:20px;padding:48px 36px;text-align:center;box-shadow:0 4px 32px rgba(0,0,0,.1);max-width:400px;width:90%">' +
+          '<div style="font-size:52px;margin-bottom:20px">&#128100;</div>' +
+          '<h2 style="color:#1e293b;margin:0 0 8px;font-size:22px">Identifique-se</h2>' +
+          '<p style="color:#64748b;margin:0 0 24px;font-size:14px;line-height:1.5">' +
+            'Digite seu e-mail Google para acessar o sistema.' +
+          '</p>' +
+          '<input id="_auth_email_inp" type="email" placeholder="seu@email.com" ' +
+            'style="width:100%;box-sizing:border-box;padding:12px 16px;border:2px solid #e2e8f0;border-radius:10px;' +
+            'font-size:15px;outline:none;margin-bottom:8px" />' +
+          '<div id="_auth_email_err" style="color:#dc2626;font-size:13px;min-height:20px;margin-bottom:12px"></div>' +
+          '<button id="_auth_email_btn" ' +
+            'style="width:100%;padding:14px;background:#4285f4;color:#fff;border:none;border-radius:10px;' +
+            'font-size:15px;font-weight:700;cursor:pointer">Acessar</button>' +
+          '<p style="margin-top:20px;font-size:12px;color:#94a3b8">' +
+            'Voc&#234; ser&#225; identificado como visitante at&#233; que um administrador configure seu perfil.' +
+          '</p>' +
+        '</div>' +
+      '</div>';
+
+    function _tentar() {
+      var email = (document.getElementById('_auth_email_inp').value || '').trim().toLowerCase();
+      var errEl = document.getElementById('_auth_email_err');
+      errEl.textContent = '';
+      if (!email || email.indexOf('@') < 0) {
+        errEl.textContent = 'Digite um e-mail válido.';
+        return;
+      }
+      document.getElementById('_auth_email_btn').disabled = true;
+      document.getElementById('_auth_email_btn').textContent = 'Validando...';
+      google.script.run
+        .withSuccessHandler(function(result) {
+          if (result && result.ok && result.email) {
+            try { sessionStorage.removeItem('_ccbj_login_attempt'); } catch(_) {}
+            if (typeof AppState !== 'undefined' && AppState.usuario) {
+              AppState.usuario._sessao = result.sessao || '';
+            }
+            self._definirEmail(result.email);
+          } else {
+            var msg = (result && result.msg) || 'E-mail não autorizado.';
+            document.getElementById('_auth_email_err').textContent = msg;
+            document.getElementById('_auth_email_btn').disabled = false;
+            document.getElementById('_auth_email_btn').textContent = 'Acessar';
+          }
+        })
+        .withFailureHandler(function() {
+          document.getElementById('_auth_email_err').textContent = 'Erro ao validar. Tente novamente.';
+          document.getElementById('_auth_email_btn').disabled = false;
+          document.getElementById('_auth_email_btn').textContent = 'Acessar';
+        })
+        .iniciarSessaoGAS(email, email);
+    }
+
+    document.getElementById('_auth_email_btn').addEventListener('click', _tentar);
+    document.getElementById('_auth_email_inp').addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') _tentar();
+    });
+    setTimeout(function() {
+      var inp = document.getElementById('_auth_email_inp');
+      if (inp) inp.focus();
+    }, 100);
+  },
+
   // Exibe página de login com link AccountChooser.
   // Usa target="_top" para escapar do iframe do GAS — sem isso, AccountChooser retorna 403
   // por restrição de X-Frame-Options.
   _mostrarLoginGoogle: function(executeAsMe) {
-    // window.__APP_URL__ is the real script.google.com service URL injected by doGet.
-    // window.top.location.href inside the GAS iframe returns the sandboxed
-    // googleusercontent.com URL, which AccountChooser rejects with 400.
+    // Sinaliza que já houve uma tentativa de login via AccountChooser.
+    // Na próxima execução de _resolverEmailServidor, se ainda falhar, mostra o formulário de email.
+    try { sessionStorage.setItem('_ccbj_login_attempt', '1'); } catch(_) {}
+
     var appUrl = window.__APP_URL__ || '';
     if (!appUrl) {
       try { appUrl = window.top.location.href.split('?')[0]; } catch(_) {}

@@ -327,8 +327,8 @@ function obterDadosIniciais(sessaoOuEmail) {
 }
 
 function limparCacheUsuario(emailUsuario) {
-  const cache = CacheService.getUserCache();
-  cache.remove("dados_iniciais");
+  // Cache armazenado em ScriptCache (não UserCache) — usar a mesma instância para limpar.
+  const cache = CacheService.getScriptCache();
   if (emailUsuario && String(emailUsuario).includes("@")) {
     const chave =
       "dados_iniciais_" +

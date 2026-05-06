@@ -40,11 +40,14 @@ const GAS = {
     if (typeof cb === 'function') cb({ ok: false, stub: true, msg: 'Funcionalidade em desenvolvimento' });
   },
 
-  // Retorna o token de sessão atual (AppState deve estar inicializado)
+  // Retorna o token de sessão ou o email como fallback.
+  // Quando o usuário é identificado via obterEmailSessaoAtiva() (sem GSI), nenhum token é criado.
+  // Passar o email diretamente garante que _resolverEmailReal() consiga validar a identidade.
   _sessao: function() {
-    return (typeof AppState !== 'undefined' && AppState.usuario && AppState.usuario._sessao)
-      ? AppState.usuario._sessao
-      : '';
+    if (typeof AppState !== 'undefined' && AppState.usuario) {
+      return AppState.usuario._sessao || AppState.usuario.email || '';
+    }
+    return '';
   },
 
   /**
