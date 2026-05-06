@@ -1,36 +1,28 @@
 <!--
 @file core/auth_identity_js.html
 @layer frontend/auth
-@description Identidade do usuário via email injetado pelo doGet.
+@description Helper de identidade NÃO-BLOQUEANTE.
 
-             Fluxo primário: doGet captura Session.getActiveUser() → window.__EMAIL_INICIAL__.
+  O boot do sistema NÃO depende deste arquivo.
+  A identidade primária vem de obterDadosIniciais() via google.script.run,
+  que resolve Session.getActiveUser() corretamente mesmo em "Execute as: Me"
+  porque google.script.run propaga o contexto OAuth do chamante.
 
-             Em deployments "Execute as: Me", doGet não captura o email mas
-             google.script.run SIM expõe Session.getActiveUser() para o usuário chamante.
-             O fallback via obterEmailSessaoAtiva() resolve este caso.
+  Este módulo resolve Auth.email em paralelo (assíncrono) para que módulos
+  que usem Auth.quandoPronto() recebam o email quando disponível.
 
-             Se google.script.run também retornar vazio (executeAsMe=true), tenta GSI
-             (Google Identity Services) com JWT verificado pelo backend via iniciarSessaoGAS().
-             Se GSI não estiver configurado (sem GOOGLE_CLIENT_ID), exibe página de login
-             com link AccountChooser que usa target="_top" para escapar do iframe do GAS.
+  Fontes em ordem de prioridade:
+    1. window.__EMAIL_INICIAL__ injetado pelo doGet (quando disponível)
+    2. google.script.run.obterEmailSessaoAtiva() — fallback assíncrono
 -->
 <script>
   window.__EMAIL_INICIAL__  = '<?= emailInicial ?>';
-  window.__SESSAO_INICIAL__ = '<?= sessaoInicial ?>';
   window.__APP_URL__        = '<?= appUrl ?>';
 </script>
 <script>
 
-function _getEmailInicial() {
-  try {
-    var raw = window.__EMAIL_INICIAL__;
-    if (!raw || raw.indexOf('@') < 0) return '';
-    return String(raw).toLowerCase().trim();
-  } catch(e) { return ''; }
-}
-
 // ═══════════════════════════════════════════════════════════════
-// AUTH — identidade do usuário com múltiplas camadas de fallback
+// AUTH — helper não-bloqueante de identidade
 // ═══════════════════════════════════════════════════════════════
 
 const Auth = {
@@ -38,285 +30,17 @@ const Auth = {
   pronto:     false,
   _callbacks: [],
 
-  iniciar: function() {
-    if (this.pronto) return;
-
-    // 1. Email injetado pelo doGet (funciona quando Session.getActiveUser() disponível)
-    var email = _getEmailInicial();
-    if (email) {
-      this._definirEmail(email);
-      return;
-    }
-
-    // 2. Fallback via google.script.run — funciona mesmo em "Execute as: Me"
-    //    porque google.script.run expõe Session.getActiveUser() para o chamante.
-    console.warn('[Auth] __EMAIL_INICIAL__ vazio — tentando via servidor...');
-    this._resolverEmailServidor();
-  },
-
   _definirEmail: function(email) {
+    if (this.pronto) return;
     this.email  = email;
     this.pronto = true;
-    if (typeof AppState !== 'undefined' && AppState.usuario) {
+    // Só sobrescreve AppState se ainda não foi preenchido pelo inicializarApp()
+    if (typeof AppState !== 'undefined' && AppState.usuario && !AppState.usuario.email) {
       AppState.usuario.email = email;
     }
     var cbs = this._callbacks.slice();
     this._callbacks = [];
-    cbs.forEach(function(cb) { try { cb(email); } catch(e) { console.error('[Auth] Callback erro:', e); } });
-  },
-
-  _resolverEmailServidor: function() {
-    var self = this;
-    google.script.run
-      .withSuccessHandler(function(result) {
-        if (result && result.ok && result.email && result.email.indexOf('@') >= 0) {
-          console.log('[Auth] Email resolvido via servidor:', result.email);
-          try { sessionStorage.removeItem('_ccbj_login_attempt'); } catch(_) {}
-          self._definirEmail(result.email);
-        } else {
-          console.warn('[Auth] Servidor não identificou o usuário.');
-          // Se o usuário já passou pelo AccountChooser mas o servidor ainda não reconhece,
-          // o deployment é "Execute as: Me" sem propagação de identidade.
-          // Mostrar formulário de email para criar sessão manual (visitante_controlado).
-          var jaFezLogin = false;
-          try { jaFezLogin = !!sessionStorage.getItem('_ccbj_login_attempt'); } catch(_) {}
-          if (jaFezLogin) {
-            self._mostrarFormEmail();
-          } else {
-            self._tentarGSI();
-          }
-        }
-      })
-      .withFailureHandler(function(err) {
-        console.error('[Auth] Falha ao contatar servidor:', err);
-        self._mostrarLoginGoogle(false);
-      })
-      .obterEmailSessaoAtiva();
-  },
-
-  // Tenta GSI (Google Identity Services) se GOOGLE_CLIENT_ID estiver configurado.
-  _tentarGSI: function() {
-    var self = this;
-    google.script.run
-      .withSuccessHandler(function(clientId) {
-        if (clientId) {
-          console.log('[Auth] GSI disponível — iniciando One Tap...');
-          self._iniciarGSI(clientId);
-        } else {
-          console.warn('[Auth] GOOGLE_CLIENT_ID não configurado — exibindo login AccountChooser.');
-          self._mostrarLoginGoogle(true);
-        }
-      })
-      .withFailureHandler(function() {
-        self._mostrarLoginGoogle(true);
-      })
-      .obterClienteIdGoogle();
-  },
-
-  // Inicializa Google Identity Services com One Tap e botão de login.
-  _iniciarGSI: function(clientId) {
-    var self = this;
-
-    self._mostrarCarregandoGSI();
-
-    var script = document.createElement('script');
-    script.src = 'https://accounts.google.com/gsi/client';
-    script.async = true;
-    script.defer = true;
-    script.onload = function() {
-      try {
-        google.accounts.id.initialize({
-          client_id: clientId,
-          callback: function(response) {
-            if (!response || !response.credential) {
-              self._mostrarLoginGoogle(true);
-              return;
-            }
-            console.log('[Auth] GSI JWT recebido — validando no servidor...');
-            google.script.run
-              .withSuccessHandler(function(result) {
-                if (result && result.ok && result.email) {
-                  // Armazenar sessão para chamadas backend posteriores
-                  if (typeof AppState !== 'undefined' && AppState.usuario) {
-                    AppState.usuario._sessao = result.sessao || '';
-                  }
-                  self._definirEmail(result.email);
-                } else {
-                  console.error('[Auth] GSI: backend rejeitou JWT —', result && result.msg);
-                  self._mostrarLoginGoogle(true);
-                }
-              })
-              .withFailureHandler(function(err) {
-                console.error('[Auth] GSI: falha ao validar JWT:', err);
-                self._mostrarLoginGoogle(true);
-              })
-              .iniciarSessaoGAS(response.credential, '');
-          }
-        });
-
-        // Renderizar botão no container criado por _mostrarCarregandoGSI
-        var btnEl = document.getElementById('_auth_gsi_btn');
-        if (btnEl) {
-          google.accounts.id.renderButton(btnEl, {
-            theme: 'outline',
-            size: 'large',
-            text: 'signin_with',
-            locale: 'pt-BR',
-            width: 280
-          });
-        }
-
-        // Tentar One Tap silencioso primeiro
-        google.accounts.id.prompt(function(notification) {
-          if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-            console.log('[Auth] One Tap não exibido — usuário deve clicar no botão.');
-          }
-        });
-      } catch(e) {
-        console.error('[Auth] Erro ao inicializar GSI:', e);
-        self._mostrarLoginGoogle(true);
-      }
-    };
-    script.onerror = function() {
-      console.error('[Auth] Falha ao carregar biblioteca GSI.');
-      self._mostrarLoginGoogle(true);
-    };
-    document.head.appendChild(script);
-  },
-
-  // Exibe container para o botão GSI enquanto a biblioteca carrega.
-  _mostrarCarregandoGSI: function() {
-    document.body.innerHTML =
-      '<div style="font-family:sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;background:#f1f5f9">' +
-        '<div style="background:#fff;border-radius:20px;padding:48px 36px;text-align:center;box-shadow:0 4px 32px rgba(0,0,0,.1);max-width:400px;width:90%">' +
-          '<div style="font-size:52px;margin-bottom:20px">&#128274;</div>' +
-          '<h2 style="color:#1e293b;margin:0 0 12px;font-size:22px">Acesso Restrito</h2>' +
-          '<p style="color:#64748b;margin:0 0 28px;line-height:1.6;font-size:15px">' +
-            'Fa&#231;a login com sua conta Google institucional.' +
-          '</p>' +
-          '<div id="_auth_gsi_btn" style="display:flex;justify-content:center;margin-bottom:16px"></div>' +
-          '<p style="font-size:12px;color:#94a3b8">Carregando op&#231;&#245;es de login...</p>' +
-        '</div>' +
-      '</div>';
-  },
-
-  // Formulário de email para usuários externos que o GAS não consegue identificar.
-  // Acionado após AccountChooser (usuário provou ter conta Google, mas GAS não propaga identidade).
-  // Cria sessão via iniciarSessaoGAS → usuário entra como visitante_controlado.
-  _mostrarFormEmail: function() {
-    var self = this;
-    document.body.innerHTML =
-      '<div style="font-family:sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;background:#f1f5f9">' +
-        '<div style="background:#fff;border-radius:20px;padding:48px 36px;text-align:center;box-shadow:0 4px 32px rgba(0,0,0,.1);max-width:400px;width:90%">' +
-          '<div style="font-size:52px;margin-bottom:20px">&#128100;</div>' +
-          '<h2 style="color:#1e293b;margin:0 0 8px;font-size:22px">Identifique-se</h2>' +
-          '<p style="color:#64748b;margin:0 0 24px;font-size:14px;line-height:1.5">' +
-            'Digite seu e-mail Google para acessar o sistema.' +
-          '</p>' +
-          '<input id="_auth_email_inp" type="email" placeholder="seu@email.com" ' +
-            'style="width:100%;box-sizing:border-box;padding:12px 16px;border:2px solid #e2e8f0;border-radius:10px;' +
-            'font-size:15px;outline:none;margin-bottom:8px" />' +
-          '<div id="_auth_email_err" style="color:#dc2626;font-size:13px;min-height:20px;margin-bottom:12px"></div>' +
-          '<button id="_auth_email_btn" ' +
-            'style="width:100%;padding:14px;background:#4285f4;color:#fff;border:none;border-radius:10px;' +
-            'font-size:15px;font-weight:700;cursor:pointer">Acessar</button>' +
-          '<p style="margin-top:20px;font-size:12px;color:#94a3b8">' +
-            'Voc&#234; ser&#225; identificado como visitante at&#233; que um administrador configure seu perfil.' +
-          '</p>' +
-        '</div>' +
-      '</div>';
-
-    function _tentar() {
-      var email = (document.getElementById('_auth_email_inp').value || '').trim().toLowerCase();
-      var errEl = document.getElementById('_auth_email_err');
-      errEl.textContent = '';
-      if (!email || email.indexOf('@') < 0) {
-        errEl.textContent = 'Digite um e-mail válido.';
-        return;
-      }
-      document.getElementById('_auth_email_btn').disabled = true;
-      document.getElementById('_auth_email_btn').textContent = 'Validando...';
-      google.script.run
-        .withSuccessHandler(function(result) {
-          if (result && result.ok && result.email) {
-            try { sessionStorage.removeItem('_ccbj_login_attempt'); } catch(_) {}
-            if (typeof AppState !== 'undefined' && AppState.usuario) {
-              AppState.usuario._sessao = result.sessao || '';
-            }
-            self._definirEmail(result.email);
-          } else {
-            var msg = (result && result.msg) || 'E-mail não autorizado.';
-            document.getElementById('_auth_email_err').textContent = msg;
-            document.getElementById('_auth_email_btn').disabled = false;
-            document.getElementById('_auth_email_btn').textContent = 'Acessar';
-          }
-        })
-        .withFailureHandler(function() {
-          document.getElementById('_auth_email_err').textContent = 'Erro ao validar. Tente novamente.';
-          document.getElementById('_auth_email_btn').disabled = false;
-          document.getElementById('_auth_email_btn').textContent = 'Acessar';
-        })
-        .iniciarSessaoGAS(email, email);
-    }
-
-    document.getElementById('_auth_email_btn').addEventListener('click', _tentar);
-    document.getElementById('_auth_email_inp').addEventListener('keydown', function(e) {
-      if (e.key === 'Enter') _tentar();
-    });
-    setTimeout(function() {
-      var inp = document.getElementById('_auth_email_inp');
-      if (inp) inp.focus();
-    }, 100);
-  },
-
-  // Exibe página de login com link AccountChooser.
-  // Usa target="_top" para escapar do iframe do GAS — sem isso, AccountChooser retorna 403
-  // por restrição de X-Frame-Options.
-  _mostrarLoginGoogle: function(executeAsMe) {
-    // Sinaliza que já houve uma tentativa de login via AccountChooser.
-    // Na próxima execução de _resolverEmailServidor, se ainda falhar, mostra o formulário de email.
-    try { sessionStorage.setItem('_ccbj_login_attempt', '1'); } catch(_) {}
-
-    var appUrl = window.__APP_URL__ || '';
-    if (!appUrl) {
-      try { appUrl = window.top.location.href.split('?')[0]; } catch(_) {}
-    }
-    if (!appUrl) appUrl = window.location.href.split('?')[0];
-
-    var loginUrl = 'https://accounts.google.com/AccountChooser?continue=' + encodeURIComponent(appUrl);
-
-    var detalhe = '<br><small style="color:#94a3b8;display:block;margin-top:8px">Ap&#243;s entrar, a p&#225;gina recarrega automaticamente. Se voltar a esta tela, o administrador deve reconfigurar o deploy para <strong>"Execute as: User accessing the web app"</strong>.</small>';
-
-    document.body.innerHTML =
-      '<div style="font-family:sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;background:#f1f5f9">' +
-        '<div style="background:#fff;border-radius:20px;padding:48px 36px;text-align:center;box-shadow:0 4px 32px rgba(0,0,0,.1);max-width:400px;width:90%">' +
-          '<div style="font-size:52px;margin-bottom:20px">&#128274;</div>' +
-          '<h2 style="color:#1e293b;margin:0 0 12px;font-size:22px">Acesso Restrito</h2>' +
-          '<p style="color:#64748b;margin:0 0 28px;line-height:1.6;font-size:15px">' +
-            'Fa&#231;a login com sua conta Google institucional para acessar o Sistema CCBJ.' +
-            detalhe +
-          '</p>' +
-          '<a href="' + loginUrl + '" target="_top" ' +
-            'style="display:inline-flex;align-items:center;gap:10px;background:#4285f4;color:#fff;' +
-            'text-decoration:none;padding:14px 28px;border-radius:10px;font-weight:700;font-size:15px">' +
-            '<svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg">' +
-              '<path fill="#fff" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908C16.658 14.383 17.64 12.075 17.64 9.2z"/>' +
-              '<path fill="#fff" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332C2.438 15.983 5.482 18 9 18z"/>' +
-              '<path fill="#fff" d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"/>' +
-              '<path fill="#fff" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0 5.482 0 2.438 2.017.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"/>' +
-            '</svg>' +
-            'Entrar com Google' +
-          '</a>' +
-          '<p style="margin-top:16px;font-size:12px;color:#94a3b8">' +
-            'Ap&#243;s o login, a p&#225;gina ser&#225; recarregada automaticamente.' +
-          '</p>' +
-        '</div>' +
-      '</div>';
-  },
-
-  // Mantido para compatibilidade com chamadas externas
-  _mostrarBloqueio: function() {
-    this._mostrarLoginGoogle(false);
+    cbs.forEach(function(cb) { try { cb(email); } catch(e) {} });
   },
 
   quandoPronto: function(cb) {
@@ -325,6 +49,23 @@ const Auth = {
   }
 };
 
-document.addEventListener('DOMContentLoaded', function() { Auth.iniciar(); });
+// Resolução assíncrona em background — não bloqueia o boot
+document.addEventListener('DOMContentLoaded', function() {
+  var raw = window.__EMAIL_INICIAL__;
+  if (raw && raw.indexOf('@') >= 0) {
+    Auth._definirEmail(String(raw).toLowerCase().trim());
+    return;
+  }
+
+  // Fallback: servidor resolve Session.getActiveUser() via google.script.run
+  google.script.run
+    .withSuccessHandler(function(r) {
+      if (r && r.ok && r.email && r.email.indexOf('@') >= 0) {
+        Auth._definirEmail(r.email);
+      }
+    })
+    .withFailureHandler(function() {})
+    .obterEmailSessaoAtiva();
+});
 
 </script>

@@ -152,9 +152,6 @@ function _rcCarregarDemandaNoDetalhe(idReserva) {
     el.innerHTML = '<div class="flex items-center gap-2 flex-wrap">'
       + '<span class="text-[11px] font-bold text-slate-700">' + escaparHTML(demanda.titulo || '') + '</span>'
       + '<span class="px-2 py-0.5 rounded-full text-[9px] font-black ' + stCls + '">' + escaparHTML(demanda.status || '') + '</span>'
-      + '<button onclick="mostrarAba(\'aba-balcao\');var m=document.getElementById(\'modalDetalheRes\');if(m)m.remove();"'
-      + ' class="px-2 py-0.5 bg-orange-100 text-orange-700 text-[9px] font-black rounded-lg hover:bg-orange-500 hover:text-white transition">'
-      + '<i class="fas fa-external-link-alt mr-1"></i>Ver no Balcão</button>'
       + '</div>';
   }, function() {
     el.innerHTML = '<span class="text-[10px] text-red-400 italic">Erro ao carregar demanda.</span>';

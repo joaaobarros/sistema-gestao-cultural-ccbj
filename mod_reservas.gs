@@ -351,6 +351,7 @@ function salvarEdicaoReserva(dados) {
   if (!validarEmail(dados.responsavel))
     throw new Error("Email do responsável inválido.");
 
+  const lock = obterLockComRetry("salvarEdicaoReserva", 8000, 3);
   try {
     const responsavelNormalizado = normalizarEmail(dados.responsavel);
     const aba = _getSheet("Reservas");
@@ -385,6 +386,7 @@ function salvarEdicaoReserva(dados) {
           dados.horaInicio,
           dados.horaTermino,
           dados.sala,
+          dados.id,
         );
 
         const linha = i + 1;
@@ -425,6 +427,8 @@ function salvarEdicaoReserva(dados) {
     throw new Error("Reserva não encontrada para edição.");
   } catch (e) {
     throw new Error("Erro ao salvar edição: " + e.message);
+  } finally {
+    lock.releaseLock();
   }
 }
 
@@ -565,6 +569,7 @@ function verificarDisponibilidadeItensPorHorario(
   inicio,
   termino,
   idSala,
+  idReservaIgnorar,
 ) {
   if (!itensSolicitados || itensSolicitados === "Nenhum") return;
 
@@ -573,6 +578,7 @@ function verificarDisponibilidadeItensPorHorario(
     inicio,
     termino,
     idSala || null,
+    idReservaIgnorar || null,
   );
 
   const parseItens = (str) => {
@@ -617,6 +623,7 @@ function obterDisponibilidadeItensPorHorario(
   inicio,
   termino,
   idSalaContexto,
+  idReservaIgnorar,
 ) {
   try {
     const abaItens = _getSheet("Itens");
@@ -652,6 +659,7 @@ function obterDisponibilidadeItensPorHorario(
 
     reservas.slice(1).forEach((r) => {
       if (compararStrings(r[13], "CANCELADO")) return;
+      if (idReservaIgnorar && String(r[0]).trim() === String(idReservaIgnorar).trim()) return;
       const dataReserva = normalizarData(r[1]);
       if (dataReserva === null || dataReserva !== dataBusca) return;
       const ini = normalizarHora(r[2]);
@@ -1005,58 +1013,122 @@ function processarAgendamentoLote(dados, datas) {
  * @sideEffects Escreve nas planilhas Reservas, ReservasRECE e RelatoriosCODIP
  */
 function criarReservaController(dados, datas) {
-  const idLote = gerarId("LOTE");
-  const linhas = [];
-  const idsGerados = [];
+  if (!dados || !Array.isArray(datas) || datas.length === 0)
+    throw new Error("Dados ou datas inválidos.");
+  if (!dados.responsavel || !validarEmail(dados.responsavel))
+    throw new Error("Email do responsável inválido. Faça login novamente.");
+  if (!dados.sala || !dados.horaInicio || !dados.horaTermino || !dados.nomeAcao)
+    throw new Error("Campos obrigatórios não preenchidos.");
 
-  datas.forEach((data) => {
-    const idReserva = gerarId("RES");
-    idsGerados.push(idReserva);
+  validarReserva(dados);
+  detectarComportamentoSuspeito("agendamento");
 
-    const linha = [
-      idReserva,
-      data,
-      dados.horaInicio,
-      dados.horaTermino,
-      dados.sala,
-      dados.turno,
-      dados.nomeAcao,
-      dados.tipoAcao,
-      dados.responsavel,
-      dados.setor,
-      dados.coResponsavel,
-      dados.release,
-      dados.itensVolantes,
-      "CONFIRMADO",
-      new Date(),
-      idLote,
-    ];
-    linhas.push(linha);
+  const lock = obterLockComRetry("criarReservaController", 10000, 3);
+  try {
+    const responsavelNorm = normalizarEmail(dados.responsavel);
+    const idLote = gerarId("LOTE");
+    const dataSolicitacao = new Date();
+    const linhas = [];
+    const idsGerados = [];
+    const datasProcessadas = new Set();
 
-    if (dados.modoRece) {
-      ReceService.criarOuAtualizar({ id: idReserva, ...dados, data });
-    }
-  });
+    datas.forEach((data) => {
+      const dataKey = String(data).trim();
+      if (datasProcessadas.has(dataKey))
+        throw new Error("Data duplicada no lote: " + dataKey);
+      datasProcessadas.add(dataKey);
 
-  ReservaRepository.salvar(linhas);
+      const resultadoConflito = verificarConflitoEspaco(
+        dados.sala,
+        data,
+        dados.horaInicio,
+        dados.horaTermino,
+        null,
+      );
+      if (resultadoConflito && resultadoConflito.conflito) {
+        const ex = resultadoConflito.existente || {};
+        throw new Error(
+          `Conflito detectado em ${dataKey}: espaço já reservado` +
+            (ex.inicio ? ` (${ex.inicio}–${ex.fim}: ${ex.nome || ""})` : ""),
+        );
+      }
 
-  const temCodip =
-    dados.codipPrograma ||
-    dados.codipMesRef ||
-    dados.codipTipoAcao ||
-    Number(dados.codipPubPresencial) > 0 ||
-    dados.codipSegmento1;
-  if (temCodip) {
-    idsGerados.forEach((id) => {
-      try {
-        _salvarCamposCODIP(id, dados);
-      } catch (e) {
-        console.error("CODIP lote:", e);
+      verificarDisponibilidadeItensPorHorario(
+        dados.itensVolantes,
+        data,
+        dados.horaInicio,
+        dados.horaTermino,
+        dados.sala,
+      );
+
+      const idReserva = gerarId("RES");
+      idsGerados.push(idReserva);
+
+      const linha = [
+        idReserva,
+        data,
+        dados.horaInicio,
+        dados.horaTermino,
+        dados.sala,
+        dados.turno,
+        dados.nomeAcao,
+        dados.tipoAcao,
+        responsavelNorm,
+        dados.setor,
+        dados.coResponsavel,
+        dados.release,
+        dados.itensVolantes,
+        "CONFIRMADO",
+        dataSolicitacao,
+        idLote,
+      ];
+      linhas.push(linha);
+
+      registrarLog(
+        "CRIAÇÃO",
+        "RESERVA",
+        dados.nomeAcao,
+        `ID: ${idReserva} | Data: ${dataKey} | Sala: ${dados.sala}`,
+        null,
+        linha,
+        responsavelNorm,
+      );
+
+      if (dados.modoRece) {
+        ReceService.criarOuAtualizar({
+          id: idReserva,
+          ...dados,
+          responsavel: responsavelNorm,
+          data,
+        });
       }
     });
-  }
 
-  return { sucesso: true, ids: idsGerados };
+    ReservaRepository.salvar(linhas);
+
+    const temCodip =
+      dados.codipPrograma ||
+      dados.codipMesRef ||
+      dados.codipTipoAcao ||
+      Number(dados.codipPubPresencial) > 0 ||
+      dados.codipSegmento1;
+    if (temCodip) {
+      idsGerados.forEach((id) => {
+        try {
+          _salvarCamposCODIP(id, dados);
+        } catch (e) {
+          console.error("CODIP lote:", e);
+        }
+      });
+    }
+
+    limparCacheUsuario(responsavelNorm);
+    return { sucesso: true, ids: idsGerados };
+  } catch (e) {
+    throw new Error(e.message);
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function atualizarReservaController(dados) {
@@ -1174,8 +1246,43 @@ const ReservaService = {
     return criarReservaController(dados, datas);
   },
   atualizar(dados) {
+    if (!dados || !dados.id) throw new Error("ID da reserva não informado.");
+    if (!dados.responsavel || !validarEmail(dados.responsavel))
+      throw new Error("Email do responsável inválido.");
+
+    validarReserva(dados);
+
     const reservaExistente = ReservaRepository.buscarPorId(dados.id);
-    if (!reservaExistente) throw new Error("Reserva não encontrada");
+    if (!reservaExistente) throw new Error("Reserva não encontrada.");
+
+    const responsavelNorm = normalizarEmail(dados.responsavel);
+    verificarDonoOuAdmin(reservaExistente[8], responsavelNorm);
+
+    const resultadoConflito = verificarConflitoEspaco(
+      dados.sala,
+      dados.data,
+      dados.horaInicio,
+      dados.horaTermino,
+      dados.id,
+    );
+    if (resultadoConflito && resultadoConflito.conflito) {
+      const ex = resultadoConflito.existente || {};
+      throw new Error(
+        `Conflito detectado: espaço já reservado` +
+          (ex.inicio ? ` (${ex.inicio}–${ex.fim}: ${ex.nome || ""})` : ""),
+      );
+    }
+
+    verificarDisponibilidadeItensPorHorario(
+      dados.itensVolantes,
+      dados.data,
+      dados.horaInicio,
+      dados.horaTermino,
+      dados.sala,
+      dados.id,
+    );
+
+    const dadosAntes = reservaExistente.slice(1, 13);
     const novaLinha = [
       dados.id,
       dados.data,
@@ -1185,7 +1292,7 @@ const ReservaService = {
       dados.turno,
       dados.nomeAcao,
       dados.tipoAcao,
-      dados.responsavel,
+      responsavelNorm,
       dados.setor,
       dados.coResponsavel,
       dados.release,
@@ -1195,10 +1302,27 @@ const ReservaService = {
       reservaExistente[15],
     ];
     ReservaRepository.atualizar(dados.id, novaLinha);
+
+    registrarLog(
+      "EDIÇÃO",
+      "RESERVA",
+      dados.nomeAcao,
+      "ID: " + dados.id,
+      dadosAntes,
+      novaLinha.slice(1, 13),
+      responsavelNorm,
+    );
+
     const temRece = ReceRepository.buscarPorReservaGeral(dados.id);
     if (temRece) {
-      ReceService.criarOuAtualizar({ id: dados.id, ...dados });
+      ReceService.criarOuAtualizar({
+        id: dados.id,
+        ...dados,
+        responsavel: responsavelNorm,
+      });
     }
+
+    limparCacheUsuario(responsavelNorm);
     return { sucesso: true };
   },
 };

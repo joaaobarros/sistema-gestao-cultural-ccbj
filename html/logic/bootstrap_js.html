@@ -35,15 +35,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
   console.log('Iniciando Sistema CCBJ...');
 
-  // Aguardar identidade do usuário antes de carregar dados do servidor.
-  // Auth é definido em core/auth_identity_js.html (carregado antes deste arquivo).
-  if (typeof Auth !== 'undefined' && typeof Auth.quandoPronto === 'function') {
-    Auth.quandoPronto(function() {
-      inicializarApp();
-    });
-  } else {
-    console.error('[Bootstrap] Auth não disponível — sistema bloqueado. Verifique o carregamento de auth_identity_js.');
-  }
+  // Chamada direta: a identidade é resolvida pelo backend em obterDadosIniciais()
+  // via Session.getActiveUser() que funciona em google.script.run mesmo em "Execute as: Me".
+  // Auth (auth_identity_js) resolve identidade em paralelo para módulos que usem Auth.email.
+  inicializarApp();
 
   /**
    * ========================================

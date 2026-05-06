@@ -360,15 +360,11 @@ function carregarUsuariosPermissoes() {
   }
 
   if (editor) {
-    editor.innerHTML = '<p class="text-xs text-slate-400 mb-3">Selecione um usuário para ver detalhes ou acesse o painel completo.</p>' +
-      '<button onclick="if(typeof mostrarAba===\'function\')mostrarAba(\'aba-permissoes-v2\')" ' +
-      'class="text-[10px] font-black text-purple-600 bg-purple-50 hover:bg-purple-100 px-3 py-2 rounded-xl transition-all">' +
-      '<i class="fas fa-shield-alt mr-1"></i>Abrir painel completo de permissões</button>';
+    editor.innerHTML = '<p class="text-xs text-slate-400 mb-3">Selecione um usuário para ver detalhes.</p>';
   }
 }
 
 function selecionarUsuarioConfig(email) {
-  if (typeof mostrarAba === 'function') mostrarAba('aba-permissoes-v2');
   setTimeout(function() {
     if (typeof p2SelecionarUsuario === 'function') p2SelecionarUsuario(email);
   }, 300);

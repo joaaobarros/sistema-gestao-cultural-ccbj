@@ -48,38 +48,15 @@
     
     <nav class="flex-1 px-3 py-4 overflow-y-auto custom-scrollbar space-y-1">
 
-      <!-- ── PESSOAL ──────────────────────────────────────── -->
-      <div class="mb-1">
-        <button onclick="toggleModulo('mod-pessoal')"
-          class="w-full flex items-center justify-between px-3 py-2 text-[9px] font-black text-slate-500 uppercase tracking-widest hover:text-purple-300 transition-colors">
-          <span><i class="fas fa-user mr-2 text-slate-600"></i>Pessoal</span>
-          <i id="icon-mod-pessoal" class="fas fa-chevron-down text-[8px] text-slate-600"></i>
-        </button>
-
-        <div id="mod-pessoal" class="space-y-0.5 pl-2 hidden">
-
-          <button data-aba="aba-tarefas" class="tab-btn nav-item w-full">
-            <i class="fas fa-list-check w-5 text-center text-xs"></i>
-            <span class="text-xs font-semibold">Tarefas</span>
-          </button>
-
-          <button data-aba="aba-processos" class="tab-btn nav-item w-full">
-            <i class="fas fa-sitemap w-5 text-center text-xs"></i>
-            <span class="text-xs font-semibold">Processos</span>
-          </button>
-
-        </div>
-      </div>
-
       <!-- ── ESPAÇOS ──────────────────────────────────────── -->
       <div class="mb-1">
         <button onclick="toggleModulo('mod-espacos')"
           class="w-full flex items-center justify-between px-3 py-2 text-[9px] font-black text-slate-500 uppercase tracking-widest hover:text-purple-300 transition-colors">
           <span><i class="fas fa-building mr-2 text-slate-600"></i>Espaços</span>
-          <i id="icon-mod-espacos" class="fas fa-chevron-down text-[8px] text-slate-600"></i>
+          <i id="icon-mod-espacos" class="fas fa-chevron-up text-[8px] text-slate-600"></i>
         </button>
 
-        <div id="mod-espacos" class="space-y-0.5 pl-2 hidden">
+        <div id="mod-espacos" class="space-y-0.5 pl-2">
 
           <button data-aba="aba-lista-reservas" class="tab-btn nav-item w-full">
             <i class="fas fa-calendar-alt w-5 text-center text-xs"></i>
@@ -97,11 +74,6 @@
             <span id="badgeSolicitacoes" class="hidden min-w-[18px] h-[18px] bg-red-500 text-white text-[9px] font-black rounded-full flex items-center justify-center px-1">0</span>
           </button>
 
-          <button data-aba="aba-almoxarifado" class="tab-btn nav-item w-full" id="btn-aba-almoxarifado">
-            <i class="fas fa-boxes-stacked w-5 text-center text-xs"></i>
-            <span class="text-xs font-semibold">Almoxarifado</span>
-          </button>
-
         </div>
       </div>
 
@@ -110,88 +82,14 @@
         <button onclick="toggleModulo('mod-comunicacao')"
           class="w-full flex items-center justify-between px-3 py-2 text-[9px] font-black text-slate-500 uppercase tracking-widest hover:text-purple-300 transition-colors">
           <span><i class="fas fa-bullhorn mr-2 text-slate-600"></i>Comunicação</span>
-          <i id="icon-mod-comunicacao" class="fas fa-chevron-down text-[8px] text-slate-600"></i>
+          <i id="icon-mod-comunicacao" class="fas fa-chevron-up text-[8px] text-slate-600"></i>
         </button>
 
-        <div id="mod-comunicacao" class="space-y-0.5 pl-2 hidden">
+        <div id="mod-comunicacao" class="space-y-0.5 pl-2">
 
           <button id="btn-aba-rece" data-aba="aba-agenda-rece" class="tab-btn nav-item w-full">
             <i class="fas fa-star w-5 text-center text-xs"></i>
             <span class="text-xs font-semibold">Agenda RECE</span>
-          </button>
-
-          <button data-aba="aba-balcao" class="tab-btn nav-item w-full">
-            <i class="fas fa-headset w-5 text-center text-xs"></i>
-            <span class="text-xs font-semibold">Balcão</span>
-          </button>
-
-        </div>
-      </div>
-
-      <!-- ── EQUIPES ──────────────────────────────────────── -->
-      <div class="mb-1">
-        <button onclick="toggleModulo('mod-equipes')"
-          class="w-full flex items-center justify-between px-3 py-2 text-[9px] font-black text-slate-500 uppercase tracking-widest hover:text-purple-300 transition-colors">
-          <span><i class="fas fa-users mr-2 text-slate-600"></i>Equipes</span>
-          <i id="icon-mod-equipes" class="fas fa-chevron-down text-[8px] text-slate-600"></i>
-        </button>
-
-        <div id="mod-equipes" class="space-y-0.5 pl-2 hidden">
-
-          <button data-aba="aba-rh" class="tab-btn nav-item w-full">
-            <i class="fas fa-id-badge w-5 text-center text-xs"></i>
-            <span class="text-xs font-semibold">Depto. Pessoal</span>
-          </button>
-
-          <button data-aba="aba-eficiencia" class="tab-btn nav-item w-full">
-            <i class="fas fa-gauge-high w-5 text-center text-xs"></i>
-            <span class="text-xs font-semibold">Eficiência</span>
-          </button>
-
-        </div>
-      </div>
-
-      <!-- ── FINANCEIRO ────────────────────────────────────── -->
-      <div class="mb-1">
-        <button onclick="toggleModulo('mod-financeiro')"
-          class="w-full flex items-center justify-between px-3 py-2 text-[9px] font-black text-slate-500 uppercase tracking-widest hover:text-purple-300 transition-colors">
-          <span><i class="fas fa-coins mr-2 text-slate-600"></i>Financeiro</span>
-          <i id="icon-mod-financeiro" class="fas fa-chevron-down text-[8px] text-slate-600"></i>
-        </button>
-
-        <div id="mod-financeiro" class="space-y-0.5 pl-2 hidden">
-
-          <button data-aba="aba-contratos-fin" class="tab-btn nav-item w-full" id="btn-aba-contratos-fin">
-            <i class="fas fa-file-contract w-5 text-center text-xs"></i>
-            <span class="text-xs font-semibold">Contratos / Fontes</span>
-          </button>
-
-          <button data-aba="aba-contratacoes" class="tab-btn nav-item w-full">
-            <i class="fas fa-handshake w-5 text-center text-xs"></i>
-            <span class="text-xs font-semibold">Contratações</span>
-          </button>
-
-        </div>
-      </div>
-
-      <!-- ── RELATÓRIOS ────────────────────────────────────── -->
-      <div class="mb-1">
-        <button onclick="toggleModulo('mod-relatorios')"
-          class="w-full flex items-center justify-between px-3 py-2 text-[9px] font-black text-slate-500 uppercase tracking-widest hover:text-purple-300 transition-colors">
-          <span><i class="fas fa-chart-pie mr-2 text-slate-600"></i>Relatórios</span>
-          <i id="icon-mod-relatorios" class="fas fa-chevron-down text-[8px] text-slate-600"></i>
-        </button>
-
-        <div id="mod-relatorios" class="space-y-0.5 pl-2 hidden">
-
-          <button data-aba="aba-codip" class="tab-btn nav-item w-full">
-            <i class="fas fa-chart-pie w-5 text-center text-xs"></i>
-            <span class="text-xs font-semibold">CODIP</span>
-          </button>
-
-          <button data-aba="aba-rel-financeiros" class="tab-btn nav-item w-full">
-            <i class="fas fa-file-invoice-dollar w-5 text-center text-xs"></i>
-            <span class="text-xs font-semibold">Relatórios Financeiros</span>
           </button>
 
         </div>
@@ -202,10 +100,10 @@
         <button onclick="toggleModulo('mod-estrategia')"
           class="w-full flex items-center justify-between px-3 py-2 text-[9px] font-black text-slate-500 uppercase tracking-widest hover:text-purple-300 transition-colors">
           <span><i class="fas fa-chess-king mr-2 text-slate-600"></i>Estratégia</span>
-          <i id="icon-mod-estrategia" class="fas fa-chevron-down text-[8px] text-slate-600"></i>
+          <i id="icon-mod-estrategia" class="fas fa-chevron-up text-[8px] text-slate-600"></i>
         </button>
 
-        <div id="mod-estrategia" class="space-y-0.5 pl-2 hidden">
+        <div id="mod-estrategia" class="space-y-0.5 pl-2">
 
           <button data-aba="aba-dashboard" class="tab-btn nav-item w-full">
             <i class="fas fa-chart-bar w-5 text-center text-xs"></i>
@@ -217,25 +115,6 @@
               <i class="fas fa-brain text-purple-400 text-[9px]"></i>
             </span>
             <span class="text-xs font-semibold">Inteligência IA</span>
-          </button>
-
-        </div>
-      </div>
-
-      <!-- ── INSTITUCIONAL ──────────────────────────────────── -->
-      <div class="mb-1">
-        <button onclick="toggleModulo('mod-institucional')"
-          class="w-full flex items-center justify-between px-3 py-2 text-[9px] font-black text-slate-500 uppercase tracking-widest hover:text-purple-300 transition-colors">
-          <span><i class="fas fa-ear-listen mr-2 text-slate-600"></i>Institucional</span>
-          <i id="icon-mod-institucional" class="fas fa-chevron-down text-[8px] text-slate-600"></i>
-        </button>
-
-        <div id="mod-institucional" class="space-y-0.5 pl-2 hidden">
-
-          <button data-aba="aba-escuta" class="tab-btn nav-item w-full">
-            <i class="fas fa-ear-listen w-5 text-center text-xs"></i>
-            <span class="text-xs font-semibold">Escuta Institucional</span>
-            <span id="badge-escuta-alertas" class="hidden ml-auto min-w-[16px] h-[16px] bg-red-500 text-white text-[8px] font-black rounded-full flex items-center justify-center px-1">0</span>
           </button>
 
         </div>
@@ -256,14 +135,6 @@
           <button id="btn-aba-auditoria" data-aba="aba-auditoria" class="tab-btn nav-item w-full hidden">
             <i class="fas fa-shield-alt w-5 text-center text-xs"></i>
             <span class="text-xs font-semibold">Auditoria</span>
-          </button>
-          <button
-            id="btn-aba-permissoes-v2"
-            data-aba="aba-permissoes-v2"
-            data-requer-permissao="permissoes:visualizar"
-            class="tab-btn nav-item w-full">
-            <i class="fas fa-shield-alt w-5 text-center text-xs"></i>
-            <span class="text-xs font-semibold">Permissões</span>
           </button>
         </div>
       </div>
@@ -344,10 +215,10 @@
 
 <script>
 (function() {
-  var STORE_KEY = 'sidebar_modules_v1';
+  var STORE_KEY = 'sidebar_modules_v2';
   function _salvarEstado() {
     var estado = {};
-    ['mod-pessoal','mod-espacos','mod-comunicacao','mod-equipes','mod-financeiro','mod-relatorios','mod-estrategia','mod-institucional','mod-sistema'].forEach(function(id) {
+    ['mod-espacos','mod-comunicacao','mod-estrategia','mod-sistema'].forEach(function(id) {
       var el = document.getElementById(id);
       if (el) estado[id] = !el.classList.contains('hidden');
     });

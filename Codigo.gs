@@ -105,23 +105,54 @@ function testeVSCode() {
  *              doPost: chama recusarSolicitacao
  */
 function doGet(e) {
-  // Em deployments "Execute as: Me", Session.getActiveUser() retorna vazio para
-  // requisições HTTP. A identidade real é resolvida no frontend via google.script.run
-  // (que SIM expõe Session.getActiveUser() mesmo em "Execute as: Me").
-  // NÃO bloquear aqui — deixar o app carregar e o auth_identity_js.html resolver.
-  let email = '';
-  try {
-    email = Session.getActiveUser().getEmail() || '';
-  } catch(_) {}
+  const acao = e && e.parameter && e.parameter.acao;
+  const id   = e && e.parameter && e.parameter.id;
+
+  // Fluxo de aprovação/recusa por email (links enviados por notificação)
+  if (acao && id) {
+    if (acao === 'aprovar') {
+      try {
+        const email = Session.getActiveUser().getEmail();
+        aprovarSolicitacao(id, email);
+        return HtmlService.createHtmlOutput(
+          '<h2 style="font-family:sans-serif;color:green">✅ Solicitação aprovada com sucesso.</h2>'
+        );
+      } catch (err) {
+        return HtmlService.createHtmlOutput(
+          '<h2 style="font-family:sans-serif;color:red">Erro: ' + err.message + '</h2>'
+        );
+      }
+    }
+    if (acao === 'recusar') {
+      return HtmlService.createHtmlOutput(
+        '<!DOCTYPE html><html><body style="font-family:sans-serif;max-width:500px;margin:40px auto;padding:20px">' +
+        '<h2>❌ Recusar solicitação</h2>' +
+        '<form method="post">' +
+          '<input type="hidden" name="id" value="' + id + '">' +
+          '<label>Motivo da recusa:</label><br>' +
+          '<textarea name="justificativa" required rows="4" style="width:100%;margin-top:8px;padding:8px;border:1px solid #ccc;border-radius:4px"></textarea><br><br>' +
+          '<button type="submit" style="background:#dc2626;color:white;padding:10px 24px;border:none;border-radius:6px;cursor:pointer;font-size:14px">Confirmar Recusa</button>' +
+        '</form></body></html>'
+      );
+    }
+  }
+
+  // Identidade: captura email quando disponível (otimização).
+  // A identidade real é sempre garantida pelo backend via google.script.run
+  // (Session.getActiveUser() funciona em chamadas GAS mesmo em "Execute as: Me").
+  // NÃO bloquear o carregamento do app se email estiver vazio.
+  let emailInicial = '';
+  try { emailInicial = Session.getActiveUser().getEmail() || ''; } catch(_) {}
 
   const tmpl = HtmlService.createTemplateFromFile('Index');
-  tmpl.emailInicial  = email;
+  tmpl.emailInicial  = emailInicial;
   tmpl.sessaoInicial = '';
   tmpl.appUrl        = getBaseUrl();
 
   return tmpl.evaluate()
-    .setTitle("Sistema CCBJ")
-    .addMetaTag("viewport", "width=device-width, initial-scale=1");
+    .setTitle('Sistema CCBJ')
+    .addMetaTag('viewport', 'width=device-width, initial-scale=1')
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
 function doPost(e) {

@@ -160,7 +160,12 @@ function renderizarFavoritos() {
     return;
   }
 
+  var _favBloqueados = ['aba-tarefas','aba-processos','aba-almoxarifado','aba-balcao',
+    'aba-rh','aba-eficiencia','aba-contratos-fin','aba-contratacoes',
+    'aba-codip','aba-rel-financeiros','aba-escuta','aba-permissoes-v2'];
+
   favoritos.slice(0, 12).forEach((fav, index) => {
+    if (_favBloqueados.indexOf(fav.aba) !== -1) return;
     const el = document.createElement('div');
 
     el.className = 'favorito-item flex items-center justify-between group';

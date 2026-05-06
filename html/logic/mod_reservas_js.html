@@ -608,10 +608,12 @@ function carregarReservas() {
 
   GAS.reservas.obter(function(reservas) {
 
-    // 🔒 Garante que sempre será array
     AppState.colecoes.reservas = Array.isArray(reservas) ? reservas : [];
 
-    // 🔒 Evita erro se função não existir
+    if (typeof indexarReservas === 'function') {
+      indexarReservas();
+    }
+
     if (typeof renderizarReservas === 'function') {
       renderizarReservas();
     } else {
@@ -3584,7 +3586,11 @@ function renderizarModoAgendaRece() {
   const filtroSalaAgenda = document.getElementById('agendaReceSala')?.value || '';
   const reservas = (AppState.colecoes.reservasRece || []).filter(r => {
     if (String(r[17]).toUpperCase() === 'CANCELADO') return false;
-    if (filtroSalaAgenda && String(r[6]).trim() !== filtroSalaAgenda) return false;
+    if (filtroSalaAgenda) {
+      const rawSala = String(r[6] || '').trim();
+      const nomeResolvido = AppState.mapaSalas?.[rawSala] || rawSala;
+      if (nomeResolvido !== filtroSalaAgenda && rawSala !== filtroSalaAgenda) return false;
+    }
     const p = String(r[2]||'').split('/');
     if (p.length !== 3) return false;
     const d = new Date(p[2], p[1]-1, p[0]); d.setHours(0,0,0,0);

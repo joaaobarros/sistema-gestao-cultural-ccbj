@@ -41,6 +41,17 @@ function toggleSidebar() {
  */
 function mostrarAba(idAba) {
 
+  // BLOQUEIO ESTRUTURAL — abas fora do escopo de operação autorizado
+  var _abasBloqueadas = [
+    'aba-tarefas','aba-processos','aba-almoxarifado','aba-balcao',
+    'aba-rh','aba-eficiencia','aba-contratos-fin','aba-contratacoes',
+    'aba-codip','aba-rel-financeiros','aba-escuta','aba-permissoes-v2'
+  ];
+  if (_abasBloqueadas.indexOf(idAba) !== -1) {
+    if (idAba !== 'aba-lista-reservas') mostrarAba('aba-lista-reservas');
+    return;
+  }
+
   // BLOQUEIO POR PERMISSÃO (SEM LOOP)
   if (typeof temPermissao === 'function') {
 
@@ -48,7 +59,7 @@ function mostrarAba(idAba) {
       'aba-lista-reservas': 'espacos',
       'aba-nova-reserva':   'espacos',
       'aba-agenda-rece':    'espacos',
-      'aba-codip':          'relatorios',
+      'aba-aprovacoes':     'reservas',
       'aba-dashboard':      'estrategia',
       'aba-gestao-admin':   'sistema',
       'aba-auditoria':      'sistema'
@@ -85,7 +96,8 @@ function mostrarAba(idAba) {
       'aba-codip':          'Relatórios CODIP',
       'aba-gestao-admin':   'Configurações do Sistema',
       'aba-auditoria':      'Painel de Auditoria',
-      'aba-dashboard':      'Dashboard'
+      'aba-dashboard':      'Dashboard',
+      'aba-aprovacoes':     'Aprovações'
     };
 
     const titulo = document.getElementById('tituloAba');

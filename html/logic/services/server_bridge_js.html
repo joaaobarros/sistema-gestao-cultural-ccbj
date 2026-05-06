@@ -93,7 +93,7 @@ const GAS = {
    */
   admin: {
     obterDados: function(cb, err) {
-      GAS._call('obterDadosIniciais', [GAS._sessao()], cb, err);
+      GAS._call('obterDadosIniciais', [], cb, err);
     },
     salvarConfig: function(dados, cb, err) {
       GAS._call('processarSalvarConfig', [dados], cb, err);
