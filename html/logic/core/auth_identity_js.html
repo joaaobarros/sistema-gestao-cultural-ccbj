@@ -126,8 +126,7 @@ function _inicializarGSI() {
 
 function _tentarGSI(clientId) {
   if (!clientId) {
-    // Sem client ID configurado → ir direto para tela de login manual
-    console.log('[Auth] GOOGLE_CLIENT_ID não configurado — usando login manual');
+    console.warn('[Auth] GOOGLE_CLIENT_ID não configurado — ignorando GSI');
      
     return;
   }
@@ -147,7 +146,9 @@ function _tentarGSI(clientId) {
         // Usuário pode já estar autenticado (auto_select) ou GSI falhou
         // Aguardar callback ou ir para login manual
         setTimeout(function() {
-          if (!Auth.pronto && !Auth.email)  
+          if (!Auth.pronto && !Auth.email) {
+            console.warn('[Auth] Sem identidade via GSI');
+          }
         }, 2000);
       }
     });
