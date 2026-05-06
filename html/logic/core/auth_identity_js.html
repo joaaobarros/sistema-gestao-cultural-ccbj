@@ -1,23 +1,19 @@
 <!--
 @file core/auth_identity_js.html
 @layer frontend/auth
-@description Helper de identidade NÃO-BLOQUEANTE.
+@description Helper não-bloqueante de identidade.
 
   O boot do sistema NÃO depende deste arquivo.
   A identidade primária vem de obterDadosIniciais() via google.script.run,
-  que resolve Session.getActiveUser() corretamente mesmo em "Execute as: Me"
-  porque google.script.run propaga o contexto OAuth do chamante.
+  que resolve Session.getActiveUser() corretamente no domínio Google Workspace
+  mesmo em "Execute as: Me" porque google.script.run propaga o contexto OAuth.
 
-  Este módulo resolve Auth.email em paralelo (assíncrono) para que módulos
-  que usem Auth.quandoPronto() recebam o email quando disponível.
-
-  Fontes em ordem de prioridade:
-    1. window.__EMAIL_INICIAL__ injetado pelo doGet (quando disponível)
-    2. google.script.run.obterEmailSessaoAtiva() — fallback assíncrono
+  Este módulo resolve Auth.email em paralelo (assíncrono) para módulos que
+  usem Auth.quandoPronto(). Não bloqueia, não exibe login, não cria tokens.
 -->
 <script>
-  window.__EMAIL_INICIAL__  = '<?= emailInicial ?>';
-  window.__APP_URL__        = '<?= appUrl ?>';
+  window.__EMAIL_INICIAL__ = '<?= emailInicial ?>';
+  window.__APP_URL__       = '<?= appUrl ?>';
 </script>
 <script>
 
@@ -34,7 +30,6 @@ const Auth = {
     if (this.pronto) return;
     this.email  = email;
     this.pronto = true;
-    // Só sobrescreve AppState se ainda não foi preenchido pelo inicializarApp()
     if (typeof AppState !== 'undefined' && AppState.usuario && !AppState.usuario.email) {
       AppState.usuario.email = email;
     }

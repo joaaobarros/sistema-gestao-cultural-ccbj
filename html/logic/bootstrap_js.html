@@ -35,9 +35,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
   console.log('Iniciando Sistema CCBJ...');
 
-  // Chamada direta: a identidade é resolvida pelo backend em obterDadosIniciais()
-  // via Session.getActiveUser() que funciona em google.script.run mesmo em "Execute as: Me".
-  // Auth (auth_identity_js) resolve identidade em paralelo para módulos que usem Auth.email.
+  // A identidade é resolvida pelo backend em obterDadosIniciais() via
+  // Session.getActiveUser(), que funciona em google.script.run no domínio Workspace.
   inicializarApp();
 
   /**

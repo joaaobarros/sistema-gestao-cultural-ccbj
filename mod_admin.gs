@@ -3,30 +3,12 @@
  * @description Módulo de administração: autenticação de usuários, controle de permissões,
  *              logs de auditoria, gerenciamento de configurações e fluxo de solicitações.
  * @layer backend
- * @responsibility Validação de identidade via sistema de sessão (auth_session.gs);
+ * @responsibility Identificação do usuário via Session.getActiveUser();
  *                 registro de auditoria; obterDadosIniciais (entrypoint do boot frontend);
  *                 CRUD de espaços, itens, setores e administradores;
  *                 fluxo de aprovação/recusa de solicitações.
  * @dependencies utils.js (_getSheet, validarEmail, normalizarEmail, sanitizarTexto),
- *               auth_session.gs (_resolverEmailReal, iniciarSessaoGAS),
  *               Codigo.gs (gerarId, include), GmailApp, Session, LockService
- */
-
-/**
- * ========================================
- * BLOCO: Identificação e perfil do usuário
- * ========================================
- * @description obterEmailUsuario(): resolve o email real do usuário chamante.
- *              Em "Execute as: Me", Session.getActiveUser() retorna vazio e
- *              Session.getEffectiveUser() retorna o email do DONO do script (EU).
- *              A solução correta é usar o token de sessão gerado por iniciarSessaoGAS()
- *              após o frontend capturar a identidade via Google Identity Services.
- *
- *              Hierarquia de resolução:
- *              1. Session.getActiveUser() — funciona em triggers e sidebars
- *              2. Token de sessão (sessaoOuEmail é um UUID) — principal via web app
- *              3. Email direto validado — fallback com validação de domínio/lista
- *              4. emailClienteFallback — último recurso (retrocompatibilidade)
  */
 
 // ==============================
@@ -34,41 +16,26 @@
 // ==============================
 
 /**
- * Resolve o email real do usuário.
- * @param {string} sessaoOuEmail - Token de sessão (UUID) OU email direto OU vazio
- * @returns {string} email verificado do usuário real
+ * Resolve o email do usuário chamante.
+ * Em "Execute as: Me" + Workspace domain, Session.getActiveUser() retorna o email
+ * real do usuário em chamadas google.script.run. getEffectiveUser() serve de fallback
+ * para o dono do script ou para contextos onde getActiveUser() não está disponível.
  */
-function obterEmailUsuario(sessaoOuEmail) {
+function obterEmailUsuario(emailClienteFallback) {
   try {
-    // Delegar para auth_session.gs que implementa a lógica completa
-    if (typeof _resolverEmailReal === 'function') {
-      return _resolverEmailReal(sessaoOuEmail || '');
-    }
-
-    // Fallback caso auth_session.gs não esteja disponível
-    let email = '';
-    try { email = Session.getActiveUser()?.getEmail() || ''; } catch(e_) {}
-
-    // Detectar "Execute as: Me": se o email nativo é o dono, não confiar
-    if (email) {
-      let emailDono = '';
-      try { emailDono = Session.getEffectiveUser()?.getEmail() || ''; } catch(e_) {}
-      // Se ativo ≠ efetivo, temos um usuário real (non-owner context)
-      if (!emailDono || email !== emailDono) return email.toLowerCase().trim();
-      // Ativo == Efetivo == dono → "Execute as: Me" → tentar fallback do cliente
-    }
-
-    // Usar sessaoOuEmail como email direto
-    if (sessaoOuEmail && sessaoOuEmail.indexOf('@') >= 0) {
-      const emailLimpo = String(sessaoOuEmail).trim().toLowerCase();
-      if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailLimpo)) return emailLimpo;
-    }
-
-    if (!email) throw new Error("Email não identificado. Sessão expirada?");
-    return email.toLowerCase().trim();
+    let email = Session.getActiveUser()?.getEmail();
+    if (!email || email.trim() === '')
+      email = Session.getEffectiveUser()?.getEmail();
+    if (!email || email.trim() === '') email = emailClienteFallback;
+    if (!email || email.trim() === '')
+      throw new Error('Email não identificado.');
+    const emailLimpo = String(email).trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailLimpo))
+      throw new Error('Formato de email inválido: ' + emailLimpo);
+    return emailLimpo;
   } catch (e) {
-    console.error("Erro ao obter email:", e.message);
-    throw new Error("Não foi possível identificar o usuário: " + e.message);
+    console.error('Erro ao obter email:', e.message);
+    throw new Error('Não foi possível identificar o usuário: ' + e.message);
   }
 }
 
@@ -217,13 +184,11 @@ function verificarDonoOuAdmin(emailDono, emailAtual) {
 
 /**
  * Entrypoint principal do boot do frontend.
- * @param {string} sessaoOuEmail - Token de sessão retornado por iniciarSessaoGAS(),
- *                                  ou email direto como fallback.
+ * Identidade resolvida via Session.getActiveUser() (Workspace domain).
  */
-function obterDadosIniciais(sessaoOuEmail) {
+function obterDadosIniciais(emailClienteFallback) {
   try {
-    const emailUsuario = obterEmailUsuario(sessaoOuEmail || "");
-    // Cache usa ScriptCache com chave por email (UserCache não funciona em "Execute as: Me")
+    const emailUsuario = obterEmailUsuario(emailClienteFallback || "");
     const cache    = CacheService.getScriptCache();
     const cacheKey = "dados_iniciais_" + emailUsuario.replace(/[^a-z0-9]/g, "_");
     const cacheExist = cache.get(cacheKey);
