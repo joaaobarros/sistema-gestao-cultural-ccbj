@@ -179,41 +179,42 @@ function _onCredencialGSI(response) {
 // ═══════════════════════════════════════════════════════════════
 
 function _estabelecerSessao(credencialJWT, emailFallback) {
+
   google.script.run
     .withSuccessHandler(function(resultado) {
-      if (!resultado || !resultado.ok) {
-        console.error('[Auth] Sessão rejeitada pelo servidor:', resultado && resultado.msg);
-        if (resultado && resultado.msg) {
-          Swal && Swal.fire('Acesso Negado', resultado.msg, 'error');
-        }
-        // Tentar novamente com tela de login
-        console.warn('[Auth] Sessão rejeitada — acesso bloqueado');
+
+      if (!resultado || !resultado.ok || !resultado.email || !resultado.sessao) {
+        console.error('[Auth] Sessão inválida');
         return;
       }
 
-      Auth.email    = resultado.email;
+      Auth.email    = String(resultado.email).toLowerCase().trim();
       Auth.sessaoId = resultado.sessao;
       Auth.nivel    = resultado.nivel || '';
 
-      // Atualizar AppState
-      AppState.usuario.email   = resultado.email;
-      AppState.usuario._sessao = resultado.sessao;
+      // atualizar AppState
+      AppState.usuario.email   = Auth.email;
+      AppState.usuario._sessao = Auth.sessaoId;
 
-      // Persistir em sessionStorage
+      // persistência segura
       try {
-        sessionStorage.setItem('ccbj_sessao',    resultado.sessao);
-        sessionStorage.setItem('ccbj_email',     resultado.email);
+        sessionStorage.setItem('ccbj_sessao',    Auth.sessaoId);
+        sessionStorage.setItem('ccbj_email',     Auth.email);
         sessionStorage.setItem('ccbj_sessao_ts', String(Date.now()));
-      } catch(e) {}
+      } catch(e) {
+        console.warn('[Auth] Falha ao persistir sessão');
+      }
 
-      console.log('[Auth] Sessão estabelecida para:', resultado.email);
+      console.log('[Auth] Sessão estabelecida:', Auth.email);
+
       Auth._disparar();
     })
+
     .withFailureHandler(function(err) {
-      console.error('[Auth] Falha ao estabelecer sessão:', err);
-       
+      console.error('[Auth] Erro ao estabelecer sessão:', err);
     })
-    .iniciarSessaoGAS(credencialJWT || '', emailFallback || '');
+
+    .iniciarSessaoGAS('', emailFallback || '');
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -221,23 +222,39 @@ function _estabelecerSessao(credencialJWT, emailFallback) {
 // ═══════════════════════════════════════════════════════════════
 
 function _bootAutenticacao() {
-  // Caso 1: Sessão já disponível (doGet injetou ou sessionStorage restaurou)
+
+  // 1. sessão já existente (doGet ou sessionStorage)
   if (Auth._sessaoDoGetPronta || Auth._sessaoRecuperada) {
 
-  google.script.run
-    .withSuccessHandler(function(resultado) {
+    google.script.run
+      .withSuccessHandler(function(resultado) {
 
-      if (resultado && resultado.ok && resultado.email) {
+        if (resultado && resultado.ok && resultado.email) {
 
-        Auth.email    = resultado.email;
-        Auth.sessaoId = resultado.sessao;
+          Auth.email    = resultado.email;
+          Auth.sessaoId = resultado.sessao;
 
-        AppState.usuario.email   = resultado.email;
-        AppState.usuario._sessao = resultado.sessao;
+          AppState.usuario.email   = resultado.email;
+          AppState.usuario._sessao = resultado.sessao;
 
-        Auth._disparar();
+          Auth._disparar();
 
-      } else {
+        } else {
+
+          sessionStorage.removeItem('ccbj_sessao');
+          sessionStorage.removeItem('ccbj_email');
+          sessionStorage.removeItem('ccbj_sessao_ts');
+
+          Auth._sessaoRecuperada  = false;
+          Auth._sessaoDoGetPronta = false;
+
+          _bootAutenticacao();
+        }
+
+      })
+      .withFailureHandler(function() {
+
+        console.warn('[Auth] Falha ao renovar sessão');
 
         sessionStorage.removeItem('ccbj_sessao');
         sessionStorage.removeItem('ccbj_email');
@@ -247,40 +264,31 @@ function _bootAutenticacao() {
         Auth._sessaoDoGetPronta = false;
 
         _bootAutenticacao();
-      }
+      })
+      .renovarSessaoGAS(Auth.sessaoId);
 
-    })
-    .withFailureHandler(function() {
-      console.warn('[Auth] Falha ao renovar sessão');
+    return;
+  }
 
-      sessionStorage.removeItem('ccbj_sessao');
-      sessionStorage.removeItem('ccbj_email');
-      sessionStorage.removeItem('ccbj_sessao_ts');
-
-      Auth._sessaoRecuperada  = false;
-      Auth._sessaoDoGetPronta = false;
-
-      _bootAutenticacao();
-    })
-    .renovarSessaoGAS(Auth.sessaoId);
-
-  return;
-}
-
-  // Caso 2: Tentar obter email diretamente do backend.
-  // Em "Execute as: User": Session.getActiveUser() retorna o email real.
-  // Em "Execute as: Me":   retorna '' → segue para GSI/login manual.
+  // 2. obter email diretamente do backend (única fonte de verdade)
   google.script.run
     .withSuccessHandler(function(res) {
+
       if (res && res.ok && res.email) {
+
         console.log('[Auth] Email via backend:', res.email);
         _estabelecerSessao('', res.email);
+
       } else {
-         console.warn('[Auth] Sem identidade — acesso negado');
+
+        console.error('[Auth] Nenhuma identidade disponível');
+        return;
       }
+
     })
     .withFailureHandler(function() {
-       console.warn('[Auth] Sem identidade — acesso negado');
+
+      console.error('[Auth] Falha ao obter identidade');
     })
     .obterEmailSessaoAtiva();
 }
