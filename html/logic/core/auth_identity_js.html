@@ -2,12 +2,21 @@
 @file core/auth_identity_js.html
 @layer frontend/auth
 @description Identidade do usuário via email injetado pelo doGet.
+
              Fluxo primário: doGet captura Session.getActiveUser() → window.__EMAIL_INICIAL__.
-             Fallback: google.script.run.obterEmailSessaoAtiva() quando o template não capturou.
-             Sem GSI. Sem entrada manual.
+
+             Em deployments "Execute as: Me", doGet não captura o email mas
+             google.script.run SIM expõe Session.getActiveUser() para o usuário chamante.
+             O fallback via obterEmailSessaoAtiva() resolve este caso.
+
+             Se google.script.run também retornar vazio (executeAsMe=true), tenta GSI
+             (Google Identity Services) com JWT verificado pelo backend via iniciarSessaoGAS().
+             Se GSI não estiver configurado (sem GOOGLE_CLIENT_ID), exibe página de login
+             com link AccountChooser que usa target="_top" para escapar do iframe do GAS.
 -->
 <script>
-  window.__EMAIL_INICIAL__ = '<?= emailInicial ?>';
+  window.__EMAIL_INICIAL__  = '<?= emailInicial ?>';
+  window.__SESSAO_INICIAL__ = '<?= sessaoInicial ?>';
 </script>
 <script>
 
@@ -20,7 +29,7 @@ function _getEmailInicial() {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// AUTH — identidade única via template doGet (com fallback servidor)
+// AUTH — identidade do usuário com múltiplas camadas de fallback
 // ═══════════════════════════════════════════════════════════════
 
 const Auth = {
@@ -31,14 +40,15 @@ const Auth = {
   iniciar: function() {
     if (this.pronto) return;
 
+    // 1. Email injetado pelo doGet (funciona quando Session.getActiveUser() disponível)
     var email = _getEmailInicial();
-
     if (email) {
       this._definirEmail(email);
       return;
     }
 
-    // Fallback: doGet não capturou email (preview ou sessão não propagada)
+    // 2. Fallback via google.script.run — funciona mesmo em "Execute as: Me"
+    //    porque google.script.run expõe Session.getActiveUser() para o chamante.
     console.warn('[Auth] __EMAIL_INICIAL__ vazio — tentando via servidor...');
     this._resolverEmailServidor();
   },
@@ -62,33 +72,174 @@ const Auth = {
           console.log('[Auth] Email resolvido via servidor:', result.email);
           self._definirEmail(result.email);
         } else {
-          console.error('[Auth] Servidor não identificou o usuário.');
-          self._mostrarBloqueio();
+          // Session.getActiveUser() vazio em google.script.run — típico de "Execute as: Me"
+          // sem contexto de usuário propagado. Tentar GSI como próxima camada.
+          var executeAsMe = result && result.executeAsMe;
+          console.warn('[Auth] Servidor não identificou o usuário.', executeAsMe ? '(Execute as: Me — tentando GSI)' : '');
+          if (executeAsMe) {
+            self._tentarGSI();
+          } else {
+            self._mostrarLoginGoogle(false);
+          }
         }
       })
       .withFailureHandler(function(err) {
         console.error('[Auth] Falha ao contatar servidor:', err);
-        self._mostrarBloqueio();
+        self._mostrarLoginGoogle(false);
       })
       .obterEmailSessaoAtiva();
   },
 
-  _mostrarBloqueio: function() {
+  // Tenta GSI (Google Identity Services) se GOOGLE_CLIENT_ID estiver configurado.
+  _tentarGSI: function() {
+    var self = this;
+    google.script.run
+      .withSuccessHandler(function(clientId) {
+        if (clientId) {
+          console.log('[Auth] GSI disponível — iniciando One Tap...');
+          self._iniciarGSI(clientId);
+        } else {
+          console.warn('[Auth] GOOGLE_CLIENT_ID não configurado — exibindo login AccountChooser.');
+          self._mostrarLoginGoogle(true);
+        }
+      })
+      .withFailureHandler(function() {
+        self._mostrarLoginGoogle(true);
+      })
+      .obterClienteIdGoogle();
+  },
+
+  // Inicializa Google Identity Services com One Tap e botão de login.
+  _iniciarGSI: function(clientId) {
+    var self = this;
+
+    self._mostrarCarregandoGSI();
+
+    var script = document.createElement('script');
+    script.src = 'https://accounts.google.com/gsi/client';
+    script.async = true;
+    script.defer = true;
+    script.onload = function() {
+      try {
+        google.accounts.id.initialize({
+          client_id: clientId,
+          callback: function(response) {
+            if (!response || !response.credential) {
+              self._mostrarLoginGoogle(true);
+              return;
+            }
+            console.log('[Auth] GSI JWT recebido — validando no servidor...');
+            google.script.run
+              .withSuccessHandler(function(result) {
+                if (result && result.ok && result.email) {
+                  // Armazenar sessão para chamadas backend posteriores
+                  if (typeof AppState !== 'undefined' && AppState.usuario) {
+                    AppState.usuario._sessao = result.sessao || '';
+                  }
+                  self._definirEmail(result.email);
+                } else {
+                  console.error('[Auth] GSI: backend rejeitou JWT —', result && result.msg);
+                  self._mostrarLoginGoogle(true);
+                }
+              })
+              .withFailureHandler(function(err) {
+                console.error('[Auth] GSI: falha ao validar JWT:', err);
+                self._mostrarLoginGoogle(true);
+              })
+              .iniciarSessaoGAS(response.credential, '');
+          }
+        });
+
+        // Renderizar botão no container criado por _mostrarCarregandoGSI
+        var btnEl = document.getElementById('_auth_gsi_btn');
+        if (btnEl) {
+          google.accounts.id.renderButton(btnEl, {
+            theme: 'outline',
+            size: 'large',
+            text: 'signin_with',
+            locale: 'pt-BR',
+            width: 280
+          });
+        }
+
+        // Tentar One Tap silencioso primeiro
+        google.accounts.id.prompt(function(notification) {
+          if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+            console.log('[Auth] One Tap não exibido — usuário deve clicar no botão.');
+          }
+        });
+      } catch(e) {
+        console.error('[Auth] Erro ao inicializar GSI:', e);
+        self._mostrarLoginGoogle(true);
+      }
+    };
+    script.onerror = function() {
+      console.error('[Auth] Falha ao carregar biblioteca GSI.');
+      self._mostrarLoginGoogle(true);
+    };
+    document.head.appendChild(script);
+  },
+
+  // Exibe container para o botão GSI enquanto a biblioteca carrega.
+  _mostrarCarregandoGSI: function() {
     document.body.innerHTML =
       '<div style="font-family:sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;background:#f1f5f9">' +
-        '<div style="background:#fff;border-radius:20px;padding:48px 36px;text-align:center;box-shadow:0 4px 32px rgba(0,0,0,.1);max-width:380px;width:90%">' +
-          '<div style="font-size:52px;margin-bottom:20px">🔒</div>' +
-          '<h2 style="color:#1e293b;margin:0 0 12px;font-size:22px">Sessão não identificada</h2>' +
+        '<div style="background:#fff;border-radius:20px;padding:48px 36px;text-align:center;box-shadow:0 4px 32px rgba(0,0,0,.1);max-width:400px;width:90%">' +
+          '<div style="font-size:52px;margin-bottom:20px">&#128274;</div>' +
+          '<h2 style="color:#1e293b;margin:0 0 12px;font-size:22px">Acesso Restrito</h2>' +
           '<p style="color:#64748b;margin:0 0 28px;line-height:1.6;font-size:15px">' +
-            'Não foi possível identificar sua conta Google. ' +
-            'Verifique se você está logado e recarregue a página.' +
+            'Fa&#231;a login com sua conta Google institucional.' +
           '</p>' +
-          '<button onclick="location.reload()" ' +
-            'style="background:#4f46e5;color:#fff;border:none;padding:13px 28px;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer">' +
-            '↺ Recarregar' +
-          '</button>' +
+          '<div id="_auth_gsi_btn" style="display:flex;justify-content:center;margin-bottom:16px"></div>' +
+          '<p style="font-size:12px;color:#94a3b8">Carregando op&#231;&#245;es de login...</p>' +
         '</div>' +
       '</div>';
+  },
+
+  // Exibe página de login com link AccountChooser.
+  // Usa target="_top" para escapar do iframe do GAS — sem isso, AccountChooser retorna 403
+  // por restrição de X-Frame-Options.
+  _mostrarLoginGoogle: function(executeAsMe) {
+    var appUrl = '';
+    try { appUrl = window.top.location.href.split('?')[0]; } catch(_) {}
+    if (!appUrl) appUrl = window.location.href.split('?')[0];
+
+    var loginUrl = 'https://accounts.google.com/AccountChooser?continue=' + encodeURIComponent(appUrl);
+
+    var detalhe = executeAsMe
+      ? '<br><small style="color:#94a3b8;display:block;margin-top:8px">Se o problema persistir ap&#243;s o login, o administrador pode precisar reconfigurar o deploy para "Execute as: User".</small>'
+      : '';
+
+    document.body.innerHTML =
+      '<div style="font-family:sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;background:#f1f5f9">' +
+        '<div style="background:#fff;border-radius:20px;padding:48px 36px;text-align:center;box-shadow:0 4px 32px rgba(0,0,0,.1);max-width:400px;width:90%">' +
+          '<div style="font-size:52px;margin-bottom:20px">&#128274;</div>' +
+          '<h2 style="color:#1e293b;margin:0 0 12px;font-size:22px">Acesso Restrito</h2>' +
+          '<p style="color:#64748b;margin:0 0 28px;line-height:1.6;font-size:15px">' +
+            'Fa&#231;a login com sua conta Google institucional para acessar o Sistema CCBJ.' +
+            detalhe +
+          '</p>' +
+          '<a href="' + loginUrl + '" target="_top" ' +
+            'style="display:inline-flex;align-items:center;gap:10px;background:#4285f4;color:#fff;' +
+            'text-decoration:none;padding:14px 28px;border-radius:10px;font-weight:700;font-size:15px">' +
+            '<svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg">' +
+              '<path fill="#fff" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908C16.658 14.383 17.64 12.075 17.64 9.2z"/>' +
+              '<path fill="#fff" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332C2.438 15.983 5.482 18 9 18z"/>' +
+              '<path fill="#fff" d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"/>' +
+              '<path fill="#fff" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0 5.482 0 2.438 2.017.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"/>' +
+            '</svg>' +
+            'Entrar com Google' +
+          '</a>' +
+          '<p style="margin-top:16px;font-size:12px;color:#94a3b8">' +
+            'Ap&#243;s o login, a p&#225;gina ser&#225; recarregada automaticamente.' +
+          '</p>' +
+        '</div>' +
+      '</div>';
+  },
+
+  // Mantido para compatibilidade com chamadas externas
+  _mostrarBloqueio: function() {
+    this._mostrarLoginGoogle(false);
   },
 
   quandoPronto: function(cb) {

@@ -42,21 +42,26 @@ var _SESSAO_EMAIL_PREFIX  = 'email_ccbj_';
  */
 function obterEmailSessaoAtiva() {
   try {
-    var email = '';
+    var emailAtivo = '';
+    var emailEfetivo = '';
 
-    try {
-      email = Session.getActiveUser().getEmail();
-    } catch(e) {}
+    try { emailAtivo   = Session.getActiveUser().getEmail()   || ''; } catch(e) {}
+    try { emailEfetivo = Session.getEffectiveUser().getEmail() || ''; } catch(e) {}
 
+    // Em "Execute as: Me", getActiveUser() retorna vazio em doGet mas retorna o email
+    // real do usuário chamante em google.script.run. Usar apenas getActiveUser().
+    // NÃO usar getEffectiveUser() como identidade — ele retorna o email do DONO do
+    // script para todos os usuários, o que quebra o sistema de permissões.
+    var email = emailAtivo.toLowerCase().trim();
+
+    // Detectar "Execute as: Me" sem usuário identificado: emailAtivo está vazio
+    // mas getEffectiveUser retornou algo (= o dono). Retornar falha para que o
+    // frontend prossiga com o fluxo correto (GSI ou reautenticação).
     if (!email) {
-      try {
-        email = Session.getEffectiveUser().getEmail();
-      } catch(e) {}
+      return { ok: false, executeAsMe: !!(emailEfetivo) };
     }
 
-    email = String(email || '').toLowerCase().trim();
-
-    if (!email || email.indexOf('@') === -1) {
+    if (email.indexOf('@') === -1) {
       return { ok: false };
     }
 
@@ -373,6 +378,19 @@ function _registrarLogSessao(email, acao) {
 // ═══════════════════════════════════════════════════════════════
 
 /**
+ * Retorna o GOOGLE_CLIENT_ID configurado no PropertiesService.
+ * Usado pelo frontend para inicializar o Google Identity Services (GSI).
+ * Retorna '' se não configurado — o frontend exibirá o AccountChooser como fallback.
+ */
+function obterClienteIdGoogle() {
+  try {
+    return PropertiesService.getScriptProperties().getProperty('GOOGLE_CLIENT_ID') || '';
+  } catch(e) {
+    return '';
+  }
+}
+
+/**
  * Configura parâmetros de autenticação via PropertiesService.
  * Executar uma vez pelo admin no editor GAS.
  */
@@ -416,19 +434,10 @@ function obterInfoAutenticacao() {
 
 
 function validarSessaoGAS(sessaoId) {
-  if (!sessaoId) return { ok:false };
-
-  var cache = CacheService.getScriptCache();
-  var data = cache.get(sessaoId);
-
-  if (!data) return { ok:false };
-
-  var obj = JSON.parse(data);
-
-  return {
-    ok: true,
-    email: obj.email
-  };
+  if (!sessaoId) return { ok: false };
+  var email = _resolverEmailSessao(sessaoId);
+  if (!email) return { ok: false };
+  return { ok: true, email: email };
 }
 
 
