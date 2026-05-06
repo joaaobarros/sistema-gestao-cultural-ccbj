@@ -414,3 +414,167 @@ function obterInfoAutenticacao() {
     dominiosConf:      PropertiesService.getScriptProperties().getProperty('DOMINIOS_PERMITIDOS') || '(todos)'
   };
 }
+
+function iniciarSessaoGAS(idToken) {
+
+  var ver = verificarTokenGoogle(idToken);
+  if (!ver.ok) {
+    return { ok:false, msg:'Token inválido' };
+  }
+
+  var email = ver.email;
+
+  // 🔒 valida domínio (opcional, recomendado)
+  if (!/@seudominio\.com$/.test(email)) {
+    return { ok:false, msg:'Acesso não permitido' };
+  }
+
+  var sessao = Utilities.getUuid();
+
+  var cache = CacheService.getScriptCache();
+  cache.put(sessao, JSON.stringify({
+    email: email,
+    criado: Date.now()
+  }), 8 * 60 * 60); // 8h
+
+  return {
+    ok: true,
+    email: email,
+    sessao: sessao
+  };
+}
+
+function validarSessaoGAS(sessaoId) {
+  if (!sessaoId) return { ok:false };
+
+  var cache = CacheService.getScriptCache();
+  var data = cache.get(sessaoId);
+
+  if (!data) return { ok:false };
+
+  var obj = JSON.parse(data);
+
+  return {
+    ok: true,
+    email: obj.email
+  };
+}
+
+function logoutSistema() {
+
+  console.log('[Auth] Encerrando sessão');
+
+  // 1. limpar estado local
+  Auth.email  = '';
+  Auth.sessao = '';
+  Auth.pronto = false;
+
+  // 2. limpar AppState
+  if (typeof AppState !== 'undefined' && AppState.usuario) {
+    AppState.usuario.email   = '';
+    AppState.usuario._sessao = '';
+  }
+
+  // 3. limpar storage
+  try {
+    sessionStorage.removeItem('sessao');
+    sessionStorage.removeItem('ccbj_sessao');
+    sessionStorage.removeItem('ccbj_email');
+    sessionStorage.removeItem('ccbj_sessao_ts');
+  } catch(e) {}
+
+  // 4. invalidar sessão no backend (opcional, mas recomendado)
+  try {
+    google.script.run.encerrarSessaoGAS(Auth.sessao);
+  } catch(e) {}
+
+  // 5. desconectar Google (GSI)
+  if (typeof google !== 'undefined' && google.accounts && google.accounts.id) {
+    google.accounts.id.disableAutoSelect();
+  }
+
+  // 6. reiniciar fluxo
+  setTimeout(function() {
+    location.reload();
+  }, 200);
+}
+
+function encerrarSessaoGAS(sessaoId) {
+  try {
+    if (!sessaoId) return { ok:false };
+
+    var cache = CacheService.getScriptCache();
+    cache.remove(sessaoId);
+
+    return { ok:true };
+  } catch(e) {
+    return { ok:false };
+  }
+}
+
+function confirmarLogout() {
+
+  if (typeof Swal !== 'undefined') {
+    Swal.fire({
+      title: 'Sair do sistema?',
+      text: 'Sua sessão será encerrada.',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Sair',
+      cancelButtonText: 'Cancelar',
+      confirmButtonColor: '#dc2626'
+    }).then(function(result) {
+      if (result.isConfirmed) {
+        logoutSistema();
+      }
+    });
+
+  } else {
+    if (confirm('Deseja sair do sistema?')) {
+      logoutSistema();
+    }
+  }
+}
+
+function logoutSistema() {
+
+  console.log('[Auth] Encerrando sessão');
+
+  const sessaoAtual = Auth.sessao || sessionStorage.getItem('sessao');
+
+  // 1. limpar UI imediatamente
+  document.body.style.opacity = '0.5';
+  document.body.style.pointerEvents = 'none';
+
+  // 2. limpar estado
+  Auth.email  = '';
+  Auth.sessao = '';
+  Auth.pronto = false;
+
+  if (typeof AppState !== 'undefined' && AppState.usuario) {
+    AppState.usuario.email   = '';
+    AppState.usuario._sessao = '';
+  }
+
+  // 3. limpar storage
+  try {
+    sessionStorage.clear();
+  } catch(e) {}
+
+  // 4. encerrar sessão no backend
+  try {
+    if (sessaoAtual) {
+      google.script.run.encerrarSessaoGAS(sessaoAtual);
+    }
+  } catch(e) {}
+
+  // 5. desconectar Google (ESSENCIAL)
+  if (typeof google !== 'undefined' && google.accounts && google.accounts.id) {
+    google.accounts.id.disableAutoSelect();
+  }
+
+  // 6. reload limpo
+  setTimeout(function() {
+    location.reload();
+  }, 300);
+}

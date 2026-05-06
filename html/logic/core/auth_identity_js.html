@@ -26,6 +26,90 @@
   window.__EMAIL_INICIAL__ = '<?= emailInicial ?>';
 </script>
 <script>
+  function verificarTokenGoogle(idToken) {
+  try {
+    if (!idToken) return { ok:false };
+
+    var url = 'https://oauth2.googleapis.com/tokeninfo?id_token=' + idToken;
+    var resp = UrlFetchApp.fetch(url, { muteHttpExceptions:true });
+    var data = JSON.parse(resp.getContentText() || '{}');
+
+    if (!data || !data.email || data.error_description) {
+      return { ok:false };
+    }
+
+    return {
+      ok: true,
+      email: String(data.email).toLowerCase().trim(),
+      nome: data.name || ''
+    };
+
+  } catch(e) {
+    return { ok:false };
+  }
+}
+
+const Auth = {
+  email: '',
+  sessao: '',
+  pronto: false,
+
+  iniciar: function() {
+    google.accounts.id.initialize({
+      client_id: 'SEU_GOOGLE_CLIENT_ID',
+      callback: this._onGoogle.bind(this),
+      auto_select: true
+    });
+
+    google.accounts.id.prompt();
+  },
+
+  _onGoogle: function(response) {
+    if (!response || !response.credential) {
+      console.error('[Auth] Falha no Google');
+      return;
+    }
+
+    google.script.run
+      .withSuccessHandler(this._onSessao.bind(this))
+      .withFailureHandler(function() {
+        console.error('[Auth] Erro backend');
+      })
+      .iniciarSessaoGAS(response.credential);
+  },
+
+  _onSessao: function(res) {
+    if (!res || !res.ok) {
+      console.error('[Auth] Sessão inválida');
+      return;
+    }
+
+    this.email  = res.email;
+    this.sessao = res.sessao;
+    this.pronto = true;
+
+    // integrar com seu sistema
+    AppState.usuario.email   = res.email;
+    AppState.usuario._sessao = res.sessao;
+
+    sessionStorage.setItem('sessao', res.sessao);
+
+    console.log('[Auth] Logado:', res.email);
+
+    document.dispatchEvent(new Event('auth:ready'));
+  }
+};
+document.addEventListener('DOMContentLoaded', function() {
+  Auth.iniciar();
+});
+
+function callSeguro(fn, args, cb) {
+  var sessao = sessionStorage.getItem('sessao');
+
+  google.script.run
+    .withSuccessHandler(cb)
+    [fn](sessao, ...args);
+}
 
 function _getEmailInicial() {
   try {
