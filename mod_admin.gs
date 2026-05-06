@@ -30,34 +30,27 @@
 // EMAIL E SESSÃO
 // ==============================
 
-function obterEmailUsuario() {
+function obterEmailUsuario(emailClienteFallback) {
   try {
     let email = Session.getActiveUser()?.getEmail();
-
     if (!email || email.trim() === "")
       email = Session.getEffectiveUser()?.getEmail();
-
+    if (!email || email.trim() === "") email = emailClienteFallback;
     if (!email || email.trim() === "")
-      throw new Error(
-        "Não foi possível identificar o usuário via Google. Verifique as permissões do WebApp."
-      );
-
+      throw new Error("Email não identificado.");
     const emailLimpo = String(email).trim().toLowerCase();
-
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailLimpo))
       throw new Error("Formato de email inválido: " + emailLimpo);
-
     return emailLimpo;
-
   } catch (e) {
     console.error("Erro ao obter email:", e.message);
-    throw new Error("Falha na identificação do usuário: " + e.message);
+    throw new Error("Não foi possível identificar o usuário: " + e.message);
   }
 }
 
 function obterPerfilUsuario() {
   try {
-    const email = obterEmailUsuario(); // ✅ REMOVIDO parâmetro
+    const email = obterEmailUsuario("");
     let nome = email.split("@")[0];
     let foto = null;
     try {
@@ -189,7 +182,7 @@ function verificarDonoOuAdmin(emailDono, emailAtual) {
     return true;
   } catch (e) {
     throw new Error(
-      "Acesso negado: apenas o responsável ou administrador pode realizar esta ação."
+      "Acesso negado: apenas o responsável ou administrador pode realizar esta ação.",
     );
   }
 }
@@ -200,8 +193,7 @@ function verificarDonoOuAdmin(emailDono, emailAtual) {
 
 function obterDadosIniciais(emailDoCliente) {
   try {
-    const emailUsuario = obterEmailUsuario(); // ✅ IGNORA parâmetro externo
-
+    const emailUsuario = obterEmailUsuario(emailDoCliente || "");
     const cache = CacheService.getUserCache();
     const cacheKey =
       "dados_iniciais_" + emailUsuario.replace(/[^a-z0-9]/g, "_");
@@ -305,6 +297,20 @@ function obterDadosIniciais(emailDoCliente) {
   }
 }
 
+function limparCacheUsuario(emailUsuario) {
+  const cache = CacheService.getUserCache();
+  cache.remove("dados_iniciais");
+  if (emailUsuario && String(emailUsuario).includes("@")) {
+    const chave =
+      "dados_iniciais_" +
+      emailUsuario
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, "_");
+    cache.remove(chave);
+  }
+}
+
 // ==============================
 // LOGS
 // ==============================
@@ -322,7 +328,10 @@ function registrarLog(
     const abaLogs = _getSheet("Logs");
     if (!abaLogs) return;
 
-    const usuario = emailUsuario || "desconhecido@sistema"; // ✅ corrigido
+    const usuario =
+      emailUsuario ||
+      Session.getActiveUser()?.getEmail() ||
+      "desconhecido@sistema";
 
     const formatarDados = (dados) => {
       if (dados === undefined || dados === null) return "";
@@ -357,6 +366,20 @@ function registrarLog(
   }
 }
 
+function obterLogs(emailUsuario) {
+  try {
+    verificarPermissao("superadmin", emailUsuario);
+    const abaLogs = _getSheet("Logs");
+    if (!abaLogs || abaLogs.getLastRow() < 2) return "[]";
+    const dados = abaLogs
+      .getRange(2, 1, abaLogs.getLastRow() - 1, 8)
+      .getDisplayValues();
+    return JSON.stringify(dados.reverse());
+  } catch (e) {
+    throw new Error(e.message);
+  }
+}
+
 function registrarAcesso(emailUsuario, nivelAcesso) {
   try {
     const aba = _getSheet("LogAcessos");
@@ -381,7 +404,10 @@ function registrarAcesso(emailUsuario, nivelAcesso) {
 
 function obterLogAcessos(emailUsuario) {
   try {
-    const email = emailUsuario; // ✅ removido fallback inseguro
+    const email =
+      emailUsuario ||
+      Session.getActiveUser()?.getEmail() ||
+      Session.getEffectiveUser()?.getEmail();
     verificarPermissao("admin", email);
     const aba = _getSheet("LogAcessos");
     if (!aba || aba.getLastRow() < 2) return "[]";
