@@ -79,6 +79,8 @@ const ABA_PARA_MODULO = {
   'EscutaTemplates':      'ESCUTA',
   'EscutaAlertas':        'ESCUTA',
   'EscutaPerfis':         'ESCUTA',
+  'EscutaSaturacao':      'ESCUTA',
+  'EscutaAcoes':          'ESCUTA',
   'LogsEscuta':           'ESCUTA',
 };
 

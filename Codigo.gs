@@ -138,15 +138,11 @@ function doGet(e) {
     }
   }
 
-  // Tentar capturar email do usuário no momento do doGet
-  // Em alguns deployments Google Workspace, Session.getActiveUser() funciona aqui
+  // Capturar email do usuário no momento do doGet.
+  // Em "Execute as: User": Session.getActiveUser() retorna o email real do usuário.
+  // Em "Execute as: Me":  Session.getActiveUser() retorna string vazia.
   let emailDoGet = '';
   try { emailDoGet = Session.getActiveUser().getEmail() || ''; } catch(e_) {}
-
-  // Se getActiveUser retornou o email do dono (Execute as: Me), descartar
-  let emailEfetivo = '';
-  try { emailEfetivo = Session.getEffectiveUser().getEmail() || ''; } catch(e_) {}
-  if (emailDoGet && emailDoGet === emailEfetivo) emailDoGet = '';
 
   // Gerar token de sessão se temos email real no doGet
   let sessaoInicial = '';
@@ -160,7 +156,7 @@ function doGet(e) {
   const tmpl = HtmlService.createTemplateFromFile("Index");
   tmpl.emailInicial  = emailDoGet;
   tmpl.sessaoInicial = sessaoInicial;
-  tmpl.emailDonoScript = emailEfetivo; // Frontend usa para detectar "Execute as: Me"
+  tmpl.emailDonoScript = ''; // mantido para compatibilidade com template
 
   return tmpl.evaluate()
     .setTitle("Sistema de Gestão Cultural — CCBJ")

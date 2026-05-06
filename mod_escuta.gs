@@ -149,13 +149,19 @@ function _escutaSheet(nome) {
     }
   } catch(e) {}
 
-  var ss = _escutaSS();
-  var sh = ss.getSheetByName(nome);
-  if (!sh) {
-    sh = ss.insertSheet(nome);
-    _escutaInicializarCabecalhos(sh, nome);
+  try {
+    var ss = _escutaSS();
+    if (!ss) throw new Error('Planilha ativa indisponível');
+    var sh = ss.getSheetByName(nome);
+    if (!sh) {
+      sh = ss.insertSheet(nome);
+      _escutaInicializarCabecalhos(sh, nome);
+    }
+    return sh;
+  } catch(e) {
+    Logger.log('[Escuta] _escutaSheet("' + nome + '"): ' + e.message);
+    return null;
   }
-  return sh;
 }
 
 function _escutaInicializarCabecalhos(sh, nome) {
@@ -204,14 +210,20 @@ function _escutaEmailHash(email) {
 }
 
 function _escutaSheetToArray(sh) {
-  var data = sh.getDataRange().getValues();
-  if (data.length < 2) return [];
-  var headers = data[0];
-  return data.slice(1).map(function(row) {
-    var obj = {};
-    headers.forEach(function(h, i) { obj[h] = row[i]; });
-    return obj;
-  });
+  if (!sh) return [];
+  try {
+    var data = sh.getDataRange().getValues();
+    if (data.length < 2) return [];
+    var headers = data[0];
+    return data.slice(1).map(function(row) {
+      var obj = {};
+      headers.forEach(function(h, i) { obj[h] = row[i]; });
+      return obj;
+    });
+  } catch(e) {
+    Logger.log('[Escuta] _escutaSheetToArray: ' + e.message);
+    return [];
+  }
 }
 
 function _escutaPeriodoAtual() {
@@ -1558,7 +1570,8 @@ function _escutaGerarRecomendacoes(indicadores, resumoEspontanea, alertas) {
 
 function obterDadosEscuta() {
   try {
-    var email = Session.getActiveUser().getEmail();
+    var email = '';
+    try { email = Session.getActiveUser().getEmail() || ''; } catch(e_) {}
 
     // Pré-carrega todas as abas no cache de execução de uma só vez
     var sheetsParaCarregar = [
@@ -1572,7 +1585,12 @@ function obterDadosEscuta() {
     ];
     sheetsParaCarregar.forEach(function(nome) {
       if (!_escutaExecCache[nome]) {
-        _escutaExecCache[nome] = _escutaSheetToArray(_escutaSheet(nome));
+        try {
+          _escutaExecCache[nome] = _escutaSheetToArray(_escutaSheet(nome));
+        } catch(e_) {
+          _escutaExecCache[nome] = [];
+          Logger.log('[Escuta] preload falhou para "' + nome + '": ' + e_.message);
+        }
       }
     });
 

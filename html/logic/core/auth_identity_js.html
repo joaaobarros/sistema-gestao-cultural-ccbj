@@ -53,21 +53,20 @@ const Auth = {
 // LEITURA DO TEMPLATE (Injeção do doGet)
 // ═══════════════════════════════════════════════════════════════
 
-// Valores injetados pelo servidor via HtmlService.createTemplateFromFile
-// Se Session.getActiveUser() funcionou no doGet, já temos sessão pronta
+// Valores injetados pelo servidor via HtmlService.createTemplateFromFile.
+// Em "Execute as: User": doGet captura o email real → sessão pronta aqui.
+// Em "Execute as: Me":  emailInicial = '' → boot segue para backend/GSI/login.
 (function() {
   try {
     const emailInicial  = '<?= emailInicial  ?>';
     const sessaoInicial = '<?= sessaoInicial ?>';
-    const emailDono     = '<?= emailDonoScript ?>';
 
-    if (emailInicial && emailInicial !== emailDono && sessaoInicial) {
+    if (emailInicial && sessaoInicial) {
       Auth.email    = emailInicial;
       Auth.sessaoId = sessaoInicial;
       AppState.usuario.email    = emailInicial;
       AppState.usuario._sessao  = sessaoInicial;
       console.log('[Auth] Identidade via doGet:', emailInicial);
-      // Não disparar ainda — aguardar inicializarApp() para sequência correta
       Auth._emailDoGetPronto = true;
       Auth._sessaoDoGetPronta = true;
     }
@@ -271,7 +270,6 @@ function _estabelecerSessao(credencialJWT, emailFallback) {
 function _bootAutenticacao() {
   // Caso 1: Sessão já disponível (doGet injetou ou sessionStorage restaurou)
   if (Auth._sessaoDoGetPronta || Auth._sessaoRecuperada) {
-    // Validar sessão ainda é válida no servidor
     google.script.run
       .withSuccessHandler(function(resultado) {
         if (resultado && resultado.ok) {
@@ -281,38 +279,50 @@ function _bootAutenticacao() {
           AppState.usuario._sessao = resultado.sessao;
           Auth._disparar();
         } else {
-          // Sessão expirou — reiniciar
           sessionStorage.removeItem('ccbj_sessao');
           sessionStorage.removeItem('ccbj_email');
           sessionStorage.removeItem('ccbj_sessao_ts');
-          Auth._sessaoRecuperada = false;
+          Auth._sessaoRecuperada  = false;
           Auth._sessaoDoGetPronta = false;
           _bootAutenticacao();
         }
       })
       .withFailureHandler(function() {
-        // Em caso de erro na validação, confiar na sessão salva
         Auth._disparar();
       })
       .renovarSessaoGAS(Auth.sessaoId);
     return;
   }
 
-  // Caso 2: Tentar GSI (assíncrono)
-  // Carregar GSI dinamicamente
+  // Caso 2: Tentar obter email diretamente do backend.
+  // Em "Execute as: User": Session.getActiveUser() retorna o email real.
+  // Em "Execute as: Me":   retorna '' → segue para GSI/login manual.
+  google.script.run
+    .withSuccessHandler(function(emailBackend) {
+      if (emailBackend && emailBackend.indexOf('@') > 0) {
+        console.log('[Auth] Email via backend:', emailBackend);
+        _estabelecerSessao('', emailBackend);
+      } else {
+        _tentarGSIouLogin();
+      }
+    })
+    .withFailureHandler(function() {
+      _tentarGSIouLogin();
+    })
+    .obterEmailSessaoAtiva();
+}
+
+function _tentarGSIouLogin() {
   const script = document.createElement('script');
   script.src   = 'https://accounts.google.com/gsi/client';
   script.async = true;
-  script.onload = function() {
-    setTimeout(_inicializarGSI, 100);
-  };
+  script.onload = function() { setTimeout(_inicializarGSI, 100); };
   script.onerror = function() {
-    console.warn('[Auth] Falha ao carregar GSI — usando login manual');
+    console.warn('[Auth] Falha ao carregar GSI — login manual');
     _exibirTelaLogin();
   };
   document.head.appendChild(script);
 
-  // Timeout de segurança: se GSI não responder em 5s → login manual
   setTimeout(function() {
     if (!Auth.pronto && !Auth.email) {
       console.warn('[Auth] Timeout GSI — login manual');

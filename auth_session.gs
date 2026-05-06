@@ -31,6 +31,24 @@ var _SESSAO_CACHE_PREFIX  = 'sessao_ccbj_';
 var _SESSAO_EMAIL_PREFIX  = 'email_ccbj_';
 
 // ═══════════════════════════════════════════════════════════════
+// EMAIL DO USUÁRIO ATIVO — chamada direta via google.script.run
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * Retorna o email do usuário autenticado.
+ * Em "Execute as: User": retorna o email real do usuário chamante.
+ * Em "Execute as: Me":   retorna string vazia (sem lançar exceção).
+ * Chamada pelo frontend em _bootAutenticacao antes de tentar GSI/login manual.
+ */
+function obterEmailSessaoAtiva() {
+  try {
+    return Session.getActiveUser().getEmail() || '';
+  } catch(e) {
+    return '';
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
 // INICIAR SESSÃO — ponto de entrada do login
 // ═══════════════════════════════════════════════════════════════
 
@@ -234,7 +252,12 @@ function _verificarJWTGoogle(idToken) {
 function _validarEmailAutorizado(email) {
   if (!email) return '';
   var emailLimpo = String(email).toLowerCase().trim();
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailLimpo)) return '';
+  // Requer TLD ≥ 2 chars e pelo menos um ponto no domínio (rejeita a@b.c, a@b, etc.)
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(emailLimpo)) return '';
+  // Rejeita domínios com label de 1 char apenas (ex: b.br mas não a@b.c onde 'b' é o host)
+  var dominio = emailLimpo.split('@')[1];
+  var partes = dominio.split('.');
+  if (partes.some(function(p) { return p.length < 2; })) return '';
 
   // Verificar domínios permitidos (configurável)
   var dominiosConf = PropertiesService.getScriptProperties().getProperty('DOMINIOS_PERMITIDOS') || '';
