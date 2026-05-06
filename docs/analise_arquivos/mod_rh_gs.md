@@ -152,3 +152,130 @@ Módulo exclusivamente Drive JSON que concentra operações de RH de alta fideli
 ## 13. Alinhamento com a Visão
 **Alinhado:** cálculo fiscal preciso, dados demográficos para CODIP/DEI, módulo isolado e coeso
 **Desalinhado:** sem lock em escrita, tabelas fiscais hardcoded sem versionamento, desconectado de mod_financeiro.gs e mod_equipes.gs
+
+
+ESCOPO FUNCIONAL
+-------------------------------------
+
+1. ESTRUTURA SALARIAL
+
+Criar suporte completo para:
+
+- Planos de carreira
+- Classes (com range de pontos)
+- Steps salariais (níveis dentro da classe)
+- Parâmetros do plano
+
+Implementar entidades:
+
+- PlanosCarreira
+- ClassesCarreira
+- StepsSalariais
+- ParametrosPlano
+- ContratoCarreira
+
+Garantir:
+- vínculo com contrato existente
+- cálculo de salário baseado em classe + step
+
+-------------------------------------
+
+2. BENEFÍCIOS (INTEGRAR COM MODELO EXISTENTE)
+
+Implementar:
+
+- BeneficiosRH (cadastro manual)
+- CategoriaBeneficios (preset por categoria)
+- ContratoBeneficiosOverride (exceções)
+- FonteBeneficioRegras (restrições por fonte)
+
+Garantir:
+- herança por categoria
+- override por contrato
+- validação por fonte de financiamento
+
+-------------------------------------
+
+3. IMPORTAÇÃO (PLANILHA / CSV)
+
+Implementar ingestão de dados via:
+
+- upload CSV
+- leitura de planilha (Google Sheets ou similar)
+
+Suportar importação de:
+
+- planos de carreira
+- classes
+- steps salariais
+- benefícios
+
+Regras:
+- validar estrutura antes de inserir
+- impedir duplicidade
+- permitir atualização controlada (upsert)
+
+-------------------------------------
+
+4. INTERFACE (FRONTEND)
+
+Criar telas para:
+
+A. Planos de carreira
+- criar/editar plano
+- definir parâmetros
+
+B. Classes e faixas
+- criar classes
+- definir range de pontos
+- editar steps salariais
+
+C. Benefícios
+- criar/editar/excluir benefício
+- vincular à categoria
+
+D. Contrato
+- visualizar salário (classe + step)
+- visualizar benefícios herdados
+- aplicar override manual
+
+-------------------------------------
+
+5. LÓGICA CENTRAL
+
+Implementar funções:
+
+- obterSalarioContrato(contratoId)
+- obterBeneficiosContrato(contratoId)
+
+Garantir:
+- uso de fonte única de dados
+- nenhuma lógica duplicada
+- integração com AppState (ou equivalente)
+
+-------------------------------------
+
+6. DOCUMENTAÇÃO (.md)
+
+Criar/atualizar:
+
+- docs/rh_estrutura_salarial.md
+- docs/rh_beneficios.md
+- docs/rh_integracao.md
+
+Conteúdo:
+- modelo de dados
+- fluxo de cálculo
+- regras de negócio
+- integração com sistema
+
+NÃO documentar antes da implementação estar estável.
+
+-------------------------------------
+
+7. DIRETRIZES CRÍTICAS
+
+- NÃO hardcode nenhum valor
+- NÃO duplicar lógica entre módulos
+- NÃO criar soluções paralelas
+- remover código legado conflitante

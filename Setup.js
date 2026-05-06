@@ -818,6 +818,7 @@ function inicializarEquipePadrao() {
   return { ok: true };
 }
 
+//revisar parametros prosteriormente, pois parametros podem
 function inicializarParametrosRH() {
 
   var aba = _abrirAba('EQUIPES', 'ParametrosRH');
