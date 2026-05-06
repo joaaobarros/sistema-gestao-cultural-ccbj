@@ -26,85 +26,10 @@
   window.__EMAIL_INICIAL__ = '<?= emailInicial ?>';
 </script>
 <script>
-  function verificarTokenGoogle(idToken) {
-  try {
+ 
 
-    var url = 'https://oauth2.googleapis.com/tokeninfo?id_token=' + idToken;
-    var resp = UrlFetchApp.fetch(url);
-    var data = JSON.parse(resp.getContentText());
 
-    if (!data || !data.email) {
-      return { ok:false };
-    }
-
-    // 🔒 validar client_id (ESSENCIAL)
-    var CLIENT_ID = '25744307135-5n04qardga1aakl647legj7m523cg03k.apps.googleusercontent.com';
-
-    if (data.aud !== CLIENT_ID) {
-      return { ok:false };
-    }
-
-    return {
-      ok: true,
-      email: String(data.email).toLowerCase().trim(),
-      nome: data.name || ''
-    };
-
-  } catch(e) {
-    return { ok:false };
-  }
-}
-
-const Auth = {
-  email: '',
-  sessao: '',
-  pronto: false,
-
-  iniciar: function() {
-    google.accounts.id.initialize({
-      client_id: '25744307135-5n04qardga1aakl647legj7m523cg03k.apps.googleusercontent.com',
-      callback: this._onGoogle.bind(this),
-      auto_select: true
-    });
-
-    google.accounts.id.prompt();
-  },
-
-  _onGoogle: function(response) {
-    if (!response || !response.credential) {
-      console.error('[Auth] Falha no Google');
-      return;
-    }
-
-    google.script.run
-      .withSuccessHandler(this._onSessao.bind(this))
-      .withFailureHandler(function() {
-        console.error('[Auth] Erro backend');
-      })
-      .iniciarSessaoGAS(response.credential);
-  },
-
-  _onSessao: function(res) {
-    if (!res || !res.ok) {
-      console.error('[Auth] Sessão inválida');
-      return;
-    }
-
-    this.email  = res.email;
-    this.sessao = res.sessao;
-    this.pronto = true;
-
-    // integrar com seu sistema
-    AppState.usuario.email   = res.email;
-    AppState.usuario._sessao = res.sessao;
-
-    sessionStorage.setItem('sessao', res.sessao);
-
-    console.log('[Auth] Logado:', res.email);
-
-    document.dispatchEvent(new Event('auth:ready'));
-  }
-};
+// inicialização
 document.addEventListener('DOMContentLoaded', function() {
   Auth.iniciar();
 });
@@ -132,22 +57,73 @@ function _getEmailInicial() {
 // ═══════════════════════════════════════════════════════════════
 
 const Auth = {
-  sessaoId:     '',
-  email:        '',
-  nivel:        '',
-  pronto:       false,
-  _callbacks:   [],
+  sessaoId: '',
+  email: '',
+  nivel: '',
+  pronto: false,
+  _callbacks: [],
 
-  // Registra callback para quando a identidade estiver pronta
+  iniciar: function() {
+    if (typeof google === 'undefined' || !google.accounts) {
+      console.error('[Auth] GSI não carregado');
+      return;
+    }
+
+    google.accounts.id.initialize({
+      client_id: 'SEU_CLIENT_ID_AQUI',
+      callback: this._onGoogle.bind(this),
+      auto_select: true
+    });
+
+    google.accounts.id.prompt();
+  },
+
+  _onGoogle: function(response) {
+  if (!response || !response.credential) {
+    console.error('[Auth] Falha no Google');
+    return;
+  }
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      if (!res || !res.ok) {
+        console.error('[Auth] Sessão inválida:', res);
+        return;
+      }
+
+      Auth.email    = res.email;
+      Auth.sessaoId = res.sessao;
+      Auth.pronto   = true;
+
+      AppState.usuario.email   = res.email;
+      AppState.usuario._sessao = res.sessao;
+
+      sessionStorage.setItem('ccbj_sessao', res.sessao);
+      sessionStorage.setItem('ccbj_email', res.email);
+      sessionStorage.setItem('ccbj_sessao_ts', String(Date.now()));
+
+      console.log('[Auth] Logado:', res.email);
+
+      Auth._disparar();
+    })
+    .withFailureHandler(function(err) {
+      console.error('[Auth] Erro backend:', err);
+    })
+    .iniciarSessaoGAS(response.credential);
+},
+
   quandoPronto: function(cb) {
-    if (this.pronto) { cb(this.email, this.sessaoId); return; }
+    if (this.pronto) {
+      cb(this.email, this.sessaoId);
+      return;
+    }
     this._callbacks.push(cb);
   },
 
   _disparar: function() {
     this.pronto = true;
-    this._callbacks.forEach(function(cb) {
-      try { cb(Auth.email, Auth.sessaoId); } catch(e) { console.warn('[Auth]', e); }
+    this._callbacks.forEach((cb) => {
+      try { cb(this.email, this.sessaoId); } catch(e) {}
     });
     this._callbacks = [];
   }
