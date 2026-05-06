@@ -1415,7 +1415,7 @@ function renderizarTabelaRece() {
     <td class="p-4 text-right">
       <div class="flex justify-end gap-2">
         
-        ${(AppState.usuario.isAdmin || AppState.usuario.isSuperadmin || AppState.usuario.isComunicacao || AppState.usuario.email === r[18]) ? `
+        ${(temPermissao('reservas','editar') || AppState.usuario.isComunicacao || AppState.usuario.email === r[18]) ? `
           <button
             data-acao="editar-rece"
             data-id="${escaparHTML(r[0] || '')}"
@@ -1425,7 +1425,7 @@ function renderizarTabelaRece() {
           </button>
         ` : ''}
 
-        ${(!isCancelado(r) && (AppState.usuario.isAdmin || AppState.usuario.isSuperadmin || AppState.usuario.email === r[18])) ? `
+        ${(!isCancelado(r) && (temPermissao('reservas','editar') || AppState.usuario.email === r[18])) ? `
           <button
             data-acao="cancelar-rece"
             data-id="${escaparHTML(r[0] || '')}"
@@ -1436,7 +1436,7 @@ function renderizarTabelaRece() {
           </button>
         ` : ''}
 
-        ${(AppState.usuario.isAdmin || AppState.usuario.isSuperadmin) ? `
+        ${temPermissao('reservas','excluir') ? `
           <button
             data-acao="excluir-rece"
             data-id="${escaparHTML(r[0] || '')}"

@@ -235,7 +235,7 @@ function renderizarBalcao(lista){
     c.innerHTML = '<div class="p-12 text-center">'
       + '<i class="fas fa-bullhorn text-slate-200 text-4xl mb-3"></i>'
       + '<p class="text-slate-400 font-bold text-sm">Nenhum processo encontrado</p>'
-      + (temPermissao('comunicacao','editar')
+      + (temPermissao('balcao','editar')
           ? '<button onclick="abrirModalAtendimento()" class="mt-4 bg-orange-500 text-white text-xs font-black px-4 py-2 rounded-xl">+ Novo Processo</button>'
           : '')
       + '</div>';
