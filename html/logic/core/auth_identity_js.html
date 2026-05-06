@@ -28,13 +28,19 @@
 <script>
   function verificarTokenGoogle(idToken) {
   try {
-    if (!idToken) return { ok:false };
 
     var url = 'https://oauth2.googleapis.com/tokeninfo?id_token=' + idToken;
-    var resp = UrlFetchApp.fetch(url, { muteHttpExceptions:true });
-    var data = JSON.parse(resp.getContentText() || '{}');
+    var resp = UrlFetchApp.fetch(url);
+    var data = JSON.parse(resp.getContentText());
 
-    if (!data || !data.email || data.error_description) {
+    if (!data || !data.email) {
+      return { ok:false };
+    }
+
+    // 🔒 validar client_id (ESSENCIAL)
+    var CLIENT_ID = '25744307135-5n04qardga1aakl647legj7m523cg03k.apps.googleusercontent.com';
+
+    if (data.aud !== CLIENT_ID) {
       return { ok:false };
     }
 
