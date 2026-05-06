@@ -564,12 +564,20 @@ function temPermissao(modulo, acao) {
 
 function carregarPermissoes(cb) {
   var em = _p2S.emailAtual;
-  if (!em) { if (typeof cb === 'function') cb(); return; }
+
+  if (!em) {
+    if (typeof cb === 'function') cb();
+    document.dispatchEvent(new Event('permissoes:ready'));
+    return;
+  }
 
   GAS.permissoesV2.obter(em, function(data) {
+
     if (data && AppState && AppState.usuario) {
+
       var finais = data.permissoes_finais || {};
       var modulos = {};
+
       Object.keys(finais).forEach(function(m) {
         modulos[m] = {
           visualizar: !!finais[m].visualizar,
@@ -577,6 +585,7 @@ function carregarPermissoes(cb) {
           excluir:    !!finais[m].excluir
         };
       });
+
       AppState.usuario.permissoes = modulos;
       AppState.usuario.perfil     = data.perfil_base || 'visitante_controlado';
 
@@ -584,8 +593,16 @@ function carregarPermissoes(cb) {
       if (idx === -1) _p2S.permissoes.push(data);
       else _p2S.permissoes[idx] = data;
     }
+
+    document.dispatchEvent(new Event('permissoes:ready'));
+
     if (typeof cb === 'function') cb();
+
   }, function() {
+
+    // mesmo em erro, dispara (pra não travar sistema)
+    document.dispatchEvent(new Event('permissoes:ready'));
+
     if (typeof cb === 'function') cb();
   });
 }

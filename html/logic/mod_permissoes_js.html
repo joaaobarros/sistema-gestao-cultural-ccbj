@@ -18,7 +18,7 @@
  * @param acao    string — 'visualizar' | 'editar' | 'excluir'
  * @returns boolean
  */
-function temPermissao(modulo, acao) {
+function temPermissao_v1(modulo, acao) {
   if (!AppState || !AppState.usuario) return false;
   if (AppState.usuario.isSuperadmin) return true;
 
@@ -41,7 +41,7 @@ function temPermissao(modulo, acao) {
  * @description Busca permissões do backend e armazena em AppState.usuario.permissoes.
  *              Chamado no boot; falha silenciosa — fallback ativo via temPermissao().
  */
-function carregarPermissoes(cb) {
+function carregarPermissoes_v1(cb) {
   if (!GAS || !GAS.permissoes) {
     if (typeof cb === 'function') cb();
     return;
