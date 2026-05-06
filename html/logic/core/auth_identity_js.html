@@ -2,8 +2,9 @@
 @file core/auth_identity_js.html
 @layer frontend/auth
 @description Identidade do usuário via email injetado pelo doGet.
-             doGet captura Session.getActiveUser().getEmail() e injeta como
-             window.__EMAIL_INICIAL__. Não usa GSI nem entrada manual.
+             Fluxo primário: doGet captura Session.getActiveUser() → window.__EMAIL_INICIAL__.
+             Fallback: google.script.run.obterEmailSessaoAtiva() quando o template não capturou.
+             Sem GSI. Sem entrada manual.
 -->
 <script>
   window.__EMAIL_INICIAL__ = '<?= emailInicial ?>';
@@ -13,12 +14,13 @@
 function _getEmailInicial() {
   try {
     var raw = window.__EMAIL_INICIAL__;
-    return raw ? String(raw).toLowerCase().trim() : '';
+    if (!raw || raw.indexOf('@') < 0) return '';
+    return String(raw).toLowerCase().trim();
   } catch(e) { return ''; }
 }
 
 // ═══════════════════════════════════════════════════════════════
-// AUTH — identidade única via template doGet
+// AUTH — identidade única via template doGet (com fallback servidor)
 // ═══════════════════════════════════════════════════════════════
 
 const Auth = {
@@ -31,21 +33,62 @@ const Auth = {
 
     var email = _getEmailInicial();
 
-    if (!email || email.indexOf('@') < 0) {
-      console.error('[Auth] Email não disponível — Session.getActiveUser() não retornou identidade.');
+    if (email) {
+      this._definirEmail(email);
       return;
     }
 
+    // Fallback: doGet não capturou email (preview ou sessão não propagada)
+    console.warn('[Auth] __EMAIL_INICIAL__ vazio — tentando via servidor...');
+    this._resolverEmailServidor();
+  },
+
+  _definirEmail: function(email) {
     this.email  = email;
     this.pronto = true;
-
     if (typeof AppState !== 'undefined' && AppState.usuario) {
       AppState.usuario.email = email;
     }
-
     var cbs = this._callbacks.slice();
     this._callbacks = [];
     cbs.forEach(function(cb) { try { cb(email); } catch(e) { console.error('[Auth] Callback erro:', e); } });
+  },
+
+  _resolverEmailServidor: function() {
+    var self = this;
+    google.script.run
+      .withSuccessHandler(function(result) {
+        if (result && result.ok && result.email && result.email.indexOf('@') >= 0) {
+          console.log('[Auth] Email resolvido via servidor:', result.email);
+          self._definirEmail(result.email);
+        } else {
+          console.error('[Auth] Servidor não identificou o usuário.');
+          self._mostrarBloqueio();
+        }
+      })
+      .withFailureHandler(function(err) {
+        console.error('[Auth] Falha ao contatar servidor:', err);
+        self._mostrarBloqueio();
+      })
+      .obterEmailSessaoAtiva();
+  },
+
+  _mostrarBloqueio: function() {
+    document.body.innerHTML =
+      '<div style="font-family:sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;background:#f1f5f9">' +
+        '<div style="background:#fff;border-radius:20px;padding:48px 36px;text-align:center;box-shadow:0 4px 32px rgba(0,0,0,.1);max-width:380px;width:90%">' +
+          '<div style="font-size:52px;margin-bottom:20px">🔒</div>' +
+          '<h2 style="color:#1e293b;margin:0 0 12px;font-size:22px">Sessão não identificada</h2>' +
+          '<p style="color:#64748b;margin:0 0 28px;line-height:1.6;font-size:15px">' +
+            'Não foi possível identificar sua conta Google. ' +
+            'Verifique se você está logado e recarregue a página.' +
+          '</p>' +
+          '<button onclick="location.reload()" ' +
+            'style="background:#4f46e5;color:#fff;border:none;padding:13px 28px;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer">' +
+            '↺ Recarregar' +
+          '</button>' +
+        '</div>' +
+      '</div>';
   },
 
   quandoPronto: function(cb) {

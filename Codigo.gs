@@ -112,11 +112,40 @@ function doGet(e) {
   } catch(e) {}
 
   if (!email) {
-    return HtmlService.createHtmlOutput(`
-      <h2 style="font-family:sans-serif;text-align:center;margin-top:60px">
-        🔒 Você precisa estar logado no Google
-      </h2>
-    `);
+    var appUrl = '';
+    try { appUrl = ScriptApp.getService().getUrl(); } catch(_) { appUrl = BASE_URL_FALLBACK; }
+    var loginUrl = 'https://accounts.google.com/AccountChooser?continue=' + encodeURIComponent(appUrl);
+
+    return HtmlService.createHtmlOutput(
+      '<!DOCTYPE html><html><head>' +
+      '<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">' +
+      '<title>Sistema CCBJ — Login</title>' +
+      '<style>' +
+        'body{font-family:sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;background:#f1f5f9}' +
+        '.card{background:#fff;border-radius:20px;padding:48px 36px;text-align:center;box-shadow:0 4px 32px rgba(0,0,0,.1);max-width:400px;width:90%}' +
+        '.icon{font-size:52px;margin-bottom:20px}' +
+        'h2{color:#1e293b;margin:0 0 12px;font-size:22px}' +
+        'p{color:#64748b;margin:0 0 32px;line-height:1.6;font-size:15px}' +
+        '.btn{display:inline-flex;align-items:center;gap:10px;background:#4285f4;color:#fff;text-decoration:none;padding:14px 28px;border-radius:10px;font-weight:700;font-size:15px}' +
+        '.btn:hover{background:#3367d6}' +
+        '.hint{margin-top:20px;font-size:12px;color:#94a3b8}' +
+      '</style></head>' +
+      '<body><div class="card">' +
+        '<div class="icon">🔒</div>' +
+        '<h2>Acesso Restrito</h2>' +
+        '<p>Para acessar o Sistema CCBJ, faça login com sua conta Google institucional.</p>' +
+        '<a class="btn" href="' + loginUrl + '">' +
+          '<svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg">' +
+            '<path fill="#fff" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908C16.658 14.383 17.64 12.075 17.64 9.2z"/>' +
+            '<path fill="#fff" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332C2.438 15.983 5.482 18 9 18z"/>' +
+            '<path fill="#fff" d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"/>' +
+            '<path fill="#fff" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0 5.482 0 2.438 2.017.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"/>' +
+          '</svg>' +
+          'Entrar com Google' +
+        '</a>' +
+        '<p class="hint">Após o login, retorne a esta página e recarregue.</p>' +
+      '</div></body></html>'
+    ).setTitle('Sistema CCBJ — Login');
   }
 
   const tmpl = HtmlService.createTemplateFromFile('Index');
