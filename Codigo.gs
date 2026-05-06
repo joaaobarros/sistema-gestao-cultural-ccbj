@@ -142,16 +142,7 @@ function doGet(e) {
   // Em "Execute as: User": Session.getActiveUser() retorna o email real do usuário.
   // Em "Execute as: Me":  Session.getActiveUser() retorna string vazia.
   let emailDoGet = '';
-  try { emailDoGet = Session.getActiveUser().getEmail() || ''; } catch(e_) {}
-
-  // Gerar token de sessão se temos email real no doGet
   let sessaoInicial = '';
-  if (emailDoGet && typeof iniciarSessaoGAS === 'function') {
-    try {
-      const res = iniciarSessaoGAS('', emailDoGet);
-      if (res && res.ok) sessaoInicial = res.sessao;
-    } catch(e_) {}
-  }
 
   const tmpl = HtmlService.createTemplateFromFile("Index");
   tmpl.emailInicial  = emailDoGet;

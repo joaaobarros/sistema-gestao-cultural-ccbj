@@ -21,7 +21,21 @@
 
 @dependencies google.accounts.id (GSI — carregado assincronamente)
 -->
+
 <script>
+  window.__EMAIL_INICIAL__ = '<?= emailInicial ?>';
+</script>
+<script>
+
+function _getEmailInicial() {
+  try {
+    return (typeof window !== 'undefined' && window.__EMAIL_INICIAL__) 
+      ? String(window.__EMAIL_INICIAL__).toLowerCase().trim()
+      : '';
+  } catch(e) {
+    return '';
+  }
+}
 
 // ═══════════════════════════════════════════════════════════════
 // ESTADO DE AUTENTICAÇÃO
@@ -49,31 +63,6 @@ const Auth = {
   }
 };
 
-// ═══════════════════════════════════════════════════════════════
-// LEITURA DO TEMPLATE (Injeção do doGet)
-// ═══════════════════════════════════════════════════════════════
-
-// Valores injetados pelo servidor via HtmlService.createTemplateFromFile.
-// Em "Execute as: User": doGet captura o email real → sessão pronta aqui.
-// Em "Execute as: Me":  emailInicial = '' → boot segue para backend/GSI/login.
-(function() {
-  try {
-    const emailInicial  = '<?= emailInicial  ?>';
-    const sessaoInicial = '<?= sessaoInicial ?>';
-
-    if (emailInicial && sessaoInicial) {
-      Auth.email    = emailInicial;
-      Auth.sessaoId = sessaoInicial;
-      AppState.usuario.email    = emailInicial;
-      AppState.usuario._sessao  = sessaoInicial;
-      console.log('[Auth] Identidade via doGet:', emailInicial);
-      Auth._emailDoGetPronto = true;
-      Auth._sessaoDoGetPronta = true;
-    }
-  } catch(e) {
-    // Template não processado (preview local) — ignorar
-  }
-})();
 
 // ═══════════════════════════════════════════════════════════════
 // SESSÃO PERSISTIDA (sessionStorage entre abas da mesma sessão)
@@ -125,37 +114,7 @@ function _inicializarGSI() {
 }
 
 function _tentarGSI(clientId) {
-  if (!clientId) {
-    console.warn('[Auth] GOOGLE_CLIENT_ID não configurado — ignorando GSI');
-     
-    return;
-  }
-
-  try {
-    google.accounts.id.initialize({
-      client_id:           clientId,
-      callback:            _onCredencialGSI,
-      auto_select:         true,   // Seleção automática — sem popup se já logado
-      cancel_on_tap_outside: false,
-      context:             'signin'
-    });
-
-    google.accounts.id.prompt(function(notification) {
-      if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-        console.log('[Auth] GSI: prompt não exibido —', notification.getNotDisplayedReason() || notification.getSkippedReason());
-        // Usuário pode já estar autenticado (auto_select) ou GSI falhou
-        // Aguardar callback ou ir para login manual
-        setTimeout(function() {
-          if (!Auth.pronto && !Auth.email) {
-            console.warn('[Auth] Sem identidade via GSI');
-          }
-        }, 2000);
-      }
-    });
-  } catch(e) {
-    console.warn('[Auth] Erro ao inicializar GSI:', e);
-     
-  }
+  console.warn('[Auth] GSI desativado');
 }
 
 function _onCredencialGSI(response) {
@@ -211,7 +170,8 @@ function _estabelecerSessao(credencialJWT, emailFallback) {
     })
 
     .withFailureHandler(function(err) {
-      console.error('[Auth] Erro ao estabelecer sessão:', err);
+      console.error('[Auth] Falha ao estabelecer sessão:', err);
+      console.warn('[Auth] Sistema não inicializado');
     })
 
     .iniciarSessaoGAS('', emailFallback || '');
@@ -223,74 +183,23 @@ function _estabelecerSessao(credencialJWT, emailFallback) {
 
 function _bootAutenticacao() {
 
-  // 1. sessão já existente (doGet ou sessionStorage)
-  if (Auth._sessaoDoGetPronta || Auth._sessaoRecuperada) {
-
-    google.script.run
-      .withSuccessHandler(function(resultado) {
-
-        if (resultado && resultado.ok && resultado.email) {
-
-          Auth.email    = resultado.email;
-          Auth.sessaoId = resultado.sessao;
-
-          AppState.usuario.email   = resultado.email;
-          AppState.usuario._sessao = resultado.sessao;
-
-          Auth._disparar();
-
-        } else {
-
-          sessionStorage.removeItem('ccbj_sessao');
-          sessionStorage.removeItem('ccbj_email');
-          sessionStorage.removeItem('ccbj_sessao_ts');
-
-          Auth._sessaoRecuperada  = false;
-          Auth._sessaoDoGetPronta = false;
-
-          _bootAutenticacao();
-        }
-
-      })
-      .withFailureHandler(function() {
-
-        console.warn('[Auth] Falha ao renovar sessão');
-
-        sessionStorage.removeItem('ccbj_sessao');
-        sessionStorage.removeItem('ccbj_email');
-        sessionStorage.removeItem('ccbj_sessao_ts');
-
-        Auth._sessaoRecuperada  = false;
-        Auth._sessaoDoGetPronta = false;
-
-        _bootAutenticacao();
-      })
-      .renovarSessaoGAS(Auth.sessaoId);
-
+  // 1. sessão já existente
+  if (Auth._sessaoRecuperada) {
+    Auth._disparar();
     return;
   }
 
-  // 2. obter email diretamente do backend (única fonte de verdade)
-  google.script.run
-    .withSuccessHandler(function(res) {
+  // 2. email vindo do template
+  const emailInicial = _getEmailInicial();
 
-      if (res && res.ok && res.email) {
+  if (emailInicial && emailInicial.indexOf('@') > 0) {
+    console.log('[Auth] Email via template:', emailInicial);
+    _estabelecerSessao('', emailInicial);
+    return;
+  }
 
-        console.log('[Auth] Email via backend:', res.email);
-        _estabelecerSessao('', res.email);
-
-      } else {
-
-        console.error('[Auth] Nenhuma identidade disponível');
-        return;
-      }
-
-    })
-    .withFailureHandler(function() {
-
-      console.error('[Auth] Falha ao obter identidade');
-    })
-    .obterEmailSessaoAtiva();
+  // 3. fallback bloqueado
+  console.error('[Auth] Nenhuma identidade disponível');
 }
 
 function _tentarGSIouLogin() {

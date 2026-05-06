@@ -42,9 +42,28 @@ var _SESSAO_EMAIL_PREFIX  = 'email_ccbj_';
  */
 function obterEmailSessaoAtiva() {
   try {
-    return Session.getActiveUser().getEmail() || '';
+    var email = '';
+
+    try {
+      email = Session.getActiveUser().getEmail();
+    } catch(e) {}
+
+    if (!email) {
+      try {
+        email = Session.getEffectiveUser().getEmail();
+      } catch(e) {}
+    }
+
+    email = String(email || '').toLowerCase().trim();
+
+    if (!email || email.indexOf('@') === -1) {
+      return { ok: false };
+    }
+
+    return { ok: true, email: email };
+
   } catch(e) {
-    return '';
+    return { ok: false };
   }
 }
 
@@ -71,9 +90,7 @@ function iniciarSessaoGAS(credencialOuEmail, emailFallback) {
 
     // 2. Email direto como fallback (credencialOuEmail é um email, ou emailFallback)
     if (!email) {
-      var candidato = (credencialOuEmail && credencialOuEmail.indexOf('@') >= 0)
-        ? credencialOuEmail
-        : (emailFallback || '');
+      var candidato = emailFallback || credencialOuEmail || '';
       if (candidato) {
         email = _validarEmailAutorizado(candidato);
       }
