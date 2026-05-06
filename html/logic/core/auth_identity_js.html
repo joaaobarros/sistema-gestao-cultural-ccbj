@@ -17,6 +17,7 @@
 <script>
   window.__EMAIL_INICIAL__  = '<?= emailInicial ?>';
   window.__SESSAO_INICIAL__ = '<?= sessaoInicial ?>';
+  window.__APP_URL__        = '<?= appUrl ?>';
 </script>
 <script>
 
@@ -72,15 +73,14 @@ const Auth = {
           console.log('[Auth] Email resolvido via servidor:', result.email);
           self._definirEmail(result.email);
         } else {
-          // Session.getActiveUser() vazio em google.script.run — típico de "Execute as: Me"
-          // sem contexto de usuário propagado. Tentar GSI como próxima camada.
+          // Session.getActiveUser() vazio — "Execute as: Me" sem contexto propagado.
+          // Tentar GSI; se não configurado, mostrar login AccountChooser.
+          // Se o usuário já passou pelo AccountChooser e voltou mas getActiveUser()
+          // ainda é vazio, o deployment é "Anyone" (não "Anyone with Google Account")
+          // e só GSI ou trocar para "Execute as: User" resolve.
           var executeAsMe = result && result.executeAsMe;
-          console.warn('[Auth] Servidor não identificou o usuário.', executeAsMe ? '(Execute as: Me — tentando GSI)' : '');
-          if (executeAsMe) {
-            self._tentarGSI();
-          } else {
-            self._mostrarLoginGoogle(false);
-          }
+          console.warn('[Auth] Servidor não identificou o usuário.', executeAsMe ? '(Execute as: Me)' : '');
+          self._tentarGSI();
         }
       })
       .withFailureHandler(function(err) {
@@ -200,15 +200,18 @@ const Auth = {
   // Usa target="_top" para escapar do iframe do GAS — sem isso, AccountChooser retorna 403
   // por restrição de X-Frame-Options.
   _mostrarLoginGoogle: function(executeAsMe) {
-    var appUrl = '';
-    try { appUrl = window.top.location.href.split('?')[0]; } catch(_) {}
+    // window.__APP_URL__ is the real script.google.com service URL injected by doGet.
+    // window.top.location.href inside the GAS iframe returns the sandboxed
+    // googleusercontent.com URL, which AccountChooser rejects with 400.
+    var appUrl = window.__APP_URL__ || '';
+    if (!appUrl) {
+      try { appUrl = window.top.location.href.split('?')[0]; } catch(_) {}
+    }
     if (!appUrl) appUrl = window.location.href.split('?')[0];
 
     var loginUrl = 'https://accounts.google.com/AccountChooser?continue=' + encodeURIComponent(appUrl);
 
-    var detalhe = executeAsMe
-      ? '<br><small style="color:#94a3b8;display:block;margin-top:8px">Se o problema persistir ap&#243;s o login, o administrador pode precisar reconfigurar o deploy para "Execute as: User".</small>'
-      : '';
+    var detalhe = '<br><small style="color:#94a3b8;display:block;margin-top:8px">Ap&#243;s entrar, a p&#225;gina recarrega automaticamente. Se voltar a esta tela, o administrador deve reconfigurar o deploy para <strong>"Execute as: User accessing the web app"</strong>.</small>';
 
     document.body.innerHTML =
       '<div style="font-family:sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;background:#f1f5f9">' +

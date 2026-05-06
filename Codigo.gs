@@ -117,6 +117,7 @@ function doGet(e) {
   const tmpl = HtmlService.createTemplateFromFile('Index');
   tmpl.emailInicial  = email;
   tmpl.sessaoInicial = '';
+  tmpl.appUrl        = getBaseUrl();
 
   return tmpl.evaluate()
     .setTitle("Sistema CCBJ")
