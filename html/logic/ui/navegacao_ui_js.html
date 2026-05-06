@@ -40,6 +40,33 @@ function toggleSidebar() {
  * @sideEffects Dispara carregarDashboard(), carregarAuditoria() etc. ao entrar nas abas.
  */
 function mostrarAba(idAba) {
+
+  // BLOQUEIO POR PERMISSÃO (SEM LOOP)
+  if (typeof temPermissao === 'function') {
+
+    const mapa = {
+      'aba-lista-reservas': 'espacos',
+      'aba-nova-reserva':   'espacos',
+      'aba-agenda-rece':    'espacos',
+      'aba-codip':          'relatorios',
+      'aba-dashboard':      'estrategia',
+      'aba-gestao-admin':   'sistema',
+      'aba-auditoria':      'sistema'
+    };
+
+    var mod = mapa[idAba];
+
+    if (mod && !temPermissao(mod, 'visualizar')) {
+
+      // evita loop infinito
+      if (idAba !== 'aba-lista-reservas') {
+        mostrarAba('aba-lista-reservas');
+      }
+
+      return;
+    }
+  }
+
   document.querySelectorAll('.tab-content').forEach(a => a.classList.add('hidden'));
   document.querySelectorAll('.tab-btn').forEach(b => {
     b.classList.remove('bg-white/10', 'text-white', 'border-purple-500');
@@ -49,6 +76,7 @@ function mostrarAba(idAba) {
   const abaAlvo = document.getElementById(idAba);
   if (abaAlvo) {
     abaAlvo.classList.remove('hidden');
+
     const titulos = {
       'aba-lista-reservas': 'Agenda Geral',
       'aba-nova-reserva':   (typeof AppState !== 'undefined' && (AppState.editandoId || AppState.editandoReceId))
@@ -59,6 +87,7 @@ function mostrarAba(idAba) {
       'aba-auditoria':      'Painel de Auditoria',
       'aba-dashboard':      'Dashboard'
     };
+
     const titulo = document.getElementById('tituloAba');
     if (titulo) titulo.innerText = titulos[idAba] || 'Sistema CCBJ';
   }
@@ -66,33 +95,30 @@ function mostrarAba(idAba) {
   const botaoAtivo =
     document.querySelector(`button[data-aba="${idAba}"]`) ||
     document.querySelector(`button[onclick="mostrarAba('${idAba}')"]`);
+
   if (botaoAtivo) {
     botaoAtivo.classList.add('bg-white/10', 'text-white', 'border-purple-500');
     botaoAtivo.classList.remove('text-purple-200', 'border-transparent');
   }
 
-  // Proteção de acesso
+  // PROTEÇÃO LEGADA (mantida como fallback)
   if (typeof AppState !== 'undefined' && !AppState.usuario.isAdmin && !AppState.usuario.isSuperadmin) {
     if (idAba === 'aba-gestao-admin' || idAba === 'aba-auditoria') {
-      mostrarAba('aba-lista-reservas');
+      if (idAba !== 'aba-lista-reservas') {
+        mostrarAba('aba-lista-reservas');
+      }
       return;
     }
   }
 
-  /**
-   * ========================================
-   * BLOCO: Carregamento lazy por aba
-   * ========================================
-   * @description Dispara a carga de dados específicos ao entrar em cada aba.
-   * @context Chamado toda vez que mostrarAba() troca a visualização ativa.
-   * @sideEffects Pode chamar o backend, atualizar AppState e re-renderizar componentes.
-   */
+  // ── Lazy load ─────────────────────────
+
   if (idAba === 'aba-gestao-admin') {
-    if (typeof renderizarEspacosAdmin        === 'function') renderizarEspacosAdmin();
-    if (typeof renderizarItensAdmin          === 'function') renderizarItensAdmin();
-    if (typeof renderizarSetoresAdmin        === 'function') renderizarSetoresAdmin();
-    if (typeof renderizarAdmins             === 'function') renderizarAdmins();
-    if (typeof carregarUsuariosPermissoes    === 'function') carregarUsuariosPermissoes();
+    if (typeof renderizarEspacosAdmin     === 'function') renderizarEspacosAdmin();
+    if (typeof renderizarItensAdmin       === 'function') renderizarItensAdmin();
+    if (typeof renderizarSetoresAdmin     === 'function') renderizarSetoresAdmin();
+    if (typeof renderizarAdmins           === 'function') renderizarAdmins();
+    if (typeof carregarUsuariosPermissoes === 'function') carregarUsuariosPermissoes();
 
     if (typeof _ctrCache === 'undefined' || !_ctrCache || !_ctrCache.contratos || !_ctrCache.contratos.length) {
       if (typeof carregarDadosContratos === 'function') carregarDadosContratos(renderizarContratos);
@@ -131,7 +157,6 @@ function mostrarAba(idAba) {
     if (typeof carregarSolicitacoes === 'function') carregarSolicitacoes();
   }
 
-  // Dispatch genérico para módulos que registram window._onShow_aba_xxx
   var _dynHandler = window['_onShow_' + idAba.replace(/-/g, '_')];
   if (typeof _dynHandler === 'function') _dynHandler();
 

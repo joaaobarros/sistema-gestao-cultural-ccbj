@@ -128,7 +128,7 @@ function _tentarGSI(clientId) {
   if (!clientId) {
     // Sem client ID configurado → ir direto para tela de login manual
     console.log('[Auth] GOOGLE_CLIENT_ID não configurado — usando login manual');
-    _exibirTelaLogin();
+     
     return;
   }
 
@@ -147,19 +147,19 @@ function _tentarGSI(clientId) {
         // Usuário pode já estar autenticado (auto_select) ou GSI falhou
         // Aguardar callback ou ir para login manual
         setTimeout(function() {
-          if (!Auth.pronto && !Auth.email) _exibirTelaLogin();
+          if (!Auth.pronto && !Auth.email)  
         }, 2000);
       }
     });
   } catch(e) {
     console.warn('[Auth] Erro ao inicializar GSI:', e);
-    _exibirTelaLogin();
+     
   }
 }
 
 function _onCredencialGSI(response) {
   if (!response || !response.credential) {
-    _exibirTelaLogin();
+     
     return;
   }
 
@@ -171,54 +171,6 @@ function _onCredencialGSI(response) {
   } catch(e) {}
 
   _estabelecerSessao(response.credential, Auth._emailGSIPreview || '');
-}
-
-// ═══════════════════════════════════════════════════════════════
-// TELA DE LOGIN MANUAL (fallback quando GSI não está configurado)
-// ═══════════════════════════════════════════════════════════════
-
-function _exibirTelaLogin() {
-  // Verificar se Swal está disponível
-  if (typeof Swal === 'undefined') {
-    // Swal não carregou ainda — aguardar
-    setTimeout(_exibirTelaLogin, 500);
-    return;
-  }
-
-  Swal.fire({
-    title:              'Identificação de Usuário',
-    html: `
-      <p style="margin-bottom:12px;font-size:13px;color:#6b7280">
-        Digite seu e-mail institucional Google para acessar o sistema.
-      </p>
-      <input id="swal-email-login"
-             type="email"
-             placeholder="seu@email.org.br"
-             class="swal2-input"
-             style="font-size:14px"
-             autocomplete="email">
-    `,
-    confirmButtonText:  'Entrar',
-    allowOutsideClick:  false,
-    allowEscapeKey:     false,
-    showCancelButton:   false,
-    didOpen: function() {
-      const inp = document.getElementById('swal-email-login');
-      if (inp) inp.focus();
-    },
-    preConfirm: function() {
-      const email = (document.getElementById('swal-email-login') || {}).value || '';
-      if (!email || !email.includes('@')) {
-        Swal.showValidationMessage('Informe um e-mail válido');
-        return false;
-      }
-      return email.toLowerCase().trim();
-    }
-  }).then(function(result) {
-    if (result.isConfirmed && result.value) {
-      _estabelecerSessao('', result.value);
-    }
-  });
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -234,7 +186,7 @@ function _estabelecerSessao(credencialJWT, emailFallback) {
           Swal && Swal.fire('Acesso Negado', resultado.msg, 'error');
         }
         // Tentar novamente com tela de login
-        setTimeout(_exibirTelaLogin, 500);
+        console.warn('[Auth] Sessão rejeitada — acesso bloqueado');
         return;
       }
 
@@ -258,7 +210,7 @@ function _estabelecerSessao(credencialJWT, emailFallback) {
     })
     .withFailureHandler(function(err) {
       console.error('[Auth] Falha ao estabelecer sessão:', err);
-      _exibirTelaLogin();
+       
     })
     .iniciarSessaoGAS(credencialJWT || '', emailFallback || '');
 }
@@ -270,65 +222,70 @@ function _estabelecerSessao(credencialJWT, emailFallback) {
 function _bootAutenticacao() {
   // Caso 1: Sessão já disponível (doGet injetou ou sessionStorage restaurou)
   if (Auth._sessaoDoGetPronta || Auth._sessaoRecuperada) {
-    google.script.run
-      .withSuccessHandler(function(resultado) {
-        if (resultado && resultado.ok) {
-          Auth.email    = resultado.email;
-          Auth.sessaoId = resultado.sessao;
-          AppState.usuario.email   = resultado.email;
-          AppState.usuario._sessao = resultado.sessao;
-          Auth._disparar();
-        } else {
-          sessionStorage.removeItem('ccbj_sessao');
-          sessionStorage.removeItem('ccbj_email');
-          sessionStorage.removeItem('ccbj_sessao_ts');
-          Auth._sessaoRecuperada  = false;
-          Auth._sessaoDoGetPronta = false;
-          _bootAutenticacao();
-        }
-      })
-      .withFailureHandler(function() {
+
+  google.script.run
+    .withSuccessHandler(function(resultado) {
+
+      if (resultado && resultado.ok && resultado.email) {
+
+        Auth.email    = resultado.email;
+        Auth.sessaoId = resultado.sessao;
+
+        AppState.usuario.email   = resultado.email;
+        AppState.usuario._sessao = resultado.sessao;
+
         Auth._disparar();
-      })
-      .renovarSessaoGAS(Auth.sessaoId);
-    return;
-  }
+
+      } else {
+
+        sessionStorage.removeItem('ccbj_sessao');
+        sessionStorage.removeItem('ccbj_email');
+        sessionStorage.removeItem('ccbj_sessao_ts');
+
+        Auth._sessaoRecuperada  = false;
+        Auth._sessaoDoGetPronta = false;
+
+        _bootAutenticacao();
+      }
+
+    })
+    .withFailureHandler(function() {
+      console.warn('[Auth] Falha ao renovar sessão');
+
+      sessionStorage.removeItem('ccbj_sessao');
+      sessionStorage.removeItem('ccbj_email');
+      sessionStorage.removeItem('ccbj_sessao_ts');
+
+      Auth._sessaoRecuperada  = false;
+      Auth._sessaoDoGetPronta = false;
+
+      _bootAutenticacao();
+    })
+    .renovarSessaoGAS(Auth.sessaoId);
+
+  return;
+}
 
   // Caso 2: Tentar obter email diretamente do backend.
   // Em "Execute as: User": Session.getActiveUser() retorna o email real.
   // Em "Execute as: Me":   retorna '' → segue para GSI/login manual.
   google.script.run
-    .withSuccessHandler(function(emailBackend) {
-      if (emailBackend && emailBackend.indexOf('@') > 0) {
-        console.log('[Auth] Email via backend:', emailBackend);
-        _estabelecerSessao('', emailBackend);
+    .withSuccessHandler(function(res) {
+      if (res && res.ok && res.email) {
+        console.log('[Auth] Email via backend:', res.email);
+        _estabelecerSessao('', res.email);
       } else {
-        _tentarGSIouLogin();
+         console.warn('[Auth] Sem identidade — acesso negado');
       }
     })
     .withFailureHandler(function() {
-      _tentarGSIouLogin();
+       console.warn('[Auth] Sem identidade — acesso negado');
     })
     .obterEmailSessaoAtiva();
 }
 
 function _tentarGSIouLogin() {
-  const script = document.createElement('script');
-  script.src   = 'https://accounts.google.com/gsi/client';
-  script.async = true;
-  script.onload = function() { setTimeout(_inicializarGSI, 100); };
-  script.onerror = function() {
-    console.warn('[Auth] Falha ao carregar GSI — login manual');
-    _exibirTelaLogin();
-  };
-  document.head.appendChild(script);
-
-  setTimeout(function() {
-    if (!Auth.pronto && !Auth.email) {
-      console.warn('[Auth] Timeout GSI — login manual');
-      _exibirTelaLogin();
-    }
-  }, 5000);
+  console.warn('[Auth] Nenhuma identidade disponível — acesso bloqueado');
 }
 
 // ═══════════════════════════════════════════════════════════════

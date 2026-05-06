@@ -94,10 +94,24 @@ var _P2_BASE_LOCAL = {
 };
 
 function _p2baseLocal(perfil, mod) {
+
   if (perfil === 'superadmin') return {v:1,e:1,x:1};
-  var vcMods = ['agenda','estrategia','comunicacao','espacos'];
-  if (perfil === 'visitante_controlado') return vcMods.indexOf(mod) !== -1 ? {v:1,e:0,x:0} : {v:0,e:0,x:0};
-  if (perfil === 'visitante') return mod === 'agenda' ? {v:1,e:0,x:0} : {v:0,e:0,x:0};
+
+  // VISITANTE CONTROLADO
+  if (perfil === 'visitante_controlado') {
+    var permitidos = ['espacos','comunicacao','relatorios','estrategia'];
+    return permitidos.indexOf(mod) !== -1
+      ? {v:1,e:0,x:0}
+      : {v:0,e:0,x:0};
+  }
+
+  // VISITANTE
+  if (perfil === 'visitante') {
+    return mod === 'espacos'
+      ? {v:1,e:0,x:0}
+      : {v:0,e:0,x:0};
+  }
+
   var base = _P2_BASE_LOCAL[perfil] || {};
   var m = base[mod] || {v:0,e:0,x:0};
   return m;
@@ -555,9 +569,17 @@ function temPermissao(modulo, acao) {
   }
 
   var modulos = AppState.usuario.permissoes;
-  if (modulos && modulos[modulo]) return !!modulos[modulo][acao];
-  if (AppState.usuario.isAdmin) return acao !== 'excluir' || modulo !== 'rh';
-  return acao === 'visualizar' && ['agenda','estrategia','comunicacao','espacos'].indexOf(modulo) !== -1;
+
+  if (modulos && modulos[modulo]) {
+    return !!modulos[modulo][acao];
+  }
+
+  // fallback seguro (visitante_controlado)
+  if (acao === 'visualizar') {
+    return ['espacos','comunicacao','relatorios','estrategia'].indexOf(modulo) !== -1;
+  }
+
+  return false;
 }
 
 // ── Override carregarPermissoes com dados v2 ─────────────────
@@ -576,6 +598,22 @@ function carregarPermissoes(cb) {
     if (data && AppState && AppState.usuario) {
 
       var finais = data.permissoes_finais || {};
+
+      if (!finais || Object.keys(finais).length === 0) {
+
+        finais = {};
+
+        _P2_MODULOS_ORDEM.forEach(function(m) {
+          var b = _p2baseLocal(data.perfil_base || 'visitante_controlado', m);
+
+          finais[m] = {
+            visualizar: !!b.v,
+            editar:     !!b.e,
+            excluir:    !!b.x
+          };
+        });
+
+      }
       var modulos = {};
 
       Object.keys(finais).forEach(function(m) {
@@ -587,6 +625,21 @@ function carregarPermissoes(cb) {
       });
 
       AppState.usuario.permissoes = modulos;
+      if (!AppState.usuario.permissoes || Object.keys(AppState.usuario.permissoes).length === 0) {
+
+        AppState.usuario.permissoes = {};
+
+        _P2_MODULOS_ORDEM.forEach(function(m) {
+          var b = _p2baseLocal(AppState.usuario.perfil || 'visitante_controlado', m);
+          AppState.usuario.permissoes[m] = {
+            visualizar: !!b.v,
+            editar:     !!b.e,
+            excluir:    !!b.x
+          };
+        });
+
+      }
+
       AppState.usuario.perfil     = data.perfil_base || 'visitante_controlado';
 
       var idx = _p2S.permissoes.findIndex(function(p) { return p.email === em; });

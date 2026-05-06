@@ -17,12 +17,8 @@ ORDEM DE CARREGAMENTO DOS SCRIPTS (obrigatória):
                                   equipes, tarefas, processos, almoxarifado, balcao,
                                   eficiencia, contratacoes, permissoes, financeiro (alias)
 
-  ── AUTH ──────────────────────────────────────────────────────
-  3. core/auth_identity_js     — captura identidade real ("Execute as: Me"); define Auth.
-                                 Deve vir antes de bootstrap_js.
-
   ── MODULES (sem DOM, sem backend) ───────────────────────────
-  4. modules/disponibilidade_module_js — conflito frontend, horários, normalização de datas
+  3. modules/disponibilidade_module_js — conflito frontend, horários, normalização de datas
   4. modules/itens_module_js           — lookup itens fixos e nomes de sala
 
   ── UI HELPERS ────────────────────────────────────────────────
