@@ -39,9 +39,9 @@ function obterEmailUsuario(emailClienteFallback) {
   }
 }
 
-function obterPerfilUsuario() {
+function obterPerfilUsuario(emailFallback) {
   try {
-    const email = obterEmailUsuario("");
+    const email = obterEmailUsuario(emailFallback || "");
     let nome = email.split("@")[0];
     let foto = null;
     try {

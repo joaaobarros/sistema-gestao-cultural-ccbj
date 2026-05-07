@@ -93,7 +93,14 @@ const GAS = {
    */
   admin: {
     obterDados: function(cb, err) {
-      GAS._call('obterDadosIniciais', [], cb, err);
+      // Passa o email capturado server-side no doGet como fallback.
+      // getActiveUser() funciona em doGet mas pode falhar em google.script.run
+      // no deployment "Execute as: Me". O template injeta o email real do usuário
+      // em __EMAIL_INICIAL__ antes de servir a página — nunca é o email do dono.
+      var emailFallback = (window.__EMAIL_INICIAL__ && window.__EMAIL_INICIAL__.indexOf('@') >= 0)
+        ? window.__EMAIL_INICIAL__
+        : '';
+      GAS._call('obterDadosIniciais', [emailFallback], cb, err);
     },
     salvarConfig: function(dados, cb, err) {
       GAS._call('processarSalvarConfig', [dados], cb, err);
@@ -111,7 +118,8 @@ const GAS = {
       GAS._call('obterDadosParaConfig', nomeAba ? [nomeAba] : [], cb, err);
     },
     obterPerfil: function(cb, err) {
-      GAS._call('obterPerfilUsuario', [], cb, err);
+      var em = (AppState && AppState.usuario && AppState.usuario.email) || window.__EMAIL_INICIAL__ || '';
+      GAS._call('obterPerfilUsuario', [em], cb, err);
     },
     sugerirReservaIA: function(descricao, cb, err) {
       GAS._call('sugerirReservaIAComDados', [descricao], cb, err);
@@ -256,10 +264,12 @@ const GAS = {
       GAS._call('obterUrlLogout', [], cb, err);
     },
     salvarPreferencia: function(chave, valor, cb, err) {
-      GAS._call('salvarPreferenciasUsuario', [chave, valor], cb, err);
+      var em = (AppState && AppState.usuario && AppState.usuario.email) || window.__EMAIL_INICIAL__ || '';
+      GAS._call('salvarPreferenciasUsuario', [chave, valor, em], cb, err);
     },
     carregarPreferencias: function(cb, err) {
-      GAS._call('carregarPreferenciasUsuario', [], cb, err);
+      var em = (AppState && AppState.usuario && AppState.usuario.email) || window.__EMAIL_INICIAL__ || '';
+      GAS._call('carregarPreferenciasUsuario', [em], cb, err);
     }
   },
 

@@ -10,8 +10,8 @@
 // Personalização Sidebar
 // ============================================================
 
-function salvarPreferenciasUsuario(chave, valor) {
-  const email = Session.getActiveUser().getEmail();
+function salvarPreferenciasUsuario(chave, valor, emailFallback) {
+  const email = Session.getActiveUser().getEmail() || emailFallback || '';
   const sheet = _getSheet('PreferenciasUsuarios');
   if (!sheet) throw new Error("Aba PreferenciasUsuarios não encontrada.");
 
@@ -29,8 +29,8 @@ function salvarPreferenciasUsuario(chave, valor) {
   return true;
 }
 
-function carregarPreferenciasUsuario() {
-  const email = Session.getActiveUser().getEmail();
+function carregarPreferenciasUsuario(emailFallback) {
+  const email = Session.getActiveUser().getEmail() || emailFallback || '';
   const sheet = _getSheet('PreferenciasUsuarios');
   if (!sheet) return {};
 
