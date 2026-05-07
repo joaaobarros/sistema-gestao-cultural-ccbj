@@ -38,83 +38,31 @@ var _p2S = {
 };
 
 var _P2_MODULOS_LABELS = {
-  agenda:'Agenda', estrategia:'Estratégia', comunicacao:'Comunicação', espacos:'Espaços',
-  reservas:'Reservas', contratos:'Contratos', financeiro:'Financeiro', tarefas:'Tarefas',
-  processos:'Processos', almoxarifado:'Almoxarifado', balcao:'Balcão', rh:'RH',
-  eficiencia:'Eficiência', contratacoes:'Contratações', relatorios:'Relatórios',
-  escuta:'Escuta', pessoal:'Pessoal'
+  espacos:'Espaços & Agendamento',
+  reservas:'Aprovações',
+  estrategia:'Estratégia'
 };
 
-var _P2_MODULOS_ORDEM = [
-  'agenda','estrategia','comunicacao','espacos',
-  'reservas','contratos','financeiro','tarefas',
-  'processos','almoxarifado','balcao','rh',
-  'eficiencia','contratacoes','relatorios','escuta','pessoal'
-];
+// Módulos ativos no escopo atual do sistema (ESPAÇOS, APROVAÇÕES, ESTRATÉGIA)
+// Acesso ao módulo "sistema" (admin/auditoria) é controlado pela lista Administradores, não por esta grade.
+var _P2_MODULOS_ORDEM = ['espacos','reservas','estrategia'];
 
+// Permissões base para os 3 módulos ativos do sistema
 var _P2_BASE_LOCAL = {
-  superadmin: null,
-  admin: {
-    agenda:{v:1,e:1,x:1},estrategia:{v:1,e:1,x:1},comunicacao:{v:1,e:1,x:1},espacos:{v:1,e:1,x:1},
-    reservas:{v:1,e:1,x:1},contratos:{v:1,e:1,x:0},financeiro:{v:1,e:0,x:0},tarefas:{v:1,e:1,x:1},
-    processos:{v:1,e:1,x:1},almoxarifado:{v:1,e:1,x:0},balcao:{v:1,e:1,x:0},rh:{v:0,e:0,x:0},
-    eficiencia:{v:1,e:0,x:0},contratacoes:{v:0,e:0,x:0},relatorios:{v:1,e:0,x:0},
-    escuta:{v:1,e:0,x:0},pessoal:{v:1,e:1,x:0}
-  },
-  gestor: {
-    agenda:{v:1,e:1,x:0},estrategia:{v:1,e:1,x:0},comunicacao:{v:1,e:0,x:0},espacos:{v:1,e:0,x:0},
-    reservas:{v:1,e:1,x:0},contratos:{v:1,e:1,x:0},financeiro:{v:0,e:0,x:0},tarefas:{v:1,e:1,x:0},
-    processos:{v:1,e:1,x:0},almoxarifado:{v:0,e:0,x:0},balcao:{v:1,e:0,x:0},rh:{v:0,e:0,x:0},
-    eficiencia:{v:1,e:0,x:0},contratacoes:{v:0,e:0,x:0},relatorios:{v:1,e:0,x:0},
-    escuta:{v:1,e:0,x:0},pessoal:{v:1,e:0,x:0}
-  },
-  tecnico: {
-    agenda:{v:1,e:1,x:0},estrategia:{v:1,e:0,x:0},comunicacao:{v:1,e:0,x:0},espacos:{v:1,e:1,x:0},
-    reservas:{v:1,e:1,x:0},contratos:{v:0,e:0,x:0},financeiro:{v:0,e:0,x:0},tarefas:{v:1,e:1,x:0},
-    processos:{v:0,e:0,x:0},almoxarifado:{v:1,e:1,x:0},balcao:{v:1,e:1,x:0},rh:{v:0,e:0,x:0},
-    eficiencia:{v:0,e:0,x:0},contratacoes:{v:0,e:0,x:0},relatorios:{v:0,e:0,x:0},
-    escuta:{v:0,e:0,x:0},pessoal:{v:1,e:0,x:0}
-  },
-  rh: {
-    agenda:{v:1,e:0,x:0},estrategia:{v:1,e:0,x:0},comunicacao:{v:1,e:0,x:0},espacos:{v:1,e:0,x:0},
-    reservas:{v:0,e:0,x:0},contratos:{v:0,e:0,x:0},financeiro:{v:1,e:0,x:0},tarefas:{v:1,e:1,x:0},
-    processos:{v:0,e:0,x:0},almoxarifado:{v:0,e:0,x:0},balcao:{v:0,e:0,x:0},rh:{v:1,e:1,x:0},
-    eficiencia:{v:1,e:0,x:0},contratacoes:{v:1,e:1,x:0},relatorios:{v:1,e:0,x:0},
-    escuta:{v:1,e:0,x:0},pessoal:{v:1,e:1,x:0}
-  },
-  comunicacao: {
-    agenda:{v:1,e:0,x:0},estrategia:{v:1,e:1,x:0},comunicacao:{v:1,e:1,x:0},espacos:{v:1,e:0,x:0},
-    reservas:{v:1,e:0,x:0},contratos:{v:0,e:0,x:0},financeiro:{v:0,e:0,x:0},tarefas:{v:1,e:1,x:0},
-    processos:{v:1,e:1,x:0},almoxarifado:{v:0,e:0,x:0},balcao:{v:0,e:0,x:0},rh:{v:0,e:0,x:0},
-    eficiencia:{v:0,e:0,x:0},contratacoes:{v:0,e:0,x:0},relatorios:{v:0,e:0,x:0},
-    escuta:{v:1,e:0,x:0},pessoal:{v:0,e:0,x:0}
-  },
-  visitante_controlado: null,
-  visitante: null
+  superadmin:          null,
+  admin:               {espacos:{v:1,e:1,x:1}, reservas:{v:1,e:1,x:1}, estrategia:{v:1,e:1,x:1}},
+  gestor:              {espacos:{v:1,e:1,x:0}, reservas:{v:1,e:1,x:0}, estrategia:{v:1,e:1,x:0}},
+  tecnico:             {espacos:{v:1,e:1,x:0}, reservas:{v:1,e:0,x:0}, estrategia:{v:1,e:0,x:0}},
+  rh:                  {espacos:{v:1,e:0,x:0}, reservas:{v:0,e:0,x:0}, estrategia:{v:1,e:0,x:0}},
+  comunicacao:         {espacos:{v:1,e:0,x:0}, reservas:{v:1,e:0,x:0}, estrategia:{v:1,e:1,x:0}},
+  visitante_controlado:{espacos:{v:1,e:0,x:0}, reservas:{v:0,e:0,x:0}, estrategia:{v:1,e:0,x:0}},
+  visitante:           {espacos:{v:1,e:0,x:0}, reservas:{v:0,e:0,x:0}, estrategia:{v:0,e:0,x:0}}
 };
 
 function _p2baseLocal(perfil, mod) {
-
   if (perfil === 'superadmin') return {v:1,e:1,x:1};
-
-  // VISITANTE CONTROLADO
-  if (perfil === 'visitante_controlado') {
-    var permitidos = ['espacos','comunicacao','relatorios','estrategia'];
-    return permitidos.indexOf(mod) !== -1
-      ? {v:1,e:0,x:0}
-      : {v:0,e:0,x:0};
-  }
-
-  // VISITANTE
-  if (perfil === 'visitante') {
-    return mod === 'espacos'
-      ? {v:1,e:0,x:0}
-      : {v:0,e:0,x:0};
-  }
-
   var base = _P2_BASE_LOCAL[perfil] || {};
-  var m = base[mod] || {v:0,e:0,x:0};
-  return m;
+  return base[mod] || {v:0,e:0,x:0};
 }
 
 // ── Carregamento de dados ────────────────────────────────────
@@ -560,6 +508,8 @@ var _temPermissaoV1 = typeof temPermissao === 'function' ? temPermissao : null;
 function temPermissao(modulo, acao) {
   if (!AppState || !AppState.usuario) return false;
   if (AppState.usuario.isSuperadmin) return true;
+  // Admins têm acesso total ao módulo sistema (gestão, auditoria, permissões)
+  if (AppState.usuario.isAdmin && modulo === 'sistema') return true;
 
   var perm = _p2S.permissoes.find(function(p) { return p.email === _p2S.emailAtual; });
   if (perm) {
@@ -642,14 +592,10 @@ function carregarPermissoes(cb) {
 
     // Em erro de rede/backend: aplicar visitante_controlado para garantir entrada segura sem crash.
     if (AppState && AppState.usuario) {
-      var _vcPermitidos = ['espacos','comunicacao','relatorios','estrategia'];
       var _vcModulos = {};
       _P2_MODULOS_ORDEM.forEach(function(m) {
-        _vcModulos[m] = {
-          visualizar: _vcPermitidos.indexOf(m) !== -1,
-          editar:     false,
-          excluir:    false
-        };
+        var b = _p2baseLocal('visitante_controlado', m);
+        _vcModulos[m] = { visualizar: !!b.v, editar: !!b.e, excluir: !!b.x };
       });
       AppState.usuario.permissoes = _vcModulos;
       AppState.usuario.perfil     = 'visitante_controlado';

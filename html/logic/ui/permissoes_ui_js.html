@@ -19,14 +19,16 @@ function configurarInterfacePorPermissao() {
   const isAdmin      = AppState.usuario.isAdmin;
   const isSuperadmin = AppState.usuario.isSuperadmin;
 
-  const btnGestao    = document.getElementById('btn-aba-gestao');
-  const btnAuditoria = document.getElementById('btn-aba-auditoria');
-  const modSistema   = document.getElementById('modulo-sistema');
+  const btnGestao      = document.getElementById('btn-aba-gestao');
+  const btnPermissoes  = document.getElementById('btn-aba-permissoes');
+  const btnAuditoria   = document.getElementById('btn-aba-auditoria');
+  const modSistema     = document.getElementById('modulo-sistema');
 
   if (isAdmin || isSuperadmin) {
-    if (btnGestao)    btnGestao.classList.remove('hidden');
-    if (btnAuditoria) btnAuditoria.classList.remove('hidden');
-    if (modSistema)   modSistema.classList.remove('hidden');
+    if (btnGestao)     btnGestao.classList.remove('hidden');
+    if (btnPermissoes) btnPermissoes.classList.remove('hidden');
+    if (btnAuditoria)  btnAuditoria.classList.remove('hidden');
+    if (modSistema)    modSistema.classList.remove('hidden');
   } else {
     if (modSistema)   modSistema.classList.add('hidden');
   }

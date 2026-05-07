@@ -365,19 +365,18 @@ function carregarUsuariosPermissoes() {
 }
 
 function selecionarUsuarioConfig(email) {
+  if (typeof mostrarAba === 'function') mostrarAba('aba-permissoes-v2');
   setTimeout(function() {
     if (typeof p2SelecionarUsuario === 'function') p2SelecionarUsuario(email);
-  }, 300);
+  }, 400);
 }
 
 function _abrirConfigUsuarioExterno(email) {
-  // Chamado após aprovação de cadastro externo — navega para permissões do novo usuário
-  if (typeof p2SelecionarUsuario === 'function') {
-    p2SelecionarUsuario(email);
-    return;
-  }
-  // Fallback: abre a aba de permissões v2
+  // Chamado após aprovação de cadastro externo — abre painel de permissões com usuário pré-selecionado
   if (typeof mostrarAba === 'function') mostrarAba('aba-permissoes-v2');
+  setTimeout(function() {
+    if (typeof p2SelecionarUsuario === 'function') p2SelecionarUsuario(email);
+  }, 400);
 }
 
 /**

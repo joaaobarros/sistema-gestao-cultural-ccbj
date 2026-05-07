@@ -378,8 +378,14 @@ function obterLogs(emailUsuario) {
     if (!abaLogs || abaLogs.getLastRow() < 2) return "[]";
     const dados = abaLogs
       .getRange(2, 1, abaLogs.getLastRow() - 1, 8)
-      .getDisplayValues();
-    return JSON.stringify(dados.reverse());
+      .getValues();
+    return JSON.stringify(dados.reverse().map(function(r) {
+      var d = r[0] instanceof Date ? r[0] : new Date(String(r[0]));
+      var ts = isNaN(d.getTime()) ? String(r[0]) :
+        ('0'+d.getDate()).slice(-2)+'/'+('0'+(d.getMonth()+1)).slice(-2)+'/'+d.getFullYear()+
+        ' '+('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2);
+      return [ts].concat(Array.from(r).slice(1).map(String));
+    }));
   } catch (e) {
     throw new Error(e.message);
   }
@@ -1029,6 +1035,7 @@ function listarSolicitacoesPendentes(emailUsuario) {
   return dados
     .filter((r) => {
       if (!r[0]) return false;
+      if (String(r[1]).toUpperCase() === 'CADASTRO_EXTERNO') return false;
       if (isAdmin) return true;
       if (salasComoResponsavel.has(String(r[4]).trim())) return true;
       const status = String(r[8]).toUpperCase();
@@ -1091,7 +1098,7 @@ function listarTodasSolicitacoes(emailUsuario) {
   return aba
     .getRange(2, 1, aba.getLastRow() - 1, 12)
     .getDisplayValues()
-    .filter((r) => r[0])
+    .filter((r) => r[0] && String(r[1]).toUpperCase() !== 'CADASTRO_EXTERNO')
     .map((r) => ({
       id: r[0],
       tipo: r[1],
