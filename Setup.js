@@ -19,6 +19,14 @@
  *   - Alterar nomes de abas em MODULOS sem migrar dados quebrará _getSheet para a aba renomeada.
  */
 
+
+function setupPrimeiroAdmin() {
+  var EMAIL = 'joao.barros@idm.org.br'; // ← seu email
+  var SENHA = 'jprbce085';       // ← sua senha
+  var NOME  = 'João Paulo Barros';
+
+}
+ 
 /**
  * ========================================
  * BLOCO: Configuração dos módulos e schema
@@ -983,4 +991,65 @@ function repararAbaCredenciais() {
 function debugItens() {
   var aba = _abrirAba('ESPACOS', 'Itens');
   Logger.log(aba.getName());
+}
+
+/**
+ * Cria o primeiro admin e garante a aba CredenciaisUsuarios.
+ * Executar UMA VEZ no editor GAS para provisionar o acesso inicial.
+ *
+ * COMO USAR:
+ *   1. Edite email, senha e nome abaixo
+ *   2. Execute esta função no editor
+ *   3. Veja o resultado nos Registros do Cloud
+ *   4. Abra a URL do app e entre com email + senha
+ */
+function setupPrimeiroAdmin() {
+  var EMAIL = 'joao.barros@idm.org.br'; // ← seu email
+  var SENHA = 'troque-esta-senha';       // ← sua senha
+  var NOME  = 'João Barros';            // ← seu nome
+
+  console.log('=== setupPrimeiroAdmin ===');
+
+  // 1. Garantir planilha MASTER acessível
+  var master;
+  try {
+    master = _abrirModulo('MASTER');
+    console.log('MASTER: ok → ' + master.getId());
+  } catch(e) {
+    console.error('ERRO: não consegui abrir MASTER — ' + e.message);
+    return;
+  }
+
+  // 2. Criar aba CredenciaisUsuarios se não existir
+  var aba = master.getSheetByName('CredenciaisUsuarios');
+  if (!aba) {
+    _configurarAbas(master, {
+      'CredenciaisUsuarios': MODULOS.MASTER.abas['CredenciaisUsuarios']
+    }, COR_MODULO['MASTER']);
+    aba = master.getSheetByName('CredenciaisUsuarios');
+    console.log('Aba CredenciaisUsuarios criada.');
+  } else {
+    console.log('Aba CredenciaisUsuarios já existe.');
+  }
+
+  // 3. Verificar se admin já existe
+  var emailLimpo = EMAIL.trim().toLowerCase();
+  if (aba.getLastRow() > 1) {
+    var existentes = aba.getRange(2, 1, aba.getLastRow() - 1, 1).getValues();
+    for (var i = 0; i < existentes.length; i++) {
+      if (String(existentes[i][0]).trim().toLowerCase() === emailLimpo) {
+        console.log('Admin ' + emailLimpo + ' já cadastrado. Nenhuma alteração.');
+        console.log('=== Pronto. Abra o app e entre com email + senha. ===');
+        return;
+      }
+    }
+  }
+
+  // 4. Gravar hash SHA-256 da senha
+  var bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, SENHA);
+  var hash  = bytes.map(function(b) { return ('0' + (b & 0xFF).toString(16)).slice(-2); }).join('');
+  aba.appendRow([emailLimpo, hash, NOME, true, new Date().toISOString(), '']);
+  console.log('Admin criado: ' + emailLimpo);
+  console.warn('Lembre de trocar a senha após o primeiro acesso.');
+  console.log('=== Pronto. Abra o app e entre com email + senha. ===');
 }
