@@ -21,10 +21,51 @@
 
 
 function setupPrimeiroAdmin() {
-  var EMAIL = 'joao.barros@idm.org.br'; // ← seu email
-  var SENHA = 'jprbce085';       // ← sua senha
+  var EMAIL = 'joao.barros@idm.org.br';
+  var SENHA = 'jprbce085';
   var NOME  = 'João Paulo Barros';
 
+  console.log('=== setupPrimeiroAdmin ===');
+
+  var master;
+  try {
+    master = _abrirModulo('MASTER');
+    console.log('MASTER ok → ' + master.getId());
+  } catch(e) {
+    console.error('ERRO ao abrir MASTER: ' + e.message);
+    return;
+  }
+
+  // Garante aba
+  var aba = master.getSheetByName('CredenciaisUsuarios');
+  if (!aba) {
+    _configurarAbas(master, { 'CredenciaisUsuarios': MODULOS.MASTER.abas['CredenciaisUsuarios'] }, COR_MODULO['MASTER']);
+    aba = master.getSheetByName('CredenciaisUsuarios');
+    console.log('Aba CredenciaisUsuarios criada.');
+  }
+
+  // Hash SHA-256
+  var bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, SENHA);
+  var hash  = bytes.map(function(b) { return ('0' + (b & 0xFF).toString(16)).slice(-2); }).join('');
+  var emailLimpo = EMAIL.trim().toLowerCase();
+
+  // Atualiza se já existe, cria se não existe
+  if (aba.getLastRow() > 1) {
+    var dados = aba.getRange(2, 1, aba.getLastRow() - 1, 2).getValues();
+    for (var i = 0; i < dados.length; i++) {
+      if (String(dados[i][0]).trim().toLowerCase() === emailLimpo) {
+        aba.getRange(i + 2, 2).setValue(hash);
+        aba.getRange(i + 2, 4).setValue(true);
+        console.log('Senha atualizada para: ' + emailLimpo);
+        console.log('=== Pronto. Abra o app e entre com email + senha. ===');
+        return;
+      }
+    }
+  }
+
+  aba.appendRow([emailLimpo, hash, NOME, true, new Date().toISOString(), '']);
+  console.log('Admin criado: ' + emailLimpo);
+  console.log('=== Pronto. Abra o app e entre com email + senha. ===');
 }
  
 /**
