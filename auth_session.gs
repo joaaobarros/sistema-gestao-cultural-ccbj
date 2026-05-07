@@ -590,20 +590,16 @@ function listarCredenciais(emailAdmin) {
 }
 
 /**
- * Cria a aba CredenciaisUsuarios na planilha MASTER se não existir.
- * Chamar de inicializarSistema() ou manualmente do editor GAS.
+ * Verifica se a aba CredenciaisUsuarios existe na planilha MASTER.
+ * A aba é criada por inicializarSistema() via MODULOS — nunca criar aqui.
+ * Para recriar em produção: executar recriarEstrutura() no editor GAS.
  */
 function garantirAbaCredenciais() {
   try {
     var sh = typeof _getSheet === 'function' ? _getSheet('CredenciaisUsuarios') : null;
     if (sh) return true;
-    var master = typeof _abrirModulo === 'function' ? _abrirModulo('MASTER') : SpreadsheetApp.getActiveSpreadsheet();
-    if (!master) return false;
-    var nova = master.insertSheet('CredenciaisUsuarios');
-    nova.appendRow(['email', 'senha_hash', 'nome', 'ativo', 'criado_em', 'ultimo_login']);
-    nova.getRange(1, 1, 1, 6).setFontWeight('bold');
-    Logger.log('[Auth] Aba CredenciaisUsuarios criada na planilha MASTER.');
-    return true;
+    Logger.log('[Auth] Aba CredenciaisUsuarios não encontrada. Execute inicializarSistema() ou recriarEstrutura().');
+    return false;
   } catch(e) {
     Logger.log('[garantirAbaCredenciais] ' + e.message);
     return false;

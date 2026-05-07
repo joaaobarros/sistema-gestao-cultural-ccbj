@@ -928,20 +928,11 @@ function inicializarCredenciais() {
     return { ok: false, msg: 'MASTER não encontrada' };
   }
 
+  // A aba é criada por _configurarAbas() via MODULOS.MASTER.abas — nunca criar aqui.
   var aba = master.getSheetByName('CredenciaisUsuarios');
   if (!aba) {
-    // Cria com cabeçalho canônico (mesma ordem que auth_session.gs lê)
-    aba = master.insertSheet('CredenciaisUsuarios');
-    var cabecalho = ['email', 'senha_hash', 'nome', 'ativo', 'criado_em', 'ultimo_login'];
-    var r = aba.getRange(1, 1, 1, cabecalho.length);
-    r.setValues([cabecalho])
-     .setFontWeight('bold')
-     .setBackground(COR_MODULO['MASTER'] || '#1F2937')
-     .setFontColor('#FFFFFF')
-     .setHorizontalAlignment('center');
-    aba.setFrozenRows(1);
-    aba.setColumnWidths(1, cabecalho.length, 160);
-    console.log('[Credenciais] Aba CredenciaisUsuarios criada.');
+    console.warn('[Credenciais] Aba CredenciaisUsuarios não encontrada. Execute inicializarSistema() ou recriarEstrutura().');
+    return { ok: false, msg: 'Aba não encontrada. Execute o setup.' };
   }
 
   // ── 2. Criar primeiro admin se configurado ────────────────────
