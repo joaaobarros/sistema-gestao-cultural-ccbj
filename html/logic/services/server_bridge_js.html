@@ -549,7 +549,11 @@ const GAS = {
     encerrar:     function(sessaoId, cb, err)                 { GAS._call('encerrarSessaoGAS',        [sessaoId],                  cb, err); },
     login:        function(email, senha, cb, err)             { GAS._call('validarCredenciais',       [email, senha],              cb, err); },
     salvarUsuario:function(adm, alvo, senha, nome, ativo, cb, err) { GAS._call('salvarCredencialUsuario', [adm, alvo, senha, nome, ativo], cb, err); },
-    listarUsuarios:function(adm, cb, err)                     { GAS._call('listarCredenciais',        [adm],                       cb, err); }
+    listarUsuarios:function(adm, cb, err)                     { GAS._call('listarCredenciais',        [adm],                       cb, err); },
+    solicitarCadastro: function(nome, email, senha, cb, err)  { GAS._call('solicitarCadastroExterno', [nome, email, senha],         cb, err); },
+    listarPendentesCadastro: function(adm, cb, err)           { GAS._call('listarSolicitacoesCadastroExterno', [adm],              cb, err); },
+    aprovarCadastro: function(id, adm, cb, err)               { GAS._call('aprovarCadastroExterno',   [id, adm],                   cb, err); },
+    recusarCadastro: function(id, adm, motivo, cb, err)       { GAS._call('recusarCadastroExterno',   [id, adm, motivo],           cb, err); }
   },
 
   /**

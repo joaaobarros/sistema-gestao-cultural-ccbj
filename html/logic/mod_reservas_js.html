@@ -2034,6 +2034,31 @@ function _pollSolicitacoes(primeiro) {
           if (typeof _atualizarStatsSolicitacoes === 'function') _atualizarStatsSolicitacoes();
         }
 
+        // Para admins: busca pendentes de cadastro externo e integra no badge
+        var isAdmin = AppState.usuario.isAdmin || AppState.usuario.isSuperadmin;
+        if (isAdmin && typeof GAS !== 'undefined' && GAS.auth && GAS.auth.listarPendentesCadastro) {
+          GAS.auth.listarPendentesCadastro(AppState.usuario.email, function(res) {
+            if (typeof _cadastrosCache !== 'undefined') {
+              _cadastrosCache = (res && res.ok && res.solicitacoes) ? res.solicitacoes : _cadastrosCache;
+            }
+            if (typeof _atualizarBadgeSolicitacoes === 'function') _atualizarBadgeSolicitacoes();
+            if (typeof _atualizarBadgeCadastros === 'function') _atualizarBadgeCadastros();
+
+            // Alerta de novos cadastros pendentes
+            if (!primeiro && res && res.ok && res.solicitacoes) {
+              var novos = res.solicitacoes.filter(function(c) { return c.status === 'PENDENTE'; }).length;
+              if (novos > 0 && typeof _pollSolicitacoesUltimoPendente !== 'undefined') {
+                var prevCad = (window._pollCadastrosUltimoPendente || 0);
+                if (novos > prevCad) {
+                  Swal.mixin({ toast:true, position:'top-end', showConfirmButton:false, timer:6000, timerProgressBar:true })
+                    .fire({ icon:'info', title:'Novo usuário aguardando aprovação', text: novos+' cadastro(s) pendente(s)' });
+                }
+                window._pollCadastrosUltimoPendente = novos;
+              }
+            }
+          }, function() {});
+        }
+
         _pollSolicitacoesTimer = setTimeout(function(){ _pollSolicitacoes(false); }, 30000);
       }, function() {
         _pollSolicitacoesTimer = setTimeout(function(){ _pollSolicitacoes(false); }, 60000);
@@ -3217,7 +3242,7 @@ function _ccbjConfirmar() {
       horaInicio: ht.ini,
       horaTermino: ht.ter,
       turno: ht.label,
-      setor: 'ADMINISTRAÇÃO',
+      setor: 'GESTÃO - CCBJ FECHADO',
       responsavel: AppState.usuario.email,
       coresponsavel: 'Não informado',
       release: motivo,

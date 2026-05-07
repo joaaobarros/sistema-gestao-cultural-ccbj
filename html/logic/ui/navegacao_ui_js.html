@@ -167,6 +167,7 @@ function mostrarAba(idAba) {
 
   if (idAba === 'aba-aprovacoes') {
     if (typeof carregarSolicitacoes === 'function') carregarSolicitacoes();
+    if (typeof carregarCadastrosExternos === 'function') carregarCadastrosExternos();
   }
 
   var _dynHandler = window['_onShow_' + idAba.replace(/-/g, '_')];

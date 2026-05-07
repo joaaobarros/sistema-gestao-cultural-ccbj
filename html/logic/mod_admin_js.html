@@ -370,6 +370,16 @@ function selecionarUsuarioConfig(email) {
   }, 300);
 }
 
+function _abrirConfigUsuarioExterno(email) {
+  // Chamado após aprovação de cadastro externo — navega para permissões do novo usuário
+  if (typeof p2SelecionarUsuario === 'function') {
+    p2SelecionarUsuario(email);
+    return;
+  }
+  // Fallback: abre a aba de permissões v2
+  if (typeof mostrarAba === 'function') mostrarAba('aba-permissoes-v2');
+}
+
 /**
  * BLOCO: Renderização de administradores do sistema (admin)
  * @context Chamado ao abrir a aba de configurações; filtra header "email" e entradas inválidas.

@@ -626,3 +626,102 @@ function criarPrimeiroAdmin(email, senha, nome) {
   try { emailDono = Session.getEffectiveUser().getEmail(); } catch(_) {}
   return salvarCredencialUsuario(emailDono || email, email, senha, nome, true);
 }
+
+// ═══════════════════════════════════════════════════════════════
+// CADASTRO EXTERNO — auto-registro aguardando aprovação admin
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * Registra uma solicitação de acesso para usuário externo sem autenticação prévia.
+ * Não cria credenciais imediatamente — apenas enfileira para aprovação admin.
+ */
+function solicitarCadastroExterno(nome, email, senha) {
+  try {
+    if (!nome || !email || !senha) {
+      return { ok: false, msg: 'Nome, e-mail e senha são obrigatórios.' };
+    }
+    var emailLimpo = String(email).trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(emailLimpo)) {
+      return { ok: false, msg: 'E-mail inválido.' };
+    }
+    if (String(senha).trim().length < 6) {
+      return { ok: false, msg: 'A senha deve ter pelo menos 6 caracteres.' };
+    }
+
+    var shCred = typeof _getSheet === 'function' ? _getSheet('CredenciaisUsuarios') : null;
+    if (shCred && shCred.getLastRow() > 1) {
+      var credRows = shCred.getRange(2, 1, shCred.getLastRow() - 1, 1).getValues();
+      for (var i = 0; i < credRows.length; i++) {
+        if (String(credRows[i][0] || '').trim().toLowerCase() === emailLimpo) {
+          return { ok: false, msg: 'Este e-mail já possui acesso. Tente fazer login.' };
+        }
+      }
+    }
+
+    var shSol = typeof _getSheet === 'function' ? _getSheet('Solicitacoes') : null;
+    if (!shSol) return { ok: false, msg: 'Sistema indisponível. Tente novamente.' };
+
+    if (shSol.getLastRow() > 1) {
+      var solRows = shSol.getRange(2, 1, shSol.getLastRow() - 1, 9).getValues();
+      for (var j = 0; j < solRows.length; j++) {
+        if (String(solRows[j][1]).toUpperCase() === 'CADASTRO_EXTERNO' &&
+            String(solRows[j][5]).toLowerCase().trim() === emailLimpo &&
+            String(solRows[j][8]).toUpperCase() === 'PENDENTE') {
+          return { ok: false, msg: 'Já existe uma solicitação pendente para este e-mail. Aguarde a resposta por e-mail.' };
+        }
+      }
+    }
+
+    var nomeLimpo = String(nome).trim();
+    var senhaHash = _hashSenha(String(senha));
+    var id = typeof gerarId === 'function' ? gerarId('CAD') : ('CAD_' + Date.now());
+
+    shSol.appendRow([
+      id,
+      'CADASTRO_EXTERNO',
+      '',
+      '',
+      '',
+      emailLimpo,
+      nomeLimpo,
+      JSON.stringify({ nome: nomeLimpo, senhaHash: senhaHash }),
+      'PENDENTE',
+      '',
+      new Date(),
+      ''
+    ]);
+
+    try { _notificarAdminsCadastroExterno(id, nomeLimpo, emailLimpo); } catch(e) {}
+
+    return { ok: true, msg: 'Solicitação enviada. Você receberá um e-mail quando for aprovado.' };
+  } catch(e) {
+    Logger.log('[solicitarCadastroExterno] ' + e.message);
+    return { ok: false, msg: 'Erro ao registrar solicitação. Tente novamente.' };
+  }
+}
+
+function _notificarAdminsCadastroExterno(id, nome, email) {
+  try {
+    var admins = typeof obterAdmins === 'function' ? obterAdmins() : [];
+    if (!admins.length) return;
+    var assunto = '[CCBJ] Nova solicitação de acesso — ' + nome;
+    var corpo = [
+      'Nova solicitação de cadastro externo recebida no Sistema CCBJ.',
+      '',
+      'Nome : ' + nome,
+      'E-mail: ' + email,
+      'Data  : ' + new Date().toLocaleString('pt-BR'),
+      '',
+      'Acesse o painel → Aprovações → Novos Usuários para aprovar ou recusar.',
+      '',
+      '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+      'Sistema de Gestão de Espaços — Centro Cultural Bom Jardim',
+      'Este e-mail foi gerado automaticamente.'
+    ].join('\n');
+    admins.forEach(function(a) {
+      try { GmailApp.sendEmail(a, assunto, corpo); } catch(e) {}
+    });
+  } catch(e) {
+    Logger.log('[_notificarAdminsCadastroExterno] ' + e.message);
+  }
+}
