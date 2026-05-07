@@ -93,14 +93,13 @@ const GAS = {
    */
   admin: {
     obterDados: function(cb, err) {
-      // Passa o email capturado server-side no doGet como fallback.
-      // getActiveUser() funciona em doGet mas pode falhar em google.script.run
-      // no deployment "Execute as: Me". O template injeta o email real do usuário
-      // em __EMAIL_INICIAL__ antes de servir a página — nunca é o email do dono.
       var emailFallback = (window.__EMAIL_INICIAL__ && window.__EMAIL_INICIAL__.indexOf('@') >= 0)
-        ? window.__EMAIL_INICIAL__
-        : '';
-      GAS._call('obterDadosIniciais', [emailFallback], cb, err);
+        ? window.__EMAIL_INICIAL__ : '';
+      // Inclui token de sessão gerado no login (senha ou GSI) para identificação do usuário
+      // quando Session.getActiveUser() retorna vazio no deployment "Execute as: Me".
+      var sessaoId = (typeof AppState !== 'undefined' && AppState.usuario && AppState.usuario._sessao)
+        ? AppState.usuario._sessao : '';
+      GAS._call('obterDadosIniciais', [emailFallback, sessaoId], cb, err);
     },
     salvarConfig: function(dados, cb, err) {
       GAS._call('processarSalvarConfig', [dados], cb, err);
@@ -541,13 +540,16 @@ const GAS = {
   },
 
   /**
-   * BLOCO: Autenticação / identidade (auth_session.gs)
+   * BLOCO: Autenticação / identidade (auth_session.gs + auth credenciais)
    */
   auth: {
-    obterInfo:   function(cb, err)              { GAS._call('obterInfoAutenticacao',   [],          cb, err); },
-    iniciar:     function(jwt, email, cb, err)  { GAS._call('iniciarSessaoGAS',        [jwt, email],cb, err); },
-    renovar:     function(sessaoId, cb, err)    { GAS._call('renovarSessaoGAS',        [sessaoId],  cb, err); },
-    encerrar:    function(sessaoId, cb, err)    { GAS._call('encerrarSessaoGAS',       [sessaoId],  cb, err); }
+    obterInfo:    function(cb, err)                           { GAS._call('obterInfoAutenticacao',    [],                          cb, err); },
+    iniciar:      function(jwt, email, cb, err)               { GAS._call('iniciarSessaoGAS',         [jwt, email],                cb, err); },
+    renovar:      function(sessaoId, cb, err)                 { GAS._call('renovarSessaoGAS',         [sessaoId],                  cb, err); },
+    encerrar:     function(sessaoId, cb, err)                 { GAS._call('encerrarSessaoGAS',        [sessaoId],                  cb, err); },
+    login:        function(email, senha, cb, err)             { GAS._call('validarCredenciais',       [email, senha],              cb, err); },
+    salvarUsuario:function(adm, alvo, senha, nome, ativo, cb, err) { GAS._call('salvarCredencialUsuario', [adm, alvo, senha, nome, ativo], cb, err); },
+    listarUsuarios:function(adm, cb, err)                     { GAS._call('listarCredenciais',        [adm],                       cb, err); }
   },
 
   /**

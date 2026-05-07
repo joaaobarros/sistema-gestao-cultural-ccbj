@@ -70,6 +70,9 @@ const ABA_PARA_MODULO = {
   'Processos':            'PESSOAL',
   'Demandas':             'PESSOAL',
 
+  // AUTH
+  'CredenciaisUsuarios':  'MASTER',
+
   // ESCUTA
   'EscutaConfig':         'ESCUTA',
   'EscutaPerguntas':      'ESCUTA',

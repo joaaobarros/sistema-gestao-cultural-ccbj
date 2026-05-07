@@ -1,0 +1,332 @@
+<!--
+@file html/logic/auth_login_js.html
+@layer frontend/auth
+@description Lógica de autenticação do frontend.
+             Dois caminhos: Google Sign-In (GSI) + email+senha como fallback.
+             Gerencia sessão no localStorage (8h TTL).
+             Expõe _loginInicializar() — chamado pelo bootstrap em vez de inicializarApp() direto.
+@responsibility Mostrar/ocultar tela de login; validar credenciais; armazenar token de sessão.
+@dependencies auth_session.gs (validarCredenciais, iniciarSessaoGAS, validarSessaoGAS, obterClienteIdGoogle)
+-->
+<script>
+
+// ════════════════════════════════════════════════════════════════
+// BLOCO: Constantes de sessão
+// ════════════════════════════════════════════════════════════════
+
+var _AUTH_KEY = 'ccbj_auth_v1';
+var _AUTH_TTL = 8 * 60 * 60 * 1000; // 8 horas em ms
+
+// ════════════════════════════════════════════════════════════════
+// BLOCO: Persistência de sessão (localStorage)
+// ════════════════════════════════════════════════════════════════
+
+function _loginSalvarSessao(token, email, nome) {
+  try {
+    localStorage.setItem(_AUTH_KEY, JSON.stringify({
+      token: token, email: email, nome: nome || '', ts: Date.now()
+    }));
+  } catch(_) {}
+}
+
+function _loginCarregarSessao() {
+  try {
+    var raw = localStorage.getItem(_AUTH_KEY);
+    if (!raw) return null;
+    var s = JSON.parse(raw);
+    if (!s || !s.token || !s.email || (Date.now() - (s.ts || 0)) > _AUTH_TTL) {
+      localStorage.removeItem(_AUTH_KEY);
+      return null;
+    }
+    return s;
+  } catch(_) { return null; }
+}
+
+function _loginLimpar() {
+  try { localStorage.removeItem(_AUTH_KEY); } catch(_) {}
+}
+
+// ════════════════════════════════════════════════════════════════
+// BLOCO: Controle do overlay de login
+// ════════════════════════════════════════════════════════════════
+
+function _loginMostrar() {
+  var el = document.getElementById('loginOverlay');
+  if (el) el.style.display = 'flex';
+}
+
+function _loginOcultar(cb) {
+  var el = document.getElementById('loginOverlay');
+  if (!el) { if (cb) cb(); return; }
+  el.style.transition = 'opacity 0.35s ease';
+  el.style.opacity = '0';
+  setTimeout(function() {
+    el.style.display = 'none';
+    el.style.opacity = '1';
+    if (cb) cb();
+  }, 350);
+}
+
+// ════════════════════════════════════════════════════════════════
+// BLOCO: Feedback visual
+// ════════════════════════════════════════════════════════════════
+
+function _loginMostrarErro(msg) {
+  var texto = document.getElementById('loginErroTexto');
+  var bloco = document.getElementById('loginErro');
+  if (texto) texto.textContent = msg;
+  if (bloco) bloco.classList.remove('hidden');
+}
+
+function _loginOcultarErro() {
+  var bloco = document.getElementById('loginErro');
+  if (bloco) bloco.classList.add('hidden');
+}
+
+function _loginSetBusy(busy) {
+  var btn = document.getElementById('loginBtn');
+  if (!btn) return;
+  btn.disabled = busy;
+  btn.textContent = busy ? 'Verificando...' : 'Entrar';
+}
+
+function _loginToggleSenha() {
+  var inp = document.getElementById('loginSenha');
+  var ico = document.getElementById('loginSenhaIcon');
+  if (!inp) return;
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+  if (ico) ico.className = inp.type === 'password' ? 'fas fa-eye text-sm' : 'fas fa-eye-slash text-sm';
+}
+
+// ════════════════════════════════════════════════════════════════
+// BLOCO: Aplicar sessão ao AppState e abrir o app
+// ════════════════════════════════════════════════════════════════
+
+function _loginAplicarSessao(token, email, nome) {
+  _loginSalvarSessao(token, email, nome);
+  if (typeof AppState !== 'undefined') {
+    AppState.usuario._sessao = token;
+    AppState.usuario.email   = email;
+    AppState.usuario.nome    = nome || AppState.usuario.nome || '';
+  }
+  _loginOcultar(function() {
+    if (typeof inicializarApp === 'function') inicializarApp();
+  });
+}
+
+// ════════════════════════════════════════════════════════════════
+// BLOCO: Login com email + senha
+// ════════════════════════════════════════════════════════════════
+
+function _loginSubmit() {
+  var email = (document.getElementById('loginEmail') || {}).value || '';
+  var senha = (document.getElementById('loginSenha') || {}).value || '';
+
+  _loginOcultarErro();
+  if (!email.trim())  { _loginMostrarErro('Informe seu e-mail.'); return; }
+  if (!senha)         { _loginMostrarErro('Informe sua senha.'); return; }
+
+  _loginSetBusy(true);
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      _loginSetBusy(false);
+      if (res && res.ok) {
+        _loginAplicarSessao(res.token, res.email, res.nome);
+      } else {
+        _loginMostrarErro((res && res.msg) || 'Falha na autenticação.');
+      }
+    })
+    .withFailureHandler(function(err) {
+      _loginSetBusy(false);
+      _loginMostrarErro('Erro de conexão. Tente novamente.');
+      console.error('[Login senha]', err);
+    })
+    .validarCredenciais(email.trim(), senha);
+}
+
+// ════════════════════════════════════════════════════════════════
+// BLOCO: Google Sign-In (GSI)
+// ════════════════════════════════════════════════════════════════
+
+function _loginGSICallback(response) {
+  if (!response || !response.credential) {
+    _loginMostrarErro('Google não retornou credencial. Tente novamente.');
+    return;
+  }
+
+  _loginSetBusy(true);
+  _loginOcultarErro();
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      _loginSetBusy(false);
+      if (res && res.ok) {
+        _loginAplicarSessao(res.sessao || res.token, res.email, res.nome || '');
+      } else {
+        _loginMostrarErro((res && res.msg) || 'Conta Google não autorizada.');
+      }
+    })
+    .withFailureHandler(function(err) {
+      _loginSetBusy(false);
+      _loginMostrarErro('Erro ao validar conta Google.');
+      console.error('[Login GSI]', err);
+    })
+    .iniciarSessaoGAS(response.credential, null);
+}
+
+function _loginInicializarGSI(clientId) {
+  var loader = document.getElementById('loginGSILoader');
+  var btnEl  = document.getElementById('googleSignInBtn');
+  var sep    = document.getElementById('loginSeparador');
+
+  if (!clientId) {
+    // Sem client_id: ocultar bloco GSI, mostrar só formulário
+    var bloco = document.getElementById('loginBlocoGSI');
+    if (bloco) bloco.style.display = 'none';
+    return;
+  }
+
+  // Carregar o script GSI dinamicamente
+  var script = document.createElement('script');
+  script.src = 'https://accounts.google.com/gsi/client';
+  script.async = true;
+  script.defer = true;
+  script.onload = function() {
+    if (!window.google || !google.accounts) {
+      if (loader) loader.style.display = 'none';
+      return;
+    }
+
+    google.accounts.id.initialize({
+      client_id:   clientId,
+      callback:    _loginGSICallback,
+      auto_select: true,
+      context:     'signin'
+    });
+
+    google.accounts.id.renderButton(btnEl, {
+      theme:  'outline',
+      size:   'large',
+      text:   'signin_with',
+      locale: 'pt-BR',
+      width:  360
+    });
+
+    // Prompt automático (One Tap) se disponível
+    google.accounts.id.prompt();
+
+    if (loader) loader.style.display = 'none';
+    if (btnEl)  btnEl.style.display  = 'flex';
+    if (sep)    sep.classList.remove('hidden');
+  };
+  script.onerror = function() {
+    if (loader) loader.style.display = 'none';
+  };
+  document.head.appendChild(script);
+}
+
+// ════════════════════════════════════════════════════════════════
+// BLOCO: Inicialização — ponto de entrada chamado pelo bootstrap
+// ════════════════════════════════════════════════════════════════
+
+/**
+ * _loginInicializar()
+ * Substitui a chamada direta a inicializarApp() no bootstrap.
+ * Verifica sessão salva → valida no servidor → ou exibe login.
+ */
+function _loginInicializar() {
+  var sessao = _loginCarregarSessao();
+
+  if (sessao && sessao.token) {
+    // Valida se o token ainda está vivo no CacheService
+    google.script.run
+      .withSuccessHandler(function(res) {
+        if (res && res.ok) {
+          // Sessão válida: restaurar AppState e abrir app direto
+          if (typeof AppState !== 'undefined') {
+            AppState.usuario._sessao = sessao.token;
+            AppState.usuario.email   = sessao.email;
+            AppState.usuario.nome    = sessao.nome || '';
+          }
+          if (typeof inicializarApp === 'function') inicializarApp();
+        } else {
+          _loginLimpar();
+          _loginExibir();
+        }
+      })
+      .withFailureHandler(function() {
+        _loginLimpar();
+        _loginExibir();
+      })
+      .validarSessaoGAS(sessao.token);
+  } else {
+    _loginExibir();
+  }
+}
+
+function _loginExibir() {
+  _loginMostrar();
+  // Buscar client_id GSI do servidor (configurável via PropertiesService)
+  google.script.run
+    .withSuccessHandler(function(clientId) {
+      _loginInicializarGSI(clientId || '');
+    })
+    .withFailureHandler(function() {
+      _loginInicializarGSI('');
+    })
+    .obterClienteIdGoogle();
+}
+
+// ════════════════════════════════════════════════════════════════
+// BLOCO: Logout
+// ════════════════════════════════════════════════════════════════
+
+/**
+ * Encerra a sessão e volta para a tela de login.
+ * Chamar de qualquer botão de logout no app.
+ */
+function _loginLogout() {
+  var sessao = _loginCarregarSessao();
+  var token  = sessao ? sessao.token : (AppState && AppState.usuario && AppState.usuario._sessao);
+
+  _loginLimpar();
+  if (typeof AppState !== 'undefined') {
+    AppState.usuario._sessao = '';
+    AppState.usuario.email   = '';
+    AppState.usuario.nome    = '';
+  }
+
+  if (token) {
+    try {
+      google.script.run.encerrarSessaoGAS(token);
+    } catch(_) {}
+  }
+
+  // Recarregar a página para garantir estado limpo
+  try { window.top.location.reload(); } catch(_) {
+    try { window.location.reload(); } catch(_) {}
+  }
+}
+
+// ════════════════════════════════════════════════════════════════
+// BLOCO: Event listeners de teclado no formulário
+// ════════════════════════════════════════════════════════════════
+
+document.addEventListener('DOMContentLoaded', function() {
+  var emailEl = document.getElementById('loginEmail');
+  var senhaEl = document.getElementById('loginSenha');
+
+  if (emailEl) {
+    emailEl.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') { e.preventDefault(); if (senhaEl) senhaEl.focus(); }
+    });
+  }
+  if (senhaEl) {
+    senhaEl.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') { e.preventDefault(); _loginSubmit(); }
+    });
+  }
+});
+
+</script>

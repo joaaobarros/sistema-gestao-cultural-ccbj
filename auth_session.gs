@@ -447,3 +447,177 @@ function validarSessaoGAS(sessaoId) {
 function logoutSistema() {
   return true;
 }
+// ═══════════════════════════════════════════════════════════════
+// AUTENTICAÇÃO COM SENHA — CredenciaisUsuarios (MASTER)
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * Hash SHA-256 de uma senha (string UTF-8 → hex).
+ */
+function _hashSenha(senha) {
+  var bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, senha);
+  return bytes.map(function(b) {
+    return ('0' + (b & 0xFF).toString(16)).slice(-2);
+  }).join('');
+}
+
+/**
+ * Valida email+senha contra a aba CredenciaisUsuarios (planilha MASTER).
+ * Retorna { ok, token, email, nome, nivel } em sucesso.
+ */
+function validarCredenciais(email, senha) {
+  if (!email || !senha) {
+    return { ok: false, msg: 'Email e senha são obrigatórios.' };
+  }
+  var emailLimpo = String(email).trim().toLowerCase();
+  var hash = _hashSenha(String(senha));
+
+  try {
+    var sh = typeof _getSheet === 'function' ? _getSheet('CredenciaisUsuarios') : null;
+    if (!sh || sh.getLastRow() < 2) {
+      return { ok: false, msg: 'Nenhum usuário cadastrado. Contate o administrador.' };
+    }
+
+    var dados = sh.getRange(2, 1, sh.getLastRow() - 1, 6).getValues();
+    for (var i = 0; i < dados.length; i++) {
+      var emailSheet = String(dados[i][0] || '').trim().toLowerCase();
+      if (emailSheet !== emailLimpo) continue;
+
+      var ativo = dados[i][3];
+      if (ativo === false || ativo === 'FALSE' || ativo === 0) {
+        return { ok: false, msg: 'Usuário inativo. Contate o administrador.' };
+      }
+
+      var hashSheet = String(dados[i][1] || '').trim();
+      if (hashSheet !== hash) {
+        return { ok: false, msg: 'Senha incorreta.' };
+      }
+
+      try { sh.getRange(i + 2, 6).setValue(new Date().toISOString()); } catch(_) {}
+
+      var token = _gerarTokenSessao(emailLimpo);
+      var nivel = _resolverNivelAcesso(emailLimpo);
+      _registrarLogSessao(emailLimpo, 'login_senha');
+
+      return {
+        ok:    true,
+        token: token,
+        email: emailLimpo,
+        nome:  String(dados[i][2] || emailLimpo.split('@')[0]).trim(),
+        nivel: nivel
+      };
+    }
+
+    return { ok: false, msg: 'Usuário não encontrado.' };
+  } catch(e) {
+    Logger.log('[validarCredenciais] ' + e.message);
+    return { ok: false, msg: 'Erro interno. Tente novamente.' };
+  }
+}
+
+/**
+ * Cria ou atualiza uma credencial de usuário (somente admins).
+ * Passe senhaPlain como null para atualizar sem alterar a senha.
+ */
+function salvarCredencialUsuario(emailAdmin, emailAlvo, senhaPlain, nome, ativo) {
+  try {
+    if (!emailAdmin) return { ok: false, msg: 'Admin não identificado.' };
+    var emailAdminLimpo = String(emailAdmin).trim().toLowerCase();
+
+    try {
+      if (typeof verificarPermissao === 'function' && !verificarPermissao('admin', emailAdminLimpo)) {
+        return { ok: false, msg: 'Apenas administradores podem gerenciar usuários.' };
+      }
+    } catch(_) {}
+
+    var emailAlvoLimpo = String(emailAlvo || '').trim().toLowerCase();
+    if (!emailAlvoLimpo || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(emailAlvoLimpo)) {
+      return { ok: false, msg: 'Email inválido.' };
+    }
+
+    var sh = typeof _getSheet === 'function' ? _getSheet('CredenciaisUsuarios') : null;
+    if (!sh) return { ok: false, msg: 'Aba CredenciaisUsuarios não encontrada na planilha MASTER.' };
+
+    var hash = senhaPlain ? _hashSenha(String(senhaPlain)) : null;
+    var nomeAlvo = String(nome || emailAlvoLimpo.split('@')[0]).trim();
+    var ativoVal = ativo !== false;
+
+    if (sh.getLastRow() > 1) {
+      var dados = sh.getRange(2, 1, sh.getLastRow() - 1, 4).getValues();
+      for (var i = 0; i < dados.length; i++) {
+        if (String(dados[i][0] || '').trim().toLowerCase() === emailAlvoLimpo) {
+          sh.getRange(i + 2, 3).setValue(nomeAlvo);
+          sh.getRange(i + 2, 4).setValue(ativoVal);
+          if (hash) sh.getRange(i + 2, 2).setValue(hash);
+          return { ok: true, msg: 'Usuário atualizado com sucesso.' };
+        }
+      }
+    }
+
+    if (!hash) return { ok: false, msg: 'Senha é obrigatória para novo usuário.' };
+    sh.appendRow([emailAlvoLimpo, hash, nomeAlvo, ativoVal, new Date().toISOString(), '']);
+    return { ok: true, msg: 'Usuário criado com sucesso.' };
+  } catch(e) {
+    Logger.log('[salvarCredencialUsuario] ' + e.message);
+    return { ok: false, msg: e.message };
+  }
+}
+
+/**
+ * Lista credenciais cadastradas (sem expor hashes).
+ */
+function listarCredenciais(emailAdmin) {
+  try {
+    var sh = typeof _getSheet === 'function' ? _getSheet('CredenciaisUsuarios') : null;
+    if (!sh || sh.getLastRow() < 2) return { ok: true, usuarios: [] };
+
+    var dados = sh.getRange(2, 1, sh.getLastRow() - 1, 6).getValues();
+    var usuarios = dados
+      .filter(function(r) { return String(r[0] || '').trim(); })
+      .map(function(r) {
+        return {
+          email:       String(r[0] || '').trim(),
+          nome:        String(r[2] || '').trim(),
+          ativo:       r[3] !== false && r[3] !== 'FALSE' && r[3] !== 0,
+          criadoEm:    r[4] ? String(r[4]).substring(0, 10) : '',
+          ultimoLogin: r[5] ? String(r[5]).substring(0, 10) : ''
+        };
+      });
+    return { ok: true, usuarios: usuarios };
+  } catch(e) {
+    return { ok: false, msg: e.message };
+  }
+}
+
+/**
+ * Cria a aba CredenciaisUsuarios na planilha MASTER se não existir.
+ * Chamar de inicializarSistema() ou manualmente do editor GAS.
+ */
+function garantirAbaCredenciais() {
+  try {
+    var sh = typeof _getSheet === 'function' ? _getSheet('CredenciaisUsuarios') : null;
+    if (sh) return true;
+    var master = typeof _abrirModulo === 'function' ? _abrirModulo('MASTER') : SpreadsheetApp.getActiveSpreadsheet();
+    if (!master) return false;
+    var nova = master.insertSheet('CredenciaisUsuarios');
+    nova.appendRow(['email', 'senha_hash', 'nome', 'ativo', 'criado_em', 'ultimo_login']);
+    nova.getRange(1, 1, 1, 6).setFontWeight('bold');
+    Logger.log('[Auth] Aba CredenciaisUsuarios criada na planilha MASTER.');
+    return true;
+  } catch(e) {
+    Logger.log('[garantirAbaCredenciais] ' + e.message);
+    return false;
+  }
+}
+
+/**
+ * Bootstrap helper: cria a aba e insere o primeiro admin.
+ * Chamar UMA VEZ do editor GAS para provisionar o sistema.
+ * Ex: criarPrimeiroAdmin('joao@idm.org.br', 'senhaForte123', 'João Barros')
+ */
+function criarPrimeiroAdmin(email, senha, nome) {
+  garantirAbaCredenciais();
+  var emailDono = '';
+  try { emailDono = Session.getEffectiveUser().getEmail(); } catch(_) {}
+  return salvarCredencialUsuario(emailDono || email, email, senha, nome, true);
+}

@@ -207,7 +207,9 @@ MÓDULOS HTML (incluídos no <main>, cada um com JS próprio inline):
 </head>
 <body class="bg-slate-50 text-slate-900 min-h-screen flex">
 
-  
+<!-- LOGIN OVERLAY — exibido antes do app quando não há sessão válida -->
+<?!= include('html/layout/login_html'); ?>
+
 <!-- IDENTIDADE DO USUÁRIO  -->
 <script>
   window.__EMAIL_INICIAL__  = '<?= emailInicial ?>';
@@ -292,6 +294,9 @@ MÓDULOS HTML (incluídos no <main>, cada um com JS próprio inline):
 <!-- PERMISSÕES V2 -->
 <?!= include('html/logic/mod_permissoes_v2_js'); ?>
 <?!= include('html/logic/integracao_reserva_comunicacao_js'); ?>
+
+<!-- AUTH LOGIN -->
+<?!= include('html/logic/auth_login_js'); ?>
 
 <!-- BOOTSTRAP -->
 <?!= include('html/logic/bootstrap_js'); ?>

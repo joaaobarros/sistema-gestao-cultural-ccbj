@@ -35,9 +35,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
   console.log('Iniciando Sistema CCBJ...');
 
-  // A identidade é resolvida pelo backend em obterDadosIniciais() via
-  // Session.getActiveUser(), que funciona em google.script.run no domínio Workspace.
-  inicializarApp();
+  // Delega ao sistema de login: verifica sessão salva ou exibe tela de login.
+  // _loginInicializar() (auth_login_js) chama inicializarApp() após autenticar.
+  _loginInicializar();
 
   /**
    * ========================================

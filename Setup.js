@@ -58,6 +58,10 @@ const MODULOS = {
       'Logs':                 ['Data/Hora', 'Usuário', 'Ação', 'Tipo', 'Alvo', 'Detalhes', 'Dados Antes', 'Dados Depois'],
       'LogAcessos':           ['Data/Hora', 'Email', 'Nome Usuário', 'Nível Acesso', 'IP Aprox.', 'User Agent'],
       'PreferenciasUsuarios': ['email', 'chave', 'valor', 'atualizadoEm'],
+
+      // Credenciais para autenticação com senha (sistema próprio, sem depender de Session)
+      // ORDEM DAS COLUNAS: não alterar sem atualizar auth_session.gs (leitura por índice)
+      'CredenciaisUsuarios':  ['email', 'senha_hash', 'nome', 'ativo', 'criado_em', 'ultimo_login'],
     }
   },
 
@@ -566,6 +570,15 @@ function inicializarSistema() {
   // =====================================
   _registrarSuperadmin();
 
+  // =====================================
+  // INICIALIZA CREDENCIAIS DE ACESSO
+  // =====================================
+  try {
+    inicializarCredenciais();
+  } catch(e) {
+    console.warn('Falha ao inicializar credenciais:', e.message);
+  }
+
   if (usarUI) {
     ui.alert('Setup concluído!');
   }
@@ -882,6 +895,99 @@ function inicializarParametrosRH() {
   aba.appendRow(['vale_alimentacao', 27.01]);
   aba.appendRow(['desconto_vale_alimentacao', 1.00]);
 
+}
+
+/**
+ * ========================================
+ * BLOCO: Credenciais de acesso
+ * ========================================
+ * @description Provisiona a aba CredenciaisUsuarios na planilha MASTER e
+ *              cria o primeiro administrador a partir de PropertiesService.
+ *
+ * CONFIGURAÇÃO PRÉVIA (no editor GAS → Propriedades do script):
+ *   PRIMEIRO_ADMIN_EMAIL  — email do primeiro admin (ex: joao@idm.org.br)
+ *   PRIMEIRO_ADMIN_SENHA  — senha em texto plano (convertida em hash SHA-256 aqui)
+ *   PRIMEIRO_ADMIN_NOME   — nome para exibição (ex: João Barros)
+ *
+ * Segurança:
+ *   - A senha nunca é armazenada em texto plano. Apenas o hash SHA-256 é gravado.
+ *   - Após o primeiro login, remova PRIMEIRO_ADMIN_SENHA do PropertiesService.
+ *   - A função é idempotente: não duplica o admin se já existir.
+ *
+ * Execução:
+ *   - Chamada automaticamente por inicializarSistema().
+ *   - Pode ser chamada manualmente para recriar/reparar a aba.
+ */
+function inicializarCredenciais() {
+  var props = PropertiesService.getScriptProperties();
+
+  // ── 1. Garantir que a aba existe ──────────────────────────────
+  var master = _abrirModulo('MASTER');
+  if (!master) {
+    console.warn('[Credenciais] Planilha MASTER não encontrada.');
+    return { ok: false, msg: 'MASTER não encontrada' };
+  }
+
+  var aba = master.getSheetByName('CredenciaisUsuarios');
+  if (!aba) {
+    // Cria com cabeçalho canônico (mesma ordem que auth_session.gs lê)
+    aba = master.insertSheet('CredenciaisUsuarios');
+    var cabecalho = ['email', 'senha_hash', 'nome', 'ativo', 'criado_em', 'ultimo_login'];
+    var r = aba.getRange(1, 1, 1, cabecalho.length);
+    r.setValues([cabecalho])
+     .setFontWeight('bold')
+     .setBackground(COR_MODULO['MASTER'] || '#1F2937')
+     .setFontColor('#FFFFFF')
+     .setHorizontalAlignment('center');
+    aba.setFrozenRows(1);
+    aba.setColumnWidths(1, cabecalho.length, 160);
+    console.log('[Credenciais] Aba CredenciaisUsuarios criada.');
+  }
+
+  // ── 2. Criar primeiro admin se configurado ────────────────────
+  var emailAdmin = (props.getProperty('PRIMEIRO_ADMIN_EMAIL') || '').trim().toLowerCase();
+  var senhaPlain = (props.getProperty('PRIMEIRO_ADMIN_SENHA') || '').trim();
+  var nomeAdmin  = (props.getProperty('PRIMEIRO_ADMIN_NOME')  || emailAdmin.split('@')[0]).trim();
+
+  if (!emailAdmin || !senhaPlain) {
+    console.log('[Credenciais] PRIMEIRO_ADMIN_EMAIL ou PRIMEIRO_ADMIN_SENHA não configurados — pulando criação.');
+    return { ok: true, msg: 'Aba garantida; primeiro admin não configurado.' };
+  }
+
+  // Verificar se já existe
+  var dados = aba.getLastRow() > 1
+    ? aba.getRange(2, 1, aba.getLastRow() - 1, 1).getValues()
+    : [];
+  var jaExiste = dados.some(function(r) {
+    return String(r[0] || '').trim().toLowerCase() === emailAdmin;
+  });
+
+  if (jaExiste) {
+    console.log('[Credenciais] Admin ' + emailAdmin + ' já existe — sem alterações.');
+    return { ok: true, msg: 'Admin já cadastrado.' };
+  }
+
+  // Hash SHA-256 da senha
+  var hashBytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, senhaPlain);
+  var senhaHash = hashBytes.map(function(b) {
+    return ('0' + (b & 0xFF).toString(16)).slice(-2);
+  }).join('');
+
+  aba.appendRow([emailAdmin, senhaHash, nomeAdmin, true, new Date().toISOString(), '']);
+  console.log('[Credenciais] Primeiro admin criado: ' + emailAdmin);
+
+  // Aviso de segurança: lembrar de remover a senha após setup
+  console.warn('[Credenciais] ⚠️  Remova PRIMEIRO_ADMIN_SENHA do PropertiesService após o primeiro login.');
+
+  return { ok: true, msg: 'Admin ' + emailAdmin + ' criado com sucesso.' };
+}
+
+/**
+ * Recria apenas a aba de credenciais sem reexecutar o setup completo.
+ * Útil para reparar em produção sem risco.
+ */
+function repararAbaCredenciais() {
+  return inicializarCredenciais();
 }
 
 function debugItens() {

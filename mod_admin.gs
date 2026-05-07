@@ -23,9 +23,20 @@
  * NUNCA usar getEffectiveUser() como identidade — em "Execute as: Me" ele retorna
  * o email do DONO do script para todos os usuários, quebrando logs e permissões.
  */
-function obterEmailUsuario(emailClienteFallback) {
+function obterEmailUsuario(emailClienteFallback, sessaoId) {
   try {
-    let email = Session.getActiveUser()?.getEmail();
+    let email = '';
+    try { email = Session.getActiveUser()?.getEmail() || ''; } catch(_) {}
+
+    // Token de sessão gerado no login com senha ou GSI
+    if ((!email || email.trim() === '') && sessaoId) {
+      try {
+        if (typeof _resolverEmailSessao === 'function') {
+          email = _resolverEmailSessao(sessaoId) || '';
+        }
+      } catch(_) {}
+    }
+
     if (!email || email.trim() === '') email = emailClienteFallback;
     if (!email || email.trim() === '')
       throw new Error('Email não identificado.');
@@ -186,9 +197,9 @@ function verificarDonoOuAdmin(emailDono, emailAtual) {
  * Entrypoint principal do boot do frontend.
  * Identidade resolvida via Session.getActiveUser() (Workspace domain).
  */
-function obterDadosIniciais(emailClienteFallback) {
+function obterDadosIniciais(emailClienteFallback, sessaoId) {
   try {
-    const emailUsuario = obterEmailUsuario(emailClienteFallback || "");
+    const emailUsuario = obterEmailUsuario(emailClienteFallback || "", sessaoId || "");
     const cache    = CacheService.getScriptCache();
     const cacheKey = "dados_iniciais_" + emailUsuario.replace(/[^a-z0-9]/g, "_");
     const cacheExist = cache.get(cacheKey);
