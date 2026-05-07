@@ -207,6 +207,7 @@ const MODULOS = {
       'Localização','Status de Uso'
     ]
 
+    }
   },
 
   COMUNICACAO: {
@@ -499,8 +500,6 @@ const MODULOS = {
       'Demandas':  ['ID','Origem','Título','Descrição','Solicitante','Responsável','Status','Data Entrada','Data Resposta','Resposta'],
     }
   },
-
-},
 
 }
 
