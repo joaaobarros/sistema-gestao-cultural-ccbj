@@ -18,14 +18,14 @@
 /**
  * Resolve o email do usuário chamante.
  * Em "Execute as: Me" + Workspace domain, Session.getActiveUser() retorna o email
- * real do usuário em chamadas google.script.run. getEffectiveUser() serve de fallback
- * para o dono do script ou para contextos onde getActiveUser() não está disponível.
+ * real do usuário em chamadas google.script.run.
+ *
+ * NUNCA usar getEffectiveUser() como identidade — em "Execute as: Me" ele retorna
+ * o email do DONO do script para todos os usuários, quebrando logs e permissões.
  */
 function obterEmailUsuario(emailClienteFallback) {
   try {
     let email = Session.getActiveUser()?.getEmail();
-    if (!email || email.trim() === '')
-      email = Session.getEffectiveUser()?.getEmail();
     if (!email || email.trim() === '') email = emailClienteFallback;
     if (!email || email.trim() === '')
       throw new Error('Email não identificado.');
@@ -400,8 +400,7 @@ function obterLogAcessos(emailUsuario) {
   try {
     const email =
       emailUsuario ||
-      Session.getActiveUser()?.getEmail() ||
-      Session.getEffectiveUser()?.getEmail();
+      Session.getActiveUser()?.getEmail();
     verificarPermissao("admin", email);
     const aba = _getSheet("LogAcessos");
     if (!aba || aba.getLastRow() < 2) return "[]";
