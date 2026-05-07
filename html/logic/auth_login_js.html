@@ -239,11 +239,9 @@ function _loginInicializar() {
   var sessao = _loginCarregarSessao();
 
   if (sessao && sessao.token) {
-    // Valida se o token ainda está vivo no CacheService
     google.script.run
       .withSuccessHandler(function(res) {
         if (res && res.ok) {
-          // Sessão válida: restaurar AppState e abrir app direto
           if (typeof AppState !== 'undefined') {
             AppState.usuario._sessao = sessao.token;
             AppState.usuario.email   = sessao.email;
@@ -252,17 +250,44 @@ function _loginInicializar() {
           if (typeof inicializarApp === 'function') inicializarApp();
         } else {
           _loginLimpar();
-          _loginExibir();
+          _loginTentarAutoLogin();
         }
       })
       .withFailureHandler(function() {
         _loginLimpar();
-        _loginExibir();
+        _loginTentarAutoLogin();
       })
       .validarSessaoGAS(sessao.token);
   } else {
-    _loginExibir();
+    _loginTentarAutoLogin();
   }
+}
+
+/**
+ * Para usuários do Google Workspace, Session.getActiveUser() retorna o email
+ * real em google.script.run — entra direto sem mostrar o formulário.
+ * Usuários externos vão para _loginExibir() normalmente.
+ */
+function _loginTentarAutoLogin() {
+  google.script.run
+    .withSuccessHandler(function(res) {
+      if (res && res.ok && res.email) {
+        google.script.run
+          .withSuccessHandler(function(sr) {
+            if (sr && sr.ok) {
+              _loginAplicarSessao(sr.sessao || sr.token, sr.email, sr.nome || '');
+            } else {
+              _loginExibir();
+            }
+          })
+          .withFailureHandler(function() { _loginExibir(); })
+          .iniciarSessaoGAS(null, res.email);
+      } else {
+        _loginExibir();
+      }
+    })
+    .withFailureHandler(function() { _loginExibir(); })
+    .obterEmailSessaoAtiva();
 }
 
 function _loginExibir() {
