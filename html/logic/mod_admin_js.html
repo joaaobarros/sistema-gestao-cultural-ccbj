@@ -2149,188 +2149,322 @@ function verificarExibirManualAutomatico() {
 
 function renderizarManualCompleto() {
 
-  const secoes = {
+  // ── Primitivos de renderização ────────────────────────────────
 
-    intro: {
-      el: 'manual-intro-cards',
-      tipo: 'cards',
-      dados: [
-        {
-          icon: 'fa-user',
-          cor: 'blue',
-          titulo: 'Usuário Comum',
-          desc: 'Pode visualizar a agenda, criar e editar suas próprias reservas e cancelá-las.'
-        },
-        {
-          icon: 'fa-user-shield',
-          cor: 'purple',
-          titulo: 'Admin',
-          desc: 'Além das funções de usuário, gerencia espaços, itens, setores e pode cancelar/excluir qualquer reserva.'
-        },
-        {
-          icon: 'fa-crown',
-          cor: 'amber',
-          titulo: 'Superadmin',
-          desc: 'Acesso total: gerencia administradores, acessa auditoria e pode desfazer ações.'
-        }
-      ]
-    },
+  function _step(i, titulo, desc, cor) {
+    const bg  = cor === 'amber' ? 'bg-amber-500'  : cor === 'green' ? 'bg-emerald-600' : 'bg-purple-600';
+    return `<div class="flex gap-3 p-3 bg-slate-50 rounded-xl">
+      <span class="w-6 h-6 ${bg} text-white rounded-full flex items-center justify-center text-[10px] font-black shrink-0">${i}</span>
+      <div><p class="font-black text-slate-800 text-xs">${titulo}</p><p class="text-[11px] text-slate-500 mt-0.5">${desc}</p></div>
+    </div>`;
+  }
 
-    agenda: {
-      el: 'manual-agenda-cards',
-      tipo: 'steps',
-      dados: [
-        { titulo: 'Visualização completa', desc: 'Lista todas as reservas cadastradas.' },
-        { titulo: 'Filtros', desc: 'Permite buscar por data, setor ou responsável.' },
-        { titulo: 'Status', desc: 'Acompanhe reservas confirmadas e canceladas.' }
-      ]
-    },
+  function _card(icon, cor, titulo, desc) {
+    return `<div class="flex items-start gap-3 p-3 bg-slate-50 rounded-xl">
+      <div class="w-8 h-8 ${corBg(cor)} ${corTexto(cor)} rounded-lg flex items-center justify-center shrink-0"><i class="fas ${icon} text-xs"></i></div>
+      <div><p class="font-black text-slate-800 text-xs">${titulo}</p><p class="text-[11px] text-slate-500 mt-0.5">${desc}</p></div>
+    </div>`;
+  }
 
-    agendamento: {
-      el: 'manual-agendamento-cards',
-      tipo: 'steps',
-      dados: [
-        {
-          titulo: 'Criar reserva',
-          desc: 'Selecione o espaço, data, horário e responsável pela atividade.'
-        },
-        {
-          titulo: 'Itens e estrutura',
-          desc: 'Adicione equipamentos e recursos necessários para a realização da ação.'
-        },
-        {
-          titulo: 'Ativar Agenda RECE',
-          desc: 'Ao ativar a RECE, a reserva passa a ser tratada como um evento cultural público, com informações para divulgação.'
-        },
-        {
-          titulo: 'Preenchimento RECE',
-          desc: 'Informe descrição, público-alvo, artista, acessibilidade e demais dados do evento.'
-        },
-        {
-          titulo: 'Diferença importante',
-          desc: 'Reservas sem RECE são internas. Com RECE, entram na agenda pública de difusão cultural.'
-        },
-        {
-          titulo: 'Agendamento em lote',
-          desc: 'Permite criar várias reservas de uma vez para diferentes datas.'
-        },
-        {
-        titulo: '⚠️ Quando usar RECE',
-        desc: 'Use RECE apenas para atividades que serão divulgadas ao público. Evite usar em reuniões internas ou uso técnico de espaço.'
-      }
-      ]
-    },
+  function _tip(icon, cor, msg) {
+    const map = {
+      amber: 'bg-amber-50 border-amber-200 text-amber-700',
+      blue:  'bg-blue-50 border-blue-200 text-blue-700',
+      red:   'bg-red-50 border-red-200 text-red-600',
+      green: 'bg-emerald-50 border-emerald-200 text-emerald-700',
+      purple:'bg-purple-50 border-purple-200 text-purple-700'
+    };
+    return `<div class="p-3 border rounded-xl text-[11px] font-medium ${map[cor]||map.amber}"><i class="fas ${icon} mr-1.5"></i>${msg}</div>`;
+  }
 
-    rece: {
-      el: 'manual-rece-cards',
-      tipo: 'steps',
-      dados: [
-        { titulo: 'Cadastro', desc: 'Registre eventos culturais para divulgação.' },
-        { titulo: 'Informações', desc: 'Inclua descrição, público e acessibilidade.' },
-        { titulo: 'Publicação', desc: 'Eventos podem ser usados para comunicação externa.' }
-      ]
-    },
+  function _heading(txt) {
+    return `<p class="text-[10px] font-black text-slate-400 uppercase tracking-widest pt-2 pb-1 border-b border-slate-100">${txt}</p>`;
+  }
 
-    admin: {
-      el: 'manual-admin-cards',
-      tipo: 'steps',
-      dados: [
-        { titulo: 'Espaços', desc: 'Gerencie salas e capacidades.' },
-        { titulo: 'Itens', desc: 'Controle equipamentos e disponibilidade.' },
-        { titulo: 'Setores', desc: 'Organize a estrutura institucional.' },
-        { titulo: 'Usuários', desc: 'Controle acessos administrativos.' }
-      ]
-    },
+  // ── INTRODUÇÃO ────────────────────────────────────────────────
 
-    auditoria: {
-      el: 'manual-auditoria-cards',
-      tipo: 'steps',
-      dados: [
-        { titulo: 'Histórico', desc: 'Todas as ações ficam registradas.' },
-        { titulo: 'Rastreabilidade', desc: 'Identifique quem fez cada alteração.' },
-        { titulo: 'Segurança', desc: 'Permite auditoria e controle institucional.' }
-      ]
-    },
+  const elIntro = document.getElementById('manual-intro-cards');
+  if (elIntro) elIntro.innerHTML = [
+    _card('fa-user',        'blue',  'Visitante Controlado (padrão externo)',
+          'Acessa Agenda Geral, Novo Agendamento e Dashboard. Pode criar e editar apenas as próprias reservas.'),
+    _card('fa-user-shield', 'purple','Administrador',
+          'Gerencia espaços, itens, setores e usuários. Pode editar/cancelar qualquer reserva, aprovar solicitações e acessar Configurações e Permissões.'),
+    _card('fa-crown',       'amber', 'Superadmin',
+          'Tudo do Admin mais acesso à Auditoria completa, rollback de ações e gerenciamento de outros administradores.'),
+    _heading('Módulos disponíveis no sistema'),
+    _card('fa-calendar-alt','blue',  'Espaços & Agendamento',
+          'Agenda Geral, Novo Agendamento e Agenda RECE. Núcleo operacional do sistema.'),
+    _card('fa-check-double','purple','Aprovações',
+          'Valida solicitações de reserva e cadastros de novos usuários externos.'),
+    _card('fa-chart-bar',   'green', 'Estratégia',
+          'Dashboard com indicadores de uso, ocupação e análise de IA integrada.'),
+    _card('fa-server',      'amber', 'Sistema (admin)',
+          'Configurações, Permissões e Auditoria. Visível apenas para administradores.')
+  ].join('');
 
-    dashboard: {
-      el: 'manual-dashboard-cards',
-      tipo: 'steps',
-      dados: [
-        { titulo: 'Indicadores', desc: 'Visualize métricas de uso.' },
-        { titulo: 'Análises', desc: 'Acompanhe tendências e padrões.' },
-        { titulo: 'Decisão', desc: 'Apoia planejamento e gestão.' }
-      ]
-    }
+  // ── AGENDA GERAL ──────────────────────────────────────────────
 
-    ,
-    aprovacoes: {
-      el: 'manual-aprovacoes-cards',
-      tipo: 'steps',
-      dados: [
-        { titulo: 'O que são solicitações', desc: 'Reservas de espaços que exigem aprovação (ex: Biblioteca) ou solicitações de cancelamento/alteração feitas por usuários comuns geram solicitações pendentes.' },
-        { titulo: 'Quem pode aprovar', desc: 'Apenas administradores e superadmins visualizam e gerenciam solicitações. Usuários comuns veem apenas as suas próprias.' },
-        { titulo: 'Aprovar uma solicitação', desc: 'Clique em Aprovar no card da solicitação. A ação vinculada (criar reserva, cancelar, alterar) é executada imediatamente após a confirmação.' },
-        { titulo: 'Recusar uma solicitação', desc: 'Clique em Recusar e informe o motivo (mínimo 5 caracteres). O solicitante recebe e-mail com o motivo da recusa.' },
-        { titulo: 'Filtros de status', desc: 'Use os botões Pendentes, Aprovadas, Recusadas e Todas para filtrar a lista. Os cards coloridos no topo mostram a contagem por categoria.' },
-        { titulo: 'Badge na sidebar', desc: 'O número vermelho ao lado de "Aprovações" na barra lateral indica solicitações pendentes. É atualizado automaticamente ao carregar o sistema.' },
-        { titulo: 'Dono do espaço', desc: 'O e-mail cadastrado como responsável de cada espaço (em Configurações > Espaços) recebe notificação automática quando uma nova solicitação é gerada para aquele espaço.' }
-      ]
-    },
+  const elAgenda = document.getElementById('manual-agenda-cards');
+  if (elAgenda) elAgenda.innerHTML = [
+    _step(1, 'Visualização da lista',
+      'Todas as reservas aparecem do mais recente para o mais antigo. Cada card mostra: espaço, data, horário, responsável, setor e status.'),
+    _step(2, 'Filtros de busca',
+      'Use o campo de busca para filtrar por nome da ação, responsável ou setor. O filtro acontece em tempo real, sem recarregar a página.'),
+    _step(3, 'Filtros de status',
+      'Botões no topo separam entre Confirmadas, Canceladas e Todas. O total de registros é atualizado automaticamente.'),
+    _step(4, 'Ver detalhes de uma reserva',
+      'Clique em qualquer card para abrir o modal de detalhes com todos os dados completos, incluindo itens solicitados e informações RECE (se houver).'),
+    _step(5, 'Editar sua reserva',
+      'Se você é o criador da reserva ou um admin, o botão Editar aparece no modal de detalhes. Clique para abrir o formulário pré-preenchido.'),
+    _step(6, 'Cancelar reserva',
+      'Apenas o criador ou um administrador pode cancelar. O sistema solicita confirmação. Cancelamentos no mesmo dia acionam notificação automática por e-mail ao responsável pelo espaço.'),
+    _step(7, 'Reservas com status RECE',
+      'Cards com o ícone de estrela amarela indicam eventos na Agenda RECE (públicos). Clique para ver os detalhes culturais do evento.'),
+    _tip('fa-info-circle', 'blue',
+      'Admins veem todas as reservas. Usuários comuns veem todas — mas só podem editar/cancelar as próprias.')
+  ].join('');
 
-    ia: {
-      el: 'manual-ia-cards',
-      tipo: 'steps',
-      dados: [
-        { titulo: 'Fazer uma pergunta', desc: 'Consulte a IA sobre reservas, disponibilidade, padrões de uso ou qualquer dado do sistema. A resposta é baseada exclusivamente nos registros internos do CCBJ.' },
-        { titulo: 'Gerar análise', desc: 'Escolha um tipo (uso de espaços, conflitos, recursos, otimização) e um período. A IA gera um relatório interpretado com insights e recomendações práticas.' },
-        { titulo: 'Sugerir reserva', desc: 'Descreva livremente o que precisa (ex: "oficina para 30 pessoas na quinta à tarde com projetor"). A IA verifica conflitos reais e preenche o formulário automaticamente.' },
-        { titulo: 'Analisar Dashboard', desc: 'Gera um resumo executivo das métricas atuais: pontos de atenção, oportunidades identificadas e recomendação prioritária.' },
-        { titulo: 'Modo Lote via IA', desc: 'Se a descrição mencionar múltiplas datas ou repetição, a IA ativa automaticamente o modo lote e preenche todas as datas sugeridas (máx. 8 por vez).' },
-        { titulo: 'Modo RECE via IA', desc: 'Se o pedido indicar evento público ou divulgação, a IA ativa o campo RECE e pré-preenche descrição, público-alvo e acesso.' },
-        { titulo: 'Salas disponíveis em tempo real', desc: 'Ao preencher data e horário no formulário de agendamento, o sistema exibe automaticamente quais espaços estão livres naquele período — sem necessidade de consultar a IA.' },
-        { titulo: 'Horários livres por espaço', desc: 'Ao selecionar um espaço e uma data, o sistema lista os intervalos disponíveis naquele dia com base nas reservas já existentes.' },
-        { titulo: 'Previsão contextual', desc: 'Conforme você preenche o formulário (nome da ação, setor, espaço), o sistema sugere horários e salas com base no histórico de uso e preferências anteriores.' },
-        { titulo: '⚠️ Limitações', desc: 'A IA usa apenas dados internos do sistema. Não acessa a internet nem informações externas ao CCBJ. Sempre revise os campos antes de confirmar o agendamento.' }
-      ]
-    }
-  };
+  // ── AGENDAMENTO ───────────────────────────────────────────────
 
+  const elAg = document.getElementById('manual-agendamento-cards');
+  if (elAg) elAg.innerHTML = [
+    _heading('Criando uma reserva passo a passo'),
+    _step(1, 'Selecione o espaço',
+      'Escolha a sala no campo "Espaço". A capacidade máxima é exibida automaticamente ao lado. Espaços sem disponibilidade no período desejado ficam destacados com aviso de conflito.'),
+    _step(2, 'Escolha a data',
+      'Clique no campo de data para abrir o calendário. Datas já totalmente ocupadas são indicadas visualmente. Selecione uma ou mais datas para agendamento em lote.'),
+    _step(3, 'Defina o horário',
+      'Preencha "Início" e "Término". O sistema verifica conflitos em tempo real: se houver sobreposição com outra reserva, uma mensagem de alerta aparece imediatamente.'),
+    _step(4, 'Preencha os dados da ação',
+      'Informe o nome da ação, o responsável pela atividade e o setor. Esses dados aparecem na Agenda Geral e nos relatórios.'),
+    _step(5, 'Adicione itens (opcional)',
+      'Se precisar de equipamentos (cadeiras extras, projetor, etc.), use o painel de Itens para solicitar a quantidade. A disponibilidade é verificada automaticamente.'),
+    _heading('Ativar RECE (evento público)'),
+    _step(6, 'O que é o campo RECE',
+      'RECE significa que a atividade será divulgada externamente como evento cultural do CCBJ. Ao ativar, um formulário adicional é exibido com campos específicos.'),
+    _step(7, 'Preencha os dados RECE',
+      'Informe: descrição pública do evento, público-alvo, nome do artista/grupo (se houver), faixa etária, tipo de evento e informações de acessibilidade.'),
+    _tip('fa-triangle-exclamation', 'amber',
+      'Use RECE apenas para atividades de difusão cultural. Reuniões internas, ensaios e manutenção não devem usar RECE.'),
+    _heading('Agendamento em lote'),
+    _step(8, 'Selecione múltiplas datas',
+      'No calendário, clique em mais de uma data para criar várias reservas de uma vez. Cada data gera um registro independente — datas com conflito são saltadas automaticamente.'),
+    _step(9, 'Confirmar e salvar',
+      'Clique em Salvar. Se o espaço exigir aprovação, a reserva entra no fluxo de solicitações (painel Aprovações). Caso contrário, é confirmada imediatamente.')
+  ].join('');
 
+  // ── AGENDA RECE ───────────────────────────────────────────────
 
-  Object.values(secoes).forEach(sec => {
-    const container = document.getElementById(sec.el);
-    if (!container) return;
+  const elRece = document.getElementById('manual-rece-cards');
+  if (elRece) elRece.innerHTML = [
+    _step(1, 'O que é a Agenda RECE',
+      'RECE — Registro de Eventos Culturais e Esportivos — é a agenda pública do CCBJ. Lista apenas eventos com o campo RECE ativado, separando-os das reservas internas.'),
+    _step(2, 'Diferença para a Agenda Geral',
+      'A Agenda Geral mostra todas as reservas (internas e públicas). A RECE exibe apenas eventos com dados de divulgação cultural — é voltada para comunicação externa e relatórios.'),
+    _step(3, 'Filtrar por espaço',
+      'Use o seletor de sala no topo para visualizar apenas os eventos de um determinado espaço. Útil para verificar a programação de uma sala específica.'),
+    _step(4, 'Filtrar por data',
+      'O calendário lateral permite navegar entre os meses e clicar em uma data para ver apenas os eventos daquele dia.'),
+    _step(5, 'Visualizar detalhes do evento',
+      'Clique em um evento para ver o card completo: descrição, artista, público-alvo, acessibilidade e horário. Admins veem também os botões de edição e cancelamento.'),
+    _step(6, 'Editar evento RECE',
+      'Apenas o criador da reserva ou um admin pode editar. Clique no botão Editar no card para abrir o formulário pré-preenchido com todos os dados RECE.'),
+    _step(7, 'Cancelar evento RECE',
+      'Cancela a reserva vinculada. O evento desaparece da RECE e fica marcado como cancelado na Agenda Geral. O sistema registra a ação na auditoria.'),
+    _tip('fa-lightbulb', 'purple',
+      'Informações RECE (descrição, artista, público) são preenchidas no formulário de Novo Agendamento, aba RECE. Edite a reserva para ajustá-las posteriormente.')
+  ].join('');
 
-    if (sec.tipo === 'cards') {
-      container.innerHTML = sec.dados.map(n => `
-        <div class="flex items-start gap-3 p-3 bg-slate-50 rounded-xl">
-          <div class="w-8 h-8 ${corBg(n.cor)} ${corTexto(n.cor)} rounded-lg flex items-center justify-center shrink-0">
-            <i class="fas ${n.icon} text-xs"></i>
-          </div>
-          <div>
-            <p class="font-black text-slate-800 text-xs">${n.titulo}</p>
-            <p class="text-[11px] text-slate-500 mt-0.5">${n.desc}</p>
-          </div>
-        </div>
-      `).join('');
-    }
+  // ── APROVAÇÕES ────────────────────────────────────────────────
 
-    if (sec.tipo === 'steps') {
-      container.innerHTML = sec.dados.map((n, i) => `
-        <div class="flex gap-3 p-3 bg-slate-50 rounded-xl">
-          <span class="w-6 h-6 bg-purple-600 text-white rounded-full flex items-center justify-center text-[10px] font-black">
-            ${i + 1}
-          </span>
-          <div>
-            <p class="font-black text-slate-800 text-xs">${n.titulo}</p>
-            <p class="text-[11px] text-slate-500 mt-0.5">${n.desc}</p>
-          </div>
-        </div>
-      `).join('');
-    }
+  const elAprov = document.getElementById('manual-aprovacoes-cards');
+  if (elAprov) elAprov.innerHTML = [
+    _heading('Aba: Solicitações de Reserva'),
+    _step(1, 'Quando uma solicitação é gerada',
+      'Espaços configurados como "sob aprovação" em Configurações > Espaços não criam reserva diretamente. A solicitação fica pendente até um admin ou responsável pelo espaço aprovar.'),
+    _step(2, 'Quem pode ver e aprovar',
+      'Admins e superadmins veem todas as solicitações. O responsável cadastrado no espaço também recebe notificação por e-mail e pode aprovar apenas as solicitações daquele espaço.'),
+    _step(3, 'Aprovar uma reserva',
+      'Clique no botão verde Aprovar no card. Um diálogo de confirmação aparece. Ao confirmar, a reserva é criada imediatamente e o solicitante recebe e-mail de confirmação.'),
+    _step(4, 'Recusar uma reserva',
+      'Clique no botão Recusar. Será obrigatório informar o motivo (mínimo 5 caracteres). O solicitante recebe e-mail com o motivo da recusa automaticamente.'),
+    _step(5, 'Filtros de status',
+      'Use os botões Pendentes / Aprovadas / Recusadas / Todas para filtrar a lista. O painel de estatísticas no topo mostra o total de cada categoria.'),
+    _tip('fa-bell', 'blue',
+      'O número vermelho ao lado de "Aprovações" na sidebar indica solicitações pendentes e é atualizado a cada carregamento do sistema.'),
+    _heading('Aba: Novos Usuários'),
+    _step(6, 'Como chega um novo usuário aqui',
+      'Quando alguém tenta criar uma conta no sistema pelo formulário de cadastro externo, a solicitação aparece nesta aba com os dados informados: nome e e-mail.'),
+    _step(7, 'Revisar os dados do solicitante',
+      'Cada card mostra nome, e-mail e data da solicitação. Verifique se a pessoa deve realmente ter acesso ao sistema antes de aprovar.'),
+    _step(8, 'Aprovar o cadastro',
+      'Clique em Aprovar. O acesso é criado imediatamente — o sistema usa o e-mail e a senha que o usuário cadastrou. Um e-mail de boas-vindas é enviado automaticamente ao novo usuário.'),
+    _step(9, 'Configurar permissões após aprovação',
+      'Após aprovar, o sistema redireciona automaticamente para o painel de Permissões com o novo usuário selecionado. Defina o perfil dele antes de fechar o painel.'),
+    _step(10,'Recusar o cadastro',
+      'Clique em Recusar e informe o motivo. O solicitante recebe e-mail explicando que o acesso não foi concedido, com o motivo informado.')
+  ].join('');
 
-  });
+  // ── DASHBOARD ─────────────────────────────────────────────────
+
+  const elDash = document.getElementById('manual-dashboard-cards');
+  if (elDash) elDash.innerHTML = [
+    _step(1, 'Indicadores principais',
+      'O painel exibe: total de reservas no período, taxa de ocupação por espaço, número de cancelamentos e eventos RECE realizados.'),
+    _step(2, 'Gráfico de ocupação por espaço',
+      'Barras horizontais mostram qual espaço é mais usado. Ao passar o mouse, são exibidos o número de reservas e o percentual do total.'),
+    _step(3, 'Distribuição por setor',
+      'Gráfico de pizza com a proporção de uso por setor institucional. Identifica quais áreas demandam mais espaços.'),
+    _step(4, 'Linha do tempo mensal',
+      'Curva de reservas por mês nos últimos 12 meses. Útil para identificar picos de demanda e planejar a programação institucional.'),
+    _step(5, 'Alterar período',
+      'O seletor de período no topo do dashboard filtra os dados para os últimos 7, 30, 60 ou 90 dias. Clique em Atualizar para recarregar.'),
+    _step(6, 'Análise por IA',
+      'O botão "Analisar com IA" (seção Inteligência IA) gera um resumo executivo das métricas atuais: pontos de atenção, oportunidades e recomendação principal.'),
+    _tip('fa-info-circle', 'blue',
+      'O Dashboard é visível apenas para usuários com permissão de visualizar o módulo Estratégia. Configure em Sistema > Permissões.')
+  ].join('');
+
+  // ── CONFIGURAÇÕES ─────────────────────────────────────────────
+
+  const elAdmin = document.getElementById('manual-admin-cards');
+  if (elAdmin) elAdmin.innerHTML = [
+    _heading('Espaços'),
+    _step(1, 'Cadastrar um novo espaço',
+      'Clique em "+ Novo Espaço". Informe nome, capacidade e o e-mail do responsável. O responsável receberá notificações automáticas de novas solicitações para aquele espaço.'),
+    _step(2, 'Responsável por dias da semana',
+      'É possível cadastrar responsáveis diferentes por dia da semana. Útil para espaços com gestão compartilhada. Clique em "+ Adicionar responsável" e defina os dias de atuação de cada um.'),
+    _step(3, 'Editar e excluir espaço',
+      'Use os botões de lápis e lixeira no card do espaço. Excluir um espaço não remove reservas existentes — apenas impede novos agendamentos.'),
+    _heading('Itens do almoxarifado'),
+    _step(4, 'Cadastrar item',
+      'Clique em "+ Novo Item". Informe nome, quantidade total disponível e categoria (equipamento, mobiliário, material). O sistema controla a disponibilidade por horário.'),
+    _step(5, 'Ajustar quantidade',
+      'Use os botões + e − no card do item para ajustar o estoque disponível. O sistema impede que a quantidade disponível fique abaixo de zero.'),
+    _heading('Setores'),
+    _step(6, 'Gerenciar setores institucionais',
+      'Setores são usados nas reservas para identificar a área responsável. Adicione, edite ou remova setores conforme a estrutura do CCBJ.'),
+    _heading('Administradores'),
+    _step(7, 'Adicionar administrador',
+      'Informe o e-mail do novo administrador e o nível de acesso (Admin ou Superadmin). O usuário já deve existir no sistema (ter feito login pelo menos uma vez).'),
+    _step(8, 'Remover administrador',
+      'Clique no ícone de lixeira ao lado do e-mail. Superadmins não podem remover o próprio acesso de superadmin — isso evita perda total de controle do sistema.'),
+    _tip('fa-triangle-exclamation', 'amber',
+      'Adicionar alguém como Admin ou Superadmin aqui não configura as permissões de módulo — use também o painel Permissões para definir o acesso detalhado.')
+  ].join('');
+
+  // ── PERMISSÕES ────────────────────────────────────────────────
+
+  const elPerm = document.getElementById('manual-permissoes-cards');
+  if (elPerm) elPerm.innerHTML = [
+    _heading('Visão geral do sistema de permissões'),
+    _card('fa-layer-group', 'purple', 'Como funciona',
+      'Cada usuário tem um <b>perfil base</b> que define o conjunto padrão de permissões. Sobre esse perfil, o admin pode aplicar ajustes manuais (conceder ou revogar ações específicas).'),
+    _card('fa-cubes', 'blue', 'Módulos controlados',
+      '<b>Espaços &amp; Agendamento</b> — Agenda Geral, Nova Reserva, Agenda RECE. <b>Aprovações</b> — painel de validação de solicitações. <b>Estratégia</b> — Dashboard e análises.'),
+    _card('fa-bolt', 'amber', 'Acesso ao Sistema (admin)',
+      'O acesso a Configurações, Permissões e Auditoria é controlado pela lista de Administradores (menu Configurações), não por permissões de módulo.'),
+
+    _heading('Perfis base disponíveis'),
+    _step(1, 'Visitante Controlado — padrão para usuários externos',
+      'Pode <b>visualizar</b> Espaços e Estratégia. Pode criar suas próprias reservas. Não vê Aprovações. É o perfil atribuído automaticamente a novos usuários externos aprovados.'),
+    _step(2, 'Visitante',
+      'Pode <b>visualizar</b> apenas Espaços. Não acessa Dashboard nem Aprovações. Perfil mais restritivo.'),
+    _step(3, 'Técnico',
+      'Pode <b>visualizar e editar</b> Espaços e Aprovações. Visualiza Dashboard. Ideal para equipe de apoio técnico.'),
+    _step(4, 'Comunicação',
+      'Pode <b>editar</b> Estratégia e visualizar Espaços e Aprovações. Ideal para equipe de divulgação.'),
+    _step(5, 'Gestor',
+      'Pode <b>editar e aprovar</b> nos três módulos. Próximo do admin, sem acesso ao Sistema.'),
+    _step(6, 'Admin',
+      'Acesso completo a todos os módulos (visualizar, editar, excluir). Acessa Configurações, Permissões e Auditoria.'),
+    _step(7, 'Superadmin',
+      'Tudo do Admin mais poder de editar outros superadmins, acessar rollback e gerenciar administradores. Não pode ser rebaixado pelo próprio sistema.'),
+
+    _heading('Como acessar o painel de permissões'),
+    _step(1, 'Abrir o painel',
+      'No menu lateral, clique em <b>Sistema → Permissões</b>. O botão aparece apenas para admins e superadmins.'),
+    _step(2, 'Lista de usuários',
+      'À esquerda aparece a lista de todos os usuários do sistema. Use a busca no topo para filtrar por nome ou e-mail. O perfil atual de cada usuário é exibido abaixo do nome.'),
+    _step(3, 'Sincronizar usuários',
+      'Se um usuário não aparecer na lista, clique no botão <b>Sync</b> no cabeçalho do painel. O sistema importa automaticamente todos que acessaram o sistema, administradores cadastrados e usuários criados via aprovação.'),
+
+    _heading('Como configurar as permissões de um usuário'),
+    _step(1, 'Selecionar o usuário',
+      'Clique no nome do usuário na lista à esquerda. O painel editor abre à direita com os dados atuais do usuário.'),
+    _step(2, 'Escolher o perfil base',
+      'No dropdown "Perfil base", selecione o perfil desejado. Isso define as permissões padrão. Ao trocar o perfil, as permissões automáticas são recalculadas.'),
+    _step(3, 'Calcular permissões automáticas',
+      'Clique no botão <b>Calcular Auto</b> (se disponível) para ver quais permissões são concedidas automaticamente com base no cargo, função e setor cadastrado na Origem Organizacional.'),
+    _step(4, 'Revisar a grade de permissões',
+      'A tabela "Permissões Finais" mostra o resultado: cada linha é um módulo, cada coluna é uma ação (Visualizar / Editar / Excluir). Pontos verdes = permitido; pontos vermelhos = bloqueado.'),
+    _step(5, 'Ajustar manualmente',
+      'Na tabela "Ajustes Manuais", cada célula tem um toggle com três estados: <b>✓ verde</b> (conceder independente do perfil), <b>✗ vermelho</b> (bloquear independente do perfil), <b>— neutro</b> (seguir o perfil base).'),
+    _step(6, 'Salvar as alterações',
+      'Clique no botão <b>Salvar</b> no cabeçalho do editor. O sistema registra a alteração na auditoria de permissões com data, hora e quem fez a mudança.'),
+
+    _heading('Origem organizacional'),
+    _step(1, 'O que é',
+      'Dados como cargo, função, setor e os espaços dos quais o usuário é responsável podem gerar permissões automáticas. Por exemplo: responsável por um espaço ganha automaticamente permissão de editar aquele espaço.'),
+    _step(2, 'Editar a origem',
+      'Clique em <b>Editar</b> no painel "Origem Organizacional". Preencha cargo, função, setor e os IDs de espaços dos quais o usuário é responsável (separados por vírgula).'),
+    _step(3, 'Recalcular após edição',
+      'Depois de salvar a origem, clique em <b>Calcular Auto</b> para atualizar as permissões automáticas. Depois salve o perfil completo.'),
+
+    _heading('Fluxo completo: aprovação de novo usuário externo'),
+    _step(1, 'Usuário solicita acesso', 'O usuário preenche o formulário de cadastro externo e aguarda aprovação.'),
+    _step(2, 'Admin recebe notificação', 'O(s) admin(s) recebem e-mail informando que há uma nova solicitação. Acesse Aprovações → Novos Usuários.'),
+    _step(3, 'Aprovar o cadastro', 'Clique em Aprovar. O acesso é criado e um e-mail de boas-vindas é enviado ao usuário.'),
+    _step(4, 'Configurar permissões', 'O sistema redireciona automaticamente para o painel Permissões com o novo usuário selecionado. Escolha o perfil base (padrão: Visitante Controlado) e salve.'),
+    _tip('fa-circle-check', 'green',
+      'O perfil "Visitante Controlado" é seguro para começar: dá acesso básico a Espaços e Dashboard. Promova o usuário para Técnico, Gestor ou Admin quando necessário.'),
+
+    _heading('Proteções do sistema'),
+    _tip('fa-shield-halved', 'purple',
+      'Superadmins não podem rebaixar a si mesmos. Admins não podem editar permissões de superadmins. Isso garante que o sistema nunca fique sem controle administrativo.')
+  ].join('');
+
+  // ── AUDITORIA ─────────────────────────────────────────────────
+
+  const elAudit = document.getElementById('manual-auditoria-cards');
+  if (elAudit) elAudit.innerHTML = [
+    _step(1, 'O que é registrado',
+      'Toda ação relevante gera um log: criação, edição, cancelamento e exclusão de reservas; alterações em espaços, itens e setores; mudanças de permissões; aprovações e recusas.'),
+    _step(2, 'Colunas do log',
+      '<b>Data/Hora</b> — quando ocorreu (dd/mm/aaaa hh:mm). <b>Usuário</b> — quem executou. <b>Ação</b> — tipo (CRIAÇÃO, EDIÇÃO, CANCELAMENTO…). <b>Alvo</b> — o registro afetado. <b>Detalhes</b> — informação adicional. <b>Antes / Depois</b> — valor anterior e novo valor do campo alterado.'),
+    _step(3, 'Busca e filtros',
+      'Use o campo de busca no topo para filtrar por usuário, ação ou alvo. Os resultados são filtrados em tempo real.'),
+    _step(4, 'Rollback (superadmin)',
+      'Cada linha tem um botão de seta (↩) visível apenas para superadmins. Ao clicar, o sistema desfaz aquela ação específica: cancela a reserva criada, ou restaura a reserva cancelada, conforme o tipo.'),
+    _tip('fa-triangle-exclamation', 'red',
+      'O rollback é irreversível — não existe "desfazer o rollback". Use apenas quando tiver certeza de que a ação precisa ser revertida.'),
+    _tip('fa-clock', 'blue',
+      'O log exibe no máximo os últimos 1000 registros, do mais recente para o mais antigo. Ações muito antigas podem não aparecer na interface mas permanecem na planilha.')
+  ].join('');
+
+  // ── INTELIGÊNCIA IA ───────────────────────────────────────────
+
+  const elIA = document.getElementById('manual-ia-cards');
+  if (elIA) elIA.innerHTML = [
+    _step(1, 'Fazer uma pergunta (chat)',
+      'Acesse Estratégia → Inteligência IA e clique em "Conversar com IA". Digite sua dúvida em linguagem natural. A IA responde com base nos dados reais do sistema (reservas, espaços, ocupação).'),
+    _step(2, 'Gerar relatório de análise',
+      'Clique em "Gerar Relatório". Escolha um tipo (uso de espaços, conflitos, recursos, otimização) e um período. A IA processa os dados e retorna insights com recomendações práticas.'),
+    _step(3, 'Sugerir agendamento',
+      'Descreva o que precisa em linguagem livre (ex: "oficina para 30 pessoas na quinta à tarde com projetor"). A IA verifica conflitos reais e preenche o formulário automaticamente.'),
+    _step(4, 'Analisar o Dashboard',
+      'Na tela do Dashboard, clique em "Analisar com IA". Recebe um resumo executivo das métricas atuais: pontos de atenção, oportunidades e recomendação prioritária.'),
+    _step(5, 'Modo lote via IA',
+      'Se a descrição mencionar múltiplas datas ou repetição (ex: "toda segunda-feira de junho"), a IA ativa o modo lote e preenche todas as datas automaticamente (máx. 8 por vez).'),
+    _step(6, 'Modo RECE via IA',
+      'Se o pedido indicar evento público ou divulgação, a IA ativa automaticamente o campo RECE e pré-preenche descrição, público-alvo e tipo de acesso.'),
+    _tip('fa-triangle-exclamation', 'amber',
+      'A IA usa apenas dados internos do CCBJ. Não acessa a internet. Sempre revise os campos antes de confirmar o agendamento gerado automaticamente.'),
+    _tip('fa-lock', 'purple',
+      'Nenhuma informação do CCBJ é enviada a terceiros além da API de IA configurada internamente pelo administrador do sistema.')
+  ].join('');
 }
+
 
 // ============================================================
 // PAINEL DE INTELIGÊNCIA ARTIFICIAL — CCBJ

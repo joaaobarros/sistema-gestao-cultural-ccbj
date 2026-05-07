@@ -23,11 +23,12 @@
         <button onclick="mudarAbaManual('agenda')"       id="tab-manual-agenda"       class="tab-manual px-4 py-3 text-[10px] font-black uppercase tracking-wider whitespace-nowrap text-slate-400 border-b-2 border-transparent">Agenda Geral</button>
         <button onclick="mudarAbaManual('agendamento')"  id="tab-manual-agendamento"  class="tab-manual px-4 py-3 text-[10px] font-black uppercase tracking-wider whitespace-nowrap text-slate-400 border-b-2 border-transparent">Agendamento</button>
         <button onclick="mudarAbaManual('rece')"         id="tab-manual-rece"         class="tab-manual px-4 py-3 text-[10px] font-black uppercase tracking-wider whitespace-nowrap text-slate-400 border-b-2 border-transparent">Agenda RECE</button>
-        <button onclick="mudarAbaManual('admin')"        id="tab-manual-admin"        class="tab-manual px-4 py-3 text-[10px] font-black uppercase tracking-wider whitespace-nowrap text-slate-400 border-b-2 border-transparent">Configurações</button>
-        <button onclick="mudarAbaManual('auditoria')"    id="tab-manual-auditoria"    class="tab-manual px-4 py-3 text-[10px] font-black uppercase tracking-wider whitespace-nowrap text-slate-400 border-b-2 border-transparent">Auditoria</button>
-        <button onclick="mudarAbaManual('dashboard')"    id="tab-manual-dashboard"    class="tab-manual px-4 py-3 text-[10px] font-black uppercase tracking-wider whitespace-nowrap text-slate-400 border-b-2 border-transparent">Dashboard</button>
-        <button onclick="mudarAbaManual('ia')"           id="tab-manual-ia"           class="tab-manual px-4 py-3 text-[10px] font-black uppercase tracking-wider whitespace-nowrap text-slate-400 border-b-2 border-transparent">Inteligência</button>
         <button onclick="mudarAbaManual('aprovacoes')"   id="tab-manual-aprovacoes"   class="tab-manual px-4 py-3 text-[10px] font-black uppercase tracking-wider whitespace-nowrap text-slate-400 border-b-2 border-transparent">Aprovações</button>
+        <button onclick="mudarAbaManual('dashboard')"    id="tab-manual-dashboard"    class="tab-manual px-4 py-3 text-[10px] font-black uppercase tracking-wider whitespace-nowrap text-slate-400 border-b-2 border-transparent">Dashboard</button>
+        <button onclick="mudarAbaManual('admin')"        id="tab-manual-admin"        class="tab-manual px-4 py-3 text-[10px] font-black uppercase tracking-wider whitespace-nowrap text-slate-400 border-b-2 border-transparent">Configurações</button>
+        <button onclick="mudarAbaManual('permissoes')"   id="tab-manual-permissoes"   class="tab-manual px-4 py-3 text-[10px] font-black uppercase tracking-wider whitespace-nowrap text-slate-400 border-b-2 border-transparent">Permissões</button>
+        <button onclick="mudarAbaManual('auditoria')"    id="tab-manual-auditoria"    class="tab-manual px-4 py-3 text-[10px] font-black uppercase tracking-wider whitespace-nowrap text-slate-400 border-b-2 border-transparent">Auditoria</button>
+        <button onclick="mudarAbaManual('ia')"           id="tab-manual-ia"           class="tab-manual px-4 py-3 text-[10px] font-black uppercase tracking-wider whitespace-nowrap text-slate-400 border-b-2 border-transparent">Inteligência</button>
       </div>
 
       <!-- Área rolável do conteúdo -->
@@ -100,11 +101,14 @@
 
         <div id="conteudo-manual-aprovacoes" class="conteudo-manual hidden space-y-4">
           <h3 class="font-black text-slate-800 flex items-center gap-2"><i class="fas fa-check-double text-purple-500"></i> Aprovações</h3>
-          <p class="text-[12px] text-slate-600">Fluxo de solicitações que requerem validação de um administrador antes de serem executadas.</p>
+          <p class="text-[12px] text-slate-600">Central de validação de solicitações de reserva e de novos cadastros de usuários externos.</p>
           <div id="manual-aprovacoes-cards" class="space-y-3"></div>
-          <div class="p-3 bg-amber-50 border border-amber-100 rounded-xl text-[11px] text-amber-700">
-            <i class="fas fa-at mr-1"></i>Configure o e-mail do responsável em Configurações > Espaços para receber notificações automáticas.
-          </div>
+        </div>
+
+        <div id="conteudo-manual-permissoes" class="conteudo-manual hidden space-y-4">
+          <h3 class="font-black text-slate-800 flex items-center gap-2"><i class="fas fa-user-lock text-purple-500"></i> Gestão de Permissões</h3>
+          <p class="text-[12px] text-slate-600">Controle quem acessa cada módulo e com quais capacidades. Exclusivo para administradores e superadmins.</p>
+          <div id="manual-permissoes-cards" class="space-y-3"></div>
         </div>
 
       </div>
