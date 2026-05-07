@@ -16,7 +16,12 @@
 
       <!-- Header -->
       <div class="bg-gradient-to-br from-purple-700 to-purple-900 px-8 pt-10 pb-8 text-center">
-        <div class="w-16 h-16 bg-white/15 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-white/20">
+        <img src="https://ccbj.org.br/wp-content/themes/CCBJ/assets/images/logo.png"
+             alt="CCBJ" class="h-16 mx-auto mb-4 object-contain drop-shadow-lg"
+             onerror="this.style.display='none';document.getElementById('loginLogoFallback').style.display='flex'">
+        <div id="loginLogoFallback"
+             class="w-16 h-16 bg-white/15 rounded-2xl items-center justify-center mx-auto mb-4 border border-white/20"
+             style="display:none">
           <i class="fas fa-building-columns text-white text-2xl"></i>
         </div>
         <h1 class="text-white text-2xl font-bold tracking-tight">Sistema de Gestão de Espaços</h1>
