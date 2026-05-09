@@ -25,7 +25,7 @@
             <i class="fas fa-stream mr-1"></i>Diagrama
           </button>
           <button onclick="bloquearDiaCCBJ()" id="btnCCBJFechado"
-            class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-black rounded-xl uppercase transition-all flex items-center gap-2">
+            class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-black rounded-xl uppercase transition-all flex items-center gap-2 hidden">
             <i class="fas fa-lock"></i>CCBJ Fechado
           </button>
         </div>
@@ -259,11 +259,12 @@
                 <div>
                   <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Turno do bloqueio</label>
                   <select id="ccbjTurno"
-                    class="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl text-sm text-white outline-none focus:border-red-500 font-semibold">
-                    <option value="integral">Integral — 08:00 às 22:00</option>
-                    <option value="manha">Manhã — 08:00 às 12:00</option>
-                    <option value="tarde">Tarde — 12:00 às 18:00</option>
-                    <option value="noite">Noite — 18:00 às 22:00</option>
+                    class="w-full px-3 py-2.5 rounded-xl text-sm font-semibold outline-none focus:ring-2 focus:ring-red-500 border-0"
+                    style="background:#1e293b;color:#f1f5f9">
+                    <option value="integral" style="background:#1e293b;color:#f1f5f9">Integral — 08:00 às 22:00</option>
+                    <option value="manha"    style="background:#1e293b;color:#f1f5f9">Manhã — 08:00 às 12:00</option>
+                    <option value="tarde"    style="background:#1e293b;color:#f1f5f9">Tarde — 12:00 às 18:00</option>
+                    <option value="noite"    style="background:#1e293b;color:#f1f5f9">Noite — 18:00 às 22:00</option>
                   </select>
                 </div>
 

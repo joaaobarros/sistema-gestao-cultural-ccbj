@@ -87,11 +87,23 @@ function popularSelectsIniciais() {
   }
 
   // ===== SETORES =====
-  const setores = AppState.colecoes.setores || [];
+  // Combina setores da aba Listas + reservas em memória + cache localStorage
+  const _setoresBase = (AppState.colecoes.setores || []).map(s => String(s).trim()).filter(Boolean);
+  const _reservasFonte = AppState.colecoes.reservas && AppState.colecoes.reservas.length
+    ? AppState.colecoes.reservas
+    : (() => { try { return JSON.parse(localStorage.getItem('cacheReservas') || '[]'); } catch(e) { return []; } })();
+  const _setoresReservas = [...new Set(
+    _reservasFonte.map(r => String(r[9] || '').trim()).filter(Boolean)
+  )];
+  const setores = [...new Set([..._setoresBase, ..._setoresReservas])].sort();
   const optionsSetor = setores
     .filter(s => s && String(s).trim() !== '')
     .map(setor => `<option value="${escaparHTML(setor)}">${escaparHTML(setor)}</option>`)
     .join('');
+
+  // Mostra/esconde botão CCBJ Fechado conforme permissão
+  const _btnCCBJ = document.getElementById('btnCCBJFechado');
+  if (_btnCCBJ) _btnCCBJ.classList.toggle('hidden', !AppState.usuario.isAdmin);
 
   if (selSetor) selSetor.innerHTML = '<option value="">Selecione o setor...</option>' + optionsSetor;
   if (selFiltroSetor) selFiltroSetor.innerHTML = '<option value="">TODOS OS SETORES</option>' + optionsSetor;
@@ -171,16 +183,11 @@ function popularSelectsIniciais() {
         `<option value="${escaparHTML(String(s[0]))}">${escaparHTML(String(s[1]))}</option>`
       ).join('');
 
-    if (agendaSala.options.length > 1) {
-      agendaSala.value = agendaSala.options[1].value;
-    }
-
     if (document.getElementById('viewAgendaGoogle') &&
         !document.getElementById('viewAgendaGoogle').classList.contains('hidden')) {
       window._agendaGoogleSemana = 0;
       renderizarModoAgendaGoogle();
     }
-
   }
 
   // ===== AGENDA RECE =====
@@ -2312,13 +2319,10 @@ function alternarModoVisualizacao(modo) {
     agendaV?.classList.remove('hidden');
     setAtivo(btnAgend);
     window._agendaGoogleSemana = window._agendaGoogleSemana || 0;
-    // Reseta flag para forçar seleção inicial de sala na primeira entrada
+    // Padrão: mostrar todos os espaços (Todas as salas) ao entrar no modo Agenda
     window._agendaGoogleSalaForced = false;
     const selAgenda = document.getElementById('agendaGoogleSala');
-    if (selAgenda && !selAgenda.value && selAgenda.options.length > 1) {
-      selAgenda.value = selAgenda.options[1].value;
-      window._agendaGoogleSalaForced = true;
-    }
+    if (selAgenda) selAgenda.value = '';
     _initDatePickerAgenda();
     renderizarModoAgendaGoogle();
   } else if (modo === 'diagrama') {
@@ -2511,15 +2515,8 @@ function renderizarModoAgendaGoogle() {
   }
 
   const apenasMinhas = window._filtroMinhasAgenda || false;
-  // Respeita a seleção do usuário — não força a primeira sala se ele escolheu "Todas as salas"
+  // Respeita a seleção: vazio = "Todas as salas" — nunca força uma sala específica
   let salaId = document.getElementById('agendaGoogleSala')?.value || '';
-  // Fallback apenas se a agenda nunca teve uma sala definida (primeira carga)
-  if (!salaId && !apenasMinhas && AppState.colecoes.salas?.length && !window._agendaGoogleSalaForced) {
-    salaId = String(AppState.colecoes.salas[0][0]);
-    const selEl = document.getElementById('agendaGoogleSala');
-    if (selEl) selEl.value = salaId;
-    window._agendaGoogleSalaForced = true;
-  }
 
   const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
   const dow = hoje.getDay() === 0 ? 6 : hoje.getDay() - 1;

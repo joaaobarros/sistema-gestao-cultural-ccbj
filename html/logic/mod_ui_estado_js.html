@@ -1808,6 +1808,10 @@ function inicializarApp() {
     localStorage.setItem('cacheReservas_ts', Date.now());
   } catch(e) { console.warn('Erro ao salvar cache', e); }
   indexarReservas();
+  // Re-popula selects de setor com setores extraídos das reservas
+  if (typeof popularSelectsIniciais === 'function') {
+    try { popularSelectsIniciais(); } catch(e) { console.warn(e); }
+  }
 
   GAS.admin.obterEmailsSistema(function(emails) {
     AppState.emailsSistema = emails || [];
