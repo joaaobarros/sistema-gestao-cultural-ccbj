@@ -121,7 +121,9 @@ const MODULOS = {
     prop:   PROP.MASTER,
     abas: {
       'Administradores':      ['Email', 'NivelAcesso'],
-      'Configuracoes':        ['ID', 'Espaço', 'Capacidade', 'Resumo Itens', 'Email Responsável'],
+      'Configuracoes':        ['ID', 'Espaço', 'Capacidade', 'Resumo Itens', 'Email Responsável',
+                               'PossuiChaves', 'QtdChavesUsoComum', 'QtdChavesReserva',
+                               'AceitaReserva', 'ExigeProtocoloChave', 'LocalizacaoChave', 'ObservacoesInternas'],
       'Listas':               ['Setores'],
       'Logs':                 ['Data/Hora', 'Usuário', 'Ação', 'Tipo', 'Alvo', 'Detalhes', 'Dados Antes', 'Dados Depois'],
       'LogAcessos':           ['Data/Hora', 'Email', 'Nome Usuário', 'Nível Acesso', 'IP Aprox.', 'User Agent'],
@@ -273,6 +275,34 @@ const MODULOS = {
     'Itens': [
       'ID Item','Nome','Categoria','Quantidade Total',
       'Localização','Status de Uso'
+    ],
+
+    // =========================
+    // PROTOCOLO DE CHAVES
+    // =========================
+    'Chaves': [
+      'ID','EspacoId','CodigoPatrimonial','TipoChave',
+      'StatusAtual','Ativa','Observacoes','CriadaEm','AtualizadaEm'
+    ],
+
+    'ProtocolosChaves': [
+      'ProtocoloId','ChaveId','EspacoId',
+      'ResponsavelAtualId','ResponsavelAtualNome',
+      'SolicitanteId','SolicitanteNome',
+      'SetorId','SetorNome',
+      'DataHoraSolicitacao','DataHoraRetirada','DataHoraPrevistaDevolucao','DataHoraDevolucao',
+      'Status','Observacoes',
+      'EntreguePorId','EntreguePorNome',
+      'RecebidoPorId','RecebidoPorNome',
+      'DevolucaoRecebidaPorId','DevolucaoRecebidaPorNome',
+      'ReservaVinculadaId','Origem',
+      'TransferenciaDestinoId','TransferenciaDestinoNome'
+    ],
+
+    'HistoricoChaves': [
+      'ID','ProtocoloId','ChaveId','DataHora',
+      'Acao','UsuarioId','UsuarioNome',
+      'StatusAnterior','StatusNovo','Observacoes','AgenteOrigem'
     ]
 
     }

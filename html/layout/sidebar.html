@@ -95,6 +95,25 @@
         </div>
       </div>
 
+      <!-- ── INFRAESTRUTURA ─────────────────────────────────── -->
+      <div class="mb-1">
+        <button onclick="toggleModulo('mod-infraestrutura')"
+          class="w-full flex items-center justify-between px-3 py-2 text-[9px] font-black text-slate-500 uppercase tracking-widest hover:text-purple-300 transition-colors">
+          <span><i class="fas fa-tools mr-2 text-slate-600"></i>Infraestrutura</span>
+          <i id="icon-mod-infraestrutura" class="fas fa-chevron-down text-[8px] text-slate-600"></i>
+        </button>
+
+        <div id="mod-infraestrutura" class="space-y-0.5 pl-2 hidden">
+
+          <button data-aba="aba-protocolo-chaves" class="tab-btn nav-item w-full">
+            <i class="fas fa-key w-5 text-center text-xs"></i>
+            <span class="text-xs font-semibold flex-1 text-left">Protocolo de Chaves</span>
+            <span id="badgeChavesPendentes" class="hidden min-w-[18px] h-[18px] bg-amber-500 text-white text-[9px] font-black rounded-full flex items-center justify-center px-1">0</span>
+          </button>
+
+        </div>
+      </div>
+
       <!-- ── ESTRATÉGIA ────────────────────────────────────── -->
       <div class="mb-1">
         <button onclick="toggleModulo('mod-estrategia')"
@@ -222,7 +241,7 @@
   var STORE_KEY = 'sidebar_modules_v2';
   function _salvarEstado() {
     var estado = {};
-    ['mod-espacos','mod-comunicacao','mod-estrategia','mod-sistema'].forEach(function(id) {
+    ['mod-espacos','mod-infraestrutura','mod-comunicacao','mod-estrategia','mod-sistema'].forEach(function(id) {
       var el = document.getElementById(id);
       if (el) estado[id] = !el.classList.contains('hidden');
     });

@@ -1,6 +1,6 @@
 # Arquitetura de Permissões — Sistema CCBJ
 
-> Atualizado: 2026-05-06 — Refactor Fase 2
+> Atualizado: 2026-05-09 — DataLayer registrado no Setup; modifyJSON atômico
 
 ---
 
@@ -138,6 +138,61 @@ mod_permissoes_v2_js   ← define temPermissao, carregarPermissoes, aplicarPermi
 integracao_reserva_comunicacao_js
 bootstrap_js           ← ÚLTIMO: dispara DOMContentLoaded handlers
 ```
+
+---
+
+## Persistência — DataLayer (CCBJ_DATA)
+
+As permissões v2 são persistidas em arquivos JSON no Google Drive, gerenciados por `DataLayer.gs`.
+
+### Arquivos relevantes
+
+| Arquivo | Conteúdo |
+|---------|----------|
+| `permissoes_v2.json` | Array de registros `{email, perfil_base, origem, permissoes_automaticas, permissoes_manuais, permissoes_finais, atualizadoEm}` |
+| `usuarios_sistema.json` | Cache de usuários conhecidos (email, nome, configurado, ultimoAcesso) |
+| `auditoria_permissoes.json` | Log de alterações com editor/alvo/antes/depois/timestamp |
+
+### Pasta CCBJ_DATA — registro no Setup
+
+A pasta `CCBJ_DATA` e seus arquivos são registrados durante o setup:
+
+```
+inicializarSistema()  →  inicializarDataLayer()
+recriarEstrutura()    →  inicializarDataLayer()
+```
+
+`inicializarDataLayer()` (Setup.js):
+- Abre a pasta pelo ID salvo em `PropertiesService` (`FOLDER_ID_DATA`)
+- Se o ID não existir ou for inválido, faz fallback para busca por nome e registra o ID encontrado
+- Pré-cria todos os arquivos listados em `_DATA_FILES` que estiverem ausentes (**nunca sobrescreve dados existentes**)
+
+`DataLayer.getDataFolder()` usa o mesmo ID (`FOLDER_ID_DATA`) via PropertiesService + cache em memória (`_dataFolderCache`) — elimina a busca por nome a cada chamada.
+
+> **Ação necessária em produção após este deploy:** executar `inicializarDataLayer()` ou `recriarEstrutura()` uma vez no editor GAS para registrar o ID da pasta.
+
+### Operações disponíveis
+
+| Função | Lock | Comportamento em corrupção |
+|--------|------|---------------------------|
+| `readJSON(nome)` | não | retorna `[]`, preserva arquivo |
+| `writeJSON(nome, data)` | sim (30s) | lança exceção |
+| `modifyJSON(nome, fn)` | sim (30s) | lança exceção, não escreve |
+
+`modifyJSON` é a operação correta para qualquer read-modify-write crítico. Lê, transforma via `fn(data) → newData` e grava tudo sob o mesmo lock — sem race condition.
+
+### Escrita atômica de permissões
+
+`salvarPermissoesUsuarioV2` usa `modifyJSON('permissoes_v2.json', fn)`:
+
+```js
+modifyJSON('permissoes_v2.json', function(lista) {
+  // encontra e substitui, ou insere
+  return listaAtualizada;
+});
+```
+
+A leitura inicial da função (para validação e auditoria) continua usando `readJSON`; apenas a escrita é atômica. Isso elimina o race condition que podia fazer dois admins salvando simultaneamente se sobrescreverem.
 
 ---
 

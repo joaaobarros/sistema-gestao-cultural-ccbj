@@ -47,6 +47,7 @@ function mostrarAba(idAba) {
     'aba-rh','aba-eficiencia','aba-contratos-fin','aba-contratacoes',
     'aba-codip','aba-rel-financeiros','aba-escuta'
   ];
+  // aba-protocolo-chaves é operacional autorizada — não bloquear
   if (_abasBloqueadas.indexOf(idAba) !== -1) {
     if (idAba !== 'aba-lista-reservas') mostrarAba('aba-lista-reservas');
     return;
@@ -56,14 +57,15 @@ function mostrarAba(idAba) {
   if (typeof temPermissao === 'function') {
 
     const mapa = {
-      'aba-lista-reservas':   'espacos',
-      'aba-nova-reserva':     'espacos',
-      'aba-agenda-rece':      'espacos',
-      'aba-aprovacoes':       'reservas',
-      'aba-dashboard':        'estrategia',
-      'aba-gestao-admin':     'sistema',
-      'aba-auditoria':        'sistema',
-      'aba-permissoes-v2':    'sistema'
+      'aba-lista-reservas':     'espacos',
+      'aba-nova-reserva':       'espacos',
+      'aba-agenda-rece':        'espacos',
+      'aba-aprovacoes':         'reservas',
+      'aba-protocolo-chaves':   'espacos',
+      'aba-dashboard':          'estrategia',
+      'aba-gestao-admin':       'sistema',
+      'aba-auditoria':          'sistema',
+      'aba-permissoes-v2':      'sistema'
     };
 
     var mod = mapa[idAba];
@@ -90,16 +92,17 @@ function mostrarAba(idAba) {
     abaAlvo.classList.remove('hidden');
 
     const titulos = {
-      'aba-lista-reservas':  'Agenda Geral',
-      'aba-nova-reserva':    (typeof AppState !== 'undefined' && (AppState.editandoId || AppState.editandoReceId))
-                               ? 'Editar Reserva' : 'Novo Agendamento',
-      'aba-agenda-rece':     'Agenda RECE',
-      'aba-codip':           'Relatórios CODIP',
-      'aba-gestao-admin':    'Configurações do Sistema',
-      'aba-auditoria':       'Painel de Auditoria',
-      'aba-dashboard':       'Dashboard',
-      'aba-aprovacoes':      'Aprovações',
-      'aba-permissoes-v2':   'Gestão de Permissões'
+      'aba-lista-reservas':    'Agenda Geral',
+      'aba-nova-reserva':      (typeof AppState !== 'undefined' && (AppState.editandoId || AppState.editandoReceId))
+                                 ? 'Editar Reserva' : 'Novo Agendamento',
+      'aba-agenda-rece':       'Agenda RECE',
+      'aba-codip':             'Relatórios CODIP',
+      'aba-gestao-admin':      'Configurações do Sistema',
+      'aba-auditoria':         'Painel de Auditoria',
+      'aba-dashboard':         'Dashboard',
+      'aba-aprovacoes':        'Aprovações',
+      'aba-permissoes-v2':     'Gestão de Permissões',
+      'aba-protocolo-chaves':  'Protocolo de Chaves'
     };
 
     const titulo = document.getElementById('tituloAba');

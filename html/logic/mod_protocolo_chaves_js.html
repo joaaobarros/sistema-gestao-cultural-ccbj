@@ -1,0 +1,1101 @@
+<!--
+@file logic/mod_protocolo_chaves_js.html
+@layer frontend/domain
+@description Lógica JavaScript completa do módulo de Protocolo de Chaves.
+             Gerencia estado local, renderização e chamadas ao GAS.chaves.
+@responsibility Carregar dados, renderizar listas/cards, handlers de ação, validações frontend.
+@dependencies GAS.chaves (server_bridge_js), AppState, Swal
+-->
+<script>
+
+// ══════════════════════════════════════════════════════════════════
+// BLOCO: Estado local do módulo
+// ══════════════════════════════════════════════════════════════════
+
+const _chvState = {
+  dados: null,         // retorno de chaves_obterDados
+  protocolos: [],      // lista completa
+  subAbaaAtiva: 'painel',
+  subGerenciarAtiva: 'solicitadas',
+  carregado: false
+};
+
+// ══════════════════════════════════════════════════════════════════
+// BLOCO: Enums e helpers de display
+// ══════════════════════════════════════════════════════════════════
+
+const _CHV_STATUS_LABEL = {
+  SOLICITADA:                     'Solicitada',
+  AGUARDANDO_CONFIRMACAO_USUARIO: 'Ag. usuário confirmar',
+  AGUARDANDO_CONFIRMACAO_INFRA:   'Ag. infra confirmar',
+  RETIRADA:                       'Retirada',
+  DEVOLVIDA:                      'Devolvida',
+  ATRASADA:                       'Atrasada',
+  CANCELADA:                      'Cancelada',
+  NEGADA:                         'Negada',
+  TRANSFERENCIA_PENDENTE:         'Transferência pendente',
+  TRANSFERIDA:                    'Transferida'
+};
+
+const _CHV_TIPO_LABEL = { COMUM: 'Uso Comum', RESERVA: 'Reserva', MASTER: 'Master' };
+const _CHV_STATUS_CHAVE_LABEL = {
+  DISPONIVEL: 'Disponível', EM_USO: 'Em uso',
+  MANUTENCAO: 'Manutenção', BLOQUEADA: 'Bloqueada', EXTRAVIADA: 'Extraviada'
+};
+
+function _chvBadge(status) {
+  const label = _CHV_STATUS_LABEL[status] || status;
+  return `<span class="chv-badge chv-badge-${status}">${label}</span>`;
+}
+
+function _chvChaveStatusCor(status) {
+  const m = { DISPONIVEL: 'text-green-600', EM_USO: 'text-blue-600',
+               MANUTENCAO: 'text-amber-600', BLOQUEADA: 'text-red-600', EXTRAVIADA: 'text-red-700' };
+  return m[status] || 'text-slate-500';
+}
+
+function _chvNomeEspaco(id) {
+  if (!_chvState.dados) return id;
+  const e = (_chvState.dados.espacos || []).find(function(e) { return e.id === id; });
+  return e ? e.nome : id;
+}
+
+function _chvDadosChave(id) {
+  if (!_chvState.dados) return null;
+  return (_chvState.dados.chaves || []).find(function(c) { return c.id === id; });
+}
+
+function _chvFormatarDt(iso) {
+  if (!iso) return '—';
+  try {
+    const d = new Date(iso);
+    return d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric',
+                                       hour: '2-digit', minute: '2-digit' });
+  } catch(e) { return iso; }
+}
+
+function _chvFormatarData(iso) {
+  if (!iso) return '—';
+  try {
+    const d = new Date(iso);
+    return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  } catch(e) { return iso; }
+}
+
+function _chvEhAtrasado(protocolo) {
+  if (!protocolo.dtPrevistaDev || protocolo.status === 'DEVOLVIDA') return false;
+  return new Date(protocolo.dtPrevistaDev) < new Date();
+}
+
+// ══════════════════════════════════════════════════════════════════
+// BLOCO: Ponto de entrada — carregamento lazy via mostrarAba
+// ══════════════════════════════════════════════════════════════════
+
+window._onShow_aba_protocolo_chaves = function() {
+  if (!_chvState.carregado) {
+    _chvAtualizarDados();
+  } else {
+    _chvRenderizarTudo();
+  }
+};
+
+function _chvAtualizarDados() {
+  const email = (typeof AppState !== 'undefined' && AppState.usuario && AppState.usuario.email)
+    ? AppState.usuario.email : '';
+  GAS.chaves.obterDados(email, function(res) {
+    if (!res || !res.ok) {
+      Swal.fire('Erro', res && res.msg ? res.msg : 'Falha ao carregar dados.', 'error');
+      return;
+    }
+    _chvState.dados = res;
+    _chvState.carregado = true;
+    _chvPopularSelects();
+    _chvRenderizarTudo();
+  }, function(err) {
+    Swal.fire('Erro', String(err), 'error');
+  });
+}
+
+// ══════════════════════════════════════════════════════════════════
+// BLOCO: Navegação de subabas
+// ══════════════════════════════════════════════════════════════════
+
+function _chvMostrarSubaba(id) {
+  _chvState.subAbaaAtiva = id;
+  document.querySelectorAll('.chv-subaba').forEach(function(el) { el.classList.add('hidden'); });
+  document.querySelectorAll('.chv-tab-btn').forEach(function(el) { el.classList.remove('chv-tab-ativo'); });
+  const sub = document.getElementById('chv-sub-' + id);
+  if (sub) sub.classList.remove('hidden');
+  const tab = document.getElementById('chv-tab-' + id);
+  if (tab) tab.classList.add('chv-tab-ativo');
+
+  if (id === 'relatorios') return;
+  _chvRenderizarSubaba(id);
+}
+
+function _chvMostrarSubGerenciar(id) {
+  _chvState.subGerenciarAtiva = id;
+  document.querySelectorAll('.chv-sub-gerenciar-panel').forEach(function(el) { el.classList.add('hidden'); });
+  document.querySelectorAll('.chv-stab-btn').forEach(function(el) { el.classList.remove('chv-stab-ativo'); });
+  const panel = document.getElementById('chv-gerenciar-' + id);
+  if (panel) panel.classList.remove('hidden');
+  const stab = document.getElementById('chv-stab-' + id);
+  if (stab) stab.classList.add('chv-stab-ativo');
+}
+
+// ══════════════════════════════════════════════════════════════════
+// BLOCO: Popular selects com dados carregados
+// ══════════════════════════════════════════════════════════════════
+
+function _chvPopularSelects() {
+  const d = _chvState.dados;
+  if (!d) return;
+
+  const ehInfra = d.ehInfra;
+
+  // Visibilidade de elementos por papel
+  const btnEntregaDireta = document.getElementById('chv-btn-entrega-direta');
+  const tabGerenciar     = document.getElementById('chv-tab-gerenciar');
+  const tabAdmin         = document.getElementById('chv-tab-admin');
+
+  if (btnEntregaDireta) btnEntregaDireta.classList.toggle('hidden', !ehInfra);
+  if (btnEntregaDireta) btnEntregaDireta.style.display = ehInfra ? 'flex' : 'none';
+  if (tabGerenciar) tabGerenciar.classList.toggle('hidden', !ehInfra);
+  if (tabAdmin) {
+    const isAdmin = typeof AppState !== 'undefined' && AppState.usuario && AppState.usuario.isAdmin;
+    tabAdmin.classList.toggle('hidden', !isAdmin);
+  }
+
+  // Espacos nos selects
+  const espacosComChave = d.espacos || [];
+  const espacosTodos    = [];
+  // Adicionar todos espaços (incluindo sem chave, para admin config)
+  // Para solicitar, filtrar só os com chave
+  [
+    'chv-sol-espaco', 'chv-ed-espaco', 'chv-form-chave-espaco',
+    'chv-rel-espaco', 'chv-filtro-todos-espaco', 'chv-admin-espaco-filtro'
+  ].forEach(function(selId) {
+    const sel = document.getElementById(selId);
+    if (!sel) return;
+    const ehAdmin = selId === 'chv-admin-espaco-filtro' || selId === 'chv-form-chave-espaco';
+    const lista = ehAdmin ? (d.espacos || []) : espacosComChave;
+    sel.innerHTML = '<option value="">Todos' + (selId.includes('sol') || selId.includes('ed') ? ' — selecione...' : '') + '</option>';
+    lista.forEach(function(e) {
+      sel.innerHTML += `<option value="${e.id}">${e.nome}</option>`;
+    });
+  });
+}
+
+// ══════════════════════════════════════════════════════════════════
+// BLOCO: Renderização principal
+// ══════════════════════════════════════════════════════════════════
+
+function _chvRenderizarTudo() {
+  if (!_chvState.dados) return;
+  _chvRenderizarIndicadores();
+  _chvRenderizarSubaba(_chvState.subAbaaAtiva);
+}
+
+function _chvRenderizarSubaba(id) {
+  switch(id) {
+    case 'painel':    _chvRenderizarPainel(); break;
+    case 'solicitar': _chvRenderizarMeus(); break;
+    case 'gerenciar': _chvRenderizarGerenciar(); break;
+    case 'admin':     _chvRenderizarAdmin(); break;
+  }
+}
+
+// ── Indicadores ──────────────────────────────────────────────
+
+function _chvRenderizarIndicadores() {
+  const d = _chvState.dados;
+  if (!d) return;
+  const p = d.pendencias || {};
+  const chaves = d.chaves || [];
+  const disponiveis = chaves.filter(function(c) { return c.status === 'DISPONIVEL'; }).length;
+  const emUso = chaves.filter(function(c) { return c.status === 'EM_USO'; }).length;
+  const atrasados = (p.atrasadas || []).length;
+  const pendInfra = (p.aguardandoInfra || []).length + (p.solicitadas || []).length;
+  const pendUsr = (p.aguardandoUsuario || []).length;
+  const transf = (p.transferenciasPend || []).length;
+
+  const el = document.getElementById('chv-indicadores');
+  if (!el) return;
+  el.innerHTML = [
+    _chvIndCard('fas fa-check-circle', 'Disponíveis', disponiveis, 'bg-green-50 border-green-200 text-green-700'),
+    _chvIndCard('fas fa-key', 'Em uso', emUso, 'bg-blue-50 border-blue-200 text-blue-700'),
+    _chvIndCard('fas fa-exclamation-triangle', 'Atrasadas', atrasados, atrasados > 0 ? 'bg-red-50 border-red-200 text-red-700' : 'bg-slate-50 border-slate-200 text-slate-500'),
+    _chvIndCard('fas fa-hourglass-half', 'Ag. usuário', pendUsr, pendUsr > 0 ? 'bg-amber-50 border-amber-200 text-amber-700' : 'bg-slate-50 border-slate-200 text-slate-500'),
+    _chvIndCard('fas fa-inbox', 'Ag. infra', pendInfra, pendInfra > 0 ? 'bg-purple-50 border-purple-200 text-purple-700' : 'bg-slate-50 border-slate-200 text-slate-500'),
+    _chvIndCard('fas fa-exchange-alt', 'Transferências', transf, transf > 0 ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-slate-50 border-slate-200 text-slate-500'),
+  ].join('');
+
+  // Badge sidebar pendências
+  const totalPend = pendInfra + pendUsr + atrasados + transf;
+  const badge = document.getElementById('chv-badge-pendencias');
+  if (badge) {
+    badge.textContent = totalPend;
+    badge.classList.toggle('hidden', totalPend === 0);
+  }
+}
+
+function _chvIndCard(icon, label, count, classes) {
+  return `<div class="chv-ind-card border ${classes}">
+    <div class="text-2xl font-black">${count}</div>
+    <div class="text-[10px] font-black uppercase tracking-wide mt-0.5"><i class="${icon} mr-1"></i>${label}</div>
+  </div>`;
+}
+
+// ── Painel ───────────────────────────────────────────────────
+
+function _chvRenderizarPainel() {
+  const d = _chvState.dados;
+  if (!d) return;
+  const p = d.pendencias || {};
+  const email = d.emailUsuario;
+
+  _chvRenderizarAlertasCriticos(p);
+
+  const aguardando = [...(p.aguardandoUsuario || []), ...(p.aguardandoInfra || [])];
+  _chvRenderizarListaEl('chv-lista-aguardando', aguardando, 'Nenhuma confirmação pendente');
+  _chvRenderizarListaEl('chv-lista-atrasadas', p.atrasadas || [], 'Nenhuma chave atrasada');
+  _chvRenderizarListaEl('chv-lista-emuso', p.emUso || [], 'Nenhuma chave retirada');
+  _chvRenderizarListaEl('chv-lista-transferencias', p.transferenciasPend || [], 'Nenhuma transferência pendente');
+
+  _chvSetContagemEl('chv-count-aguardando', aguardando.length);
+  _chvSetContagemEl('chv-count-atrasadas', (p.atrasadas || []).length);
+  _chvSetContagemEl('chv-count-emuso', (p.emUso || []).length);
+  _chvSetContagemEl('chv-count-transferencias', (p.transferenciasPend || []).length);
+}
+
+function _chvRenderizarAlertasCriticos(p) {
+  const el = document.getElementById('chv-alertas');
+  if (!el) return;
+  const alertas = [];
+  if ((p.atrasadas || []).length > 0) {
+    alertas.push(`<div class="flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl p-3 text-xs text-red-700">
+      <i class="fas fa-exclamation-triangle text-red-500"></i>
+      <span class="font-black">${p.atrasadas.length} chave(s) com devolução atrasada!</span>
+      <button onclick="_chvMostrarSubaba('painel')" class="ml-auto text-red-600 underline font-bold">Ver</button>
+    </div>`);
+  }
+  const criticas = (p.atrasadas || []).filter(function(p) { return p.chaveId && _chvDadosChave(p.chaveId) && _chvDadosChave(p.chaveId).status === 'EXTRAVIADA'; });
+  if (criticas.length > 0) {
+    alertas.push(`<div class="flex items-center gap-2 bg-red-100 border border-red-300 rounded-xl p-3 text-xs text-red-800">
+      <i class="fas fa-skull-crossbones text-red-600"></i>
+      <span class="font-black">${criticas.length} chave(s) EXTRAVIADA(s). Contate Infraestrutura imediatamente.</span>
+    </div>`);
+  }
+  el.innerHTML = alertas.join('');
+}
+
+function _chvSetContagemEl(id, count) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = count > 0 ? '(' + count + ')' : '';
+}
+
+// ── Minhas Chaves ─────────────────────────────────────────────
+
+function _chvRenderizarMeus() {
+  const d = _chvState.dados;
+  if (!d) return;
+
+  // Carregar todos protocolos do usuário
+  const email = d.emailUsuario;
+  GAS.chaves.listarProtocolos({}, email, function(res) {
+    if (!res || !res.ok) return;
+    const meus = res.protocolos.filter(function(p) {
+      return p.solicitanteId === email || p.responsavelId === email || p.transferenciaDestinoId === email;
+    });
+    _chvState.protocolos = res.protocolos;
+    _chvRenderizarListaEl('chv-lista-meus', meus, 'Você não possui protocolos.');
+  });
+}
+
+function _chvFiltrarMeus() {
+  const status = document.getElementById('chv-filtro-meus-status').value;
+  const email = _chvState.dados ? _chvState.dados.emailUsuario : '';
+  let lista = _chvState.protocolos.filter(function(p) {
+    return p.solicitanteId === email || p.responsavelId === email || p.transferenciaDestinoId === email;
+  });
+  if (status) lista = lista.filter(function(p) { return p.status === status; });
+  _chvRenderizarListaEl('chv-lista-meus', lista, 'Nenhum protocolo com o filtro selecionado.');
+}
+
+// ── Gestão (Infra) ───────────────────────────────────────────
+
+function _chvRenderizarGerenciar() {
+  const d = _chvState.dados;
+  if (!d || !d.ehInfra) return;
+  const p = d.pendencias || {};
+
+  _chvRenderizarListaEl('chv-lista-solicitadas', p.solicitadas || [], 'Sem solicitações pendentes');
+  _chvRenderizarListaEl('chv-lista-aguardando-infra', p.aguardandoInfra || [], 'Nenhuma devolução aguardando confirmação');
+
+  const ctSol = document.getElementById('chv-ct-solicitadas');
+  if (ctSol) ctSol.textContent = (p.solicitadas||[]).length > 0 ? (p.solicitadas.length) : '';
+
+  const ctInfra = document.getElementById('chv-ct-aguardando-infra');
+  if (ctInfra) ctInfra.textContent = (p.aguardandoInfra||[]).length > 0 ? (p.aguardandoInfra.length) : '';
+
+  _chvFiltrarTodosAtivos();
+}
+
+function _chvFiltrarTodosAtivos() {
+  const busca   = (document.getElementById('chv-busca-todos') || {}).value || '';
+  const espacoFiltro = (document.getElementById('chv-filtro-todos-espaco') || {}).value || '';
+  const d = _chvState.dados;
+  if (!d) return;
+
+  const statusAtivos = ['SOLICITADA','AGUARDANDO_CONFIRMACAO_USUARIO','AGUARDANDO_CONFIRMACAO_INFRA',
+                        'RETIRADA','ATRASADA','TRANSFERENCIA_PENDENTE'];
+  let lista = (d.protocolosAtivos || []).filter(function(p) { return statusAtivos.includes(p.status); });
+
+  if (espacoFiltro) lista = lista.filter(function(p) { return p.espacoId === espacoFiltro; });
+  if (busca) {
+    const q = busca.toLowerCase();
+    lista = lista.filter(function(p) {
+      return p.id.toLowerCase().includes(q) ||
+             p.responsavelNome.toLowerCase().includes(q) ||
+             p.solicitanteNome.toLowerCase().includes(q) ||
+             _chvNomeEspaco(p.espacoId).toLowerCase().includes(q);
+    });
+  }
+  _chvRenderizarListaEl('chv-lista-todos-ativos', lista, 'Nenhum protocolo ativo encontrado.');
+}
+
+// ── Relatórios ───────────────────────────────────────────────
+
+function _chvCarregarRelatorio() {
+  const email = _chvState.dados ? _chvState.dados.emailUsuario : '';
+  const filtros = {
+    status:     document.getElementById('chv-rel-status').value || undefined,
+    espacoId:   document.getElementById('chv-rel-espaco').value || undefined,
+    dataInicio: document.getElementById('chv-rel-data-ini').value || undefined,
+    dataFim:    document.getElementById('chv-rel-data-fim').value || undefined
+  };
+  Object.keys(filtros).forEach(function(k) { if (!filtros[k]) delete filtros[k]; });
+
+  const el = document.getElementById('chv-rel-conteudo');
+  if (el) el.innerHTML = '<div class="text-xs text-slate-400 text-center p-3 animate-pulse">Carregando...</div>';
+
+  GAS.chaves.listarProtocolos(filtros, email, function(res) {
+    if (!res || !res.ok) { Swal.fire('Erro', 'Falha ao carregar relatório.', 'error'); return; }
+    _chvRenderizarRelatorio(res.protocolos || []);
+  });
+}
+
+function _chvLimparFiltrosRelatorio() {
+  ['chv-rel-status','chv-rel-espaco','chv-rel-data-ini','chv-rel-data-fim'].forEach(function(id) {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  const el = document.getElementById('chv-rel-conteudo');
+  if (el) el.innerHTML = '<div class="text-xs text-slate-400 italic p-3 bg-slate-50 rounded-xl text-center">Aplique um filtro para carregar o histórico.</div>';
+}
+
+function _chvRenderizarRelatorio(lista) {
+  const el = document.getElementById('chv-rel-conteudo');
+  if (!el) return;
+  if (!lista.length) {
+    el.innerHTML = '<div class="text-xs text-slate-400 italic p-3 bg-slate-50 rounded-xl text-center">Nenhum protocolo encontrado.</div>';
+    return;
+  }
+  // Tabela compacta
+  el.innerHTML = `
+    <div class="text-xs text-slate-500 mb-2 font-bold">${lista.length} registro(s)</div>
+    <div class="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+      <table class="w-full text-xs">
+        <thead class="bg-slate-50 border-b border-slate-200">
+          <tr>
+            <th class="px-3 py-2 text-left font-black text-slate-600">Protocolo</th>
+            <th class="px-3 py-2 text-left font-black text-slate-600">Espaço</th>
+            <th class="px-3 py-2 text-left font-black text-slate-600">Responsável</th>
+            <th class="px-3 py-2 text-left font-black text-slate-600">Solicitação</th>
+            <th class="px-3 py-2 text-left font-black text-slate-600">Devolução</th>
+            <th class="px-3 py-2 text-left font-black text-slate-600">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${lista.map(function(p) { return `
+            <tr class="border-b border-slate-100 hover:bg-slate-50 cursor-pointer" onclick="_chvAbrirDetalhe('${p.id}')">
+              <td class="px-3 py-2 font-mono text-slate-500">${p.id}</td>
+              <td class="px-3 py-2 font-bold text-slate-700">${_chvNomeEspaco(p.espacoId)}</td>
+              <td class="px-3 py-2 text-slate-600">${p.responsavelNome || p.solicitanteNome || '—'}</td>
+              <td class="px-3 py-2 text-slate-500">${_chvFormatarDt(p.dtSolicitacao)}</td>
+              <td class="px-3 py-2 text-slate-500">${p.dtDevolucao ? _chvFormatarDt(p.dtDevolucao) : (p.dtPrevistaDev ? '⏱ ' + _chvFormatarDt(p.dtPrevistaDev) : '—')}</td>
+              <td class="px-3 py-2">${_chvBadge(p.status)}</td>
+            </tr>`; }).join('')}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+// ── Admin ────────────────────────────────────────────────────
+
+function _chvRenderizarAdmin() {
+  _chvFiltrarChavesAdmin();
+  _chvRenderizarEspacosAdmin();
+}
+
+function _chvFiltrarChavesAdmin() {
+  const filtro = (document.getElementById('chv-admin-espaco-filtro') || {}).value || '';
+  const d = _chvState.dados;
+  const chaves = d ? (d.chaves || []) : [];
+  const lista = filtro ? chaves.filter(function(c) { return c.espacoId === filtro; }) : chaves;
+  const el = document.getElementById('chv-admin-lista-chaves');
+  if (!el) return;
+  if (!lista.length) {
+    el.innerHTML = '<div class="text-xs text-slate-400 italic p-2">Nenhuma chave cadastrada.</div>';
+    return;
+  }
+  el.innerHTML = lista.map(function(c) {
+    const corStatus = _chvChaveStatusCor(c.status);
+    return `<div class="flex items-center justify-between bg-slate-50 border border-slate-200 rounded-xl px-3 py-2">
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-2">
+          <span class="text-xs font-black text-slate-700 truncate">${c.codigoPatrimonial}</span>
+          <span class="text-[9px] font-bold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded-full">${_CHV_TIPO_LABEL[c.tipo] || c.tipo}</span>
+        </div>
+        <div class="text-[10px] text-slate-400 mt-0.5">${_chvNomeEspaco(c.espacoId)} · <span class="${corStatus} font-bold">${_CHV_STATUS_CHAVE_LABEL[c.status] || c.status}</span></div>
+      </div>
+      <div class="flex gap-1 ml-2 shrink-0">
+        <button onclick="_chvAbrirModalStatusChave('${c.id}', '${c.status}')" class="text-[10px] text-orange-600 hover:text-orange-800 font-black px-2 py-1 rounded-lg hover:bg-orange-50">
+          Status
+        </button>
+        <button onclick="_chvAbrirModalEditarChave('${c.id}')" class="text-[10px] text-purple-600 hover:text-purple-800 font-black px-2 py-1 rounded-lg hover:bg-purple-50">
+          Editar
+        </button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function _chvRenderizarEspacosAdmin() {
+  const d = _chvState.dados;
+  if (!d) return;
+  const todosEspacos = d.espacos || [];
+  const el = document.getElementById('chv-admin-lista-espacos');
+  if (!el) return;
+  if (!todosEspacos.length) {
+    el.innerHTML = '<div class="text-xs text-slate-400 italic p-2">Nenhum espaço encontrado.</div>';
+    return;
+  }
+  el.innerHTML = todosEspacos.map(function(e) {
+    return `<div class="flex items-center justify-between bg-slate-50 border border-slate-200 rounded-xl px-3 py-2">
+      <div class="flex-1 min-w-0">
+        <div class="text-xs font-black text-slate-700">${e.nome}</div>
+        <div class="flex gap-2 mt-0.5">
+          ${e.possuiChaves ? '<span class="text-[9px] font-bold text-green-700 bg-green-100 px-1.5 py-0.5 rounded-full">🔑 Tem chave</span>' : '<span class="text-[9px] text-slate-400">Sem chave</span>'}
+          ${e.aceitaReserva ? '<span class="text-[9px] font-bold text-blue-700 bg-blue-100 px-1.5 py-0.5 rounded-full">📅 Reservável</span>' : ''}
+          ${e.exigeProtocolo ? '<span class="text-[9px] font-bold text-purple-700 bg-purple-100 px-1.5 py-0.5 rounded-full">🔒 Exige protocolo</span>' : ''}
+        </div>
+      </div>
+      <button onclick="_chvAbrirModalConfigEspaco('${e.id}')" class="text-[10px] text-blue-600 hover:text-blue-800 font-black px-2 py-1 rounded-lg hover:bg-blue-50 ml-2 shrink-0">
+        Configurar
+      </button>
+    </div>`;
+  }).join('');
+}
+
+// ══════════════════════════════════════════════════════════════════
+// BLOCO: Renderização de lista genérica de protocolos
+// ══════════════════════════════════════════════════════════════════
+
+function _chvRenderizarListaEl(elId, lista, vazio) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  if (!lista || !lista.length) {
+    el.innerHTML = `<div class="text-xs text-slate-400 italic p-3 bg-slate-50 rounded-xl">${vazio}</div>`;
+    return;
+  }
+  el.innerHTML = lista.map(function(p) { return _chvRenderizarCard(p); }).join('');
+}
+
+function _chvRenderizarCard(p) {
+  const email = _chvState.dados ? _chvState.dados.emailUsuario : '';
+  const ehInfra = _chvState.dados ? _chvState.dados.ehInfra : false;
+  const chave = _chvDadosChave(p.chaveId);
+  const nomeEspaco = _chvNomeEspaco(p.espacoId);
+  const atrasado = _chvEhAtrasado(p);
+  const cardClass = atrasado ? 'chv-card-atrasado' : `chv-card-${p.status.toLowerCase().split('_')[0]}`;
+
+  const acoes = _chvBotoesAcao(p, email, ehInfra);
+
+  return `<div class="chv-card ${cardClass}" onclick="_chvAbrirDetalhe('${p.id}')">
+    <div class="flex items-start justify-between gap-2" onclick="event.stopPropagation()">
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-2 flex-wrap">
+          ${_chvBadge(p.status)}
+          ${atrasado ? '<span class="chv-badge bg-red-100 text-red-700">⏰ ATRASADA</span>' : ''}
+          <span class="text-[9px] font-mono text-slate-400">${p.id}</span>
+        </div>
+        <div class="mt-1.5">
+          <span class="text-sm font-black text-slate-800">${nomeEspaco}</span>
+          ${chave ? `<span class="text-[10px] text-slate-400 ml-2">${chave.codigoPatrimonial} (${_CHV_TIPO_LABEL[chave.tipo] || chave.tipo})</span>` : ''}
+        </div>
+        <div class="text-[10px] text-slate-500 mt-1 space-y-0.5">
+          <div><i class="fas fa-user text-slate-300 mr-1"></i>
+            ${p.responsavelId ? `Responsável: <b>${p.responsavelNome}</b>` : `Solicitante: <b>${p.solicitanteNome}</b>`}
+          </div>
+          ${p.setorNome ? `<div><i class="fas fa-sitemap text-slate-300 mr-1"></i>${p.setorNome}</div>` : ''}
+          <div><i class="fas fa-clock text-slate-300 mr-1"></i>Solicitado: ${_chvFormatarDt(p.dtSolicitacao)}</div>
+          ${p.dtPrevistaDev ? `<div class="${atrasado ? 'text-red-600 font-bold' : 'text-slate-400'}"><i class="fas fa-calendar-check mr-1"></i>Devolução prevista: ${_chvFormatarDt(p.dtPrevistaDev)}</div>` : ''}
+          ${p.transferenciaDestinoId ? `<div class="text-blue-600"><i class="fas fa-arrow-right mr-1"></i>Transferência para: <b>${p.transferenciaDestinoNome || p.transferenciaDestinoId}</b></div>` : ''}
+        </div>
+      </div>
+      <button class="text-slate-300 hover:text-purple-500 transition-colors shrink-0 mt-1" onclick="_chvAbrirDetalhe('${p.id}'); event.stopPropagation()">
+        <i class="fas fa-chevron-right text-xs"></i>
+      </button>
+    </div>
+    ${acoes ? `<div class="flex gap-2 mt-2.5 pt-2.5 border-t border-slate-100 flex-wrap">${acoes}</div>` : ''}
+  </div>`;
+}
+
+function _chvBotoesAcao(p, email, ehInfra) {
+  const btns = [];
+
+  // Infra: aprovar solicitação
+  if (ehInfra && p.status === 'SOLICITADA') {
+    btns.push(_chvBtnAcao('fas fa-check', 'Aprovar', `_chvAprovarEntrega('${p.id}')`, 'text-green-700 bg-green-50 border-green-200 hover:bg-green-100'));
+    btns.push(_chvBtnAcao('fas fa-times', 'Negar', `_chvNegar('${p.id}')`, 'text-red-700 bg-red-50 border-red-200 hover:bg-red-100'));
+  }
+
+  // Usuário: confirmar recebimento
+  if (p.status === 'AGUARDANDO_CONFIRMACAO_USUARIO' && (p.solicitanteId === email || ehInfra)) {
+    btns.push(_chvBtnAcao('fas fa-thumbs-up', 'Confirmar Recebimento', `_chvConfirmarRecebimento('${p.id}')`, 'text-green-700 bg-green-50 border-green-200 hover:bg-green-100'));
+  }
+
+  // Usuário: registrar devolução (se responsável)
+  if (['RETIRADA','ATRASADA'].includes(p.status) && (p.responsavelId === email || ehInfra)) {
+    btns.push(_chvBtnAcao('fas fa-undo', 'Devolver', `_chvRegistrarDevolucao('${p.id}')`, 'text-blue-700 bg-blue-50 border-blue-200 hover:bg-blue-100'));
+    if (p.status === 'RETIRADA') {
+      btns.push(_chvBtnAcao('fas fa-exchange-alt', 'Transferir', `_chvAbrirModalTransferencia('${p.id}')`, 'text-purple-700 bg-purple-50 border-purple-200 hover:bg-purple-100'));
+    }
+  }
+
+  // Infra: confirmar devolução
+  if (ehInfra && p.status === 'AGUARDANDO_CONFIRMACAO_INFRA') {
+    btns.push(_chvBtnAcao('fas fa-check-double', 'Confirmar Devolução', `_chvConfirmarDevolucao('${p.id}')`, 'text-blue-700 bg-blue-50 border-blue-200 hover:bg-blue-100'));
+  }
+
+  // Transferência: confirmar ou cancelar
+  if (p.status === 'TRANSFERENCIA_PENDENTE') {
+    if (p.transferenciaDestinoId === email) {
+      btns.push(_chvBtnAcao('fas fa-check', 'Aceitar Transferência', `_chvConfirmarTransferencia('${p.id}')`, 'text-green-700 bg-green-50 border-green-200 hover:bg-green-100'));
+    }
+    if (p.responsavelId === email || ehInfra) {
+      btns.push(_chvBtnAcao('fas fa-ban', 'Cancelar Transferência', `_chvCancelarTransferencia('${p.id}')`, 'text-red-700 bg-red-50 border-red-200 hover:bg-red-100'));
+    }
+  }
+
+  // Cancelar (solicitante ou infra, status SOLICITADA)
+  if (p.status === 'SOLICITADA' && (p.solicitanteId === email || ehInfra)) {
+    btns.push(_chvBtnAcao('fas fa-ban', 'Cancelar', `_chvCancelar('${p.id}')`, 'text-slate-600 bg-slate-50 border-slate-200 hover:bg-slate-100'));
+  }
+
+  return btns.join('');
+}
+
+function _chvBtnAcao(icon, label, onclick, classes) {
+  return `<button onclick="${onclick}; event.stopPropagation()"
+    class="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-black border rounded-xl transition-all ${classes}">
+    <i class="${icon} text-[9px]"></i>${label}
+  </button>`;
+}
+
+// ══════════════════════════════════════════════════════════════════
+// BLOCO: Modal de detalhe do protocolo
+// ══════════════════════════════════════════════════════════════════
+
+function _chvAbrirDetalhe(protocoloId) {
+  const el = document.getElementById('chv-modal-detalhe-conteudo');
+  if (!el) return;
+  el.innerHTML = '<div class="text-xs text-slate-400 text-center animate-pulse p-4">Carregando...</div>';
+  _chvAbrirModal('chv-modal-detalhe');
+
+  const email = _chvState.dados ? _chvState.dados.emailUsuario : '';
+  GAS.chaves.obterHistorico({ protocoloId: protocoloId }, email, function(res) {
+    const historico = (res && res.historico) ? res.historico : [];
+    let p = null;
+    // Buscar protocolo no state
+    const todas = _chvState.dados ? (_chvState.dados.protocolosAtivos || []) : [];
+    p = todas.find(function(x) { return x.id === protocoloId; });
+    if (!p && _chvState.protocolos) p = _chvState.protocolos.find(function(x) { return x.id === protocoloId; });
+
+    el.innerHTML = _chvHTMLDetalhe(p, historico);
+  });
+}
+
+function _chvHTMLDetalhe(p, historico) {
+  if (!p) return '<div class="text-xs text-slate-400 text-center p-4">Protocolo não encontrado no estado local. Atualize os dados.</div>';
+  const chave = _chvDadosChave(p.chaveId);
+  const nomeEspaco = _chvNomeEspaco(p.espacoId);
+
+  const campos = [
+    ['Protocolo', p.id, 'font-mono'],
+    ['Status', `${_chvBadge(p.status)} ${_chvEhAtrasado(p) ? '<span class="chv-badge bg-red-100 text-red-700 ml-1">ATRASADA</span>' : ''}`, ''],
+    ['Espaço', nomeEspaco, 'font-bold'],
+    ['Chave', chave ? `${chave.codigoPatrimonial} (${_CHV_TIPO_LABEL[chave.tipo] || chave.tipo})` : p.chaveId, ''],
+    ['Solicitante', `${p.solicitanteNome} <span class="text-slate-400">${p.solicitanteId}</span>`, ''],
+    ['Responsável atual', p.responsavelId ? `${p.responsavelNome} <span class="text-slate-400">${p.responsavelId}</span>` : '—', ''],
+    ['Setor', p.setorNome || '—', ''],
+    ['Origem', p.origem === 'ENTREGA_DIRETA' ? '🚀 Entrega Direta (Infra)' : '📋 Solicitação', ''],
+    ['Solicitação', _chvFormatarDt(p.dtSolicitacao), ''],
+    ['Retirada', _chvFormatarDt(p.dtRetirada), ''],
+    ['Dev. prevista', p.dtPrevistaDev ? _chvFormatarDt(p.dtPrevistaDev) : '—', _chvEhAtrasado(p) ? 'text-red-600 font-bold' : ''],
+    ['Devolvido em', _chvFormatarDt(p.dtDevolucao), ''],
+    ['Entregue por', p.entreguePorNome ? `${p.entreguePorNome}` : '—', ''],
+    ['Recebido por', p.recebidoPorNome ? `${p.recebidoPorNome}` : '—', ''],
+    ['Dev. recebida por', p.devRecebidaPorNome ? `${p.devRecebidaPorNome}` : '—', ''],
+    ['Reserva vinculada', p.reservaVinculadaId || '—', 'font-mono'],
+    ['Transferência para', p.transferenciaDestinoId ? `${p.transferenciaDestinoNome} (${p.transferenciaDestinoId})` : '—', ''],
+    ['Observações', p.observacoes || '—', ''],
+  ].filter(function(c) { return c[1] !== '—' || c[0] === 'Observações'; });
+
+  const linhasCampos = campos.map(function(c) {
+    return `<tr class="border-b border-slate-50">
+      <td class="py-1.5 pr-3 text-[10px] font-black text-slate-400 uppercase tracking-wide whitespace-nowrap">${c[0]}</td>
+      <td class="py-1.5 text-xs text-slate-700 ${c[2]}">${c[1]}</td>
+    </tr>`;
+  }).join('');
+
+  const linhasHist = historico.map(function(h) {
+    return `<tr class="border-b border-slate-50">
+      <td class="py-1.5 pr-2 text-[10px] text-slate-400 whitespace-nowrap">${_chvFormatarDt(h.dtHora)}</td>
+      <td class="py-1.5 pr-2 text-[10px] font-black text-slate-600">${h.acao.replace(/_/g,' ')}</td>
+      <td class="py-1.5 pr-2 text-[10px] text-slate-500">${h.usuarioNome || h.usuarioId}</td>
+      <td class="py-1.5 text-[10px] text-slate-400 italic">${h.observacoes || ''}</td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="4" class="text-xs text-slate-400 italic p-2">Sem histórico registrado</td></tr>';
+
+  return `
+    <table class="w-full mb-5">${linhasCampos}</table>
+    <h4 class="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Histórico de Movimentações</h4>
+    <div class="overflow-x-auto">
+      <table class="w-full text-xs">
+        <thead><tr class="bg-slate-50">
+          <th class="text-left px-0 py-1 text-[10px] font-black text-slate-500">Data/Hora</th>
+          <th class="text-left px-2 py-1 text-[10px] font-black text-slate-500">Ação</th>
+          <th class="text-left px-2 py-1 text-[10px] font-black text-slate-500">Usuário</th>
+          <th class="text-left px-2 py-1 text-[10px] font-black text-slate-500">Obs.</th>
+        </tr></thead>
+        <tbody>${linhasHist}</tbody>
+      </table>
+    </div>`;
+}
+
+// ══════════════════════════════════════════════════════════════════
+// BLOCO: Handlers de ações de protocolo
+// ══════════════════════════════════════════════════════════════════
+
+function _chvAprovarEntrega(protocoloId) {
+  Swal.fire({
+    title: 'Aprovar Entrega',
+    input: 'textarea',
+    inputPlaceholder: 'Observação (opcional)',
+    showCancelButton: true,
+    confirmButtonText: 'Aprovar',
+    confirmButtonColor: '#16a34a',
+    cancelButtonText: 'Cancelar'
+  }).then(function(result) {
+    if (!result.isConfirmed) return;
+    const email = _chvState.dados ? _chvState.dados.emailUsuario : '';
+    GAS.chaves.aprovarEntrega(protocoloId, result.value || '', email, function(res) {
+      if (res && res.ok) { Swal.fire('Aprovado!', 'Aguardando confirmação do usuário.', 'success'); _chvAtualizarDados(); }
+      else Swal.fire('Erro', (res && res.msg) || 'Falha ao aprovar.', 'error');
+    });
+  });
+}
+
+function _chvNegar(protocoloId) {
+  Swal.fire({
+    title: 'Negar Solicitação',
+    input: 'textarea',
+    inputPlaceholder: 'Motivo da negativa *',
+    showCancelButton: true,
+    confirmButtonText: 'Negar',
+    confirmButtonColor: '#dc2626',
+    cancelButtonText: 'Cancelar',
+    preConfirm: function(v) { if (!v || !v.trim()) { Swal.showValidationMessage('Informe o motivo.'); } }
+  }).then(function(result) {
+    if (!result.isConfirmed) return;
+    const email = _chvState.dados ? _chvState.dados.emailUsuario : '';
+    GAS.chaves.negar(protocoloId, result.value, email, function(res) {
+      if (res && res.ok) { Swal.fire('Negado', '', 'info'); _chvAtualizarDados(); }
+      else Swal.fire('Erro', (res && res.msg) || 'Falha.', 'error');
+    });
+  });
+}
+
+function _chvConfirmarRecebimento(protocoloId) {
+  Swal.fire({
+    title: 'Confirmar Recebimento',
+    text: 'Você confirma que recebeu a chave?',
+    input: 'textarea',
+    inputPlaceholder: 'Observação (opcional)',
+    showCancelButton: true,
+    confirmButtonText: 'Confirmar',
+    confirmButtonColor: '#16a34a',
+    cancelButtonText: 'Cancelar'
+  }).then(function(result) {
+    if (!result.isConfirmed) return;
+    const email = _chvState.dados ? _chvState.dados.emailUsuario : '';
+    GAS.chaves.confirmarRecebimento(protocoloId, result.value || '', email, function(res) {
+      if (res && res.ok) { Swal.fire('Recebimento confirmado!', 'Chave em seu poder.', 'success'); _chvAtualizarDados(); }
+      else Swal.fire('Erro', (res && res.msg) || 'Falha.', 'error');
+    });
+  });
+}
+
+function _chvRegistrarDevolucao(protocoloId) {
+  Swal.fire({
+    title: 'Registrar Devolução',
+    text: 'Confirma a entrega da chave à infraestrutura?',
+    input: 'textarea',
+    inputPlaceholder: 'Observação (opcional)',
+    showCancelButton: true,
+    confirmButtonText: 'Registrar',
+    confirmButtonColor: '#2563eb',
+    cancelButtonText: 'Cancelar'
+  }).then(function(result) {
+    if (!result.isConfirmed) return;
+    const email = _chvState.dados ? _chvState.dados.emailUsuario : '';
+    GAS.chaves.registrarDevolucao(protocoloId, result.value || '', email, function(res) {
+      if (res && res.ok) { Swal.fire('Devolução registrada!', 'Aguardando confirmação da Infraestrutura.', 'success'); _chvAtualizarDados(); }
+      else Swal.fire('Erro', (res && res.msg) || 'Falha.', 'error');
+    });
+  });
+}
+
+function _chvConfirmarDevolucao(protocoloId) {
+  Swal.fire({
+    title: 'Confirmar Devolução',
+    text: 'Infraestrutura confirma o recebimento da chave?',
+    input: 'textarea',
+    inputPlaceholder: 'Observação (opcional)',
+    showCancelButton: true,
+    confirmButtonText: 'Confirmar',
+    confirmButtonColor: '#2563eb',
+    cancelButtonText: 'Cancelar'
+  }).then(function(result) {
+    if (!result.isConfirmed) return;
+    const email = _chvState.dados ? _chvState.dados.emailUsuario : '';
+    GAS.chaves.confirmarDevolucao(protocoloId, result.value || '', email, function(res) {
+      if (res && res.ok) { Swal.fire('Devolução confirmada!', 'Chave devolvida ao estoque.', 'success'); _chvAtualizarDados(); }
+      else Swal.fire('Erro', (res && res.msg) || 'Falha.', 'error');
+    });
+  });
+}
+
+function _chvConfirmarTransferencia(protocoloId) {
+  Swal.fire({
+    title: 'Aceitar Transferência',
+    text: 'Você confirma que recebeu a chave por transferência?',
+    input: 'textarea',
+    inputPlaceholder: 'Observação (opcional)',
+    showCancelButton: true,
+    confirmButtonText: 'Aceitar',
+    confirmButtonColor: '#16a34a',
+    cancelButtonText: 'Cancelar'
+  }).then(function(result) {
+    if (!result.isConfirmed) return;
+    const email = _chvState.dados ? _chvState.dados.emailUsuario : '';
+    GAS.chaves.confirmarTransferencia(protocoloId, result.value || '', email, function(res) {
+      if (res && res.ok) { Swal.fire('Transferência aceita!', 'Você é o novo responsável pela chave.', 'success'); _chvAtualizarDados(); }
+      else Swal.fire('Erro', (res && res.msg) || 'Falha.', 'error');
+    });
+  });
+}
+
+function _chvCancelarTransferencia(protocoloId) {
+  Swal.fire({
+    title: 'Cancelar Transferência',
+    input: 'textarea',
+    inputPlaceholder: 'Motivo (opcional)',
+    showCancelButton: true,
+    confirmButtonText: 'Cancelar Transferência',
+    confirmButtonColor: '#dc2626',
+    cancelButtonText: 'Voltar'
+  }).then(function(result) {
+    if (!result.isConfirmed) return;
+    const email = _chvState.dados ? _chvState.dados.emailUsuario : '';
+    GAS.chaves.cancelarTransferencia(protocoloId, result.value || '', email, function(res) {
+      if (res && res.ok) { Swal.fire('Cancelada', 'Você continua como responsável.', 'info'); _chvAtualizarDados(); }
+      else Swal.fire('Erro', (res && res.msg) || 'Falha.', 'error');
+    });
+  });
+}
+
+function _chvCancelar(protocoloId) {
+  Swal.fire({
+    title: 'Cancelar Solicitação',
+    input: 'textarea',
+    inputPlaceholder: 'Motivo (opcional)',
+    showCancelButton: true,
+    confirmButtonText: 'Cancelar Solicitação',
+    confirmButtonColor: '#dc2626',
+    cancelButtonText: 'Voltar'
+  }).then(function(result) {
+    if (!result.isConfirmed) return;
+    const email = _chvState.dados ? _chvState.dados.emailUsuario : '';
+    GAS.chaves.cancelar(protocoloId, result.value || '', email, function(res) {
+      if (res && res.ok) { Swal.fire('Cancelado', '', 'info'); _chvAtualizarDados(); }
+      else Swal.fire('Erro', (res && res.msg) || 'Falha.', 'error');
+    });
+  });
+}
+
+// ══════════════════════════════════════════════════════════════════
+// BLOCO: Handlers de modais
+// ══════════════════════════════════════════════════════════════════
+
+function _chvAbrirModal(id) {
+  const el = document.getElementById(id);
+  if (el) { el.classList.remove('hidden'); el.style.display = 'flex'; }
+}
+
+function _chvFecharModal(id) {
+  const el = document.getElementById(id);
+  if (el) { el.classList.add('hidden'); el.style.display = ''; }
+}
+
+function _chvAbrirModalSolicitar() {
+  document.getElementById('chv-sol-espaco').value = '';
+  document.getElementById('chv-sol-chave').innerHTML = '<option value="">Selecione o espaço primeiro</option>';
+  document.getElementById('chv-sol-devolucao').value = '';
+  document.getElementById('chv-sol-reserva').value = '';
+  document.getElementById('chv-sol-obs').value = '';
+  _chvAbrirModal('chv-modal-solicitar');
+}
+
+function _chvAbrirModalEntregaDireta() {
+  document.getElementById('chv-ed-espaco').value = '';
+  document.getElementById('chv-ed-chave').innerHTML = '<option value="">Selecione o espaço primeiro</option>';
+  document.getElementById('chv-ed-destino').value = '';
+  document.getElementById('chv-ed-devolucao').value = '';
+  document.getElementById('chv-ed-obs').value = '';
+  _chvAbrirModal('chv-modal-entrega-direta');
+}
+
+function _chvAbrirModalTransferencia(protocoloId) {
+  const d = _chvState.dados;
+  const todas = (d && d.protocolosAtivos) ? d.protocolosAtivos : [];
+  const p = todas.find(function(x) { return x.id === protocoloId; }) ||
+            (_chvState.protocolos || []).find(function(x) { return x.id === protocoloId; });
+  document.getElementById('chv-tr-protocolo-id').value = protocoloId;
+  document.getElementById('chv-tr-info').textContent = p ? `${_chvNomeEspaco(p.espacoId)} · ${p.chaveId}` : protocoloId;
+  document.getElementById('chv-tr-destino').value = '';
+  document.getElementById('chv-tr-obs').value = '';
+  _chvAbrirModal('chv-modal-transferencia');
+}
+
+function _chvAbrirModalNovaChave() {
+  document.getElementById('chv-form-chave-id').value = '';
+  document.getElementById('chv-modal-chave-titulo').textContent = 'Nova Chave';
+  document.getElementById('chv-form-chave-espaco').value = '';
+  document.getElementById('chv-form-chave-codigo').value = '';
+  document.getElementById('chv-form-chave-tipo').value = 'COMUM';
+  document.getElementById('chv-form-chave-obs').value = '';
+  _chvAbrirModal('chv-modal-nova-chave');
+}
+
+function _chvAbrirModalEditarChave(chaveId) {
+  const d = _chvState.dados;
+  const chave = d ? (d.chaves || []).find(function(c) { return c.id === chaveId; }) : null;
+  if (!chave) { Swal.fire('Erro', 'Chave não encontrada no estado.', 'error'); return; }
+  document.getElementById('chv-form-chave-id').value = chave.id;
+  document.getElementById('chv-modal-chave-titulo').textContent = 'Editar Chave';
+  document.getElementById('chv-form-chave-espaco').value = chave.espacoId;
+  document.getElementById('chv-form-chave-codigo').value = chave.codigoPatrimonial;
+  document.getElementById('chv-form-chave-tipo').value = chave.tipo;
+  document.getElementById('chv-form-chave-obs').value = chave.observacoes;
+  _chvAbrirModal('chv-modal-nova-chave');
+}
+
+function _chvAbrirModalStatusChave(chaveId, statusAtual) {
+  document.getElementById('chv-sc-id').value = chaveId;
+  document.getElementById('chv-sc-status').value = statusAtual;
+  document.getElementById('chv-sc-obs').value = '';
+  _chvAbrirModal('chv-modal-status-chave');
+}
+
+function _chvAbrirModalConfigEspaco(espacoId) {
+  const d = _chvState.dados;
+  const e = d ? (d.espacos || []).find(function(x) { return x.id === espacoId; }) : null;
+  if (!e) { Swal.fire('Erro', 'Espaço não encontrado.', 'error'); return; }
+
+  document.getElementById('chv-ec-id').value = e.id;
+  document.getElementById('chv-ec-nome').textContent = e.nome;
+  document.getElementById('chv-ec-possui-chaves').checked = !!e.possuiChaves;
+  document.getElementById('chv-ec-aceita-reserva').checked = e.aceitaReserva !== false;
+  document.getElementById('chv-ec-exige-protocolo').checked = !!e.exigeProtocolo;
+  document.getElementById('chv-ec-qtd-comum').value = e.qtdUsoComum || 0;
+  document.getElementById('chv-ec-qtd-reserva').value = e.qtdReserva || 0;
+  document.getElementById('chv-ec-localizacao').value = e.localizacaoChave || '';
+  document.getElementById('chv-ec-obs').value = e.obsInternas || '';
+  _chvToggleCamposChave(document.getElementById('chv-ec-possui-chaves'));
+  _chvAbrirModal('chv-modal-espaco-config');
+}
+
+function _chvToggleCamposChave(checkbox) {
+  const campos = document.getElementById('chv-ec-campos-chave');
+  if (campos) campos.classList.toggle('hidden', !checkbox.checked);
+}
+
+// ══════════════════════════════════════════════════════════════════
+// BLOCO: Carregar chaves disponíveis por espaço
+// ══════════════════════════════════════════════════════════════════
+
+function _chvCarregarChavesDoEspaco() {
+  const espacoId = document.getElementById('chv-sol-espaco').value;
+  _chvPopularSelectChaves('chv-sol-chave', espacoId);
+}
+
+function _chvCarregarChavesDoEspacoEd() {
+  const espacoId = document.getElementById('chv-ed-espaco').value;
+  _chvPopularSelectChaves('chv-ed-chave', espacoId);
+}
+
+function _chvPopularSelectChaves(selectId, espacoId) {
+  const sel = document.getElementById(selectId);
+  if (!sel) return;
+  sel.innerHTML = '<option value="">Nenhuma chave disponível</option>';
+  if (!espacoId) return;
+  const d = _chvState.dados;
+  if (!d) return;
+  const disponiveis = (d.chaves || []).filter(function(c) {
+    return c.espacoId === espacoId && c.status === 'DISPONIVEL' && c.ativa;
+  });
+  if (!disponiveis.length) {
+    sel.innerHTML = '<option value="">Nenhuma chave disponível neste espaço</option>';
+    return;
+  }
+  sel.innerHTML = '<option value="">Selecione a chave...</option>';
+  disponiveis.forEach(function(c) {
+    sel.innerHTML += `<option value="${c.id}">${c.codigoPatrimonial} (${_CHV_TIPO_LABEL[c.tipo] || c.tipo})</option>`;
+  });
+}
+
+// ══════════════════════════════════════════════════════════════════
+// BLOCO: Enviar formulários
+// ══════════════════════════════════════════════════════════════════
+
+function _chvEnviarSolicitacao() {
+  const chaveId  = document.getElementById('chv-sol-chave').value;
+  const espacoId = document.getElementById('chv-sol-espaco').value;
+  if (!chaveId || !espacoId) { Swal.fire('Atenção', 'Selecione espaço e chave.', 'warning'); return; }
+
+  const dados = {
+    chaveId:           chaveId,
+    espacoId:          espacoId,
+    dtPrevistaDevolucao: document.getElementById('chv-sol-devolucao').value || '',
+    reservaId:         document.getElementById('chv-sol-reserva').value || '',
+    observacoes:       document.getElementById('chv-sol-obs').value || ''
+  };
+  const email = _chvState.dados ? _chvState.dados.emailUsuario : '';
+  GAS.chaves.solicitar(dados, email, function(res) {
+    if (res && res.ok) {
+      _chvFecharModal('chv-modal-solicitar');
+      Swal.fire('Solicitação enviada!', 'Aguarde aprovação da Infraestrutura.', 'success');
+      _chvAtualizarDados();
+    } else Swal.fire('Erro', (res && res.msg) || 'Falha ao solicitar.', 'error');
+  });
+}
+
+function _chvEnviarEntregaDireta() {
+  const chaveId  = document.getElementById('chv-ed-chave').value;
+  const espacoId = document.getElementById('chv-ed-espaco').value;
+  const destino  = document.getElementById('chv-ed-destino').value.trim();
+  if (!chaveId || !espacoId) { Swal.fire('Atenção', 'Selecione espaço e chave.', 'warning'); return; }
+  if (!destino || !destino.includes('@')) { Swal.fire('Atenção', 'Informe o email do destinatário.', 'warning'); return; }
+
+  const dados = {
+    chaveId:           chaveId,
+    espacoId:          espacoId,
+    destinoEmail:      destino,
+    dtPrevistaDevolucao: document.getElementById('chv-ed-devolucao').value || '',
+    observacoes:       document.getElementById('chv-ed-obs').value || ''
+  };
+  const email = _chvState.dados ? _chvState.dados.emailUsuario : '';
+  GAS.chaves.iniciarEntregaDireta(dados, email, function(res) {
+    if (res && res.ok) {
+      _chvFecharModal('chv-modal-entrega-direta');
+      Swal.fire('Entrega registrada!', 'Aguardando confirmação do usuário.', 'success');
+      _chvAtualizarDados();
+    } else Swal.fire('Erro', (res && res.msg) || 'Falha.', 'error');
+  });
+}
+
+function _chvEnviarTransferencia() {
+  const protocoloId = document.getElementById('chv-tr-protocolo-id').value;
+  const destino = document.getElementById('chv-tr-destino').value.trim();
+  if (!destino || !destino.includes('@')) { Swal.fire('Atenção', 'Informe email válido.', 'warning'); return; }
+  const obs = document.getElementById('chv-tr-obs').value || '';
+  const email = _chvState.dados ? _chvState.dados.emailUsuario : '';
+  GAS.chaves.solicitarTransferencia(protocoloId, destino, obs, email, function(res) {
+    if (res && res.ok) {
+      _chvFecharModal('chv-modal-transferencia');
+      Swal.fire('Transferência solicitada!', `${destino} precisa confirmar o recebimento.`, 'success');
+      _chvAtualizarDados();
+    } else Swal.fire('Erro', (res && res.msg) || 'Falha.', 'error');
+  });
+}
+
+function _chvSalvarChave() {
+  const id = document.getElementById('chv-form-chave-id').value || '';
+  const espacoId = document.getElementById('chv-form-chave-espaco').value;
+  const codigo   = document.getElementById('chv-form-chave-codigo').value.trim();
+  const tipo     = document.getElementById('chv-form-chave-tipo').value;
+  const obs      = document.getElementById('chv-form-chave-obs').value || '';
+  if (!espacoId) { Swal.fire('Atenção', 'Selecione o espaço.', 'warning'); return; }
+  if (!codigo)   { Swal.fire('Atenção', 'Informe o código patrimonial.', 'warning'); return; }
+
+  const dados = { id: id || undefined, espacoId, codigoPatrimonial: codigo, tipo, observacoes: obs, ativa: true };
+  const email = _chvState.dados ? _chvState.dados.emailUsuario : '';
+  GAS.chaves.salvarChave(dados, email, function(res) {
+    if (res && res.ok) {
+      _chvFecharModal('chv-modal-nova-chave');
+      Swal.fire('Salvo!', '', 'success');
+      _chvAtualizarDados();
+    } else Swal.fire('Erro', (res && res.msg) || 'Falha.', 'error');
+  });
+}
+
+function _chvEnviarStatusChave() {
+  const chaveId    = document.getElementById('chv-sc-id').value;
+  const novoStatus = document.getElementById('chv-sc-status').value;
+  const obs        = document.getElementById('chv-sc-obs').value || '';
+  const email      = _chvState.dados ? _chvState.dados.emailUsuario : '';
+  GAS.chaves.alterarStatusChave(chaveId, novoStatus, obs, email, function(res) {
+    if (res && res.ok) {
+      _chvFecharModal('chv-modal-status-chave');
+      Swal.fire('Status alterado!', '', 'success');
+      _chvAtualizarDados();
+    } else Swal.fire('Erro', (res && res.msg) || 'Falha.', 'error');
+  });
+}
+
+function _chvSalvarConfigEspaco() {
+  const id = document.getElementById('chv-ec-id').value;
+  if (!id) return;
+  const dados = {
+    possuiChaves:     document.getElementById('chv-ec-possui-chaves').checked,
+    aceitaReserva:    document.getElementById('chv-ec-aceita-reserva').checked,
+    exigeProtocolo:   document.getElementById('chv-ec-exige-protocolo').checked,
+    qtdUsoComum:      Number(document.getElementById('chv-ec-qtd-comum').value || 0),
+    qtdReserva:       Number(document.getElementById('chv-ec-qtd-reserva').value || 0),
+    localizacaoChave: document.getElementById('chv-ec-localizacao').value || '',
+    obsInternas:      document.getElementById('chv-ec-obs').value || ''
+  };
+  const email = _chvState.dados ? _chvState.dados.emailUsuario : '';
+  GAS.chaves.salvarCamposEspaco(id, dados, email, function(res) {
+    if (res && res.ok) {
+      _chvFecharModal('chv-modal-espaco-config');
+      Swal.fire('Configuração salva!', '', 'success');
+      _chvAtualizarDados();
+    } else Swal.fire('Erro', (res && res.msg) || 'Falha.', 'error');
+  });
+}
+
+</script>

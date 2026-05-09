@@ -85,6 +85,11 @@ const ABA_PARA_MODULO = {
   'EscutaSaturacao':      'ESCUTA',
   'EscutaAcoes':          'ESCUTA',
   'LogsEscuta':           'ESCUTA',
+
+  // CHAVES (Protocolo de Chaves — ESPACOS)
+  'Chaves':               'ESPACOS',
+  'ProtocolosChaves':     'ESPACOS',
+  'HistoricoChaves':      'ESPACOS',
 };
 
 // ══════════════════════════════════════════════════════

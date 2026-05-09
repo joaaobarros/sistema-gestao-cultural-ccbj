@@ -564,6 +564,38 @@ const GAS = {
   },
 
   /**
+   * BLOCO: Protocolo de Chaves (mod_chaves.gs)
+   * @context Retirada, devolução, transferência e rastreabilidade de chaves físicas.
+   */
+  chaves: {
+    obterDados:            function(email, cb, err)                    { GAS._call('chaves_obterDados',            [email],                     cb, err); },
+    listarProtocolos:      function(filtros, email, cb, err)           { GAS._call('chaves_listarProtocolos',      [filtros, email],             cb, err); },
+    obterHistorico:        function(filtros, email, cb, err)           { GAS._call('chaves_obterHistorico',        [filtros, email],             cb, err); },
+    obterIndicadores:      function(email, cb, err)                    { GAS._call('chaves_obterIndicadores',      [email],                     cb, err); },
+
+    salvarChave:           function(dados, email, cb, err)             { GAS._call('chaves_salvarChave',           [dados, email],               cb, err); },
+    alterarStatusChave:    function(id, status, obs, email, cb, err)   { GAS._call('chaves_alterarStatusChave',    [id, status, obs, email],    cb, err); },
+    desativarChave:        function(id, obs, email, cb, err)           { GAS._call('chaves_desativarChave',        [id, obs, email],            cb, err); },
+
+    solicitar:             function(dados, email, cb, err)             { GAS._call('chaves_solicitar',             [dados, email],               cb, err); },
+    iniciarEntregaDireta:  function(dados, email, cb, err)             { GAS._call('chaves_iniciarEntregaDireta',  [dados, email],               cb, err); },
+    aprovarEntrega:        function(id, obs, email, cb, err)           { GAS._call('chaves_aprovarEntrega',        [id, obs, email],             cb, err); },
+    confirmarRecebimento:  function(id, obs, email, cb, err)           { GAS._call('chaves_confirmarRecebimento',  [id, obs, email],             cb, err); },
+    registrarDevolucao:    function(id, obs, email, cb, err)           { GAS._call('chaves_registrarDevolucao',    [id, obs, email],             cb, err); },
+    confirmarDevolucao:    function(id, obs, email, cb, err)           { GAS._call('chaves_confirmarDevolucao',    [id, obs, email],             cb, err); },
+
+    solicitarTransferencia:  function(id, dest, obs, email, cb, err)   { GAS._call('chaves_solicitarTransferencia',  [id, dest, obs, email],    cb, err); },
+    confirmarTransferencia:  function(id, obs, email, cb, err)         { GAS._call('chaves_confirmarTransferencia',  [id, obs, email],          cb, err); },
+    cancelarTransferencia:   function(id, obs, email, cb, err)         { GAS._call('chaves_cancelarTransferencia',   [id, obs, email],          cb, err); },
+
+    cancelar:              function(id, motivo, email, cb, err)        { GAS._call('chaves_cancelar',              [id, motivo, email],          cb, err); },
+    negar:                 function(id, motivo, email, cb, err)        { GAS._call('chaves_negar',                 [id, motivo, email],          cb, err); },
+
+    salvarCamposEspaco:    function(id, dados, email, cb, err)         { GAS._call('chaves_salvarCamposEspaco',    [id, dados, email],           cb, err); },
+    listarEspacosCompletos: function(email, cb, err)                   { GAS._call('chaves_listarEspacosCompletos', [email],                     cb, err); }
+  },
+
+  /**
    * BLOCO: Permissões modulares (mod_permissoes.gs)
    */
   permissoes: {

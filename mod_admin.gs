@@ -751,11 +751,26 @@ function processarSalvarConfig(dados) {
               Number(dados.capacidade),
               data[i][3] || "",
               emailEsp,
+              !!dados.possuiChaves,
+              Number(dados.qtdUsoComum || 0),
+              Number(dados.qtdReserva || 0),
+              dados.aceitaReserva !== false,
+              !!dados.exigeProtocolo,
+              String(dados.localizacaoChave || ""),
+              String(dados.obsInternas || ""),
             ];
             aba
               .getRange(linha, 2, 1, 2)
               .setValues([[nome, Number(dados.capacidade)]]);
             aba.getRange(linha, 5).setValue(emailEsp);
+            // Campos expandidos de chave (colunas 6-12)
+            aba.getRange(linha, 6).setValue(!!dados.possuiChaves);
+            aba.getRange(linha, 7).setValue(Number(dados.qtdUsoComum || 0));
+            aba.getRange(linha, 8).setValue(Number(dados.qtdReserva || 0));
+            aba.getRange(linha, 9).setValue(dados.aceitaReserva !== false);
+            aba.getRange(linha, 10).setValue(!!dados.exigeProtocolo);
+            aba.getRange(linha, 11).setValue(String(dados.localizacaoChave || ""));
+            aba.getRange(linha, 12).setValue(String(dados.obsInternas || ""));
           } else if (tipo === "item") {
             dadosDepois = [id, nome, dados.categoria, Number(dados.qtd)];
             aba
@@ -791,9 +806,14 @@ function processarSalvarConfig(dados) {
         nome,
         Number(dados.capacidade),
         "",
-        String(dados.emailEspaco || "")
-          .toLowerCase()
-          .trim(),
+        String(dados.emailEspaco || "").toLowerCase().trim(),
+        !!dados.possuiChaves,
+        Number(dados.qtdUsoComum || 0),
+        Number(dados.qtdReserva || 0),
+        dados.aceitaReserva !== false,
+        !!dados.exigeProtocolo,
+        String(dados.localizacaoChave || ""),
+        String(dados.obsInternas || ""),
       ];
     else if (tipo === "item")
       novaLinha = [
