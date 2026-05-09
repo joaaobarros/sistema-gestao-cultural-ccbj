@@ -5,43 +5,70 @@
  *              ou que não se encaixam bem no modelo tabular.
  * @layer backend
  * @responsibility Leitura e escrita segura (com lock) de arquivos JSON em pasta CCBJ_DATA.
- * @dependencies DriveApp, LockService
+ * @dependencies DriveApp, LockService, PropertiesService
  *
  * IMPACTO NO SISTEMA:
- *   Atualmente pouco utilizado — a maior parte dos dados está nas planilhas via _getSheet.
- *   Útil para dados de configuração flexível ou preferências de usuário com estrutura variável.
+ *   getDataFolder() usa o ID registrado em PropertiesService (FOLDER_ID_DATA) para acesso
+ *   direto, sem busca por nome. O ID é registrado por inicializarDataLayer() em Setup.js.
+ *   Executar inicializarSistema() ou recriarEstrutura() garante o registro correto.
  *
  * RISCOS:
- *   - readJSON usa LockService.getScriptLock (global) mesmo para leitura — pode criar
- *     contenção desnecessária. Em uso futuro intensivo, considerar lock de usuário.
- *   - Arquivos corrompidos são sobrescritos com [] automaticamente (dados perdidos).
+ *   - readJSON: retorna [] em caso de corrupção sem sobrescrever o arquivo — preserva dados.
+ *   - modifyJSON: lança exceção em caso de corrupção — impede escrita sobre dado inválido.
+ *   - Race condition em writeJSON (sem lock de leitura): usar modifyJSON para escrita crítica.
  */
 
 /**
  * ========================================
  * BLOCO: Acesso à pasta de dados no Drive
  * ========================================
- * @description Localiza ou cria a pasta "CCBJ_DATA" no Drive do script.
- *              getFile: localiza ou cria um arquivo JSON dentro dessa pasta.
- * @context Usados por readJSON e writeJSON
- * @sideEffects Pode criar pasta ou arquivo no Drive se não existirem
+ * @description getDataFolder(): localiza a pasta CCBJ_DATA pelo ID registrado em
+ *              PropertiesService; faz fallback para busca por nome se ID não estiver
+ *              registrado ou tiver ficado inválido (ex: após migração de conta).
+ *              _dataFolderCache: evita chamar DriveApp.getFolderById múltiplas vezes
+ *              na mesma execução GAS.
+ *              getFile(): localiza ou cria um arquivo JSON dentro da pasta.
+ * @context Usados por readJSON, writeJSON e modifyJSON
+ * @sideEffects getDataFolder() pode registrar ID em PropertiesService no fallback;
+ *              getFile() pode criar arquivo vazio no Drive
  */
 
-const DATA_FOLDER_NAME = "CCBJ_DATA";
+// Deve coincidir com PROP.DATA em Setup.js
+const DATA_FOLDER_PROP = 'FOLDER_ID_DATA';
+const DATA_FOLDER_NAME = 'CCBJ_DATA';
+
+// Cache em memória — válido apenas dentro de uma única execução GAS
+var _dataFolderCache = null;
 
 function getDataFolder() {
-  const pastas = DriveApp.getFoldersByName(DATA_FOLDER_NAME);
-  if (pastas.hasNext()) return pastas.next();
+  if (_dataFolderCache) return _dataFolderCache;
 
-  return DriveApp.createFolder(DATA_FOLDER_NAME);
+  const props    = PropertiesService.getScriptProperties();
+  const folderId = props.getProperty(DATA_FOLDER_PROP);
+
+  if (folderId) {
+    try {
+      _dataFolderCache = DriveApp.getFolderById(folderId);
+      return _dataFolderCache;
+    } catch(e) {
+      // ID registrado ficou inválido (ex: pasta deletada) — refaz busca abaixo
+      console.warn('DataLayer: ID de pasta inválido, re-registrando.');
+    }
+  }
+
+  // Fallback: busca por nome e registra o ID encontrado/criado
+  const iter   = DriveApp.getFoldersByName(DATA_FOLDER_NAME);
+  const folder = iter.hasNext() ? iter.next() : DriveApp.createFolder(DATA_FOLDER_NAME);
+  props.setProperty(DATA_FOLDER_PROP, folder.getId());
+  _dataFolderCache = folder;
+  console.log('DataLayer: pasta re-registrada → ' + folder.getId());
+  return folder;
 }
 
 function getFile(nome) {
-  const pasta = getDataFolder();
+  const pasta    = getDataFolder();
   const arquivos = pasta.getFilesByName(nome);
-
   if (arquivos.hasNext()) return arquivos.next();
-
   return pasta.createFile(nome, JSON.stringify([]));
 }
 
@@ -49,65 +76,75 @@ function getFile(nome) {
  * ========================================
  * BLOCO: Leitura e escrita de JSON com lock
  * ========================================
- * @description readJSON: lê e parseia arquivo JSON com lock de 5s (previne leitura parcial).
+ * @description readJSON: lê e parseia arquivo JSON.
+ *                Em caso de erro de parse, retorna [] SEM sobrescrever o arquivo
+ *                (preserva dado para diagnóstico; não silencia corrupção com reset).
  *              writeJSON: serializa e salva com lock de 30s (previne escrita concorrente).
- *              readJSONAsMap / writeJSONFromMap: variantes para trabalhar com objetos
- *              indexados por `id` ao invés de arrays.
+ *                Adequado para escritas únicas onde o chamador já leu e preparou os dados.
+ *              modifyJSON: operação atômica de leitura + modificação + escrita sob o mesmo
+ *                lock. Usar para qualquer read-modify-write crítico (evita race condition).
+ *              readJSONAsMap / writeJSONFromMap: variantes indexadas por `id`.
  * @context Chamados por módulos que usam persistência baseada em Drive
- * @sideEffects readJSON: pode resetar arquivo corrompido para []; writeJSON: sobrescreve conteúdo
+ * @sideEffects writeJSON/modifyJSON: sobrescrevem conteúdo do arquivo
  */
 function readJSON(nome) {
   try {
-    const file = getFile(nome);
-    const conteudo = file.getBlob().getDataAsString();
-    return JSON.parse(conteudo || "[]");
-  } catch (e) {
-    console.error("JSON corrompido em:", nome, e);
-    try { getFile(nome).setContent(JSON.stringify([])); } catch(e2) {}
+    const conteudo = getFile(nome).getBlob().getDataAsString();
+    return JSON.parse(conteudo || '[]');
+  } catch(e) {
+    console.error('readJSON: falha em "' + nome + '" — ' + e.message);
     return [];
   }
 }
 
 function writeJSON(nome, data) {
-
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
-
   try {
-
-    const file = getFile(nome);
-
-    const conteudo = JSON.stringify(data);
-    file.setContent(conteudo);
-
-  } catch (e) {
-
-    console.error("Erro ao salvar JSON:", nome, e);
-    throw new Error("Falha ao salvar dados");
-
+    getFile(nome).setContent(JSON.stringify(data));
+  } catch(e) {
+    console.error('writeJSON: falha em "' + nome + '" — ' + e.message);
+    throw new Error('Falha ao salvar dados: ' + nome);
   } finally {
+    lock.releaseLock();
+  }
+}
 
+/**
+ * Lê, modifica atomicamente e grava um arquivo JSON sob lock exclusivo.
+ * @param {string} nome  — nome do arquivo JSON (ex: 'permissoes_v2.json')
+ * @param {function} fn  — recebe o array atual, retorna o array modificado
+ * @returns {Array} resultado retornado por fn
+ * @throws se o arquivo estiver corrompido ou se fn lançar exceção
+ */
+function modifyJSON(nome, fn) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const file     = getFile(nome);
+    const conteudo = file.getBlob().getDataAsString();
+    const data     = JSON.parse(conteudo || '[]');   // lança em corrupção — não escreve lixo
+    const result   = fn(data);
+    file.setContent(JSON.stringify(result));
+    return result;
+  } catch(e) {
+    console.error('modifyJSON: falha em "' + nome + '" — ' + e.message);
+    throw new Error('Falha ao modificar ' + nome + ': ' + e.message);
+  } finally {
     lock.releaseLock();
   }
 }
 
 function readJSONAsMap(nome) {
   const lista = readJSON(nome);
-
-  const mapa = {};
+  const mapa  = {};
   for (let i = 0; i < lista.length; i++) {
     const item = lista[i];
-    if (item && item.id) {
-      mapa[item.id] = item;
-    }
+    if (item && item.id) mapa[item.id] = item;
   }
-
   return mapa;
 }
 
 function writeJSONFromMap(nome, mapa) {
-  const lista = Object.values(mapa);
-  writeJSON(nome, lista);
+  writeJSON(nome, Object.values(mapa));
 }
-
-

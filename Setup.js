@@ -91,7 +91,26 @@ const PROP = {
   PESSOAL:      'SHEET_ID_PESSOAL',
   ESCUTA:       'SHEET_ID_ESCUTA',
   FOLDER_ROOT:  'FOLDER_ID_ROOT',
+  DATA:         'FOLDER_ID_DATA',      // pasta CCBJ_DATA do DataLayer
 };
+
+// Catálogo canônico de arquivos JSON gerenciados pelo DataLayer.
+// Adicionar aqui sempre que um novo arquivo JSON for introduzido em qualquer módulo.
+const _DATA_FILES = [
+  // Permissões
+  'permissoes_v2.json', 'usuarios_sistema.json', 'auditoria_permissoes.json',
+  'permissoes.json',
+  // Equipes / RH
+  'funcionarios.json', 'escalas.json', 'avaliacoes.json', 'ferias.json',
+  'rh_cargos.json', 'rh_historico.json', 'rh_avaliacoes.json',
+  'rh_ponto.json', 'rh_documentos.json', 'rh_folha.json', 'rh_perfil_social.json',
+  // Financeiro
+  'contratacoes.json', 'pagamentos.json',
+  // Pessoal / Processos
+  'tarefas.json', 'processos.json', 'demandas.json', 'atendimentos.json',
+  // Almoxarifado
+  'almoxarifado.json', 'movimentacoes_almox.json',
+];
 
 // ── Estrutura de cada módulo ─────────────────────────────────────────────
 const MODULOS = {
@@ -627,6 +646,15 @@ function inicializarSistema() {
     console.warn('Falha ao inicializar credenciais:', e.message);
   }
 
+  // =====================================
+  // INICIALIZA DATALAYER (pasta + JSONs)
+  // =====================================
+  try {
+    inicializarDataLayer();
+  } catch(e) {
+    console.warn('Falha ao inicializar DataLayer:', e.message);
+  }
+
   if (usarUI) {
     ui.alert('Setup concluído!');
   }
@@ -643,6 +671,51 @@ function inicializarSistema() {
 
 function autorizarDrive() {
   DriveApp.getRootFolder();
+}
+
+/**
+ * ========================================
+ * BLOCO: DataLayer — pasta e arquivos JSON
+ * ========================================
+ * @description Garante que a pasta CCBJ_DATA existe no Drive, registra seu ID em
+ *              PropertiesService (leitura rápida sem busca por nome) e pré-cria todos
+ *              os arquivos JSON listados em _DATA_FILES com conteúdo vazio ([]).
+ *              Idempotente: re-executar não apaga dados existentes.
+ * @context Chamado por inicializarSistema() e recriarEstrutura().
+ *          Pode ser executado manualmente para reparar a pasta após migração de conta.
+ * @sideEffects Cria/registra pasta; cria arquivos JSON ausentes (nunca sobrescreve existentes)
+ */
+function inicializarDataLayer() {
+  const props = PropertiesService.getScriptProperties();
+  let folderId = props.getProperty(PROP.DATA);
+  let folder   = null;
+
+  // 1. Tentar abrir pelo ID registrado
+  if (folderId) {
+    try { folder = DriveApp.getFolderById(folderId); } catch(e) { folder = null; }
+  }
+
+  // 2. Fallback: buscar por nome e registrar ID
+  if (!folder) {
+    const iter = DriveApp.getFoldersByName('CCBJ_DATA');
+    folder = iter.hasNext() ? iter.next() : DriveApp.createFolder('CCBJ_DATA');
+    props.setProperty(PROP.DATA, folder.getId());
+    console.log('DataLayer: pasta registrada → ' + folder.getId());
+  }
+
+  // 3. Pré-criar arquivos ausentes (sem sobrescrever dados)
+  let criados = 0;
+  _DATA_FILES.forEach(function(nome) {
+    const iter = folder.getFilesByName(nome);
+    if (!iter.hasNext()) {
+      folder.createFile(nome, JSON.stringify([]));
+      criados++;
+      console.log('DataLayer: criado ' + nome);
+    }
+  });
+
+  console.log('DataLayer: ' + _DATA_FILES.length + ' arquivos verificados, ' + criados + ' criados.');
+  return { ok: true, folderId: folder.getId(), criados: criados };
 }
 
 // ── Cria pasta raiz + subpastas ──────────────────────────────────────────
@@ -833,6 +906,12 @@ function recriarEstrutura() {
       console.warn('⚠️ Falha em ' + chave + ': ' + e.message);
     }
   });
+  try {
+    inicializarDataLayer();
+    console.log('✅ DataLayer verificado');
+  } catch(e) {
+    console.warn('⚠️ DataLayer: ' + e.message);
+  }
 }
 
 /** Libera itens órfãos de uma sala excluída (mantido do sistema anterior) */

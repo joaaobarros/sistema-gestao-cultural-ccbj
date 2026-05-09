@@ -277,15 +277,17 @@ function salvarPermissoesUsuarioV2(dados) {
     atualizadoEm:           new Date().toISOString()
   };
 
-  // Atualiza lista já lida (sem re-ler o arquivo)
-  var found = false;
-  for (var i = 0; i < listaPerms.length; i++) {
-    if (String(listaPerms[i].email||'').toLowerCase() === emailAlvo) {
-      listaPerms[i] = registro; found = true; break;
+  // Escrita atômica: re-lê dentro do lock para evitar race condition de read-modify-write
+  modifyJSON('permissoes_v2.json', function(lista) {
+    var found = false;
+    for (var i = 0; i < lista.length; i++) {
+      if (String(lista[i].email||'').toLowerCase() === emailAlvo) {
+        lista[i] = registro; found = true; break;
+      }
     }
-  }
-  if (!found) listaPerms.push(registro);
-  writeJSON('permissoes_v2.json', listaPerms);
+    if (!found) lista.push(registro);
+    return lista;
+  });
 
   // Auditoria assíncrona — não bloqueia retorno
   try { _p2registrarAuditoria({ editor: emailEditor, alvo: emailAlvo,
