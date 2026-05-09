@@ -18,6 +18,11 @@
             <i class="fas fa-user-plus text-[10px]"></i>Novos Usuários
             <span id="badgeCadastros" class="hidden min-w-[18px] h-[18px] bg-amber-500 text-white text-[9px] font-black rounded-full flex items-center justify-center px-1">0</span>
           </button>
+          <button id="tab-aprov-chaves" onclick="_aprovSwitch('chaves')"
+            class="flex items-center gap-2 px-4 py-2 bg-slate-200 text-slate-600 text-xs font-black rounded-xl uppercase transition-all">
+            <i class="fas fa-key text-[10px]"></i>Chaves
+            <span id="badgeChavesAprov" class="hidden min-w-[18px] h-[18px] bg-indigo-500 text-white text-[9px] font-black rounded-full flex items-center justify-center px-1">0</span>
+          </button>
         </div>
 
         <!-- PAINEL: Reservas -->
@@ -111,23 +116,47 @@
           </div>
         </div>
 
+        <!-- PAINEL: Chaves -->
+        <div id="painel-aprov-chaves" class="hidden">
+          <div class="bg-white rounded-3xl shadow-sm border border-slate-200 p-6 mb-6">
+            <div class="flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <h3 class="text-lg font-black text-slate-800 uppercase tracking-tighter">
+                  <i class="fas fa-key text-purple-500 mr-2"></i>Transações de Chaves
+                </h3>
+                <span id="contadorChavesAprov" class="text-[10px] text-slate-400 font-bold"></span>
+              </div>
+              <button onclick="carregarChavesPendentes()"
+                class="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-black rounded-xl uppercase transition-all">
+                <i class="fas fa-sync-alt mr-1"></i>Atualizar
+              </button>
+            </div>
+          </div>
+          <div id="listaChavesAprov" class="space-y-4 max-h-[calc(100vh-320px)] overflow-y-auto pr-1 custom-scrollbar">
+            <div class="p-10 text-center text-slate-300">
+              <i class="fas fa-key text-3xl mb-3"></i>
+              <p class="text-sm font-bold">Abra esta aba para carregar as transações.</p>
+            </div>
+          </div>
+        </div>
+
       </section>
 
       <script>
       function _aprovSwitch(aba) {
-        var isReservas = aba === 'reservas';
-        document.getElementById('painel-aprov-reservas').classList.toggle('hidden', !isReservas);
-        document.getElementById('painel-aprov-usuarios').classList.toggle('hidden', isReservas);
-
-        var btnR = document.getElementById('tab-aprov-reservas');
-        var btnU = document.getElementById('tab-aprov-usuarios');
-        if (isReservas) {
-          btnR.className = 'flex items-center gap-2 px-4 py-2 bg-slate-900 text-white text-xs font-black rounded-xl uppercase transition-all';
-          btnU.className = 'flex items-center gap-2 px-4 py-2 bg-slate-200 text-slate-600 text-xs font-black rounded-xl uppercase transition-all';
-        } else {
-          btnU.className = 'flex items-center gap-2 px-4 py-2 bg-slate-900 text-white text-xs font-black rounded-xl uppercase transition-all';
-          btnR.className = 'flex items-center gap-2 px-4 py-2 bg-slate-200 text-slate-600 text-xs font-black rounded-xl uppercase transition-all';
-          if (typeof carregarCadastrosExternos === 'function') carregarCadastrosExternos();
-        }
+        ['reservas', 'usuarios', 'chaves'].forEach(function(id) {
+          var p = document.getElementById('painel-aprov-' + id);
+          var b = document.getElementById('tab-aprov-' + id);
+          var ativo = id === aba;
+          if (p) p.classList.toggle('hidden', !ativo);
+          if (b) {
+            b.classList.toggle('bg-slate-900', ativo);
+            b.classList.toggle('text-white', ativo);
+            b.classList.toggle('bg-slate-200', !ativo);
+            b.classList.toggle('text-slate-600', !ativo);
+          }
+        });
+        if (aba === 'usuarios' && typeof carregarCadastrosExternos === 'function') carregarCadastrosExternos();
+        if (aba === 'chaves'   && typeof carregarChavesPendentes   === 'function') carregarChavesPendentes();
       }
       </script>

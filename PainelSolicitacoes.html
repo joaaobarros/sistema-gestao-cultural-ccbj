@@ -74,7 +74,8 @@ function _atualizarStatsSolicitacoes() {
 function _atualizarBadgeSolicitacoes() {
   const pendentesReservas = _solicitacoesCache.filter(s => s.status === 'PENDENTE').length;
   const pendentesCadastros = (_cadastrosCache || []).filter(c => c.status === 'PENDENTE').length;
-  const total = pendentesReservas + pendentesCadastros;
+  const pendentesChaves = (_chavesAprovCache || []).length;
+  const total = pendentesReservas + pendentesCadastros + pendentesChaves;
   const badge = document.getElementById('badgeSolicitacoes');
   if (!badge) return;
   if (total > 0) {
@@ -386,6 +387,7 @@ function _recusarUI(id) {
 // ═══════════════════════════════════════════════════════════════
 var _cadastrosCache = [];
 var _filtroCadastros = 'PENDENTE';
+var _chavesAprovCache = [];
 
 function carregarCadastrosExternos() {
   var isAdmin = AppState && AppState.usuario &&
@@ -577,6 +579,187 @@ function _aprovarCadastroUI(id) {
       if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-check text-[9px]"></i>Aprovar'; }
     });
   });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// TRANSAÇÕES DE CHAVES
+// ═══════════════════════════════════════════════════════════════
+
+function carregarChavesPendentes() {
+  var container = document.getElementById('listaChavesAprov');
+  if (!container) return;
+
+  container.innerHTML = `
+    <div class="p-10 text-center">
+      <div class="inline-flex gap-1.5 items-center">
+        <div class="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style="animation-delay:0ms"></div>
+        <div class="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style="animation-delay:150ms"></div>
+        <div class="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style="animation-delay:300ms"></div>
+      </div>
+      <p class="text-slate-400 text-[10px] mt-3 font-black uppercase tracking-widest">Carregando transações...</p>
+    </div>`;
+
+  var email = AppState && AppState.usuario ? AppState.usuario.email : '';
+  var statusPendentes = ['SOLICITADA', 'AGUARDANDO_CONFIRMACAO_INFRA', 'TRANSFERENCIA_PENDENTE'];
+
+  GAS.chaves.listarProtocolos({}, email, function(res) {
+    var todos = (res && res.ok) ? (res.protocolos || []) : [];
+    _chavesAprovCache = todos.filter(function(p) { return statusPendentes.indexOf(p.status) !== -1; });
+    _renderizarChavesAprov();
+    _atualizarBadgeChavesAprov();
+  }, function() {
+    if (container) container.innerHTML =
+      '<div class="p-10 text-center"><div class="w-12 h-12 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-3"><i class="fas fa-triangle-exclamation text-red-400"></i></div><p class="text-red-400 text-sm font-bold">Erro ao carregar transações.</p></div>';
+  });
+}
+
+function _atualizarBadgeChavesAprov() {
+  var total = _chavesAprovCache.length;
+  var badge = document.getElementById('badgeChavesAprov');
+  if (badge) { badge.textContent = total; badge.classList.toggle('hidden', total === 0); }
+  var el = document.getElementById('contadorChavesAprov');
+  if (el) el.textContent = total + ' registro(s)';
+  if (typeof _atualizarBadgeSolicitacoes === 'function') _atualizarBadgeSolicitacoes();
+}
+
+function _renderizarChavesAprov() {
+  var container = document.getElementById('listaChavesAprov');
+  if (!container) return;
+
+  if (!_chavesAprovCache.length) {
+    container.innerHTML = '<div class="p-16 text-center"><div class="w-16 h-16 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-4"><i class="fas fa-key text-green-400 text-2xl"></i></div><p class="text-slate-400 font-bold text-sm">Nenhuma transação pendente.</p></div>';
+    return;
+  }
+
+  var email = (AppState && AppState.usuario ? AppState.usuario.email : '').toLowerCase().trim();
+  var isInfra = AppState && AppState.usuario && (AppState.usuario.isAdmin || AppState.usuario.isSuperadmin || AppState.usuario.isInfra);
+
+  var statusConfig = {
+    'SOLICITADA': {
+      label: 'Aguardando Infra', cor: 'bg-purple-100 text-purple-700',
+      dot: 'bg-purple-400 animate-pulse', borda: 'border-l-purple-400',
+      descr: 'Solicitação de retirada aguardando aprovação da infra'
+    },
+    'AGUARDANDO_CONFIRMACAO_INFRA': {
+      label: 'Devolvida — Confirmar', cor: 'bg-amber-100 text-amber-700',
+      dot: 'bg-amber-400 animate-pulse', borda: 'border-l-amber-400',
+      descr: 'Usuário registrou devolução — aguardando confirmação da infra'
+    },
+    'TRANSFERENCIA_PENDENTE': {
+      label: 'Transferência Pendente', cor: 'bg-indigo-100 text-indigo-700',
+      dot: 'bg-indigo-400 animate-pulse', borda: 'border-l-indigo-400',
+      descr: 'Aguardando confirmação do destinatário'
+    }
+  };
+
+  container.innerHTML = _chavesAprovCache.map(function(p) {
+    var sc = statusConfig[p.status] || { label: p.status, cor: 'bg-slate-100 text-slate-600', dot: 'bg-slate-400', borda: 'border-l-slate-300', descr: '' };
+    var espacoNome = (AppState && AppState.mapaSalas && AppState.mapaSalas[p.espacoId]) ? AppState.mapaSalas[p.espacoId] : (p.espacoId || '—');
+    var destEmail = String(p.transferenciaDestinoId || '').toLowerCase().trim();
+
+    var acoes = '';
+    if (p.status === 'SOLICITADA' && isInfra) {
+      acoes = `<button onclick="_aprovChaveAprovarEntrega('${escaparHTML(p.id)}')" class="flex-1 py-2.5 bg-green-600 hover:bg-green-700 text-white text-[10px] font-black rounded-xl transition-all flex items-center justify-center gap-1.5"><i class="fas fa-check text-[9px]"></i>Aprovar Entrega</button>
+               <button onclick="_aprovChaveNegar('${escaparHTML(p.id)}')" class="py-2.5 px-3 bg-white hover:bg-red-600 border border-red-200 hover:border-red-600 text-red-500 hover:text-white text-[10px] font-black rounded-xl transition-all flex items-center justify-center gap-1.5"><i class="fas fa-times text-[9px]"></i>Negar</button>`;
+    } else if (p.status === 'AGUARDANDO_CONFIRMACAO_INFRA' && isInfra) {
+      acoes = `<button onclick="_aprovChaveConfirmarDevolucao('${escaparHTML(p.id)}')" class="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-black rounded-xl transition-all flex items-center justify-center gap-1.5"><i class="fas fa-undo text-[9px]"></i>Confirmar Devolução</button>`;
+    } else if (p.status === 'TRANSFERENCIA_PENDENTE' && destEmail === email) {
+      acoes = `<button onclick="_aprovChaveConfirmarTransferencia('${escaparHTML(p.id)}')" class="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-black rounded-xl transition-all flex items-center justify-center gap-1.5"><i class="fas fa-exchange-alt text-[9px]"></i>Aceitar</button>
+               <button onclick="_aprovChaveCancelarTransferencia('${escaparHTML(p.id)}')" class="py-2.5 px-3 bg-white hover:bg-red-600 border border-red-200 hover:border-red-600 text-red-500 hover:text-white text-[10px] font-black rounded-xl transition-all flex items-center justify-center gap-1.5"><i class="fas fa-times text-[9px]"></i>Recusar</button>`;
+    }
+
+    return `
+      <div class="bg-white border border-slate-200 border-l-4 ${sc.borda} rounded-2xl overflow-hidden hover:shadow-md transition-all">
+        <div class="flex items-start justify-between gap-3 px-5 pt-5 pb-3">
+          <div class="flex flex-wrap items-center gap-2">
+            <span class="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[9px] font-black uppercase bg-slate-100 text-slate-600"><i class="fas fa-key text-[8px]"></i>Chave</span>
+            <span class="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[9px] font-black uppercase ${sc.cor}"><span class="w-1.5 h-1.5 rounded-full ${sc.dot}"></span>${escaparHTML(sc.label)}</span>
+            <span class="inline-flex items-center gap-1 text-[10px] text-purple-600 font-black"><i class="fas fa-map-marker-alt text-[8px]"></i>${escaparHTML(espacoNome)}</span>
+          </div>
+          <span class="text-[9px] text-slate-400 shrink-0 mt-0.5 font-mono">${escaparHTML(p.id)}</span>
+        </div>
+        <div class="px-5 pb-3 space-y-2">
+          <p class="text-[10px] text-slate-500">${escaparHTML(sc.descr)}</p>
+          <div class="flex flex-wrap gap-3">
+            <div class="flex items-center gap-2">
+              <div class="w-6 h-6 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center text-[9px] font-black shrink-0">${escaparHTML((p.responsavelNome || p.solicitanteNome || '?').charAt(0).toUpperCase())}</div>
+              <div class="flex flex-col">
+                <span class="text-[9px] font-black text-slate-400 uppercase tracking-wider">Responsável</span>
+                <span class="text-[11px] text-slate-600 font-bold">${escaparHTML(p.responsavelNome || p.solicitanteNome || '—')}</span>
+              </div>
+            </div>
+            ${p.transferenciaDestinoNome ? `<div class="flex items-center gap-2">
+              <div class="w-6 h-6 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center text-[9px] font-black shrink-0"><i class="fas fa-arrow-right text-[8px]"></i></div>
+              <div class="flex flex-col">
+                <span class="text-[9px] font-black text-slate-400 uppercase tracking-wider">Destinatário</span>
+                <span class="text-[11px] text-slate-600 font-bold">${escaparHTML(p.transferenciaDestinoNome)}</span>
+              </div>
+            </div>` : ''}
+          </div>
+        </div>
+        ${acoes ? `<div class="flex gap-2 px-5 pb-5">${acoes}</div>` : ''}
+      </div>`;
+  }).join('');
+}
+
+function _aprovChaveAprovarEntrega(id) {
+  var email = AppState && AppState.usuario ? AppState.usuario.email : '';
+  Swal.fire({ title: 'Aprovar entrega?', icon: 'question', showCancelButton: true, confirmButtonText: 'Aprovar', confirmButtonColor: '#16a34a' })
+    .then(function(r) {
+      if (!r.isConfirmed) return;
+      GAS.chaves.aprovarEntrega(id, '', email, function(res) {
+        if (res && res.ok) { Swal.fire({ icon: 'success', title: 'Aprovado!', timer: 1800, showConfirmButton: false }); carregarChavesPendentes(); }
+        else Swal.fire('Erro', (res && res.msg) || 'Falha.', 'error');
+      });
+    });
+}
+
+function _aprovChaveNegar(id) {
+  var email = AppState && AppState.usuario ? AppState.usuario.email : '';
+  Swal.fire({ title: 'Negar solicitação?', input: 'text', inputPlaceholder: 'Motivo (opcional)', icon: 'warning', showCancelButton: true, confirmButtonText: 'Negar', confirmButtonColor: '#dc2626' })
+    .then(function(r) {
+      if (!r.isConfirmed) return;
+      GAS.chaves.negar(id, r.value || '', email, function(res) {
+        if (res && res.ok) { Swal.fire({ icon: 'success', title: 'Negado.', timer: 1800, showConfirmButton: false }); carregarChavesPendentes(); }
+        else Swal.fire('Erro', (res && res.msg) || 'Falha.', 'error');
+      });
+    });
+}
+
+function _aprovChaveConfirmarDevolucao(id) {
+  var email = AppState && AppState.usuario ? AppState.usuario.email : '';
+  Swal.fire({ title: 'Confirmar devolução?', icon: 'question', showCancelButton: true, confirmButtonText: 'Confirmar', confirmButtonColor: '#2563eb' })
+    .then(function(r) {
+      if (!r.isConfirmed) return;
+      GAS.chaves.confirmarDevolucao(id, '', email, function(res) {
+        if (res && res.ok) { Swal.fire({ icon: 'success', title: 'Devolução confirmada!', timer: 1800, showConfirmButton: false }); carregarChavesPendentes(); }
+        else Swal.fire('Erro', (res && res.msg) || 'Falha.', 'error');
+      });
+    });
+}
+
+function _aprovChaveConfirmarTransferencia(id) {
+  var email = AppState && AppState.usuario ? AppState.usuario.email : '';
+  Swal.fire({ title: 'Aceitar transferência?', icon: 'question', showCancelButton: true, confirmButtonText: 'Aceitar', confirmButtonColor: '#4f46e5' })
+    .then(function(r) {
+      if (!r.isConfirmed) return;
+      GAS.chaves.confirmarTransferencia(id, '', email, function(res) {
+        if (res && res.ok) { Swal.fire({ icon: 'success', title: 'Transferência aceita!', timer: 1800, showConfirmButton: false }); carregarChavesPendentes(); }
+        else Swal.fire('Erro', (res && res.msg) || 'Falha.', 'error');
+      });
+    });
+}
+
+function _aprovChaveCancelarTransferencia(id) {
+  var email = AppState && AppState.usuario ? AppState.usuario.email : '';
+  Swal.fire({ title: 'Recusar transferência?', icon: 'warning', showCancelButton: true, confirmButtonText: 'Recusar', confirmButtonColor: '#dc2626' })
+    .then(function(r) {
+      if (!r.isConfirmed) return;
+      GAS.chaves.cancelarTransferencia(id, 'Recusado pelo destinatário.', email, function(res) {
+        if (res && res.ok) { Swal.fire({ icon: 'success', title: 'Recusada.', timer: 1800, showConfirmButton: false }); carregarChavesPendentes(); }
+        else Swal.fire('Erro', (res && res.msg) || 'Falha.', 'error');
+      });
+    });
 }
 
 function _recusarCadastroUI(id) {

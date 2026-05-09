@@ -130,7 +130,7 @@ function _chvMostrarSubaba(id) {
   const tab = document.getElementById('chv-tab-' + id);
   if (tab) tab.classList.add('chv-tab-ativo');
 
-  if (id === 'relatorios') return;
+  if (id === 'relatorios') { _chvCarregarRelatorio(); return; }
   _chvRenderizarSubaba(id);
 }
 
@@ -228,7 +228,7 @@ function _chvRenderizarIndicadores() {
 
   // Badge sidebar pendências
   const totalPend = pendInfra + pendUsr + atrasados + transf;
-  const badge = document.getElementById('chv-badge-pendencias');
+  const badge = document.getElementById('badgeChavesPendentes');
   if (badge) {
     badge.textContent = totalPend;
     badge.classList.toggle('hidden', totalPend === 0);
