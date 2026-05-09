@@ -100,10 +100,10 @@
         <button onclick="toggleModulo('mod-infraestrutura')"
           class="w-full flex items-center justify-between px-3 py-2 text-[9px] font-black text-slate-500 uppercase tracking-widest hover:text-purple-300 transition-colors">
           <span><i class="fas fa-tools mr-2 text-slate-600"></i>Infraestrutura</span>
-          <i id="icon-mod-infraestrutura" class="fas fa-chevron-down text-[8px] text-slate-600"></i>
+          <i id="icon-mod-infraestrutura" class="fas fa-chevron-up text-[8px] text-slate-600"></i>
         </button>
 
-        <div id="mod-infraestrutura" class="space-y-0.5 pl-2 hidden">
+        <div id="mod-infraestrutura" class="space-y-0.5 pl-2">
 
           <button data-aba="aba-protocolo-chaves" class="tab-btn nav-item w-full">
             <i class="fas fa-key w-5 text-center text-xs"></i>
@@ -140,7 +140,7 @@
       </div>
 
       <!-- ── SISTEMA (superadmin/admin) ───────────────────── -->
-      <div class="mb-1" id="modulo-sistema">
+      <div class="mb-1 hidden" id="modulo-sistema">
         <button onclick="toggleModulo('mod-sistema')"
           class="w-full flex items-center justify-between px-3 py-2 text-[9px] font-black text-slate-500 uppercase tracking-widest hover:text-purple-300 transition-colors">
           <span><i class="fas fa-server mr-2 text-slate-600"></i>Sistema</span>
@@ -239,37 +239,65 @@
 <script>
 (function() {
   var STORE_KEY = 'sidebar_modules_v2';
+  var GRUPOS = ['mod-espacos','mod-infraestrutura','mod-comunicacao','mod-estrategia'];
+  var FAV_BLOQUEADOS = ['aba-tarefas','aba-processos','aba-almoxarifado','aba-balcao',
+    'aba-rh','aba-eficiencia','aba-contratos-fin','aba-contratacoes',
+    'aba-codip','aba-rel-financeiros','aba-escuta','aba-permissoes-v2'];
+
+  function _setGrupo(id, aberto) {
+    var el = document.getElementById(id);
+    var icon = document.getElementById('icon-' + id);
+    if (!el) return;
+    if (aberto) {
+      el.classList.remove('hidden');
+      if (icon) icon.className = 'fas fa-chevron-up text-[8px] text-slate-600';
+    } else {
+      el.classList.add('hidden');
+      if (icon) icon.className = 'fas fa-chevron-down text-[8px] text-slate-600';
+    }
+  }
+
   function _salvarEstado() {
     var estado = {};
-    ['mod-espacos','mod-infraestrutura','mod-comunicacao','mod-estrategia','mod-sistema'].forEach(function(id) {
+    GRUPOS.concat(['mod-sistema']).forEach(function(id) {
       var el = document.getElementById(id);
       if (el) estado[id] = !el.classList.contains('hidden');
     });
     try { localStorage.setItem(STORE_KEY, JSON.stringify(estado)); } catch(e) {}
   }
+
+  function _contarFavoritosValidos() {
+    try {
+      var favs = JSON.parse(localStorage.getItem('_fav_cache') || '[]');
+      return (favs || []).filter(function(f) {
+        return f && f.aba && FAV_BLOQUEADOS.indexOf(f.aba) === -1;
+      }).length;
+    } catch(e) { return 0; }
+  }
+
   function _restaurarEstado() {
     try {
       var estado = JSON.parse(localStorage.getItem(STORE_KEY) || 'null');
-      if (!estado) return;
-      Object.keys(estado).forEach(function(id) {
-        var el = document.getElementById(id);
-        var icon = document.getElementById('icon-' + id);
-        if (!el) return;
-        if (estado[id]) {
-          el.classList.remove('hidden');
-          if (icon) icon.className = 'fas fa-chevron-up text-[8px] text-slate-600';
-        } else {
-          el.classList.add('hidden');
-          if (icon) icon.className = 'fas fa-chevron-down text-[8px] text-slate-600';
-        }
-      });
+      if (estado) {
+        // Respeitar escolha salva pelo usuário
+        Object.keys(estado).forEach(function(id) {
+          if (id === 'mod-sistema') return; // controlado por permissoes_ui_js
+          _setGrupo(id, !!estado[id]);
+        });
+        return;
+      }
+      // Sem estado salvo: colapsar tudo se houver 2+ favoritos, senão expandir tudo
+      var colapsar = _contarFavoritosValidos() >= 2;
+      GRUPOS.forEach(function(id) { _setGrupo(id, !colapsar); });
     } catch(e) {}
   }
+
   var _origToggle = window.toggleModulo;
   window.toggleModulo = function(id) {
     if (typeof _origToggle === 'function') _origToggle(id);
     _salvarEstado();
   };
+
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', _restaurarEstado);
   } else {

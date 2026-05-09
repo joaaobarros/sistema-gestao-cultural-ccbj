@@ -2196,6 +2196,8 @@ function renderizarManualCompleto() {
           'Agenda Geral, Novo Agendamento e Agenda RECE. Núcleo operacional do sistema.'),
     _card('fa-check-double','purple','Aprovações',
           'Valida solicitações de reserva e cadastros de novos usuários externos.'),
+    _card('fa-tools',       'blue',  'Infraestrutura',
+          'Protocolo de Chaves: controle de retirada, devolução e transferência de chaves físicas. Visível para o setor responsável configurado e para admins.'),
     _card('fa-chart-bar',   'green', 'Estratégia',
           'Dashboard com indicadores de uso, ocupação e análise de IA integrada.'),
     _card('fa-server',      'amber', 'Sistema (admin)',
@@ -2343,7 +2345,7 @@ function renderizarManualCompleto() {
       'Use os botões + e − no card do item para ajustar o estoque disponível. O sistema impede que a quantidade disponível fique abaixo de zero.'),
     _heading('Setores'),
     _step(6, 'Gerenciar setores institucionais',
-      'Setores são usados nas reservas para identificar a área responsável. Adicione, edite ou remova setores conforme a estrutura do CCBJ.'),
+      'Setores são usados nas reservas para identificar a área responsável. Adicione, edite ou remova setores conforme a estrutura do CCBJ. Os setores cadastrados aqui também são usados no Protocolo de Chaves para definir qual setor gerencia as chaves de cada espaço.'),
     _heading('Administradores'),
     _step(7, 'Adicionar administrador',
       'Informe o e-mail do novo administrador e o nível de acesso (Admin ou Superadmin). O usuário já deve existir no sistema (ter feito login pelo menos uma vez).'),
@@ -2422,6 +2424,55 @@ function renderizarManualCompleto() {
     _heading('Proteções do sistema'),
     _tip('fa-shield-halved', 'purple',
       'Superadmins não podem rebaixar a si mesmos. Admins não podem editar permissões de superadmins. Isso garante que o sistema nunca fique sem controle administrativo.')
+  ].join('');
+
+  // ── PROTOCOLO DE CHAVES ───────────────────────────────────────
+
+  const elChaves = document.getElementById('manual-chaves-cards');
+  if (elChaves) elChaves.innerHTML = [
+    _heading('Visão geral'),
+    _card('fa-key', 'blue', 'O que é o Protocolo de Chaves',
+      'Módulo do grupo Infraestrutura que controla a custódia de chaves físicas dos espaços do CCBJ. Registra quem retirou, quando devolveu e todo o histórico de movimentação.'),
+    _card('fa-sitemap', 'purple', 'Quem pode usar',
+      'Qualquer usuário pode <b>solicitar</b> uma chave. Apenas o <b>setor responsável</b> (configurado por espaço em Sistema → Configurações → Protocolo de Chaves) e <b>administradores</b> podem confirmar entregas e devoluções.'),
+
+    _heading('Solicitar uma chave'),
+    _step(1, 'Abrir o módulo',
+      'No menu lateral, clique em <b>Infraestrutura → Protocolo de Chaves</b>. A aba "Minhas Chaves" mostra suas solicitações ativas.'),
+    _step(2, 'Nova solicitação',
+      'Clique em "Solicitar Chave". Selecione o espaço e confirme. O sistema registra a solicitação e notifica o setor responsável.'),
+    _step(3, 'Aguardar confirmação',
+      'A chave fica com status <b>Solicitada</b>. O setor responsável confirma a entrega presencialmente. Ao confirmar, o status muda para <b>Retirada</b>.'),
+    _tip('fa-triangle-exclamation', 'amber',
+      'A retirada presupõe que a chave seja entregue fisicamente. O sistema registra a custódia, mas não substitui a entrega real.'),
+
+    _heading('Devolver uma chave'),
+    _step(4, 'Iniciar devolução',
+      'Em "Minhas Chaves", encontre o protocolo ativo e clique em "Devolver". O status muda para <b>Aguardando Confirmação da Infraestrutura</b>.'),
+    _step(5, 'Confirmação pelo setor responsável',
+      'O setor responsável confirma o recebimento. O status muda para <b>Devolvida</b> e o histórico é registrado.'),
+
+    _heading('Transferir uma chave'),
+    _step(6, 'Transferir para outra pessoa',
+      'Com uma chave em status Retirada, clique em "Transferir" e informe o e-mail do destinatário. O destinatário confirma o recebimento diretamente no sistema — o setor responsável não participa.'),
+
+    _heading('Painel de Gestão (setor responsável)'),
+    _step(7, 'Ver todas as solicitações',
+      'A aba "Gestão" (visível apenas para o setor responsável e admins) lista todos os protocolos ativos: solicitados, retirados, atrasados e pendentes de devolução.'),
+    _step(8, 'Entrega direta',
+      'Para entregar uma chave sem que o usuário tenha solicitado, clique em "Entrega Direta". O sistema registra o protocolo imediatamente com status Retirada.'),
+    _step(9, 'Confirmação de devolução',
+      'Acesse o protocolo do usuário e clique em "Confirmar Devolução". Insira uma observação se necessário. O sistema registra no histórico.'),
+
+    _heading('Configurar chaves por espaço (admin)'),
+    _step(10, 'Acessar a configuração',
+      'Em Configurações, na listagem de espaços, clique em "⚙ Configurar Chaves" no card do espaço desejado.'),
+    _step(11, 'Campos disponíveis',
+      '<b>Possui chaves físicas</b> — habilita o controle para aquele espaço. <b>Setor Responsável</b> — selecione o setor institucional (cadastrado em Setores) que gerenciará as chaves. <b>Qtd. Uso Comum / Reserva</b> — quantidade de chaves por tipo. <b>Localização</b> — onde a chave fica guardada (ex: portaria).'),
+    _step(12, 'Setor Responsável',
+      'O campo usa a lista de Setores Institucionais cadastrados em Configurações → Setores. Ao selecionar, usuários daquele setor ganham acesso às abas de gestão e confirmação de chaves do espaço.'),
+    _tip('fa-circle-check', 'green',
+      'Se nenhum setor for configurado, o sistema usa como fallback o setor com o nome "INFRAESTRUTURA". Recomenda-se sempre configurar explicitamente.')
   ].join('');
 
   // ── AUDITORIA ─────────────────────────────────────────────────

@@ -83,7 +83,8 @@ const HIST_COL = {
 const CONF_COL = {
   ID: 0, NOME: 1, CAPACIDADE: 2, RESUMO_ITENS: 3, EMAIL_RESPONSAVEL: 4,
   POSSUI_CHAVES: 5, QTD_USO_COMUM: 6, QTD_RESERVA: 7,
-  ACEITA_RESERVA: 8, EXIGE_PROTOCOLO: 9, LOCALIZACAO_CHAVE: 10, OBS_INTERNAS: 11
+  ACEITA_RESERVA: 8, EXIGE_PROTOCOLO: 9, LOCALIZACAO_CHAVE: 10, OBS_INTERNAS: 11,
+  SETOR_RESPONSAVEL: 12
 };
 
 // ══════════════════════════════════════════════════════════════════
@@ -92,8 +93,21 @@ const CONF_COL = {
 
 function _chvEhInfraestrutura(email) {
   try {
-    const setor = obterSetorUsuario(email);
-    return String(setor).toUpperCase().includes('INFRAESTRUTURA');
+    const setorUsuario = String(obterSetorUsuario(email) || '').trim().toUpperCase();
+    if (!setorUsuario) return false;
+
+    // Verificar contra setores responsáveis configurados em cada espaço
+    const espacos = _chvLerEspacos().map(_chvMapearEspaco).filter(Boolean);
+    const setoresConfig = espacos
+      .map(function(e) { return String(e.setorResponsavel || '').trim().toUpperCase(); })
+      .filter(function(s) { return s.length > 0; });
+
+    if (setoresConfig.length > 0) {
+      return setoresConfig.some(function(s) { return setorUsuario === s; });
+    }
+
+    // Fallback: verificação legada por substring "INFRAESTRUTURA"
+    return setorUsuario.includes('INFRAESTRUTURA');
   } catch(e) { return false; }
 }
 
@@ -139,7 +153,7 @@ function _chvLerProtocolos() {
 function _chvLerEspacos() {
   const aba = _chvGetConfiguracoes();
   if (!aba || aba.getLastRow() < 2) return [];
-  const numCols = Math.min(aba.getLastColumn(), 12);
+  const numCols = Math.min(aba.getLastColumn(), 13);
   return aba.getRange(2, 1, aba.getLastRow() - 1, numCols).getValues();
 }
 
@@ -223,17 +237,18 @@ function _chvMapearEspaco(r) {
   if (!r || !r[CONF_COL.ID]) return null;
   const len = r.length;
   return {
-    id:              String(r[CONF_COL.ID] || ''),
-    nome:            String(r[CONF_COL.NOME] || ''),
-    capacidade:      Number(r[CONF_COL.CAPACIDADE] || 0),
+    id:               String(r[CONF_COL.ID] || ''),
+    nome:             String(r[CONF_COL.NOME] || ''),
+    capacidade:       Number(r[CONF_COL.CAPACIDADE] || 0),
     emailResponsavel: String(len > 4 ? (r[CONF_COL.EMAIL_RESPONSAVEL] || '') : ''),
-    possuiChaves:    len > 5 ? (String(r[CONF_COL.POSSUI_CHAVES]).toLowerCase() === 'true') : false,
-    qtdUsoComum:     len > 6 ? Number(r[CONF_COL.QTD_USO_COMUM] || 0) : 0,
-    qtdReserva:      len > 7 ? Number(r[CONF_COL.QTD_RESERVA] || 0) : 0,
-    aceitaReserva:   len > 8 ? (String(r[CONF_COL.ACEITA_RESERVA]).toLowerCase() !== 'false') : true,
-    exigeProtocolo:  len > 9 ? (String(r[CONF_COL.EXIGE_PROTOCOLO]).toLowerCase() === 'true') : false,
+    possuiChaves:     len > 5 ? (String(r[CONF_COL.POSSUI_CHAVES]).toLowerCase() === 'true') : false,
+    qtdUsoComum:      len > 6 ? Number(r[CONF_COL.QTD_USO_COMUM] || 0) : 0,
+    qtdReserva:       len > 7 ? Number(r[CONF_COL.QTD_RESERVA] || 0) : 0,
+    aceitaReserva:    len > 8 ? (String(r[CONF_COL.ACEITA_RESERVA]).toLowerCase() !== 'false') : true,
+    exigeProtocolo:   len > 9 ? (String(r[CONF_COL.EXIGE_PROTOCOLO]).toLowerCase() === 'true') : false,
     localizacaoChave: len > 10 ? String(r[CONF_COL.LOCALIZACAO_CHAVE] || '') : '',
-    obsInternas:     len > 11 ? String(r[CONF_COL.OBS_INTERNAS] || '') : ''
+    obsInternas:      len > 11 ? String(r[CONF_COL.OBS_INTERNAS] || '') : '',
+    setorResponsavel: len > 12 ? String(r[CONF_COL.SETOR_RESPONSAVEL] || '') : ''
   };
 }
 
@@ -1197,6 +1212,7 @@ function chaves_salvarCamposEspaco(id, dados, emailAtual) {
         aba.getRange(linha, CONF_COL.EXIGE_PROTOCOLO + 1).setValue(!!dados.exigeProtocolo);
         aba.getRange(linha, CONF_COL.LOCALIZACAO_CHAVE + 1).setValue(String(dados.localizacaoChave || ''));
         aba.getRange(linha, CONF_COL.OBS_INTERNAS + 1).setValue(String(dados.obsInternas || ''));
+        aba.getRange(linha, CONF_COL.SETOR_RESPONSAVEL + 1).setValue(String(dados.setorResponsavel || ''));
 
         registrarLog('EDIÇÃO', 'ESPACO_CHAVES', id, 'Campos de chave atualizados.', null, dados, email);
         return { ok: true };

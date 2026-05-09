@@ -934,6 +934,21 @@ function _chvAbrirModalConfigEspaco(espacoId) {
   document.getElementById('chv-ec-qtd-reserva').value = e.qtdReserva || 0;
   document.getElementById('chv-ec-localizacao').value = e.localizacaoChave || '';
   document.getElementById('chv-ec-obs').value = e.obsInternas || '';
+
+  // Popular select de setor responsável com setores institucionais
+  const selSetor = document.getElementById('chv-ec-setor-responsavel');
+  if (selSetor) {
+    const setores = (typeof AppState !== 'undefined' && AppState.colecoes && AppState.colecoes.setores) || [];
+    selSetor.innerHTML = '<option value="">— Selecione o setor —</option>';
+    setores.filter(function(s) { return s && s.trim(); }).forEach(function(s) {
+      const opt = document.createElement('option');
+      opt.value = s;
+      opt.textContent = s;
+      if (s === e.setorResponsavel) opt.selected = true;
+      selSetor.appendChild(opt);
+    });
+  }
+
   _chvToggleCamposChave(document.getElementById('chv-ec-possui-chaves'));
   _chvAbrirModal('chv-modal-espaco-config');
 }
@@ -1080,13 +1095,14 @@ function _chvSalvarConfigEspaco() {
   const id = document.getElementById('chv-ec-id').value;
   if (!id) return;
   const dados = {
-    possuiChaves:     document.getElementById('chv-ec-possui-chaves').checked,
-    aceitaReserva:    document.getElementById('chv-ec-aceita-reserva').checked,
-    exigeProtocolo:   document.getElementById('chv-ec-exige-protocolo').checked,
-    qtdUsoComum:      Number(document.getElementById('chv-ec-qtd-comum').value || 0),
-    qtdReserva:       Number(document.getElementById('chv-ec-qtd-reserva').value || 0),
-    localizacaoChave: document.getElementById('chv-ec-localizacao').value || '',
-    obsInternas:      document.getElementById('chv-ec-obs').value || ''
+    possuiChaves:      document.getElementById('chv-ec-possui-chaves').checked,
+    aceitaReserva:     document.getElementById('chv-ec-aceita-reserva').checked,
+    exigeProtocolo:    document.getElementById('chv-ec-exige-protocolo').checked,
+    qtdUsoComum:       Number(document.getElementById('chv-ec-qtd-comum').value || 0),
+    qtdReserva:        Number(document.getElementById('chv-ec-qtd-reserva').value || 0),
+    localizacaoChave:  document.getElementById('chv-ec-localizacao').value || '',
+    obsInternas:       document.getElementById('chv-ec-obs').value || '',
+    setorResponsavel:  document.getElementById('chv-ec-setor-responsavel')?.value || ''
   };
   const email = _chvState.dados ? _chvState.dados.emailUsuario : '';
   GAS.chaves.salvarCamposEspaco(id, dados, email, function(res) {
