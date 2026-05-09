@@ -133,7 +133,15 @@
                 <select id="agendaGoogleSala"
                   onchange="window._agendaGoogleSemana=0; renderizarModoAgendaGoogle()"
                   class="w-full px-4 py-2.5 bg-purple-50 border border-purple-100 rounded-xl text-sm text-purple-700 font-bold outline-none">
-                  <option value="">Selecione um espaço...</option>
+                  <option value="">Todas as salas</option>
+                </select>
+              </div>
+              <div class="flex-1 min-w-[160px]">
+                <label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Setor</label>
+                <select id="agendaGoogleSetor"
+                  onchange="renderizarModoAgendaGoogle()"
+                  class="w-full px-4 py-2.5 bg-indigo-50 border border-indigo-100 rounded-xl text-sm text-indigo-700 font-bold outline-none">
+                  <option value="">Todos os setores</option>
                 </select>
               </div>
               <div class="min-w-[160px]">
@@ -156,6 +164,11 @@
                   onclick="window._agendaGoogleSemana=(window._agendaGoogleSemana||0)+1; renderizarModoAgendaGoogle()"
                   class="w-9 h-9 flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-all">
                   <i class="fas fa-chevron-right text-xs"></i>
+                </button>
+                <button
+                  onclick="limparFiltrosAgenda()"
+                  class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-600 text-xs font-black rounded-xl uppercase transition-all">
+                  <i class="fas fa-rotate-left mr-1"></i>Redefinir
                 </button>
               </div>
               <span id="agendaGoogleSemanaLabel" class="text-sm font-black text-slate-600 self-center"></span>
@@ -190,24 +203,21 @@
         <div class="bg-white rounded-3xl shadow-sm border border-slate-200 p-4 flex flex-wrap gap-3 items-end">
           <div class="flex-1 min-w-[160px]">
             <label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Espaço</label>
-            <select id="diagramaFiltroSala" class="w-full px-3 py-2 bg-indigo-50 border border-indigo-100 rounded-xl text-sm text-indigo-700 font-bold outline-none">
+            <select id="diagramaFiltroSala" onchange="renderizarModoDiagrama()" class="w-full px-3 py-2 bg-indigo-50 border border-indigo-100 rounded-xl text-sm text-indigo-700 font-bold outline-none">
               <option value="">Todos os espaços</option>
             </select>
           </div>
           <div class="flex-1 min-w-[160px]">
             <label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Setor</label>
-            <select id="diagramaFiltroSetor" class="w-full px-3 py-2 bg-indigo-50 border border-indigo-100 rounded-xl text-sm text-indigo-700 font-bold outline-none">
+            <select id="diagramaFiltroSetor" onchange="renderizarModoDiagrama()" class="w-full px-3 py-2 bg-indigo-50 border border-indigo-100 rounded-xl text-sm text-indigo-700 font-bold outline-none">
               <option value="">Todos os setores</option>
             </select>
           </div>
           <div class="flex-1 min-w-[160px]">
             <label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Busca</label>
-            <input type="text" id="diagramaFiltroBusca" placeholder="Nome da ação..." class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-purple-400">
+            <input type="text" id="diagramaFiltroBusca" oninput="renderizarModoDiagrama()" placeholder="Nome da ação..." class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-purple-400">
           </div>
-          <div class="flex gap-2 shrink-0">
-            <button onclick="renderizarModoDiagrama()" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-black rounded-xl uppercase transition-all">
-              <i class="fas fa-filter mr-1"></i>Filtrar
-            </button>
+          <div class="flex gap-2 shrink-0 items-end">
             <button onclick="limparFiltrosDiagrama()" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-600 text-xs font-black rounded-xl uppercase transition-all">
               <i class="fas fa-rotate-left mr-1"></i>Redefinir
             </button>

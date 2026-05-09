@@ -190,6 +190,15 @@ function popularSelectsIniciais() {
     }
   }
 
+  const agendaSetor = document.getElementById('agendaGoogleSetor');
+  if (agendaSetor && agendaSetor.options.length <= 1) {
+    (AppState.colecoes.setores || []).filter(Boolean).forEach(s => {
+      const o = document.createElement('option');
+      o.value = s; o.textContent = s;
+      agendaSetor.appendChild(o);
+    });
+  }
+
   // ===== AGENDA RECE =====
   const agendaReceSalaEl = document.getElementById('agendaReceSala');
 
@@ -1954,6 +1963,15 @@ function limparFiltrosDiagrama() {
   renderizarModoDiagrama();
 }
 
+function limparFiltrosAgenda() {
+  const sala = document.getElementById('agendaGoogleSala');
+  const setor = document.getElementById('agendaGoogleSetor');
+  if (sala)  sala.value  = '';
+  if (setor) setor.value = '';
+  window._agendaGoogleSemana = 0;
+  renderizarModoAgendaGoogle();
+}
+
 function _diagramaCliqueVazio(event, el, salaId) {
   // Blocos chamam stopPropagation; qualquer clique que chegue aqui é em área vazia
   if (event.target !== el && event.target.tagName !== 'DIV') return;
@@ -2517,6 +2535,7 @@ function renderizarModoAgendaGoogle() {
   const apenasMinhas = window._filtroMinhasAgenda || false;
   // Respeita a seleção: vazio = "Todas as salas" — nunca força uma sala específica
   let salaId = document.getElementById('agendaGoogleSala')?.value || '';
+  const _filtroSetorAg = (document.getElementById('agendaGoogleSetor')?.value || '').trim();
 
   const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
   const dow = hoje.getDay() === 0 ? 6 : hoje.getDay() - 1;
@@ -2664,6 +2683,9 @@ function renderizarModoAgendaGoogle() {
     } else {
       resDodia = Object.values(_indexDia).flat();
     }
+    if (_filtroSetorAg) {
+      resDodia = resDodia.filter(r => String(r[9]||'').trim() === _filtroSetorAg);
+    }
 
     // Distribui blocos sobrepostos em colunas visuais (apenas ativos para o layout)
     const blocos = [];
@@ -2705,28 +2727,9 @@ function renderizarModoAgendaGoogle() {
       } else if (_isHabBloco) {
         corBloco = 'border-emerald-500 bg-emerald-50';
         corTexto = 'text-emerald-900';
-      } else if (modoMultiSala) {
+      } else {
         corBloco = getCorBloco(idSala);
         corTexto = getCorTexto(idSala);
-      } else {
-        const setorCores = {
-          'gestão':      'border-purple-500 bg-purple-50',
-          'comunicação': 'border-pink-500 bg-pink-50',
-          'formação':    'border-blue-500 bg-blue-50',
-          'produção':    'border-amber-500 bg-amber-50',
-          'técnico':     'border-emerald-500 bg-emerald-50',
-        };
-        const setorTextoCores = {
-          'gestão':      'text-purple-900',
-          'comunicação': 'text-pink-900',
-          'formação':    'text-blue-900',
-          'produção':    'text-amber-900',
-          'técnico':     'text-emerald-900',
-        };
-        const s = String(r[9] || '').toLowerCase();
-        const chave = Object.keys(setorCores).find(k => s.includes(k));
-        corBloco = setorCores[chave] || 'border-slate-400 bg-slate-50';
-        corTexto = setorTextoCores[chave] || 'text-slate-800';
       }
 
       const badgeSala = modoMultiSala && !cancelado ? `

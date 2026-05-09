@@ -230,11 +230,33 @@ function p2RenderizarOrigem(origem) {
   _p2El('p2-origem-espacos-view').innerHTML = _p2Chips(origem.donos_espaco);
 }
 
+function _p2PopularSetoresSelect() {
+  var sel = _p2El('p2-setores-input');
+  if (!sel || sel.tagName !== 'SELECT') return;
+  var setores = (AppState && AppState.colecoes && AppState.colecoes.setores || []).filter(Boolean);
+  var current = Array.from(sel.options).map(function(o){ return o.value; });
+  setores.forEach(function(s) {
+    if (!current.includes(s)) {
+      var o = document.createElement('option');
+      o.value = s; o.textContent = s;
+      sel.appendChild(o);
+    }
+  });
+}
+
 function _p2SetOrigemForm(origem) {
-  _p2El('p2-cargo-input').value    = origem.cargo || '';
-  _p2El('p2-funcoes-input').value  = (origem.funcoes    || []).join(', ');
-  _p2El('p2-setores-input').value  = (origem.setores    || []).join(', ');
-  _p2El('p2-espacos-input').value  = (origem.donos_espaco|| []).join(', ');
+  _p2El('p2-cargo-input').value   = origem.cargo || '';
+  _p2El('p2-funcoes-input').value = (origem.funcoes     || []).join(', ');
+  _p2El('p2-espacos-input').value = (origem.donos_espaco|| []).join(', ');
+
+  _p2PopularSetoresSelect();
+  var sel = _p2El('p2-setores-input');
+  if (sel && sel.tagName === 'SELECT') {
+    var selecionados = (origem.setores || []).map(function(s){ return s.trim(); });
+    Array.from(sel.options).forEach(function(o){ o.selected = selecionados.includes(o.value); });
+  } else if (sel) {
+    sel.value = (origem.setores || []).join(', ');
+  }
 }
 
 function p2ToggleOrigemEdit() {
@@ -248,10 +270,14 @@ function _p2LerOrigem() {
   function splitInput(v) {
     return v.split(',').map(function(s){ return s.trim(); }).filter(Boolean);
   }
+  var selSetores = _p2El('p2-setores-input');
+  var setores = (selSetores && selSetores.tagName === 'SELECT')
+    ? Array.from(selSetores.selectedOptions).map(function(o){ return o.value; })
+    : splitInput(selSetores ? selSetores.value : '');
   return {
     cargo:       _p2El('p2-cargo-input').value.trim(),
     funcoes:     splitInput(_p2El('p2-funcoes-input').value),
-    setores:     splitInput(_p2El('p2-setores-input').value),
+    setores:     setores,
     donos_espaco:splitInput(_p2El('p2-espacos-input').value)
   };
 }
