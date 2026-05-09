@@ -26,6 +26,16 @@
               <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1 ml-1">Capacidade Máxima</label>
               <input type="number" id="configCapacidade" class="w-full bg-slate-50 border-none rounded-2xl p-3 text-sm focus:ring-2 focus:ring-purple-500 transition-all" placeholder="Ex: 80">
             </div>
+            <div class="flex gap-4 pt-1">
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" id="configAceitaReserva" class="w-4 h-4 accent-purple-600">
+                <span class="text-[11px] font-bold text-slate-600">Aceita Reserva</span>
+              </label>
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" id="configPossuiChaves" class="w-4 h-4 accent-green-600">
+                <span class="text-[11px] font-bold text-slate-600">Possui Chaves Físicas</span>
+              </label>
+            </div>
             <div>
               <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1 ml-1">Responsáveis por dias da semana</label>
               <div id="containerDonos" class="space-y-2 max-h-52 overflow-y-auto pr-1 custom-scrollbar mb-2"></div>

@@ -508,7 +508,10 @@ function chaves_salvarChave(dados, emailAtual) {
     _chvExigeInfraOuAdmin(email);
 
     if (!dados || !dados.espacoId) throw new Error('Espaço obrigatório.');
-    if (!dados.codigoPatrimonial)  throw new Error('Código patrimonial obrigatório.');
+    if (!dados.codigoPatrimonial) {
+      const seq = String(((_chvGetChaves()?.getLastRow() || 1))).padStart(3, '0');
+      dados.codigoPatrimonial = 'CHV-' + Utilities.formatDate(new Date(), 'America/Recife', 'yyyyMMdd') + '-' + seq;
+    }
     if (!Object.values(CHV_TIPO_CHAVE).includes(dados.tipo))
       throw new Error('Tipo de chave inválido: ' + dados.tipo);
 

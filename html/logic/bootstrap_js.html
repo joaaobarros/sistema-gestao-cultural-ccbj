@@ -73,7 +73,7 @@ document.addEventListener('DOMContentLoaded', function () {
     var id   = btn.dataset.id || null;
 
     var acoes = {
-      'editar-espaco':  function() { abrirModalConfig('espaco', id, btn.dataset.nome, btn.dataset.capacidade, btn.dataset.email || ''); },
+      'editar-espaco':  function() { abrirModalConfig('espaco', id, btn.dataset.nome, btn.dataset.capacidade, btn.dataset.email || '', btn.dataset.possuiChaves === 'true', btn.dataset.aceitaReserva !== 'false'); },
       'excluir-espaco': function() { dispararExclusao(id, 'espaco'); },
       'editar-item':    function() { abrirModalConfig('item', id, btn.dataset.nome, btn.dataset.qtd, btn.dataset.categoria); },
       'excluir-item':   function() { dispararExclusao(id, 'item'); },

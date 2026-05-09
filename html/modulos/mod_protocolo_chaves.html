@@ -271,17 +271,6 @@
         </div>
       </div>
 
-      <!-- Configuração de Espaços -->
-      <div class="bg-white border border-slate-200 rounded-2xl p-4">
-        <h3 class="text-sm font-black text-slate-700 flex items-center gap-2 mb-3">
-          <i class="fas fa-building text-blue-500"></i>Configuração de Espaços
-        </h3>
-        <p class="text-[10px] text-slate-400 mb-3">Defina quais espaços possuem chaves e as configurações de protocolo.</p>
-        <div id="chv-admin-lista-espacos" class="space-y-2 max-h-96 overflow-y-auto custom-scrollbar">
-          <div class="text-xs text-slate-400 italic p-2">Carregando...</div>
-        </div>
-      </div>
-
     </div>
   </div>
 
@@ -436,10 +425,7 @@
           <option value="">Selecione...</option>
         </select>
       </div>
-      <div>
-        <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Código Patrimonial *</label>
-        <input type="text" id="chv-form-chave-codigo" placeholder="Ex: CHV-2024-001" class="w-full text-sm border border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-purple-300 outline-none">
-      </div>
+      <input type="hidden" id="chv-form-chave-codigo">
       <div>
         <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Tipo *</label>
         <select id="chv-form-chave-tipo" class="w-full text-sm border border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-purple-300 outline-none">
@@ -457,71 +443,6 @@
       <button onclick="_chvFecharModal('chv-modal-nova-chave')" class="px-4 py-2 text-xs font-bold text-slate-600 bg-slate-100 rounded-xl hover:bg-slate-200 transition-all">Cancelar</button>
       <button onclick="_chvSalvarChave()" class="px-5 py-2 text-xs font-black text-white bg-purple-600 hover:bg-purple-700 rounded-xl transition-all">
         <i class="fas fa-save mr-1.5"></i>Salvar
-      </button>
-    </div>
-  </div>
-</div>
-
-<!-- Modal: Config Espaço (Admin) -->
-<div id="chv-modal-espaco-config" class="fixed inset-0 z-[200] hidden items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
-    <div class="flex items-center justify-between p-5 border-b border-slate-100">
-      <h3 class="text-base font-black text-slate-800 flex items-center gap-2">
-        <i class="fas fa-building text-blue-500"></i>
-        Configurar Espaço — <span id="chv-ec-nome" class="text-purple-600"></span>
-      </h3>
-      <button onclick="_chvFecharModal('chv-modal-espaco-config')" class="text-slate-400 hover:text-slate-700 transition-colors">
-        <i class="fas fa-times text-lg"></i>
-      </button>
-    </div>
-    <div class="p-5 space-y-4">
-      <input type="hidden" id="chv-ec-id">
-      <div class="grid grid-cols-2 gap-4">
-        <label class="flex items-center gap-2 cursor-pointer">
-          <input type="checkbox" id="chv-ec-possui-chaves" class="w-4 h-4 accent-purple-600" onchange="_chvToggleCamposChave(this)">
-          <span class="text-sm font-black text-slate-700">Possui chaves físicas</span>
-        </label>
-        <label class="flex items-center gap-2 cursor-pointer">
-          <input type="checkbox" id="chv-ec-aceita-reserva" class="w-4 h-4 accent-purple-600">
-          <span class="text-sm font-black text-slate-700">Aceita reservas</span>
-        </label>
-        <label class="flex items-center gap-2 cursor-pointer">
-          <input type="checkbox" id="chv-ec-exige-protocolo" class="w-4 h-4 accent-purple-600">
-          <span class="text-sm font-black text-slate-700">Exige protocolo de chave</span>
-        </label>
-      </div>
-      <div id="chv-ec-campos-chave" class="hidden space-y-3 pt-2 border-t border-slate-100">
-        <div>
-          <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Setor Responsável pelas Chaves</label>
-          <select id="chv-ec-setor-responsavel" class="w-full text-sm border border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-purple-300 outline-none bg-white">
-            <option value="">— Selecione o setor —</option>
-          </select>
-          <p class="text-[9px] text-slate-400 mt-1">Usuários deste setor poderão gerenciar as chaves deste espaço.</p>
-        </div>
-        <div class="grid grid-cols-2 gap-3">
-          <div>
-            <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Qtd. Uso Comum</label>
-            <input type="number" id="chv-ec-qtd-comum" min="0" class="w-full text-sm border border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-purple-300 outline-none" value="0">
-          </div>
-          <div>
-            <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Qtd. Reserva</label>
-            <input type="number" id="chv-ec-qtd-reserva" min="0" class="w-full text-sm border border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-purple-300 outline-none" value="0">
-          </div>
-        </div>
-        <div>
-          <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Localização da Chave</label>
-          <input type="text" id="chv-ec-localizacao" placeholder="Ex: Portaria, Sala de Infraestrutura..." class="w-full text-sm border border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-purple-300 outline-none">
-        </div>
-      </div>
-      <div>
-        <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Observações Internas</label>
-        <textarea id="chv-ec-obs" rows="2" class="w-full text-sm border border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-purple-300 outline-none resize-none"></textarea>
-      </div>
-    </div>
-    <div class="flex justify-end gap-2 px-5 pb-5">
-      <button onclick="_chvFecharModal('chv-modal-espaco-config')" class="px-4 py-2 text-xs font-bold text-slate-600 bg-slate-100 rounded-xl hover:bg-slate-200 transition-all">Cancelar</button>
-      <button onclick="_chvSalvarConfigEspaco()" class="px-5 py-2 text-xs font-black text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-all">
-        <i class="fas fa-save mr-1.5"></i>Salvar Configuração
       </button>
     </div>
   </div>

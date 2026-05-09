@@ -331,15 +331,23 @@ function obterDadosIniciais(emailClienteFallback, sessaoId) {
     let indiceSalas = {};
     const mapaSalasObj = {};
 
+    const mapaFlagsEspacos = {};
     if (configSheet && configSheet.getLastRow() > 1) {
+      const nCols = Math.max(13, configSheet.getLastColumn());
       salasFull = configSheet
-        .getRange(2, 1, configSheet.getLastRow() - 1, 5)
+        .getRange(2, 1, configSheet.getLastRow() - 1, Math.min(nCols, 13))
         .getValues();
       indiceSalas = criarIndiceSalas(salasFull);
       salasFull.forEach((s) => {
         const id = String(s[0]).trim();
         const nome = String(s[1]).trim();
-        if (id && nome) mapaSalasObj[id] = nome;
+        if (id && nome) {
+          mapaSalasObj[id] = nome;
+          mapaFlagsEspacos[id] = {
+            possuiChaves:  s.length > 5 ? String(s[5]).toLowerCase() === 'true' : false,
+            aceitaReserva: s.length > 8 ? String(s[8]).toLowerCase() !== 'false' : true,
+          };
+        }
       });
     }
 
@@ -396,6 +404,7 @@ function obterDadosIniciais(emailClienteFallback, sessaoId) {
       isHabilitador: nivelAcesso === "habilitador",
       setorUsuario,
       mapaSetoresAdmin,
+      mapaFlagsEspacos,
       salas: salasFull,
       mapaSalas: mapaSalasObj,
       setores,

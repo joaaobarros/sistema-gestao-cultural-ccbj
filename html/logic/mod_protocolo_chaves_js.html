@@ -167,20 +167,16 @@ function _chvPopularSelects() {
     tabAdmin.classList.toggle('hidden', !isAdmin);
   }
 
-  // Espacos nos selects
+  // Espacos nos selects — todos usam espacosComChave (possuiChaves = true)
   const espacosComChave = d.espacos || [];
-  const todosEspacos    = d.todosEspacos || d.espacos || [];
   [
     'chv-sol-espaco', 'chv-ed-espaco', 'chv-form-chave-espaco',
     'chv-rel-espaco', 'chv-filtro-todos-espaco', 'chv-admin-espaco-filtro'
   ].forEach(function(selId) {
     const sel = document.getElementById(selId);
     if (!sel) return;
-    // Admin e formulário de nova chave usam todos os espaços
-    const ehAdmin = selId === 'chv-admin-espaco-filtro' || selId === 'chv-form-chave-espaco';
-    const lista = ehAdmin ? todosEspacos : espacosComChave;
     sel.innerHTML = '<option value="">Todos' + (selId.includes('sol') || selId.includes('ed') ? ' — selecione...' : '') + '</option>';
-    lista.forEach(function(e) {
+    espacosComChave.forEach(function(e) {
       sel.innerHTML += `<option value="${e.id}">${e.nome}</option>`;
     });
   });
@@ -435,7 +431,6 @@ function _chvRenderizarRelatorio(lista) {
 
 function _chvRenderizarAdmin() {
   _chvFiltrarChavesAdmin();
-  _chvRenderizarEspacosAdmin();
 }
 
 function _chvFiltrarChavesAdmin() {
@@ -467,33 +462,6 @@ function _chvFiltrarChavesAdmin() {
           Editar
         </button>
       </div>
-    </div>`;
-  }).join('');
-}
-
-function _chvRenderizarEspacosAdmin() {
-  const d = _chvState.dados;
-  if (!d) return;
-  const todosEspacos = d.todosEspacos || d.espacos || [];
-  const el = document.getElementById('chv-admin-lista-espacos');
-  if (!el) return;
-  if (!todosEspacos.length) {
-    el.innerHTML = '<div class="text-xs text-slate-400 italic p-2">Nenhum espaço encontrado.</div>';
-    return;
-  }
-  el.innerHTML = todosEspacos.map(function(e) {
-    return `<div class="flex items-center justify-between bg-slate-50 border border-slate-200 rounded-xl px-3 py-2">
-      <div class="flex-1 min-w-0">
-        <div class="text-xs font-black text-slate-700">${e.nome}</div>
-        <div class="flex gap-2 mt-0.5">
-          ${e.possuiChaves ? '<span class="text-[9px] font-bold text-green-700 bg-green-100 px-1.5 py-0.5 rounded-full">🔑 Tem chave</span>' : '<span class="text-[9px] text-slate-400">Sem chave</span>'}
-          ${e.aceitaReserva ? '<span class="text-[9px] font-bold text-blue-700 bg-blue-100 px-1.5 py-0.5 rounded-full">📅 Reservável</span>' : ''}
-          ${e.exigeProtocolo ? '<span class="text-[9px] font-bold text-purple-700 bg-purple-100 px-1.5 py-0.5 rounded-full">🔒 Exige protocolo</span>' : ''}
-        </div>
-      </div>
-      <button onclick="_chvAbrirModalConfigEspaco('${e.id}')" class="text-[10px] text-blue-600 hover:text-blue-800 font-black px-2 py-1 rounded-lg hover:bg-blue-50 ml-2 shrink-0">
-        Configurar
-      </button>
     </div>`;
   }).join('');
 }
@@ -894,7 +862,6 @@ function _chvAbrirModalNovaChave() {
   document.getElementById('chv-form-chave-id').value = '';
   document.getElementById('chv-modal-chave-titulo').textContent = 'Nova Chave';
   document.getElementById('chv-form-chave-espaco').value = '';
-  document.getElementById('chv-form-chave-codigo').value = '';
   document.getElementById('chv-form-chave-tipo').value = 'COMUM';
   document.getElementById('chv-form-chave-obs').value = '';
   _chvAbrirModal('chv-modal-nova-chave');
@@ -918,44 +885,6 @@ function _chvAbrirModalStatusChave(chaveId, statusAtual) {
   document.getElementById('chv-sc-status').value = statusAtual;
   document.getElementById('chv-sc-obs').value = '';
   _chvAbrirModal('chv-modal-status-chave');
-}
-
-function _chvAbrirModalConfigEspaco(espacoId) {
-  const d = _chvState.dados;
-  const e = d ? (d.espacos || []).find(function(x) { return x.id === espacoId; }) : null;
-  if (!e) { Swal.fire('Erro', 'Espaço não encontrado.', 'error'); return; }
-
-  document.getElementById('chv-ec-id').value = e.id;
-  document.getElementById('chv-ec-nome').textContent = e.nome;
-  document.getElementById('chv-ec-possui-chaves').checked = !!e.possuiChaves;
-  document.getElementById('chv-ec-aceita-reserva').checked = e.aceitaReserva !== false;
-  document.getElementById('chv-ec-exige-protocolo').checked = !!e.exigeProtocolo;
-  document.getElementById('chv-ec-qtd-comum').value = e.qtdUsoComum || 0;
-  document.getElementById('chv-ec-qtd-reserva').value = e.qtdReserva || 0;
-  document.getElementById('chv-ec-localizacao').value = e.localizacaoChave || '';
-  document.getElementById('chv-ec-obs').value = e.obsInternas || '';
-
-  // Popular select de setor responsável com setores institucionais
-  const selSetor = document.getElementById('chv-ec-setor-responsavel');
-  if (selSetor) {
-    const setores = (typeof AppState !== 'undefined' && AppState.colecoes && AppState.colecoes.setores) || [];
-    selSetor.innerHTML = '<option value="">— Selecione o setor —</option>';
-    setores.filter(function(s) { return s && s.trim(); }).forEach(function(s) {
-      const opt = document.createElement('option');
-      opt.value = s;
-      opt.textContent = s;
-      if (s === e.setorResponsavel) opt.selected = true;
-      selSetor.appendChild(opt);
-    });
-  }
-
-  _chvToggleCamposChave(document.getElementById('chv-ec-possui-chaves'));
-  _chvAbrirModal('chv-modal-espaco-config');
-}
-
-function _chvToggleCamposChave(checkbox) {
-  const campos = document.getElementById('chv-ec-campos-chave');
-  if (campos) campos.classList.toggle('hidden', !checkbox.checked);
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -1058,15 +987,13 @@ function _chvEnviarTransferencia() {
 }
 
 function _chvSalvarChave() {
-  const id = document.getElementById('chv-form-chave-id').value || '';
+  const id       = document.getElementById('chv-form-chave-id').value || '';
   const espacoId = document.getElementById('chv-form-chave-espaco').value;
-  const codigo   = document.getElementById('chv-form-chave-codigo').value.trim();
   const tipo     = document.getElementById('chv-form-chave-tipo').value;
   const obs      = document.getElementById('chv-form-chave-obs').value || '';
   if (!espacoId) { Swal.fire('Atenção', 'Selecione o espaço.', 'warning'); return; }
-  if (!codigo)   { Swal.fire('Atenção', 'Informe o código patrimonial.', 'warning'); return; }
 
-  const dados = { id: id || undefined, espacoId, codigoPatrimonial: codigo, tipo, observacoes: obs, ativa: true };
+  const dados = { id: id || undefined, espacoId, tipo, observacoes: obs, ativa: true };
   const email = _chvState.dados ? _chvState.dados.emailUsuario : '';
   GAS.chaves.salvarChave(dados, email, function(res) {
     if (res && res.ok) {
@@ -1091,27 +1018,5 @@ function _chvEnviarStatusChave() {
   });
 }
 
-function _chvSalvarConfigEspaco() {
-  const id = document.getElementById('chv-ec-id').value;
-  if (!id) return;
-  const dados = {
-    possuiChaves:      document.getElementById('chv-ec-possui-chaves').checked,
-    aceitaReserva:     document.getElementById('chv-ec-aceita-reserva').checked,
-    exigeProtocolo:    document.getElementById('chv-ec-exige-protocolo').checked,
-    qtdUsoComum:       Number(document.getElementById('chv-ec-qtd-comum').value || 0),
-    qtdReserva:        Number(document.getElementById('chv-ec-qtd-reserva').value || 0),
-    localizacaoChave:  document.getElementById('chv-ec-localizacao').value || '',
-    obsInternas:       document.getElementById('chv-ec-obs').value || '',
-    setorResponsavel:  document.getElementById('chv-ec-setor-responsavel')?.value || ''
-  };
-  const email = _chvState.dados ? _chvState.dados.emailUsuario : '';
-  GAS.chaves.salvarCamposEspaco(id, dados, email, function(res) {
-    if (res && res.ok) {
-      _chvFecharModal('chv-modal-espaco-config');
-      Swal.fire('Configuração salva!', '', 'success');
-      _chvAtualizarDados();
-    } else Swal.fire('Erro', (res && res.msg) || 'Falha.', 'error');
-  });
-}
 
 </script>

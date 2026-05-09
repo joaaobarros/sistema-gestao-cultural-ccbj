@@ -44,6 +44,8 @@ function renderizarEspacosAdmin() {
     const nomeEscapado = String(nomeOriginal).replace(/'/g, "\\'");
     const capacidade = s[2] || 0;
     const emailEspaco = String(s[4] || '').trim();
+    const possuiChaves  = s.length > 5 ? String(s[5]).toLowerCase() === 'true' : false;
+    const aceitaReserva = s.length > 8 ? String(s[8]).toLowerCase() !== 'false' : true;
 
     return `
     <div class="item-renderizado flex items-center justify-between p-4 border-b border-slate-50 hover:bg-slate-50 transition-all">
@@ -55,6 +57,10 @@ function renderizarEspacosAdmin() {
         
         <div>
           <p class="text-sm font-bold text-slate-800 uppercase leading-tight">${escaparHTML(nomeOriginal)}</p>
+          <div class="flex gap-1 mt-0.5">
+            ${aceitaReserva ? '<span class="text-[9px] font-bold text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded-full">Reservável</span>' : '<span class="text-[9px] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded-full">Não reservável</span>'}
+            ${possuiChaves ? '<span class="text-[9px] font-bold text-green-700 bg-green-50 border border-green-200 px-1.5 py-0.5 rounded-full">Tem chaves</span>' : ''}
+          </div>
           ${(function(){
             if (!emailEspaco) return '';
             let donos = [];
@@ -88,6 +94,8 @@ function renderizarEspacosAdmin() {
           data-nome="${escaparHTML(nomeOriginal)}"
           data-capacidade="${Number(capacidade)}"
           data-email="${escaparHTML(emailEspaco)}"
+          data-possui-chaves="${possuiChaves}"
+          data-aceita-reserva="${aceitaReserva}"
           class="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-all">
           <i class="fas fa-edit text-xs"></i>
         </button>
@@ -546,7 +554,7 @@ function filtrarItensAdmin(termo) {
  * @outputs DOM: exibe #modalConfig com campos específicos; oculta os demais grupos de campos.
  * @sideEffects Chama atualizarVisualizacaoPatrimonio se tipo='espaco'; limpa estado ao fechar.
  */
-function abrirModalConfig(tipo, id = null, nome = '', valor1 = '', valor2 = '') {
+function abrirModalConfig(tipo, id = null, nome = '', valor1 = '', valor2 = '', possuiChaves = false, aceitaReserva = true) {
   const modal = document.getElementById('modalConfig');
   const title = document.getElementById('modalConfigTitle');
 
@@ -566,6 +574,10 @@ function abrirModalConfig(tipo, id = null, nome = '', valor1 = '', valor2 = '') 
   if (tipo === 'espaco') {
     title.innerText = id ? 'EDITAR ESPAÇO' : 'NOVO ESPAÇO';
     camposEspaco.classList.remove('hidden');
+    const chkPossuiChaves  = document.getElementById('configPossuiChaves');
+    const chkAceitaReserva = document.getElementById('configAceitaReserva');
+    if (chkPossuiChaves)  chkPossuiChaves.checked  = !!possuiChaves;
+    if (chkAceitaReserva) chkAceitaReserva.checked = aceitaReserva !== false;
     if (id) {
       document.getElementById('configNomeEspaco').value = nomeLimpo;
       document.getElementById('configCapacidade').value = valor1;
@@ -576,6 +588,7 @@ function abrirModalConfig(tipo, id = null, nome = '', valor1 = '', valor2 = '') 
       renderizarContainerDonos();
       if (typeof atualizarVisualizacaoPatrimonio === 'function') atualizarVisualizacaoPatrimonio(id);
     } else {
+      if (chkAceitaReserva) chkAceitaReserva.checked = true;
       window._donosEspaco = [];
       renderizarContainerDonos();
       const container = document.getElementById('container-itens-fixos');
@@ -873,7 +886,9 @@ function salvarConfiguracao() {
     dados.nome = document.getElementById('configNomeEspaco')?.value.trim();
     dados.capacidade = document.getElementById('configCapacidade')?.value || 0;
     const _df = (window._donosEspaco || []).filter(d => d.email && String(d.email).includes('@'));
-    dados.emailEspaco = _df.length ? JSON.stringify(_df) : '';
+    dados.emailEspaco    = _df.length ? JSON.stringify(_df) : '';
+    dados.possuiChaves   = !!(document.getElementById('configPossuiChaves')?.checked);
+    dados.aceitaReserva  = !!(document.getElementById('configAceitaReserva')?.checked);
   } else if (tipo === 'item') {
     dados.nome = document.getElementById('configNomeItem')?.value.trim();
     dados.qtd = document.getElementById('configQtd')?.value || 0;
@@ -902,6 +917,7 @@ function salvarConfiguracao() {
       AppState.colecoes.administradores = novosDados.administradores || [];
       AppState.colecoes.setores = novosDados.setores || [];
       AppState.mapaSalas = novosDados.mapaSalas || {};
+      AppState.mapaFlagsEspacos = novosDados.mapaFlagsEspacos || AppState.mapaFlagsEspacos || {};
       setTimeout(() => {
         if (typeof renderizarEspacosAdmin === 'function') renderizarEspacosAdmin();
         if (typeof renderizarItensAdmin === 'function') renderizarItensAdmin();
@@ -2232,7 +2248,7 @@ function renderizarManualCompleto() {
   if (elAg) elAg.innerHTML = [
     _heading('Criando uma reserva passo a passo'),
     _step(1, 'Selecione o espaço',
-      'Escolha a sala no campo "Espaço". A capacidade máxima é exibida automaticamente ao lado. Espaços sem disponibilidade no período desejado ficam destacados com aviso de conflito.'),
+      'Escolha a sala no campo "Espaço". A lista exibe apenas espaços marcados como <b>Aceita Reserva</b> em Configurações. A capacidade máxima é exibida ao lado. Espaços sem disponibilidade no período desejado ficam destacados com aviso de conflito.'),
     _step(2, 'Escolha a data',
       'Clique no campo de data para abrir o calendário. Datas já totalmente ocupadas são indicadas visualmente. Selecione uma ou mais datas para agendamento em lote.'),
     _step(3, 'Defina o horário',
@@ -2252,7 +2268,7 @@ function renderizarManualCompleto() {
     _step(8, 'Selecione múltiplas datas',
       'No calendário, clique em mais de uma data para criar várias reservas de uma vez. Cada data gera um registro independente — datas com conflito são saltadas automaticamente.'),
     _step(9, 'Confirmar e salvar',
-      'Clique em Salvar. Se o espaço exigir aprovação, a reserva entra no fluxo de solicitações (painel Aprovações). Caso contrário, é confirmada imediatamente.')
+      'Clique em Salvar. Se o espaço tiver um <b>responsável configurado</b> e você não for esse responsável, o sistema exige uma justificativa e cria uma solicitação (painel Aprovações) que precisa ser aprovada. Caso contrário, a reserva é confirmada imediatamente.')
   ].join('');
 
   // ── AGENDA RECE ───────────────────────────────────────────────
@@ -2283,9 +2299,9 @@ function renderizarManualCompleto() {
   if (elAprov) elAprov.innerHTML = [
     _heading('Aba: Solicitações de Reserva'),
     _step(1, 'Quando uma solicitação é gerada',
-      'Espaços configurados como "sob aprovação" em Configurações > Espaços não criam reserva diretamente. A solicitação fica pendente até um admin ou responsável pelo espaço aprovar.'),
+      'Quando um espaço tem <b>responsável configurado</b> em Configurações e o solicitante não é esse responsável, o sistema pede justificativa e cria uma solicitação em vez de reservar diretamente. A solicitação fica pendente até um admin ou o responsável aprovar.'),
     _step(2, 'Quem pode ver e aprovar',
-      'Admins e superadmins veem todas as solicitações. O responsável cadastrado no espaço também recebe notificação por e-mail e pode aprovar apenas as solicitações daquele espaço.'),
+      'Admins e superadmins veem todas as solicitações. O responsável pelo espaço recebe notificação por e-mail (filtrada por dia da semana e turno, se configurados) e pode aprovar ou recusar.'),
     _step(3, 'Aprovar uma reserva',
       'Clique no botão verde Aprovar no card. Um diálogo de confirmação aparece. Ao confirmar, a reserva é criada imediatamente e o solicitante recebe e-mail de confirmação.'),
     _step(4, 'Recusar uma reserva',
@@ -2333,10 +2349,12 @@ function renderizarManualCompleto() {
   if (elAdmin) elAdmin.innerHTML = [
     _heading('Espaços'),
     _step(1, 'Cadastrar um novo espaço',
-      'Clique em "+ Novo Espaço". Informe nome, capacidade e o e-mail do responsável. O responsável receberá notificações automáticas de novas solicitações para aquele espaço.'),
-    _step(2, 'Responsável por dias da semana',
-      'É possível cadastrar responsáveis diferentes por dia da semana. Útil para espaços com gestão compartilhada. Clique em "+ Adicionar responsável" e defina os dias de atuação de cada um.'),
-    _step(3, 'Editar e excluir espaço',
+      'Clique em "+ Novo Espaço". Informe nome, capacidade, e marque os flags <b>Aceita Reserva</b> e/ou <b>Possui Chaves Físicas</b> conforme aplicável. Somente espaços marcados como "Aceita Reserva" aparecem no formulário de Novo Agendamento.'),
+    _step(2, 'Responsável por dias da semana e turno',
+      'É possível cadastrar responsáveis diferentes por dia da semana e por turno (Manhã / Tarde / Noite). Clique em "+ Adicionar responsável", defina os dias e turnos. O setor do responsável é preenchido automaticamente pelo perfil do usuário cadastrado. Quando um espaço tem responsável configurado, reservas feitas por outros usuários vão automaticamente para aprovação.'),
+    _step(3, 'Flags do espaço',
+      '<b>Aceita Reserva</b> — o espaço aparece na lista de seleção em Novo Agendamento. <b>Possui Chaves Físicas</b> — habilita o controle de chaves no módulo Protocolo de Chaves e a configuração de quantidade e localização das chaves.'),
+    _step(4, 'Editar e excluir espaço',
       'Use os botões de lápis e lixeira no card do espaço. Excluir um espaço não remove reservas existentes — apenas impede novos agendamentos.'),
     _heading('Itens do almoxarifado'),
     _step(4, 'Cadastrar item',
@@ -2434,7 +2452,7 @@ function renderizarManualCompleto() {
     _card('fa-key', 'blue', 'O que é o Protocolo de Chaves',
       'Módulo do grupo Infraestrutura que controla a custódia de chaves físicas dos espaços do CCBJ. Registra quem retirou, quando devolveu e todo o histórico de movimentação.'),
     _card('fa-sitemap', 'purple', 'Quem pode usar',
-      'Qualquer usuário pode <b>solicitar</b> uma chave. Apenas o <b>setor responsável</b> (configurado por espaço em Sistema → Configurações → Protocolo de Chaves) e <b>administradores</b> podem confirmar entregas e devoluções.'),
+      'Qualquer usuário pode <b>solicitar</b> uma chave. Apenas o <b>setor responsável</b> (configurado por espaço em Sistema → Configurações → Configuração de Espaços) e <b>administradores</b> podem confirmar entregas e devoluções.'),
 
     _heading('Solicitar uma chave'),
     _step(1, 'Abrir o módulo',
@@ -2466,11 +2484,13 @@ function renderizarManualCompleto() {
 
     _heading('Configurar chaves por espaço (admin)'),
     _step(10, 'Acessar a configuração',
-      'Em Configurações, na listagem de espaços, clique em "⚙ Configurar Chaves" no card do espaço desejado.'),
-    _step(11, 'Campos disponíveis',
-      '<b>Possui chaves físicas</b> — habilita o controle para aquele espaço. <b>Setor Responsável</b> — selecione o setor institucional (cadastrado em Setores) que gerenciará as chaves. <b>Qtd. Uso Comum / Reserva</b> — quantidade de chaves por tipo. <b>Localização</b> — onde a chave fica guardada (ex: portaria).'),
-    _step(12, 'Setor Responsável',
-      'O campo usa a lista de Setores Institucionais cadastrados em Configurações → Setores. Ao selecionar, usuários daquele setor ganham acesso às abas de gestão e confirmação de chaves do espaço.'),
+      'Vá em <b>Sistema → Configurações → Configuração de Espaços</b>. Clique no ícone de lápis no card do espaço desejado. O mesmo modal de edição de espaço exibe os flags e campos de chave.'),
+    _step(11, 'Habilitar o controle de chaves',
+      'Marque o flag <b>Possui Chaves Físicas</b> no modal de edição do espaço. Isso habilita o espaço no módulo Protocolo de Chaves e libera os campos de quantidade e localização.'),
+    _step(12, 'Cadastrar uma chave',
+      'No Protocolo de Chaves → aba Admin → "+ Nova", selecione o espaço (apenas espaços com "Possui Chaves Físicas" ativo aparecem), escolha o tipo (Uso Comum / Reserva / Master). O <b>código patrimonial é gerado automaticamente</b> pelo sistema no formato CHV-YYYYMMDD-NNN.'),
+    _step(13, 'Setor Responsável pelas chaves',
+      'Configure o responsável pelo espaço em Configurações → Espaços (campo "Responsáveis por dias da semana e turno"). Usuários do setor cadastrado ganham acesso às abas de gestão e confirmação no Protocolo de Chaves.'),
     _tip('fa-circle-check', 'green',
       'Se nenhum setor for configurado, o sistema usa como fallback o setor com o nome "INFRAESTRUTURA". Recomenda-se sempre configurar explicitamente.')
   ].join('');

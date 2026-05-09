@@ -72,12 +72,18 @@ function popularSelectsIniciais() {
   const selFiltroSala = document.getElementById('filtroSala');
   const selVolantes = document.getElementById('selectVolantes');
 
-  // ===== SALAS (FORMULÁRIO) =====
+  // ===== SALAS (FORMULÁRIO) — apenas espaços reserváveis =====
   if (selSala) {
     const salas = AppState.colecoes.salas || [];
+    const flags = AppState.mapaFlagsEspacos || {};
     selSala.innerHTML =
       '<option value="">Selecione um local...</option>' +
-      salas.map(s => {
+      salas.filter(function(s) {
+        const id = String(s[0] || '').trim();
+        if (!id) return false;
+        const f = flags[id];
+        return !f || f.aceitaReserva !== false;
+      }).map(s => {
         const id = s[0] ?? '';
         const nome = s[1] ?? 'Sem nome';
         const cap = s[2] ?? '-';
