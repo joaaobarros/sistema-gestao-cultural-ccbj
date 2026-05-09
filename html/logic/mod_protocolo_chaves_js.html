@@ -56,7 +56,8 @@ function _chvChaveStatusCor(status) {
 
 function _chvNomeEspaco(id) {
   if (!_chvState.dados) return id;
-  const e = (_chvState.dados.espacos || []).find(function(e) { return e.id === id; });
+  const lista = _chvState.dados.todosEspacos || _chvState.dados.espacos || [];
+  const e = lista.find(function(e) { return e.id === id; });
   return e ? e.nome : id;
 }
 
@@ -168,17 +169,16 @@ function _chvPopularSelects() {
 
   // Espacos nos selects
   const espacosComChave = d.espacos || [];
-  const espacosTodos    = [];
-  // Adicionar todos espaços (incluindo sem chave, para admin config)
-  // Para solicitar, filtrar só os com chave
+  const todosEspacos    = d.todosEspacos || d.espacos || [];
   [
     'chv-sol-espaco', 'chv-ed-espaco', 'chv-form-chave-espaco',
     'chv-rel-espaco', 'chv-filtro-todos-espaco', 'chv-admin-espaco-filtro'
   ].forEach(function(selId) {
     const sel = document.getElementById(selId);
     if (!sel) return;
+    // Admin e formulário de nova chave usam todos os espaços
     const ehAdmin = selId === 'chv-admin-espaco-filtro' || selId === 'chv-form-chave-espaco';
-    const lista = ehAdmin ? (d.espacos || []) : espacosComChave;
+    const lista = ehAdmin ? todosEspacos : espacosComChave;
     sel.innerHTML = '<option value="">Todos' + (selId.includes('sol') || selId.includes('ed') ? ' — selecione...' : '') + '</option>';
     lista.forEach(function(e) {
       sel.innerHTML += `<option value="${e.id}">${e.nome}</option>`;
@@ -474,7 +474,7 @@ function _chvFiltrarChavesAdmin() {
 function _chvRenderizarEspacosAdmin() {
   const d = _chvState.dados;
   if (!d) return;
-  const todosEspacos = d.espacos || [];
+  const todosEspacos = d.todosEspacos || d.espacos || [];
   const el = document.getElementById('chv-admin-lista-espacos');
   if (!el) return;
   if (!todosEspacos.length) {

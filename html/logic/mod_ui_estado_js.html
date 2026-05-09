@@ -451,6 +451,24 @@ function adicionarItemVolante() {
  * @outputs Chama criarReservaController() ou salvarReservaRece() no backend
  * @sideEffects showLoader, resetarFormulario, mostrarAba, renderizarReservas
  */
+function _precisaAprovacaoResponsavel(salaId) {
+  if (AppState.usuario.isAdmin) return false;
+  if (!salaId || salaId === 'EXTERNO') return false;
+  const salas = AppState.colecoes.salas || [];
+  const sala = salas.find(function(s) { return String(s[0]).trim() === String(salaId).trim(); });
+  if (!sala) return false;
+  const emailEspacoStr = String(sala[4] || '').trim();
+  if (!emailEspacoStr) return false;
+  let donos = [];
+  try { donos = JSON.parse(emailEspacoStr); } catch(e) { return false; }
+  if (!Array.isArray(donos) || !donos.length) return false;
+  const emailUsuario = String(AppState.usuario.email || '').toLowerCase().trim();
+  const ehResponsavel = donos.some(function(d) {
+    return String(d.email || d || '').toLowerCase().trim() === emailUsuario;
+  });
+  return !ehResponsavel;
+}
+
 async function salvarAgendamento() {
 
   if (typeof calendarInstance === 'undefined' || !calendarInstance) {
@@ -602,7 +620,52 @@ async function salvarAgendamento() {
     return;
   }
 
-  // 🔍 NOVA RESERVA (fluxo intacto)
+  // 🔍 NOVA RESERVA — verifica se precisa de aprovação do responsável
+  if (_precisaAprovacaoResponsavel(dados.sala)) {
+    showLoader(false);
+    if (btnSubmit) btnSubmit.disabled = false;
+
+    const swalResult = await Swal.fire({
+      title: 'Solicitação de reserva',
+      html: '<p style="font-size:13px;color:#64748b;margin-bottom:8px">Este espaço possui responsável configurado. Sua solicitação será enviada para aprovação.</p>' +
+            '<textarea id="swal-justif" class="swal2-textarea" placeholder="Justificativa (mínimo 10 caracteres)" rows="3" style="width:100%"></textarea>',
+      showCancelButton: true,
+      confirmButtonText: 'Enviar solicitação',
+      cancelButtonText: 'Cancelar',
+      preConfirm: function() {
+        const val = (document.getElementById('swal-justif')?.value || '').trim();
+        if (val.length < 10) {
+          Swal.showValidationMessage('Justificativa muito curta (mínimo 10 caracteres).');
+          return false;
+        }
+        return val;
+      }
+    });
+
+    if (!swalResult.isConfirmed || !swalResult.value) return;
+
+    showLoader(true);
+    if (btnSubmit) btnSubmit.disabled = true;
+
+    const payload = { sala: dados.sala, datas: datas, dados: dados };
+    GAS.solicitacoes.criar('RESERVA', 'ESPACO', payload, dados.responsavel, swalResult.value,
+      function() {
+        showLoader(false);
+        if (btnSubmit) btnSubmit.disabled = false;
+        resetarFormulario();
+        mostrarAba('aba-lista-reservas');
+        Swal.mixin({ toast: true, position: 'top-end', showConfirmButton: false, timer: 4000 })
+          .fire({ icon: 'info', title: 'Solicitação enviada! Aguarde aprovação do responsável.' });
+      },
+      function(err) {
+        showLoader(false);
+        if (btnSubmit) btnSubmit.disabled = false;
+        Swal.fire('Erro', err?.message || 'Erro ao criar solicitação', 'error');
+      }
+    );
+    return;
+  }
+
   GAS.reservas.criar(dados, datas, function(res) {
       showLoader(false);
       if (btnSubmit) btnSubmit.disabled = false;
@@ -1767,6 +1830,7 @@ function inicializarApp() {
       AppState.colecoes.administradores = dados.administradores || [];
       AppState.mapaSalas = dados.mapaSalas || {};
       AppState.mapaNomes = dados.mapaNomes || {};
+      AppState.mapaSetoresAdmin = dados.mapaSetoresAdmin || {};
       AppState.emailsSistema = [];
 
       // ===== UI USUÁRIO =====

@@ -376,6 +376,17 @@ function obterDadosIniciais(emailClienteFallback, sessaoId) {
 
     const setorUsuario = obterSetorUsuario(emailUsuario);
 
+    // Mapa email → setor para auto-preenchimento no formulário de responsáveis
+    const mapaSetoresAdmin = {};
+    try {
+      if (abaAdmins && abaAdmins.getLastRow() > 1 && abaAdmins.getLastColumn() >= 3) {
+        abaAdmins.getRange(2, 1, abaAdmins.getLastRow() - 1, 3).getValues().forEach(function(r) {
+          const em = String(r[0] || '').trim().toLowerCase();
+          if (em && r[2]) mapaSetoresAdmin[em] = String(r[2]).trim();
+        });
+      }
+    } catch(e) {}
+
     const resultado = {
       usuarioEmail: emailUsuario,
       isAdmin: nivelAcesso === "admin" || nivelAcesso === "superadmin",
@@ -384,6 +395,7 @@ function obterDadosIniciais(emailClienteFallback, sessaoId) {
         nivelAcesso === "comunicação" || nivelAcesso === "comunicacao",
       isHabilitador: nivelAcesso === "habilitador",
       setorUsuario,
+      mapaSetoresAdmin,
       salas: salasFull,
       mapaSalas: mapaSalasObj,
       setores,
@@ -950,18 +962,14 @@ function obterAdmins() {
     .filter((e) => e.includes("@"));
 }
 
-function obterDonoEspaco(nomeOuIdEspaco, diaSemana) {
+function obterDonoEspaco(nomeOuIdEspaco, diaSemana, turno) {
   const aba = _getSheet("Configuracoes");
   if (!aba || aba.getLastRow() < 2) return null;
   const dados = aba.getDataRange().getValues();
   for (let i = 1; i < dados.length; i++) {
     const id = String(dados[i][0] || "").trim();
-    const nome = String(dados[i][1] || "")
-      .toLowerCase()
-      .trim();
-    const alvo = String(nomeOuIdEspaco || "")
-      .toLowerCase()
-      .trim();
+    const nome = String(dados[i][1] || "").toLowerCase().trim();
+    const alvo = String(nomeOuIdEspaco || "").toLowerCase().trim();
     if (id !== nomeOuIdEspaco && nome !== alvo) continue;
 
     const rawDono = String(dados[i][4] || "").trim();
@@ -969,14 +977,25 @@ function obterDonoEspaco(nomeOuIdEspaco, diaSemana) {
 
     try {
       const arr = JSON.parse(rawDono);
-      const lista = Array.isArray(arr) ? arr : [arr];
+      let lista = Array.isArray(arr) ? arr : [arr];
+
+      // Filtrar por dia da semana
       if (diaSemana !== undefined && diaSemana !== null) {
-        const filtrados = lista.filter(
-          (d) => Array.isArray(d.dias) && d.dias.includes(diaSemana),
-        );
-        if (filtrados.length) return filtrados.map((d) => d.email).join(",");
+        const porDia = lista.filter(function(d) {
+          return Array.isArray(d.dias) && d.dias.includes(diaSemana);
+        });
+        if (porDia.length) lista = porDia;
       }
-      return lista.map((d) => d.email || d).join(",");
+
+      // Filtrar por turno (só se o responsável tiver turnos configurados)
+      if (turno && lista.length) {
+        const porTurno = lista.filter(function(d) {
+          return !d.turnos || !d.turnos.length || d.turnos.includes(turno);
+        });
+        if (porTurno.length) lista = porTurno;
+      }
+
+      return lista.map(function(d) { return d.email || d; }).join(",");
     } catch (e) {
       return rawDono;
     }
@@ -987,7 +1006,7 @@ function obterDonoEspaco(nomeOuIdEspaco, diaSemana) {
 function notificarSolicitacao(s) {
   try {
     const diaSemana = s.diaSemana !== undefined ? s.diaSemana : null;
-    const dono = obterDonoEspaco(s.sala, diaSemana);
+    const dono = obterDonoEspaco(s.sala, diaSemana, s.turno || null);
     const admins = obterAdmins();
     const dest = [...new Set([dono, ...admins].filter(Boolean))];
     if (!dest.length) return;
@@ -1078,6 +1097,17 @@ function chat_criarSolicitacao(tipo, subtipo, dados, usuario, justificativa) {
       }
     } catch (e) {}
 
+    let turno = null;
+    try {
+      const horaIni = dados?.dados?.horaInicio || dados?.dados?.turno || '';
+      if (dados?.dados?.turno) {
+        turno = String(dados.dados.turno).toUpperCase();
+      } else if (horaIni) {
+        const h = parseInt(String(horaIni).split(':')[0]);
+        if (!isNaN(h)) turno = h < 12 ? 'MANHA' : h < 18 ? 'TARDE' : 'NOITE';
+      }
+    } catch(e) {}
+
     const linha = [
       id,
       String(tipo || "").toUpperCase(),
@@ -1107,6 +1137,7 @@ function chat_criarSolicitacao(tipo, subtipo, dados, usuario, justificativa) {
         usuario,
         justificativa,
         diaSemana,
+        turno,
       });
     } catch (e) {
       console.warn("Notificação falhou (não crítico):", e.message);

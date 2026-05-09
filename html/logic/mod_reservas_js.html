@@ -2245,8 +2245,17 @@ const _diasNomesEspaco = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
 
 function adicionarDono() {
   window._donosEspaco = window._donosEspaco || [];
-  window._donosEspaco.push({ email: '', dias: [1,2,3,4,5], setor: '' });
+  window._donosEspaco.push({ email: '', dias: [1,2,3,4,5], setor: '', turnos: ['MANHA','TARDE','NOITE'] });
   renderizarContainerDonos();
+}
+
+function _preencherSetorResponsavel(i, email) {
+  const e = String(email || '').trim().toLowerCase();
+  const setor = (AppState.mapaSetoresAdmin || {})[e] || '';
+  if (setor && window._donosEspaco && window._donosEspaco[i] !== undefined) {
+    window._donosEspaco[i].setor = setor;
+    renderizarContainerDonos();
+  }
 }
 
 function removerDono(i) {
@@ -2269,6 +2278,7 @@ function renderizarContainerDonos() {
       <div class="flex gap-2">
         <input type="email" list="_donoEmailList" value="${escaparHTML(d.email||'')}" placeholder="email@ccbj.org.br"
           oninput="window._donosEspaco[${i}].email=this.value"
+          onchange="_preencherSetorResponsavel(${i}, this.value)"
           class="flex-1 px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs outline-none focus:border-purple-400 font-semibold">
         <button type="button" onclick="removerDono(${i})" class="w-7 h-7 flex items-center justify-center text-red-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-all"><i class="fas fa-times text-xs"></i></button>
       </div>
@@ -2281,6 +2291,13 @@ function renderizarContainerDonos() {
         ${[1,2,3,4,5,6,0].map(n => `<label class="cursor-pointer"><input type="checkbox" class="sr-only peer" ${(d.dias||[]).includes(n)?'checked':''}
           onchange="const _d=window._donosEspaco[${i}].dias||[];const _x=_d.indexOf(${n});if(this.checked&&_x<0)_d.push(${n});else if(!this.checked&&_x>=0)_d.splice(_x,1);window._donosEspaco[${i}].dias=_d;">
           <span class="inline-block px-2 py-0.5 text-[9px] font-black rounded-full border bg-white text-slate-500 border-slate-200 peer-checked:bg-purple-600 peer-checked:text-white peer-checked:border-purple-600 transition-all">${_diasNomesEspaco[n]}</span>
+        </label>`).join('')}
+      </div>
+      <div class="flex flex-wrap gap-1 pt-1 border-t border-slate-100">
+        <span class="text-[9px] text-slate-400 self-center mr-1">Turnos:</span>
+        ${[['MANHA','MANHÃ'],['TARDE','TARDE'],['NOITE','NOITE']].map(([v,l]) => `<label class="cursor-pointer"><input type="checkbox" class="sr-only peer" ${(d.turnos||[]).includes(v)?'checked':''}
+          onchange="const _t=window._donosEspaco[${i}].turnos||[];const _x=_t.indexOf('${v}');if(this.checked&&_x<0)_t.push('${v}');else if(!this.checked&&_x>=0)_t.splice(_x,1);window._donosEspaco[${i}].turnos=_t;">
+          <span class="inline-block px-2 py-0.5 text-[9px] font-black rounded-full border bg-white text-slate-500 border-slate-200 peer-checked:bg-amber-500 peer-checked:text-white peer-checked:border-amber-500 transition-all">${l}</span>
         </label>`).join('')}
       </div>
     </div>`).join('');

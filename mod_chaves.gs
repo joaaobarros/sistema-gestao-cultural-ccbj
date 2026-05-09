@@ -342,9 +342,8 @@ function chaves_obterDados(emailAtual) {
     const ehInfra = _chvEhInfraOuAdmin(email);
 
     const espacosBrutos = _chvLerEspacos();
-    const espacos = espacosBrutos
-      .map(_chvMapearEspaco)
-      .filter(function(e) { return e && e.possuiChaves; });
+    const todosEspacos = espacosBrutos.map(_chvMapearEspaco).filter(Boolean);
+    const espacos = todosEspacos.filter(function(e) { return e.possuiChaves; });
 
     const chavesBrutas = _chvLerChaves();
     const chaves = chavesBrutas
@@ -387,6 +386,7 @@ function chaves_obterDados(emailAtual) {
       ehInfra: ehInfra,
       emailUsuario: email,
       espacos: espacos,
+      todosEspacos: todosEspacos,
       chaves: chaves,
       protocolosAtivos: ativos,
       pendencias: pendencias,
