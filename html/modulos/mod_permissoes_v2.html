@@ -164,11 +164,17 @@
               </div>
               <div>
                 <label class="text-[9px] text-slate-400 uppercase font-black block mb-1">Setores</label>
-                <select id="p2-setores-input" multiple size="4"
-                  onchange="p2OnOrigemChange()"
-                  class="w-full text-xs border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-purple-400"
-                  style="min-height:72px"></select>
-                <p class="text-[8px] text-slate-300 mt-0.5">Ctrl+clique para selecionar múltiplos</p>
+                <div class="flex gap-1.5">
+                  <select id="p2-setores-picker"
+                    class="flex-1 text-xs border border-slate-200 rounded-xl px-2 py-1.5 outline-none focus:border-purple-400 bg-white">
+                  </select>
+                  <button type="button" onclick="_p2AddSetor()"
+                    class="px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 text-xs font-black rounded-xl transition-all" title="Adicionar setor">
+                    <i class="fas fa-plus"></i>
+                  </button>
+                </div>
+                <div id="p2-setores-chips" class="flex flex-wrap gap-1 mt-1.5 min-h-[20px]"></div>
+                <input type="hidden" id="p2-setores-input">
               </div>
               <div>
                 <label class="text-[9px] text-slate-400 uppercase font-black block mb-1">IDs de espaços gerenciados <span class="font-normal text-slate-300">(separar por vírgula)</span></label>

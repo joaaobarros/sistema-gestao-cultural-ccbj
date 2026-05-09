@@ -230,18 +230,57 @@ function p2RenderizarOrigem(origem) {
   _p2El('p2-origem-espacos-view').innerHTML = _p2Chips(origem.donos_espaco);
 }
 
-function _p2PopularSetoresSelect() {
-  var sel = _p2El('p2-setores-input');
-  if (!sel || sel.tagName !== 'SELECT') return;
-  var setores = (AppState && AppState.colecoes && AppState.colecoes.setores || []).filter(Boolean);
-  var current = Array.from(sel.options).map(function(o){ return o.value; });
-  setores.forEach(function(s) {
-    if (!current.includes(s)) {
-      var o = document.createElement('option');
-      o.value = s; o.textContent = s;
-      sel.appendChild(o);
-    }
-  });
+function _p2SetoresDisponiveis() {
+  return (AppState && AppState.colecoes && AppState.colecoes.setores || [])
+    .filter(function(s) { return s && String(s).trim() !== '' && String(s).toUpperCase() !== 'SETORES'; });
+}
+
+function _p2PopularPickerSetores() {
+  var picker = _p2El('p2-setores-picker');
+  if (!picker) return;
+  var disponíveis = _p2SetoresDisponiveis();
+  picker.innerHTML = '<option value="">— selecionar setor —</option>'
+    + disponíveis.map(function(s) {
+        return '<option value="' + escaparHTML(s) + '">' + escaparHTML(s) + '</option>';
+      }).join('');
+}
+
+function _p2RenderSetoresChips(setores) {
+  var div = _p2El('p2-setores-chips');
+  if (!div) return;
+  div.innerHTML = (setores || []).map(function(s) {
+    return '<span style="display:inline-flex;align-items:center;gap:3px;background:#e0e7ff;color:#3730a3;'
+      + 'border-radius:6px;padding:2px 7px;font-size:10px;font-weight:700">'
+      + escaparHTML(s)
+      + '<button type="button" onclick="_p2RemoveSetor(\'' + escaparHTML(s) + '\')" '
+      + 'style="background:none;border:none;cursor:pointer;color:#6366f1;font-size:11px;line-height:1;padding:0 0 0 2px">&times;</button>'
+      + '</span>';
+  }).join('');
+}
+
+function _p2AddSetor() {
+  var picker = _p2El('p2-setores-picker');
+  var hidden = _p2El('p2-setores-input');
+  if (!picker || !picker.value) return;
+  var val   = picker.value.trim();
+  var atual = hidden ? hidden.value.split(',').map(function(s){ return s.trim(); }).filter(Boolean) : [];
+  if (!atual.includes(val)) {
+    atual.push(val);
+    if (hidden) hidden.value = atual.join(', ');
+    _p2RenderSetoresChips(atual);
+    p2OnOrigemChange();
+  }
+  picker.value = '';
+}
+
+function _p2RemoveSetor(s) {
+  var hidden = _p2El('p2-setores-input');
+  if (!hidden) return;
+  var atual = hidden.value.split(',').map(function(x){ return x.trim(); }).filter(Boolean);
+  atual = atual.filter(function(x){ return x !== s; });
+  hidden.value = atual.join(', ');
+  _p2RenderSetoresChips(atual);
+  p2OnOrigemChange();
 }
 
 function _p2SetOrigemForm(origem) {
@@ -249,14 +288,11 @@ function _p2SetOrigemForm(origem) {
   _p2El('p2-funcoes-input').value = (origem.funcoes     || []).join(', ');
   _p2El('p2-espacos-input').value = (origem.donos_espaco|| []).join(', ');
 
-  _p2PopularSetoresSelect();
-  var sel = _p2El('p2-setores-input');
-  if (sel && sel.tagName === 'SELECT') {
-    var selecionados = (origem.setores || []).map(function(s){ return s.trim(); });
-    Array.from(sel.options).forEach(function(o){ o.selected = selecionados.includes(o.value); });
-  } else if (sel) {
-    sel.value = (origem.setores || []).join(', ');
-  }
+  _p2PopularPickerSetores();
+  var setores = (origem.setores || []).filter(Boolean);
+  var hidden  = _p2El('p2-setores-input');
+  if (hidden) hidden.value = setores.join(', ');
+  _p2RenderSetoresChips(setores);
 }
 
 function p2ToggleOrigemEdit() {
@@ -264,20 +300,21 @@ function p2ToggleOrigemEdit() {
   _p2El('p2-origem-edit').classList.toggle('hidden', !_p2S.origemEditando);
   _p2El('p2-origem-view').classList.toggle('hidden', _p2S.origemEditando);
   _p2El('p2-origem-edit-btn').textContent = _p2S.origemEditando ? '✕ Fechar' : '✎ Editar';
+  if (_p2S.origemEditando) {
+    // garante picker populado ao abrir (setores podem ter carregado após _p2SetOrigemForm)
+    var picker = _p2El('p2-setores-picker');
+    if (picker && picker.options.length <= 1) _p2PopularPickerSetores();
+  }
 }
 
 function _p2LerOrigem() {
   function splitInput(v) {
-    return v.split(',').map(function(s){ return s.trim(); }).filter(Boolean);
+    return (v || '').split(',').map(function(s){ return s.trim(); }).filter(Boolean);
   }
-  var selSetores = _p2El('p2-setores-input');
-  var setores = (selSetores && selSetores.tagName === 'SELECT')
-    ? Array.from(selSetores.selectedOptions).map(function(o){ return o.value; })
-    : splitInput(selSetores ? selSetores.value : '');
   return {
     cargo:       _p2El('p2-cargo-input').value.trim(),
     funcoes:     splitInput(_p2El('p2-funcoes-input').value),
-    setores:     setores,
+    setores:     splitInput(_p2El('p2-setores-input') ? _p2El('p2-setores-input').value : ''),
     donos_espaco:splitInput(_p2El('p2-espacos-input').value)
   };
 }
@@ -488,6 +525,11 @@ function p2SalvarPermissoes() {
 
     _p2S.editando = JSON.parse(JSON.stringify(res.permissoes));
     p2RenderizarOrigem(res.permissoes.origem || {});
+    // sincroniza chips/input do formulário de edição com os dados salvos
+    var _setoresSalvos = (res.permissoes.origem && res.permissoes.origem.setores) || [];
+    var _hiddenS = _p2El('p2-setores-input');
+    if (_hiddenS) _hiddenS.value = _setoresSalvos.join(', ');
+    _p2RenderSetoresChips(_setoresSalvos);
     p2RenderizarAutomaticas(res.permissoes.permissoes_automaticas || {});
     p2RenderizarManuais(res.permissoes.permissoes_manuais || {});
     p2RenderizarFinais(_p2ConsolidarLocal(
