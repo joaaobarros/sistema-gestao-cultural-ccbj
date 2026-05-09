@@ -37,7 +37,7 @@ const _CHV_STATUS_LABEL = {
   TRANSFERIDA:                    'Transferida'
 };
 
-const _CHV_TIPO_LABEL = { COMUM: 'Uso Comum', RESERVA: 'Reserva'};
+const _CHV_TIPO_LABEL = { 'CHAVE COMUM': 'Uso Comum', 'CHAVE RESERVA': 'Reserva' };
 const _CHV_STATUS_CHAVE_LABEL = {
   DISPONIVEL: 'Disponível', EM_USO: 'Em uso',
   MANUTENCAO: 'Manutenção', BLOQUEADA: 'Bloqueada', EXTRAVIADA: 'Extraviada'
@@ -862,7 +862,7 @@ function _chvAbrirModalNovaChave() {
   document.getElementById('chv-form-chave-id').value = '';
   document.getElementById('chv-modal-chave-titulo').textContent = 'Nova Chave';
   document.getElementById('chv-form-chave-espaco').value = '';
-  document.getElementById('chv-form-chave-tipo').value = 'COMUM';
+  document.getElementById('chv-form-chave-tipo').value = 'CHAVE COMUM';
   document.getElementById('chv-form-chave-obs').value = '';
   _chvAbrirModal('chv-modal-nova-chave');
 }
@@ -993,9 +993,13 @@ function _chvSalvarChave() {
   const obs      = document.getElementById('chv-form-chave-obs').value || '';
   if (!espacoId) { Swal.fire('Atenção', 'Selecione o espaço.', 'warning'); return; }
 
+  const btn = document.querySelector('#chv-modal-nova-chave button[onclick="_chvSalvarChave()"]');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1.5"></i>Salvando...'; }
+
   const dados = { id: id || undefined, espacoId, tipo, observacoes: obs, ativa: true };
   const email = _chvState.dados ? _chvState.dados.emailUsuario : '';
   GAS.chaves.salvarChave(dados, email, function(res) {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save mr-1.5"></i>Salvar'; }
     if (res && res.ok) {
       _chvFecharModal('chv-modal-nova-chave');
       Swal.fire('Salvo!', '', 'success');
