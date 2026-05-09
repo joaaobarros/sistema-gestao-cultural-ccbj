@@ -211,16 +211,47 @@ function obterPermissoesUsuarioV2(email) {
 function salvarPermissoesUsuarioV2(dados) {
   if (!dados || !dados.email) throw new Error('Email obrigatório');
 
-  var emailEditor = obterEmailUsuario('');
-  var permsEditor = obterPermissoesUsuarioV2(emailEditor);
-  if (!permsEditor || (permsEditor.perfil_base !== 'superadmin' && permsEditor.perfil_base !== 'admin')) {
+  // Aceita emailEditor enviado pelo cliente como fallback para getActiveUser()
+  // (em google.script.run com Execute as: Me, getActiveUser() pode retornar vazio)
+  var emailEditor = obterEmailUsuario(dados.emailEditor || '');
+  if (!emailEditor) throw new Error('Não foi possível identificar o editor. Recarregue a página.');
+
+  // Leitura única de permissoes_v2.json — evita 3 readJSON separados na mesma função
+  var listaPerms = readJSON('permissoes_v2.json');
+
+  function _buscarOuDefault(email) {
+    for (var i = 0; i < listaPerms.length; i++) {
+      if (String(listaPerms[i].email||'').toLowerCase() === email) return listaPerms[i];
+    }
+    var perfil_base = 'visitante_controlado';
+    try {
+      var abaAdmins = _getSheet('Administradores');
+      if (abaAdmins && abaAdmins.getLastRow() > 1) {
+        var rows = abaAdmins.getRange(2, 1, abaAdmins.getLastRow() - 1, 2).getValues();
+        var map  = {superadmin:'superadmin',admin:'admin',gestor:'gestor',
+                    tecnico:'tecnico','técnico':'tecnico',rh:'rh',
+                    comunicacao:'comunicacao','comunicação':'comunicacao'};
+        for (var k = 0; k < rows.length; k++) {
+          if (String(rows[k][0]||'').toLowerCase().trim() === email) {
+            var n = String(rows[k][1]||'').toLowerCase().trim();
+            if (map[n]) { perfil_base = map[n]; break; }
+          }
+        }
+      }
+    } catch(e) {}
+    return { email: email, perfil_base: perfil_base, origem: {cargo:'',funcoes:[],setores:[],donos_espaco:[]},
+             permissoes_automaticas: {}, permissoes_manuais: {}, permissoes_finais: {}, atualizadoEm: null };
+  }
+
+  var permsEditor  = _buscarOuDefault(emailEditor);
+  if (permsEditor.perfil_base !== 'superadmin' && permsEditor.perfil_base !== 'admin') {
     throw new Error('Permissão insuficiente');
   }
 
-  var emailAlvo   = String(dados.email).toLowerCase().trim();
-  var permsAlvoAnt = obterPermissoesUsuarioV2(emailAlvo);
+  var emailAlvo    = String(dados.email).toLowerCase().trim();
+  var permsAlvoAnt = _buscarOuDefault(emailAlvo);
 
-  if (permsAlvoAnt && permsAlvoAnt.perfil_base === 'superadmin' && permsEditor.perfil_base !== 'superadmin') {
+  if (permsAlvoAnt.perfil_base === 'superadmin' && permsEditor.perfil_base !== 'superadmin') {
     throw new Error('Apenas superadmin pode editar outro superadmin');
   }
   if (emailAlvo === emailEditor && permsEditor.perfil_base === 'superadmin' && dados.perfil_base !== 'superadmin') {
@@ -246,29 +277,25 @@ function salvarPermissoesUsuarioV2(dados) {
     atualizadoEm:           new Date().toISOString()
   };
 
-  _p2registrarAuditoria({
-    editor:    emailEditor,
-    alvo:      emailAlvo,
-    antes:     permsAlvoAnt,
-    depois:    registro,
-    timestamp: new Date().toISOString()
-  });
-
-  var lista = readJSON('permissoes_v2.json');
+  // Atualiza lista já lida (sem re-ler o arquivo)
   var found = false;
-  for (var i = 0; i < lista.length; i++) {
-    if (String(lista[i].email||'').toLowerCase() === emailAlvo) {
-      lista[i] = registro; found = true; break;
+  for (var i = 0; i < listaPerms.length; i++) {
+    if (String(listaPerms[i].email||'').toLowerCase() === emailAlvo) {
+      listaPerms[i] = registro; found = true; break;
     }
   }
-  if (!found) lista.push(registro);
-  writeJSON('permissoes_v2.json', lista);
+  if (!found) listaPerms.push(registro);
+  writeJSON('permissoes_v2.json', listaPerms);
 
+  // Auditoria assíncrona — não bloqueia retorno
+  try { _p2registrarAuditoria({ editor: emailEditor, alvo: emailAlvo,
+    antes: permsAlvoAnt, depois: registro, timestamp: new Date().toISOString() }); } catch(e) {}
+
+  // Marca usuário como configurado
   var usuarios = readJSON('usuarios_sistema.json');
   for (var j = 0; j < usuarios.length; j++) {
     if (String(usuarios[j].email||'').toLowerCase() === emailAlvo) {
-      usuarios[j].configurado = true;
-      break;
+      usuarios[j].configurado = true; break;
     }
   }
   writeJSON('usuarios_sistema.json', usuarios);
@@ -419,14 +446,34 @@ function calcularPermissoesFinais(email) {
   return _p2consolidar(p.perfil_base, p.permissoes_automaticas, p.permissoes_manuais);
 }
 
-function listarPermissoesV2() {
-  var em = obterEmailUsuario('');
-  var p  = obterPermissoesUsuarioV2(em);
+function listarPermissoesV2(emailFallback) {
+  var em = obterEmailUsuario(emailFallback || '');
+  if (!em) throw new Error('Acesso negado — identidade não resolvida');
+  var lista = readJSON('permissoes_v2.json');
+  var p = null;
+  for (var i = 0; i < lista.length; i++) {
+    if (String(lista[i].email||'').toLowerCase() === em) { p = lista[i]; break; }
+  }
+  // fallback: verifica na aba Administradores se não estiver na lista v2
+  if (!p) {
+    try {
+      var abaAdmins = _getSheet('Administradores');
+      if (abaAdmins && abaAdmins.getLastRow() > 1) {
+        var rows = abaAdmins.getRange(2, 1, abaAdmins.getLastRow() - 1, 2).getValues();
+        for (var k = 0; k < rows.length; k++) {
+          if (String(rows[k][0]||'').toLowerCase().trim() === em) {
+            var n = String(rows[k][1]||'').toLowerCase().trim();
+            if (n === 'superadmin' || n === 'admin') { p = { perfil_base: n }; break; }
+          }
+        }
+      }
+    } catch(e) {}
+  }
   if (!p || (p.perfil_base !== 'superadmin' && p.perfil_base !== 'admin')) {
     throw new Error('Acesso negado');
   }
   return {
-    permissoes: readJSON('permissoes_v2.json'),
+    permissoes: lista,
     usuarios:   readJSON('usuarios_sistema.json')
   };
 }

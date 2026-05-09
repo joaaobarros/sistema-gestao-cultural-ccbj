@@ -57,29 +57,14 @@ function getFile(nome) {
  * @sideEffects readJSON: pode resetar arquivo corrompido para []; writeJSON: sobrescreve conteúdo
  */
 function readJSON(nome) {
-
-  const lock = LockService.getScriptLock();
-  lock.waitLock(5000); // leitura rápida, menor tempo
-
   try {
-
     const file = getFile(nome);
     const conteudo = file.getBlob().getDataAsString();
-
     return JSON.parse(conteudo || "[]");
-
   } catch (e) {
-
     console.error("JSON corrompido em:", nome, e);
-
-    const file = getFile(nome);
-    file.setContent(JSON.stringify([]));
-
+    try { getFile(nome).setContent(JSON.stringify([])); } catch(e2) {}
     return [];
-
-  } finally {
-
-    lock.releaseLock();
   }
 }
 

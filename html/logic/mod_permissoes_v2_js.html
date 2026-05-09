@@ -10,14 +10,18 @@
 
 // ── Extensão do GAS namespace ────────────────────────────────
 
+function _p2emailAtual() {
+  return (AppState && AppState.usuario && AppState.usuario.email) || '';
+}
+
 GAS.permissoesV2 = {
-  listar:        function(cb, err)        { GAS._call('listarPermissoesV2',           [],       cb, err); },
-  obter:         function(email, cb, err) { GAS._call('obterPermissoesUsuarioV2',     [email],  cb, err); },
-  salvar:        function(dados, cb, err) { GAS._call('salvarPermissoesUsuarioV2',    [dados],  cb, err); },
-  usuarios:      function(cb, err)        { GAS._call('obterUsuariosSistema',          [],       cb, err); },
-  sincronizar:   function(cb, err)        { GAS._call('sincronizarUsuariosSistema',    [],       cb, err); },
+  listar:        function(cb, err)        { GAS._call('listarPermissoesV2',           [_p2emailAtual()], cb, err); },
+  obter:         function(email, cb, err) { GAS._call('obterPermissoesUsuarioV2',     [email],           cb, err); },
+  salvar:        function(dados, cb, err) { GAS._call('salvarPermissoesUsuarioV2',    [dados],           cb, err); },
+  usuarios:      function(cb, err)        { GAS._call('obterUsuariosSistema',          [],                cb, err); },
+  sincronizar:   function(cb, err)        { GAS._call('sincronizarUsuariosSistema',    [],                cb, err); },
   calcularAuto:  function(origem, perfil, cb, err) { GAS._call('calcularPermissoesAutomaticas', [origem, perfil], cb, err); },
-  auditoria:     function(cb, err)        { GAS._call('obterAuditoriaPermissoes',      [],       cb, err); }
+  auditoria:     function(cb, err)        { GAS._call('obterAuditoriaPermissoes',      [],                cb, err); }
 };
 
 // ── Estado do módulo ─────────────────────────────────────────
@@ -501,6 +505,7 @@ function p2SalvarPermissoes() {
 
   var dados = {
     email:               _p2S.emailSelecionado,
+    emailEditor:         _p2S.emailAtual || (AppState && AppState.usuario ? AppState.usuario.email || '' : ''),
     perfil_base:         _p2El('p2-perfil-select').value,
     origem:              origemFinal,
     permissoes_manuais:  _p2S.editando.permissoes_manuais || {}
