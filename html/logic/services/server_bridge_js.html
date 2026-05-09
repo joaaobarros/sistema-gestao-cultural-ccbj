@@ -164,6 +164,13 @@ const GAS = {
     },
     obterRelatoriosCODIP: function(cb, err) {
       GAS._call('obterRelatoriosCODIP', [], cb, err);
+    },
+    obterSetor: function(emailAlvo, cb, err) {
+      GAS._call('obterSetorUsuario', [emailAlvo], cb, err);
+    },
+    salvarSetor: function(emailAlvo, setor, cb, err) {
+      var emailSolicitante = (typeof AppState !== 'undefined' && AppState.usuario && AppState.usuario.email) || '';
+      GAS._call('salvarSetorUsuario', [emailAlvo, setor, emailSolicitante], cb, err);
     }
   },
 

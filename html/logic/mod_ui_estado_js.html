@@ -487,7 +487,9 @@ async function salvarAgendamento() {
 
   if (!horaIni?.value) { Swal.fire('Atenção', 'Informe início.', 'warning'); return; }
   if (!horaTer?.value) { Swal.fire('Atenção', 'Informe término.', 'warning'); return; }
-  if (!setorEl?.value) { Swal.fire('Atenção', 'Selecione o setor.', 'warning'); return; }
+  // Para não-admins, o select está desabilitado; usa AppState como fallback
+  const setorValor = (setorEl?.value) || (!AppState.usuario.isAdmin ? AppState.usuario.setor : '');
+  if (!setorValor) { Swal.fire('Atenção', 'Selecione o setor.', 'warning'); return; }
 
   const todosItens = [
     ...(itensFixosSelecionados || []).map(i => `${i.qtd}x ${i.nome} (fixo)`),
@@ -511,7 +513,7 @@ async function salvarAgendamento() {
     horaInicio:    horaIni.value,
     horaTermino:   horaTer.value,
     turno:         turnoEl?.value || '',
-    setor:         setorEl.value.toUpperCase(),
+    setor:         setorValor.toUpperCase(),
     responsavel:   AppState?.usuario?.email || '',
     coresponsavel: document.getElementById('inputOutroResponsavel')?.value.trim() || 'Não informado',
     enderecoExterno: selectSala?.value === 'EXTERNO'
@@ -1752,6 +1754,7 @@ function inicializarApp() {
       AppState.usuario.isComunicacao = dados.isComunicacao || false;
       AppState.usuario.isHabilitador = dados.isHabilitador || false;
       AppState.usuario.isSuperadmin = dados.isSuperadmin;
+      AppState.usuario.setor = dados.setorUsuario || '';
 
       if (typeof carregarPerfilUsuario === 'function') {
         try { carregarPerfilUsuario(); } catch (e) { console.warn(e); }

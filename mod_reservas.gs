@@ -121,6 +121,100 @@ function verificarConflitoEspaco(
 
 /**
  * ========================================
+ * BLOCO: possuiConflitoReserva — interface canônica centralizada
+ * ========================================
+ * @description Ponto único obrigatório para qualquer verificação de conflito no sistema.
+ *              Toda criação/edição de reserva DEVE passar por aqui.
+ *              Internamente delega para verificarConflitoEspaco.
+ *              BLOQUEIO (CCBJ_FECHADO) não passa por esta função — cancela conflitos diretamente.
+ * @inputs { data, espacoId, inicio, fim, reservaIgnoradaId }
+ * @outputs { conflito: boolean, tipo?, solicitado?, existente?, contexto? }
+ */
+function possuiConflitoReserva({ data, espacoId, inicio, fim, reservaIgnoradaId }) {
+  return verificarConflitoEspaco(espacoId, data, inicio, fim, reservaIgnoradaId || null);
+}
+
+/**
+ * ========================================
+ * BLOCO: Cancelamento automático por CCBJ FECHADO
+ * ========================================
+ * @description Cancela todas as reservas ativas que conflitam com o bloqueio CCBJ FECHADO.
+ *              Exclui outras reservas do tipo BLOQUEIO (não cancela bloqueios com bloqueios).
+ *              Envia notificação por email ao dono de cada reserva cancelada.
+ *              Registra log de auditoria para cada cancelamento.
+ * @inputs sala, data, inicio, fim (strings), motivo (string), emailAdmin (string)
+ * @outputs Array de { id, nome, email } das reservas canceladas
+ * @sideEffects Escreve na planilha Reservas, envia emails, registra logs
+ */
+function _cancelarReservasConflitantes(sala, data, inicio, fim, motivo, emailAdmin) {
+  const aba = _getSheet("Reservas");
+  if (!aba || aba.getLastRow() < 2) return [];
+
+  const dados = aba.getDataRange().getValues();
+  const dataBusca = normalizarData(data);
+  const inicioMin = normalizarHora(inicio);
+  const fimMin = normalizarHora(fim);
+
+  if (dataBusca === null || inicioMin === null || fimMin === null) return [];
+
+  const salaNorm = String(sala).trim();
+  const cancelados = [];
+
+  for (let i = 1; i < dados.length; i++) {
+    const statusAtual = String(dados[i][13] || "").toUpperCase();
+    if (statusAtual === "CANCELADO") continue;
+
+    const tipoReserva = String(dados[i][7] || "").toUpperCase();
+    if (tipoReserva === "BLOQUEIO") continue;
+
+    if (String(dados[i][4] || "").trim() !== salaNorm) continue;
+
+    const dataPlanilha = normalizarData(dados[i][1]);
+    if (dataPlanilha === null || dataPlanilha !== dataBusca) continue;
+
+    const iniP = normalizarHora(dados[i][2]);
+    const terP = normalizarHora(dados[i][3]);
+    if (iniP === null || terP === null) continue;
+
+    if (!horariosSobrepostos(inicioMin, fimMin, iniP, terP)) continue;
+
+    aba.getRange(i + 1, 14).setValue("CANCELADO");
+
+    const emailDono = String(dados[i][8] || "");
+    const nomeReserva = String(dados[i][6] || "");
+    const idReserva = String(dados[i][0] || "");
+
+    cancelados.push({ id: idReserva, nome: nomeReserva, email: emailDono });
+
+    registrarLog(
+      "CANCELAMENTO_AUTO",
+      "RESERVA",
+      nomeReserva,
+      `ID: ${idReserva} | Motivo: CCBJ Fechado — ${motivo}`,
+      `Status: ${statusAtual}`,
+      "Status: CANCELADO",
+      emailAdmin
+    );
+
+    try {
+      if (emailDono && emailDono.includes("@") && emailDono !== emailAdmin) {
+        const dataFmt = formatarData ? formatarData(dataBusca) : String(data);
+        GmailApp.sendEmail(
+          emailDono,
+          "❌ Sua reserva foi cancelada — CCBJ Fechado",
+          `Olá,\n\nSua reserva "${nomeReserva}" em ${dataFmt} (${inicio}–${fim}) foi cancelada automaticamente.\n\nMotivo: CCBJ estará fechado nesse período — ${motivo}.\n\nEntre em contato com a equipe de gestão para mais informações.`
+        );
+      }
+    } catch (e) {
+      console.warn("Notificação de cancelamento falhou:", e.message);
+    }
+  }
+
+  return cancelados;
+}
+
+/**
+ * ========================================
  * BLOCO: Cancelamento e habilitação de reservas
  * ========================================
  * @description cancelarReserva: cancela a reserva (apenas dono ou admin). Notifica admins
@@ -365,13 +459,13 @@ function salvarEdicaoReserva(dados) {
         const emailDono = valores[i][8];
         verificarDonoOuAdmin(emailDono, responsavelNormalizado);
 
-        const resultadoConflito = verificarConflitoEspaco(
-          dados.sala,
-          dados.data,
-          dados.horaInicio,
-          dados.horaTermino,
-          dados.id,
-        );
+        const resultadoConflito = possuiConflitoReserva({
+          data: dados.data,
+          espacoId: dados.sala,
+          inicio: dados.horaInicio,
+          fim: dados.horaTermino,
+          reservaIgnoradaId: dados.id,
+        });
         if (resultadoConflito && resultadoConflito.conflito) {
           const ex = resultadoConflito.existente || {};
           throw new Error(
@@ -903,13 +997,13 @@ function processarAgendamentoLote(dados, datas) {
       if (isNaN(dataFinal.getTime()))
         throw new Error("Data inválida: " + dataStr);
 
-      const resultadoConflito = verificarConflitoEspaco(
-        dados.sala,
-        dataFinal,
-        dados.horaInicio,
-        dados.horaTermino,
-        null,
-      );
+      const resultadoConflito = possuiConflitoReserva({
+        data: dataFinal,
+        espacoId: dados.sala,
+        inicio: dados.horaInicio,
+        fim: dados.horaTermino,
+        reservaIgnoradaId: null,
+      });
       if (resultadoConflito && resultadoConflito.conflito) {
         const ex = resultadoConflito.existente || {};
         throw new Error(
@@ -1032,25 +1126,39 @@ function criarReservaController(dados, datas) {
     const idsGerados = [];
     const datasProcessadas = new Set();
 
+    const ehBloqueio = String(dados.tipoAcao || "").toUpperCase() === "BLOQUEIO";
+
     datas.forEach((data) => {
       const dataKey = String(data).trim();
       if (datasProcessadas.has(dataKey))
         throw new Error("Data duplicada no lote: " + dataKey);
       datasProcessadas.add(dataKey);
 
-      const resultadoConflito = verificarConflitoEspaco(
-        dados.sala,
-        data,
-        dados.horaInicio,
-        dados.horaTermino,
-        null,
-      );
-      if (resultadoConflito && resultadoConflito.conflito) {
-        const ex = resultadoConflito.existente || {};
-        throw new Error(
-          `Conflito detectado em ${dataKey}: espaço já reservado` +
-            (ex.inicio ? ` (${ex.inicio}–${ex.fim}: ${ex.nome || ""})` : ""),
+      if (ehBloqueio) {
+        // CCBJ FECHADO: cancela reservas conflitantes em vez de falhar
+        _cancelarReservasConflitantes(
+          dados.sala,
+          data,
+          dados.horaInicio,
+          dados.horaTermino,
+          dados.release || dados.nomeAcao || "CCBJ Fechado",
+          responsavelNorm
         );
+      } else {
+        const resultadoConflito = possuiConflitoReserva({
+          data,
+          espacoId: dados.sala,
+          inicio: dados.horaInicio,
+          fim: dados.horaTermino,
+          reservaIgnoradaId: null,
+        });
+        if (resultadoConflito && resultadoConflito.conflito) {
+          const ex = resultadoConflito.existente || {};
+          throw new Error(
+            `Conflito detectado em ${dataKey}: espaço já reservado` +
+              (ex.inicio ? ` (${ex.inicio}–${ex.fim}: ${ex.nome || ""})` : ""),
+          );
+        }
       }
 
       verificarDisponibilidadeItensPorHorario(
@@ -1258,13 +1366,13 @@ const ReservaService = {
     const responsavelNorm = normalizarEmail(dados.responsavel);
     verificarDonoOuAdmin(reservaExistente[8], responsavelNorm);
 
-    const resultadoConflito = verificarConflitoEspaco(
-      dados.sala,
-      dados.data,
-      dados.horaInicio,
-      dados.horaTermino,
-      dados.id,
-    );
+    const resultadoConflito = possuiConflitoReserva({
+      data: dados.data,
+      espacoId: dados.sala,
+      inicio: dados.horaInicio,
+      fim: dados.horaTermino,
+      reservaIgnoradaId: dados.id,
+    });
     if (resultadoConflito && resultadoConflito.conflito) {
       const ex = resultadoConflito.existente || {};
       throw new Error(

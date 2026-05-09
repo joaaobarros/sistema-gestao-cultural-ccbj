@@ -197,6 +197,106 @@ function verificarDonoOuAdmin(emailDono, emailAtual) {
  * Entrypoint principal do boot do frontend.
  * Identidade resolvida via Session.getActiveUser() (Workspace domain).
  */
+/**
+ * ========================================
+ * BLOCO: Setor de usuário — leitura e escrita
+ * ========================================
+ * @description obterSetorUsuario: lê o setor do usuário buscando primeiro na coluna 3 da
+ *              aba Administradores, depois em PreferenciasUsuarios (chave "setor_usuario").
+ *              salvarSetorUsuario: admin pode definir setor para qualquer usuário.
+ *              Usuário pode definir próprio setor somente se não tiver um configurado.
+ * @sideEffects Lê/Escreve em Administradores (col 3) ou PreferenciasUsuarios
+ */
+function obterSetorUsuario(email) {
+  if (!email || !email.includes('@')) return '';
+
+  const emailNorm = String(email).trim().toLowerCase();
+
+  try {
+    const abaAdmins = _getSheet('Administradores');
+    if (abaAdmins && abaAdmins.getLastRow() > 1) {
+      const numCols = abaAdmins.getLastColumn();
+      if (numCols >= 3) {
+        const dados = abaAdmins.getRange(2, 1, abaAdmins.getLastRow() - 1, 3).getValues();
+        const linha = dados.find(r => String(r[0]).trim().toLowerCase() === emailNorm);
+        if (linha && String(linha[2] || '').trim()) return String(linha[2]).trim();
+      }
+    }
+  } catch (e) {}
+
+  try {
+    const abaPrefs = _getSheet('PreferenciasUsuarios');
+    if (abaPrefs && abaPrefs.getLastRow() > 1) {
+      const dados = abaPrefs.getDataRange().getValues();
+      for (let i = 1; i < dados.length; i++) {
+        if (String(dados[i][0]).trim().toLowerCase() === emailNorm &&
+            String(dados[i][1]).trim() === 'setor_usuario') {
+          try { return JSON.parse(String(dados[i][2])) || ''; } catch(e) { return String(dados[i][2]) || ''; }
+        }
+      }
+    }
+  } catch (e) {}
+
+  return '';
+}
+
+function salvarSetorUsuario(emailAlvo, setor, emailSolicitante) {
+  if (!emailSolicitante || !emailSolicitante.includes('@'))
+    throw new Error('Email do solicitante inválido.');
+  if (!emailAlvo || !emailAlvo.includes('@'))
+    throw new Error('Email do usuário inválido.');
+
+  const emailAlvoNorm = String(emailAlvo).trim().toLowerCase();
+  const emailSolNorm  = String(emailSolicitante).trim().toLowerCase();
+  const setorNorm     = String(setor || '').trim();
+
+  const ehAdmin = (() => {
+    try {
+      const abaAdmins = _getSheet('Administradores');
+      if (!abaAdmins || abaAdmins.getLastRow() < 2) return false;
+      const dados = abaAdmins.getRange(2, 1, abaAdmins.getLastRow() - 1, 2).getValues();
+      const info = dados.find(r => String(r[0]).trim().toLowerCase() === emailSolNorm);
+      return info ? ['admin','superadmin'].includes(String(info[1]).toLowerCase()) : false;
+    } catch(e) { return false; }
+  })();
+
+  if (!ehAdmin && emailAlvoNorm !== emailSolNorm)
+    throw new Error('Sem permissão para alterar setor de outro usuário.');
+
+  // Tenta salvar na coluna 3 de Administradores primeiro
+  try {
+    const abaAdmins = _getSheet('Administradores');
+    if (abaAdmins && abaAdmins.getLastRow() > 1) {
+      const numCols = abaAdmins.getLastColumn();
+      const dados = abaAdmins.getRange(2, 1, abaAdmins.getLastRow() - 1, Math.max(2, numCols)).getValues();
+      for (let i = 0; i < dados.length; i++) {
+        if (String(dados[i][0]).trim().toLowerCase() === emailAlvoNorm) {
+          abaAdmins.getRange(i + 2, 3).setValue(setorNorm);
+          registrarLog('SETOR_USUARIO', 'USUARIO', emailAlvo, 'Setor: ' + setorNorm, '', setorNorm, emailSolicitante);
+          return true;
+        }
+      }
+    }
+  } catch (e) {}
+
+  // Fallback: PreferenciasUsuarios
+  const abaPrefs = _getSheet('PreferenciasUsuarios');
+  if (!abaPrefs) throw new Error('Não foi possível salvar o setor do usuário.');
+  const dadosPrefs = abaPrefs.getDataRange().getValues();
+  for (let i = 1; i < dadosPrefs.length; i++) {
+    if (String(dadosPrefs[i][0]).trim().toLowerCase() === emailAlvoNorm &&
+        String(dadosPrefs[i][1]).trim() === 'setor_usuario') {
+      abaPrefs.getRange(i + 1, 3).setValue(JSON.stringify(setorNorm));
+      abaPrefs.getRange(i + 1, 4).setValue(new Date());
+      registrarLog('SETOR_USUARIO', 'USUARIO', emailAlvo, 'Setor: ' + setorNorm, '', setorNorm, emailSolicitante);
+      return true;
+    }
+  }
+  abaPrefs.appendRow([emailAlvo, 'setor_usuario', JSON.stringify(setorNorm), new Date()]);
+  registrarLog('SETOR_USUARIO', 'USUARIO', emailAlvo, 'Setor: ' + setorNorm, '', setorNorm, emailSolicitante);
+  return true;
+}
+
 function obterDadosIniciais(emailClienteFallback, sessaoId) {
   try {
     const emailUsuario = obterEmailUsuario(emailClienteFallback || "", sessaoId || "");
@@ -274,6 +374,8 @@ function obterDadosIniciais(emailClienteFallback, sessaoId) {
       }
     });
 
+    const setorUsuario = obterSetorUsuario(emailUsuario);
+
     const resultado = {
       usuarioEmail: emailUsuario,
       isAdmin: nivelAcesso === "admin" || nivelAcesso === "superadmin",
@@ -281,6 +383,7 @@ function obterDadosIniciais(emailClienteFallback, sessaoId) {
       isComunicacao:
         nivelAcesso === "comunicação" || nivelAcesso === "comunicacao",
       isHabilitador: nivelAcesso === "habilitador",
+      setorUsuario,
       salas: salasFull,
       mapaSalas: mapaSalasObj,
       setores,

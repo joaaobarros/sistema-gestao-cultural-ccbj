@@ -218,6 +218,7 @@ function p2SelecionarUsuario(email) {
   p2RenderizarFinaisLocal();
 
   p2RenderizarLista();
+  p2CarregarSetor(email);
 }
 
 // ── Origem ───────────────────────────────────────────────────
@@ -674,6 +675,38 @@ function _p2PerfilCor(perfil) {
     visitante_controlado:'text-amber-600',visitante:'text-slate-400'
   };
   return map[perfil] || 'text-slate-400';
+}
+
+// ── Setor Principal do usuário ────────────────────────────────
+
+function _p2PopularSelectSetor(valorAtual) {
+  var sel = document.getElementById('p2-setor-select');
+  if (!sel) return;
+  var setores = (AppState && AppState.colecoes && AppState.colecoes.setores) || [];
+  sel.innerHTML = '<option value="">— nenhum —</option>'
+    + setores.filter(Boolean).map(function(s) {
+        return '<option value="' + escaparHTML(s) + '"' + (s === valorAtual ? ' selected' : '') + '>' + escaparHTML(s) + '</option>';
+      }).join('');
+}
+
+function p2CarregarSetor(email) {
+  _p2PopularSelectSetor('');
+  if (!email) return;
+  GAS.admin.obterSetor(email, function(setor) {
+    _p2PopularSelectSetor(setor || '');
+  }, function() {});
+}
+
+function p2SalvarSetor() {
+  var email = _p2S.emailSelecionado;
+  var sel   = document.getElementById('p2-setor-select');
+  if (!email || !sel) return;
+  var setor = sel.value;
+  GAS.admin.salvarSetor(email, setor, function() {
+    Swal.fire({ icon: 'success', title: 'Setor salvo', timer: 1500, showConfirmButton: false });
+  }, function(err) {
+    Swal.fire('Erro', (err && err.message) || 'Falha ao salvar setor.', 'error');
+  });
 }
 
 </script>

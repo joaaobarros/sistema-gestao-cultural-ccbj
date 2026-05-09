@@ -96,6 +96,18 @@ function popularSelectsIniciais() {
   if (selSetor) selSetor.innerHTML = '<option value="">Selecione o setor...</option>' + optionsSetor;
   if (selFiltroSetor) selFiltroSetor.innerHTML = '<option value="">TODOS OS SETORES</option>' + optionsSetor;
 
+  // Auto-preenche setor do usuário logado; não-admins não podem alterar
+  if (selSetor && AppState.usuario.setor) {
+    selSetor.value = AppState.usuario.setor;
+  }
+  if (selSetor && !AppState.usuario.isAdmin) {
+    selSetor.disabled = true;
+    selSetor.title = 'Setor preenchido automaticamente pelo perfil do usuário';
+  } else if (selSetor) {
+    selSetor.disabled = false;
+    selSetor.title = '';
+  }
+
   // ===== FILTRO SALA (USA ID COMO VALUE, NOME COMO LABEL) =====
   // Isso garante que a comparação com r[4] (que é ID) funcione corretamente
   if (selFiltroSala) {
@@ -2300,9 +2312,12 @@ function alternarModoVisualizacao(modo) {
     agendaV?.classList.remove('hidden');
     setAtivo(btnAgend);
     window._agendaGoogleSemana = window._agendaGoogleSemana || 0;
+    // Reseta flag para forçar seleção inicial de sala na primeira entrada
+    window._agendaGoogleSalaForced = false;
     const selAgenda = document.getElementById('agendaGoogleSala');
     if (selAgenda && !selAgenda.value && selAgenda.options.length > 1) {
       selAgenda.value = selAgenda.options[1].value;
+      window._agendaGoogleSalaForced = true;
     }
     _initDatePickerAgenda();
     renderizarModoAgendaGoogle();
@@ -2496,9 +2511,14 @@ function renderizarModoAgendaGoogle() {
   }
 
   const apenasMinhas = window._filtroMinhasAgenda || false;
-  let salaId = document.getElementById('agendaGoogleSala')?.value;
-  if (!salaId && !apenasMinhas && AppState.colecoes.salas?.length) {
+  // Respeita a seleção do usuário — não força a primeira sala se ele escolheu "Todas as salas"
+  let salaId = document.getElementById('agendaGoogleSala')?.value || '';
+  // Fallback apenas se a agenda nunca teve uma sala definida (primeira carga)
+  if (!salaId && !apenasMinhas && AppState.colecoes.salas?.length && !window._agendaGoogleSalaForced) {
     salaId = String(AppState.colecoes.salas[0][0]);
+    const selEl = document.getElementById('agendaGoogleSala');
+    if (selEl) selEl.value = salaId;
+    window._agendaGoogleSalaForced = true;
   }
 
   const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
@@ -2648,31 +2668,41 @@ function renderizarModoAgendaGoogle() {
       resDodia = Object.values(_indexDia).flat();
     }
 
-    // Distribui blocos sobrepostos em colunas visuais
+    // Distribui blocos sobrepostos em colunas visuais (apenas ativos para o layout)
     const blocos = [];
-    resDodia.filter(r => String(r[13]||'').toUpperCase() !== 'CANCELADO').forEach(r => {
+    resDodia.forEach(r => {
+      const _st = String(r[13]||'').toUpperCase();
       const ini = normHora(r[2]);
       const ter = normHora(r[3]);
       let col = 0;
-      while (blocos.some(b => b.col === col && b.ini < ter && b.ter > ini)) col++;
-      blocos.push({ r, ini, ter, col });
+      // Cancelados não competem por colunas — ficam na coluna 0 como overlay
+      if (_st !== 'CANCELADO') {
+        while (blocos.some(b => b.col === col && b.ini < ter && b.ter > ini && String(b.r[13]||'').toUpperCase() !== 'CANCELADO')) col++;
+      }
+      blocos.push({ r, ini, ter, col, cancelado: _st === 'CANCELADO' });
     });
-    const maxCol = blocos.length > 0 ? Math.max(...blocos.map(b => b.col)) + 1 : 1;
+    const maxCol = Math.max(1, ...blocos.filter(b => !b.cancelado).map(b => b.col + 1));
 
-    const blocosHTML = blocos.filter(({r}) => String(r[13]||'').toUpperCase() !== 'CANCELADO').map(({ r, ini, ter, col }) => {
+    const blocosHTML = blocos.map(({ r, ini, ter, col, cancelado }) => {
       const top    = ((ini - INICIO_MIN) / TOTAL_MIN) * TOTAL_PX;
       const height = Math.max(((ter - ini) / TOTAL_MIN) * TOTAL_PX, 24);
-      const left   = (col / maxCol) * 100;
-      const width  = (1 / maxCol) * 100;
+      // Cancelados ficam na coluna 0 sem dividir largura
+      const _colEfetiva = cancelado ? 0 : col;
+      const _maxColEfetivo = cancelado ? 1 : maxCol;
+      const left   = (_colEfetiva / _maxColEfetivo) * 100;
+      const width  = cancelado ? 100 : (1 / _maxColEfetivo) * 100;
       const idSala = String(r[4]);
       const nomeSala = AppState.mapaSalas?.[idSala] || idSala;
 
-      // No modo multi-sala, cor por sala; no modo sala única, cor por setor
       const _statusBloco = String(r[13]||'').toUpperCase();
       const _isHabBloco  = _statusBloco === 'HABILITADO';
       const _isBloqueio  = String(r[7]||'').toUpperCase() === 'BLOQUEIO';
+
       let corBloco, corTexto;
-      if (_isBloqueio) {
+      if (cancelado) {
+        corBloco = 'border-slate-300 bg-slate-50';
+        corTexto = 'text-slate-400';
+      } else if (_isBloqueio) {
         corBloco = 'border-red-300 bg-red-50/70';
         corTexto = 'text-red-700';
       } else if (_isHabBloco) {
@@ -2702,8 +2732,7 @@ function renderizarModoAgendaGoogle() {
         corTexto = setorTextoCores[chave] || 'text-slate-800';
       }
 
-      // Badge de sala — só exibe no modo multi-sala
-      const badgeSala = modoMultiSala ? `
+      const badgeSala = modoMultiSala && !cancelado ? `
         <div class="inline-flex items-center gap-1 ${getCorBadge(idSala)} px-1.5 py-0.5 rounded-md mt-0.5" style="font-size:8px; font-weight:800; line-height:1.2; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
           <svg width="6" height="6" viewBox="0 0 6 6" fill="currentColor" style="shrink:0; opacity:0.7">
             <circle cx="3" cy="3" r="3"/>
@@ -2711,7 +2740,11 @@ function renderizarModoAgendaGoogle() {
           ${escaparHTML(nomeSala)}
         </div>` : '';
 
-      const conteudoBloco = _isBloqueio ? `
+      const conteudoBloco = cancelado ? `
+        <div class="text-[9px] font-black text-slate-400 uppercase tracking-wide leading-none line-through">❌ Cancelado</div>
+        ${height > 28 ? `<div class="text-[10px] font-bold truncate leading-tight text-slate-400 line-through mt-0.5">${escaparHTML(r[6])}</div>` : ''}
+        ${height > 44 ? `<div class="text-[9px] text-slate-300 opacity-70">${fmtMin(ini)}–${fmtMin(ter)}</div>` : ''}
+      ` : _isBloqueio ? `
         <div class="text-[9px] font-black text-red-500 uppercase tracking-wide leading-none">🔒 CCBJ Fechado</div>
         ${height > 28 ? `<div class="text-[10px] font-bold truncate leading-tight text-red-700 mt-0.5">${escaparHTML(r[11] || r[6])}</div>` : ''}
         ${height > 44 ? `<div class="text-[9px] text-red-400 opacity-70">${fmtMin(ini)}–${fmtMin(ter)}</div>` : ''}
@@ -2727,11 +2760,12 @@ function renderizarModoAgendaGoogle() {
         <div
           class="absolute border-l-4 ${corBloco} rounded-r-lg shadow-sm cursor-pointer overflow-hidden
                  transition-all hover:brightness-95 hover:shadow-md hover:z-20
-                 ${_isBloqueio ? 'opacity-80' : ''}"
+                 ${cancelado ? 'opacity-40 pointer-events-auto' : _isBloqueio ? 'opacity-80' : ''}"
           style="top:${top}px; height:${height}px; left:${left}%; width:calc(${width}% - 3px);
+                 ${cancelado ? 'border-style:dashed' : ''}
                  ${_isBloqueio ? 'background:repeating-linear-gradient(45deg,transparent,transparent 4px,rgba(239,68,68,0.05) 4px,rgba(239,68,68,0.05) 8px)' : ''}"
           onclick="event.stopPropagation(); abrirDetalheReserva('${escaparHTML(r[0])}')"
-          title="${escaparHTML(_isBloqueio ? ('CCBJ Fechado — ' + (r[11]||'')) : r[6])} — ${escaparHTML(nomeSala)} — ${fmtMin(ini)}–${fmtMin(ter)}">
+          title="${escaparHTML(cancelado ? ('CANCELADO — ' + r[6]) : _isBloqueio ? ('CCBJ Fechado — ' + (r[11]||'')) : r[6])} — ${escaparHTML(nomeSala)} — ${fmtMin(ini)}–${fmtMin(ter)}">
           <div class="px-1.5 py-1 flex flex-col h-full">
             ${conteudoBloco}
           </div>
@@ -2847,42 +2881,41 @@ function renderizarModoAgendaGoogle() {
     }
   }, 80);
 
-  // ── Listener toggle ───────────────────────────────────────────────────────
-  document.getElementById('filtroMinhasAgenda')?.addEventListener('change', e => {
-    window._filtroMinhasAgenda = e.target.checked;
-    // Ao ativar "Minhas", limpa seleção de sala para não confundir
-    if (e.target.checked) {
-      const sel = document.getElementById('agendaGoogleSala');
-      if (sel) sel.value = '';
-    }
-    renderizarModoAgendaGoogle();
-  });
+  // ── Listener toggle — guard contra duplicação ─────────────────────────────
+  const _toggleEl = document.getElementById('filtroMinhasAgenda');
+  if (_toggleEl && !_toggleEl._agListenerOk) {
+    _toggleEl._agListenerOk = true;
+    _toggleEl.addEventListener('change', e => {
+      window._filtroMinhasAgenda = e.target.checked;
+      if (e.target.checked) {
+        const sel = document.getElementById('agendaGoogleSala');
+        if (sel) sel.value = '';
+        window._agendaGoogleSalaForced = false;
+      }
+      renderizarModoAgendaGoogle();
+    });
+  }
 }
 
 function atualizarAgendaAposMudanca() {
-
   if (typeof AppState !== 'undefined') {
     AppState.colecoes.reservas = [];
   }
 
   GAS.reservas.obter(function(reservas) {
+    AppState.colecoes.reservas = reservas || [];
+    indexarReservas();
 
-      AppState.colecoes.reservas = reservas || [];
-      indexarReservas();
+    const _agVis = document.getElementById('viewAgendaGoogle') && !document.getElementById('viewAgendaGoogle').classList.contains('hidden');
+    const _dgVis = document.getElementById('viewDiagrama')     && !document.getElementById('viewDiagrama').classList.contains('hidden');
 
-      const agendaVisivel = document
-        .getElementById('viewAgendaGoogle')
-        ?.classList.contains('hidden') === false;
+    if (_agVis && typeof renderizarModoAgendaGoogle === 'function') renderizarModoAgendaGoogle();
+    else if (_dgVis && typeof renderizarModoDiagrama === 'function') renderizarModoDiagrama();
+    else if (typeof renderizarReservas === 'function') renderizarReservas();
 
-      if (agendaVisivel && typeof renderizarModoAgendaGoogle === 'function') {
-        renderizarModoAgendaGoogle();
-      } else if (typeof renderizarReservas === 'function') {
-        renderizarReservas();
-      }
-
-    }, function(err) {
-      console.error('Erro ao atualizar agenda:', err);
-    });
+  }, function(err) {
+    console.error('Erro ao atualizar agenda:', err);
+  });
 }
 
 function agendaSemanaAnterior() {
@@ -3278,15 +3311,21 @@ function _concluirBloqueiosCCBJ(processados, total, erros, datas, motivo) {
   GAS.reservas.obter(function(reservas) {
     AppState.colecoes.reservas = reservas || [];
     indexarReservas();
-    renderizarReservas();
     window._ultimosBloqueiosCCBJ = { datas: datas, motivo: motivo };
+
+    // Atualiza o modo ativo — não força mudança de view
+    var _agendaVis = document.getElementById('viewAgendaGoogle') && !document.getElementById('viewAgendaGoogle').classList.contains('hidden');
+    var _diagVis   = document.getElementById('viewDiagrama')     && !document.getElementById('viewDiagrama').classList.contains('hidden');
+    if (_agendaVis) renderizarModoAgendaGoogle();
+    else if (_diagVis) renderizarModoDiagrama();
+    else renderizarReservas();
 
     var totalSalas = (AppState.colecoes.salas || []).length;
     var msg = erros > 0
-      ? (total - erros) + ' bloqueio(s) criados. ' + erros + ' com conflito (já ocupados).'
+      ? (total - erros) + ' bloqueio(s) criados. Reservas conflitantes foram canceladas automaticamente.'
       : datas.length === 1
-        ? 'Todas as ' + totalSalas + ' salas bloqueadas em ' + datas[0] + '.'
-        : datas.length + ' dias bloqueados em ' + totalSalas + ' sala(s).';
+        ? 'Todas as ' + totalSalas + ' salas bloqueadas em ' + datas[0] + '. Reservas conflitantes canceladas e notificadas.'
+        : datas.length + ' dias bloqueados em ' + totalSalas + ' sala(s). Reservas conflitantes canceladas e notificadas.';
 
     Swal.fire({
       icon: erros > 0 ? 'warning' : 'success',
@@ -3347,7 +3386,11 @@ function _desfazerBloqueiosCCBJ() {
           GAS.reservas.obter(function(reservas) {
             AppState.colecoes.reservas = reservas || [];
             indexarReservas();
-            renderizarReservas();
+            var _agVis2 = document.getElementById('viewAgendaGoogle') && !document.getElementById('viewAgendaGoogle').classList.contains('hidden');
+            var _dgVis2 = document.getElementById('viewDiagrama') && !document.getElementById('viewDiagrama').classList.contains('hidden');
+            if (_agVis2) renderizarModoAgendaGoogle();
+            else if (_dgVis2) renderizarModoDiagrama();
+            else renderizarReservas();
           });
           Swal.mixin({toast:true,position:'top-end',showConfirmButton:false,timer:3000,timerProgressBar:true})
             .fire({icon:'success',title:'Bloqueios desfeitos com sucesso'});
