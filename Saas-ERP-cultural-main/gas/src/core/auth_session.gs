@@ -342,19 +342,19 @@ function _emailDonoScript() {
 }
 
 function _resolverNivelAcesso(email) {
+  // verificarPermissao() throws quando o nível não é satisfeito — cada chamada
+  // precisa do seu próprio try/catch para não interromper as verificações seguintes.
+  if (typeof verificarPermissao === 'function') {
+    try { if (verificarPermissao('superadmin', email)) return 'superadmin'; } catch(_) {}
+    try { if (verificarPermissao('admin', email)) return 'admin'; } catch(_) {}
+  }
   try {
-    if (typeof verificarPermissao === 'function') {
-      if (verificarPermissao('superadmin', email)) return 'superadmin';
-      if (verificarPermissao('admin', email)) return 'admin';
-    }
     if (typeof obterPermissoesUsuario === 'function') {
       var perms = obterPermissoesUsuario(email);
-      return perms.perfil || 'visitante_controlado';
+      return (perms && perms.perfil) || 'visitante_controlado';
     }
-    return 'visitante_controlado';
-  } catch(e) {
-    return 'visitante_controlado';
-  }
+  } catch(_) {}
+  return 'visitante_controlado';
 }
 
 function _registrarLogSessao(email, acao) {

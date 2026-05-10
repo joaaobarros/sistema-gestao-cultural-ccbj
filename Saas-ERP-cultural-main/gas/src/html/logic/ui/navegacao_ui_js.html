@@ -280,6 +280,7 @@ var _MOD_SIDEBAR_MAP = {
   agenda_rece:   ['button[data-aba="aba-agenda-rece"]', '#btn-aba-rece'],
   dashboard:     ['button[data-aba="aba-dashboard"]'],
   chaves:        ['button[data-aba="aba-protocolo-chaves"]'],
+  acoes:         ['button[data-aba="aba-acoes"]'],
   tarefas:       ['button[data-aba="aba-tarefas"]'],
   processos:     ['button[data-aba="aba-processos"]'],
   almoxarifado:  ['button[data-aba="aba-almoxarifado"]'],
@@ -314,7 +315,7 @@ function aplicarEstadoModulos() {
   });
 
   // Mostrar/ocultar grupos container conforme se têm algum botão visível
-  ['modulo-trabalho','modulo-atendimento','modulo-pessoas','modulo-financeiro','modulo-institucional'].forEach(function(grupoId) {
+  ['modulo-programacao','modulo-trabalho','modulo-atendimento','modulo-pessoas','modulo-financeiro','modulo-institucional'].forEach(function(grupoId) {
     var wrapper = document.getElementById(grupoId);
     if (!wrapper) return;
     var temVisivel = wrapper.querySelectorAll('button[data-aba]:not(.hidden)').length > 0;
@@ -330,6 +331,7 @@ function aplicarEstadoModulos() {
       'aba-agenda-rece':     'agenda_rece',
       'aba-dashboard':       'dashboard',
       'aba-protocolo-chaves':'chaves',
+      'aba-acoes':           'acoes',
       'aba-tarefas':         'tarefas',
       'aba-processos':       'processos',
       'aba-almoxarifado':    'almoxarifado',

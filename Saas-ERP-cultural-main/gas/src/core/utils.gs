@@ -91,6 +91,21 @@ const ABA_PARA_MODULO = {
   'ProtocolosChaves':     'ESPACOS',
   'HistoricoChaves':      'ESPACOS',
 
+  // ATIVOS / INFRAESTRUTURA (ESPACOS)
+  'MovimentacoesAtivos':  'ESPACOS',
+  'Manutencoes':          'ESPACOS',
+  'UsoAtivos':            'ESPACOS',
+  'BaixasAtivos':         'ESPACOS',
+  'AlertasInfra':         'ESPACOS',
+
+  // EQUIPES — tabelas expandidas
+  'Vinculos':             'EQUIPES',
+  'Ocorrencias':          'EQUIPES',
+  'ParametrosRH':         'EQUIPES',
+
+  // PESSOAL — interações de tarefas
+  'InteracoesTarefas':    'PESSOAL',
+
   // ACTION ENGINE
   'Acoes':                'ACOES',
   'AcoesRecursos':        'ACOES',

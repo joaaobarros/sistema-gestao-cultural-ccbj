@@ -347,6 +347,38 @@ ${String(texto || "").trim()}`;
   return chamarIA(prompt);
 }
 
+/**
+ * Retorna métricas agregadas do CODIP para o painel de indicadores.
+ * @returns {{ totalEstimado, totalReal, totalRegistros, taxaPresenca }}
+ */
+function obterMetricasCODIP() {
+  try {
+    var sheet = _getSheet('RelatoriosCODIP');
+    if (!sheet || sheet.getLastRow() < 2) {
+      return { totalEstimado: 0, totalReal: 0, totalRegistros: 0, taxaPresenca: 0 };
+    }
+    var dados = sheet.getRange(2, 1, sheet.getLastRow() - 1, 15).getValues();
+    var totalPresencial = 0, totalVirtual = 0, count = 0;
+    dados.forEach(function(r) {
+      if (!r[0]) return;
+      count++;
+      totalPresencial += Number(r[13]) || 0;
+      totalVirtual    += Number(r[14]) || 0;
+    });
+    var totalReal = totalPresencial + totalVirtual;
+    var taxa = totalReal > 0 ? Math.round((totalPresencial / totalReal) * 100) : 0;
+    return {
+      totalEstimado:  totalPresencial,
+      totalReal:      totalReal,
+      totalRegistros: count,
+      taxaPresenca:   taxa
+    };
+  } catch (e) {
+    Logger.error('relatorios', 'obterMetricasCODIP', e.message);
+    return { totalEstimado: 0, totalReal: 0, totalRegistros: 0, taxaPresenca: 0 };
+  }
+}
+
 function obterRelatoriosCODIP() {
   try {
     const sheet = _getSheet("RelatoriosCODIP");
