@@ -390,6 +390,14 @@ function _chvLimparFiltrosRelatorio() {
   if (el) el.innerHTML = '<div class="text-xs text-slate-400 italic p-3 bg-slate-50 rounded-xl text-center">Aplique um filtro para carregar o histórico.</div>';
 }
 
+function _chvRedefinirRelatorio() {
+  ['chv-rel-status','chv-rel-espaco','chv-rel-data-ini','chv-rel-data-fim'].forEach(function(id) {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  _chvCarregarRelatorio();
+}
+
 function _chvRenderizarRelatorio(lista) {
   const el = document.getElementById('chv-rel-conteudo');
   if (!el) return;

@@ -299,7 +299,8 @@ function _chvVerificarChaveJaEmUso(chaveId) {
     CHV_STATUS_PROTOCOLO.AGUARDANDO_CONFIRMACAO_USUARIO,
     CHV_STATUS_PROTOCOLO.AGUARDANDO_CONFIRMACAO_INFRA,
     CHV_STATUS_PROTOCOLO.RETIRADA,
-    CHV_STATUS_PROTOCOLO.TRANSFERENCIA_PENDENTE
+    CHV_STATUS_PROTOCOLO.TRANSFERENCIA_PENDENTE,
+    CHV_STATUS_PROTOCOLO.TRANSFERIDA
   ];
   for (let i = 0; i < protocolos.length; i++) {
     const p = _chvMapearProtocolo(protocolos[i]);
@@ -358,7 +359,8 @@ function chaves_obterDados(emailAtual) {
       CHV_STATUS_PROTOCOLO.AGUARDANDO_CONFIRMACAO_INFRA,
       CHV_STATUS_PROTOCOLO.RETIRADA,
       CHV_STATUS_PROTOCOLO.TRANSFERENCIA_PENDENTE,
-      CHV_STATUS_PROTOCOLO.ATRASADA
+      CHV_STATUS_PROTOCOLO.ATRASADA,
+      CHV_STATUS_PROTOCOLO.TRANSFERIDA
     ];
 
     const ativos = todos.filter(function(p) { return statusAtivos.includes(p.status); });
@@ -367,7 +369,7 @@ function chaves_obterDados(emailAtual) {
       aguardandoUsuario:  ativos.filter(function(p) { return p.status === CHV_STATUS_PROTOCOLO.AGUARDANDO_CONFIRMACAO_USUARIO; }),
       aguardandoInfra:    ativos.filter(function(p) { return p.status === CHV_STATUS_PROTOCOLO.AGUARDANDO_CONFIRMACAO_INFRA; }),
       solicitadas:        ativos.filter(function(p) { return p.status === CHV_STATUS_PROTOCOLO.SOLICITADA; }),
-      emUso:              ativos.filter(function(p) { return p.status === CHV_STATUS_PROTOCOLO.RETIRADA; }),
+      emUso:              ativos.filter(function(p) { return p.status === CHV_STATUS_PROTOCOLO.RETIRADA || p.status === CHV_STATUS_PROTOCOLO.TRANSFERIDA; }),
       atrasadas:          ativos.filter(function(p) { return p.status === CHV_STATUS_PROTOCOLO.ATRASADA; }),
       transferenciasPend: ativos.filter(function(p) { return p.status === CHV_STATUS_PROTOCOLO.TRANSFERENCIA_PENDENTE; })
     };
@@ -974,15 +976,18 @@ function chaves_confirmarTransferencia(protocoloId, obs, emailAtual) {
 
       const nomeNovo = _chvResolverNome(email);
       const extras = {};
-      extras[PROT_COL.STATUS]                    = CHV_STATUS_PROTOCOLO.TRANSFERIDA;
-      extras[PROT_COL.RESPONSAVEL_ATUAL_ID]       = email;
-      extras[PROT_COL.RESPONSAVEL_ATUAL_NOME]     = nomeNovo;
-      extras[PROT_COL.RECEBIDO_POR_ID]           = email;
-      extras[PROT_COL.RECEBIDO_POR_NOME]         = nomeNovo;
-      extras[PROT_COL.DT_RETIRADA]               = new Date().toISOString();
+      extras[PROT_COL.STATUS]                      = CHV_STATUS_PROTOCOLO.TRANSFERIDA;
+      extras[PROT_COL.RESPONSAVEL_ATUAL_ID]         = email;
+      extras[PROT_COL.RESPONSAVEL_ATUAL_NOME]       = nomeNovo;
+      extras[PROT_COL.RECEBIDO_POR_ID]             = email;
+      extras[PROT_COL.RECEBIDO_POR_NOME]           = nomeNovo;
+      extras[PROT_COL.DT_RETIRADA]                 = new Date().toISOString();
+      extras[PROT_COL.TRANSFERENCIA_DESTINO_ID]     = '';
+      extras[PROT_COL.TRANSFERENCIA_DESTINO_NOME]   = '';
       if (obs) extras[PROT_COL.OBSERVACOES] = String(obs);
 
       _chvAtualizarProtocoloStatus(r.linha, CHV_STATUS_PROTOCOLO.TRANSFERIDA, extras);
+      _chvAtualizarStatusChaveNaPlanilha(p.chaveId, CHV_STATUS_CHAVE.EM_USO);
 
       _chvRegistrarHistorico(protocoloId, p.chaveId, 'TRANSFERENCIA_CONFIRMADA', email, nomeNovo,
         CHV_STATUS_PROTOCOLO.TRANSFERENCIA_PENDENTE, CHV_STATUS_PROTOCOLO.TRANSFERIDA, obs, 'USUARIO');
