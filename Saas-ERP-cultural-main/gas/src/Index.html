@@ -1,0 +1,312 @@
+<!--
+@file Index.html
+@type layout
+@description Template raiz do webapp. Compõe o HTML final via include() do GAS,
+             define estilos globais e declara a ordem de carregamento dos módulos JS.
+@responsibility Estrutura da página, includes de fragmentos HTML, ordem de scripts.
+
+ORDEM DE CARREGAMENTO DOS SCRIPTS:
+  ── CORE ──────────────────────────────────────────────────────
+  1. core/event_bus_js        — EventBus pub/sub singleton. DEVE ser o primeiro script.
+  2. core/app_state_js        — AppState singleton.
+  3. services/server_bridge_js — GAS bridge tipado. Namespaces: reservas, espacos,
+                                  usuarios, contratos, equipes, tarefas, processos,
+                                  almoxarifado, balcao, eficiencia, contratacoes,
+                                  permissoes (v2), modulos, chaves, escuta, auth.
+  3. core/auth_identity_js    — Auth helper não-bloqueante; seta window.__EMAIL_INICIAL__
+                                  e window.__APP_URL__ via template GAS.
+
+  ── MODULES (puro JS, sem DOM) ────────────────────────────────
+  4. modules/disponibilidade_module_js — conflito frontend, horários, normalização de datas
+  5. modules/itens_module_js           — lookup itens fixos e nomes de sala
+
+  ── UI HELPERS ────────────────────────────────────────────────
+  6. mod_ui_componentes_js     — escaparHTML, showLoader, helpers de cor
+  7. ui/navegacao_ui_js        — toggleSidebar, mostrarAba; dispatch _onShow_aba_xxx
+  8. ui/permissoes_ui_js       — configurarInterfacePorPermissao, carregarStatusModulos
+
+  ── DOMÍNIO / FEATURES ────────────────────────────────────────
+  9.  mod_ui_estado_js          — validação horários, carrinho, salvarAgendamento, inicializarApp
+  10. mod_reservas_js           — calendário, render de reservas, lote, diagrama
+  11. mod_admin_js              — painéis admin, RECE, dashboard
+  12. mod_contratos_js          — CRUD de contratos, metas, rubricas, indicadores
+  13. mod_favoritos_js          — drag-and-drop de favoritos na sidebar
+  14. mod_protocolo_chaves_js   — protocolo de chaves (lazy via _onShow_aba_protocolo_chaves)
+  15. mod_permissoes_v2_js      — temPermissao(), carregarPermissoes(), aplicarPermissoesUI()
+  16. integracao_reserva_comunicacao_js — integração reserva ↔ comunicação
+  17. mod_gestao_modulos_js     — toggle módulos (lazy via _onShow_aba_gestao-modulos)
+  18. auth_login_js             — overlay de login, GSI, sessão localStorage
+  19. bootstrap_js              — DOMContentLoaded, event listeners (SEMPRE POR ÚLTIMO)
+
+MÓDULOS HTML (incluídos no <main>, auto-registram _onShow_aba_xxx para lazy load):
+  - mod_tarefas, mod_processos, mod_almoxarifado, mod_balcao, mod_rh
+  - mod_eficiencia, mod_contratacoes, mod_relatorios_financeiros, mod_escuta
+  - mod_permissoes_v2, mod_gestao_modulos (painéis admin)
+
+MÓDULOS INLINE (carregados após bootstrap):
+  - html/modulos/PainelSolicitacoes — painel de solicitações externas
+  - html/modulos/GestaoContratos    — gestão completa de contratos com JS próprio
+  - html/modais/modal_manual        — modal de ajuda
+-->
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sistema de Gestão CCBJ</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/pt.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+    .hidden { display: none; }
+
+    .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 10px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #cbd5e1; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #f1f1f1; }
+    ::-webkit-scrollbar-thumb { background: #c084fc; border-radius: 10px; }
+    ::-webkit-scrollbar-thumb:hover { background: #a855f7; }
+
+    .animate-fadeIn { animation: fadeIn 0.3s ease-in-out; }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .flatpickr-day.selected { background: #7c3aed !important; border-color: #7c3aed !important; }
+    #miniCalAgenda .flatpickr-calendar { width: 100% !important; min-width: 0 !important; box-shadow: none !important; border: 1px solid #e2e8f0 !important; border-radius: 12px !important; }
+    #miniCalAgenda .flatpickr-days { width: 100% !important; }
+    #miniCalAgenda .dayContainer { min-width: 0 !important; max-width: 100% !important; width: 100% !important; }
+    #miniCalAgenda .flatpickr-day { max-width: 100%; height: 30px; line-height: 30px; font-size: 11px; }
+    #miniCalAgenda .flatpickr-month { height: 34px; }
+    #miniCalAgenda .flatpickr-current-month { font-size: 12px; }
+    #miniCalAgenda .flatpickr-weekday { font-size: 10px; }
+    #miniCalAgenda .flatpickr-calendar.inline,
+    #miniCalRece   .flatpickr-calendar.inline {
+      width: 100% !important; min-width: 0 !important; max-width: 100% !important;
+      box-shadow: none !important; border: 1px solid #e2e8f0 !important; border-radius: 12px !important;
+    }
+    #miniCalAgenda .flatpickr-days, #miniCalRece .flatpickr-days { width: 100% !important; }
+    #miniCalAgenda .dayContainer,   #miniCalRece .dayContainer   { min-width: 0 !important; max-width: 100% !important; width: 100% !important; }
+    #miniCalAgenda .flatpickr-day,  #miniCalRece .flatpickr-day  { max-width: 14.28%; height: 28px; line-height: 28px; font-size: 11px; }
+    #miniCalAgenda .flatpickr-month, #miniCalRece .flatpickr-month { height: 32px; }
+    #miniCalAgenda .flatpickr-current-month, #miniCalRece .flatpickr-current-month { font-size: 12px; }
+    #miniCalAgenda .flatpickr-weekday, #miniCalRece .flatpickr-weekday { font-size: 10px; }
+    #miniCalAgenda .flatpickr-calendar,
+    #miniCalRece   .flatpickr-calendar {
+      width: 196px !important; min-width: 0 !important; max-width: 196px !important;
+      box-shadow: none !important; border: 1px solid #e2e8f0 !important; border-radius: 12px !important;
+      font-size: 11px !important;
+    }
+    #miniCalAgenda .flatpickr-days, #miniCalRece .flatpickr-days { width: 196px !important; }
+    #miniCalAgenda .dayContainer,   #miniCalRece .dayContainer   { min-width: 0 !important; max-width: 196px !important; width: 196px !important; }
+
+    /* ── Lote avançado ── */
+    .lote-chip {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 9999px;
+      border: 1px solid rgba(255,255,255,0.15);
+      background: rgba(255,255,255,0.05);
+      color: #94a3b8;
+      font-size: 10px;
+      font-weight: 800;
+      cursor: pointer;
+      transition: all 0.15s;
+      user-select: none;
+    }
+    .lote-chip:hover { background: rgba(147,51,234,0.3); border-color: rgba(147,51,234,0.5); color: #d8b4fe; }
+    .peer:checked ~ .lote-chip {
+      background: #7c3aed !important;
+      border-color: #7c3aed !important;
+      color: white !important;
+    }
+    .lote-modo-ativo {
+      background: rgba(124,58,237,0.3) !important;
+      border-color: rgba(124,58,237,0.6) !important;
+    }
+    .lote-modo-ativo i  { color: #d8b4fe !important; }
+    .lote-modo-ativo span { color: #d8b4fe !important; }
+    .mensal-sub-ativo {
+      background: rgba(124,58,237,0.3) !important;
+      border-color: rgba(124,58,237,0.5) !important;
+      color: #d8b4fe !important;
+    }
+    .lote-data-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 8px;
+      background: rgba(124,58,237,0.25);
+      border: 1px solid rgba(124,58,237,0.4);
+      border-radius: 8px;
+      font-size: 10px;
+      font-weight: 700;
+      color: #c4b5fd;
+      max-width: 100%;
+      word-break: break-word;
+    }
+    .lote-data-chip button {
+      color: #a78bfa;
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 0;
+      line-height: 1;
+      font-size: 11px;
+    }
+    .lote-data-chip button:hover { color: #f87171; }
+    .lote-modo-btn { min-height: 72px; }
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      border-radius: 10px;
+      transition: all 0.15s;
+      color: #c4b5fd;
+      border-left: 3px solid transparent;
+      text-align: left;
+      background: none;
+      border-top: none;
+      border-right: none;
+      border-bottom: none;
+      cursor: pointer;
+      width: 100%;
+    }
+    .nav-item:hover { background: rgba(255,255,255,0.07); color: #fff; }
+    .nav-item.active, .tab-btn.bg-white\/10 { background: rgba(255,255,255,0.1) !important; color: #fff !important; border-left-color: #a855f7 !important; }
+    .em-breve-badge {
+      margin-left: auto;
+      font-size: 7px;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #6b7280;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.08);
+      padding: 1px 5px;
+      border-radius: 99px;
+      white-space: nowrap;
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-900 min-h-screen flex">
+
+<!-- LOGIN OVERLAY — exibido antes do app quando não há sessão válida -->
+<?!= include('html/layout/login_html'); ?>
+
+<!-- IDENTIDADE DO USUÁRIO -->
+<script>window.__EMAIL_INICIAL__ = '<?= emailInicial ?>';</script>
+
+
+<!-- Loader global -->
+<div id="globalLoader" class="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-white/80 backdrop-blur-sm hidden">
+  <div class="relative w-20 h-20">
+    <div class="absolute inset-0 border-4 border-purple-200 rounded-full"></div>
+    <div class="absolute inset-0 border-4 border-purple-600 rounded-full border-t-transparent animate-spin"></div>
+  </div>
+  <p class="mt-4 font-bold text-purple-900 tracking-widest animate-pulse uppercase text-xs">Sincronizando CCBJ...</p>
+</div>
+
+<?!= include('html/layout/sidebar'); ?>
+
+
+<!-- Main -->
+<main class="flex-1 flex flex-col h-screen overflow-hidden">
+
+  <?!= include('html/layout/header'); ?>
+
+  <div class="flex-1 overflow-y-auto p-4 lg:p-8 space-y-6">
+
+    <?!= include('html/modulos/mod_agenda_geral'); ?>
+    <?!= include('html/modulos/mod_nova_reserva'); ?>
+    <?!= include('html/modulos/mod_configuracoes'); ?>
+    <?!= include('html/modulos/mod_auditoria'); ?>
+    <?!= include('html/modulos/mod_agenda_rece'); ?>
+    <?!= include('html/modulos/mod_dashboard'); ?>
+    <?!= include('html/modulos/mod_aprovacoes'); ?>
+    <?!= include('html/modulos/mod_protocolo_chaves'); ?>
+    <?!= include('html/modulos/mod_codip'); ?>
+    <?!= include('html/modulos/mod_financeiro'); ?>
+
+    <?!= include('html/modulos/mod_tarefas'); ?>
+    <?!= include('html/modulos/mod_processos'); ?>
+    <?!= include('html/modulos/mod_almoxarifado'); ?>
+    <?!= include('html/modulos/mod_balcao'); ?>
+    <?!= include('html/modulos/mod_rh'); ?>
+    <?!= include('html/modulos/mod_eficiencia'); ?>
+    <?!= include('html/modulos/mod_contratacoes'); ?>
+    <?!= include('html/modulos/mod_relatorios_financeiros'); ?>
+    <?!= include('html/modulos/mod_escuta'); ?>
+
+    <?!= include('html/modulos/mod_permissoes_v2'); ?>
+    <?!= include('html/modulos/mod_gestao_modulos'); ?>
+
+  </div>
+</main>
+
+
+<?!= include('html/modais/modal_config'); ?>
+
+
+<!-- CORE -->
+<?!= include('html/logic/core/event_bus_js'); ?>
+<?!= include('html/logic/core/app_state_js'); ?>
+
+<!-- SERVICES -->
+<?!= include('html/logic/services/server_bridge_js'); ?>
+
+<!-- AUTH (AGORA RECEBE EMAIL CORRETAMENTE) -->
+<?!= include('html/logic/core/auth_identity_js'); ?>
+
+
+<!-- MODULES -->
+<?!= include('html/logic/modules/disponibilidade_module_js'); ?>
+<?!= include('html/logic/modules/itens_module_js'); ?>
+
+<!-- UI HELPERS -->
+<?!= include('html/logic/mod_ui_componentes_js'); ?>
+<?!= include('html/logic/ui/navegacao_ui_js'); ?>
+<?!= include('html/logic/ui/permissoes_ui_js'); ?>
+
+<!-- DOMÍNIO -->
+<?!= include('html/logic/mod_ui_estado_js'); ?>
+<?!= include('html/logic/mod_reservas_js'); ?>
+<?!= include('html/logic/mod_admin_js'); ?>
+<?!= include('html/logic/mod_contratos_js'); ?>
+<?!= include('html/logic/mod_favoritos_js'); ?>
+
+<!-- PROTOCOLO DE CHAVES -->
+<?!= include('html/logic/mod_protocolo_chaves_js'); ?>
+
+<!-- PERMISSÕES V2 -->
+<?!= include('html/logic/mod_permissoes_v2_js'); ?>
+<?!= include('html/logic/integracao_reserva_comunicacao_js'); ?>
+
+<!-- GESTÃO DE MÓDULOS -->
+<?!= include('html/logic/mod_gestao_modulos_js'); ?>
+
+<!-- AUTH LOGIN -->
+<?!= include('html/logic/auth_login_js'); ?>
+
+<!-- BOOTSTRAP -->
+<?!= include('html/logic/bootstrap_js'); ?>
+
+
+<?!= include('html/modais/modal_manual'); ?>
+<?!= include('html/modulos/PainelSolicitacoes'); ?>
+<?!= include('html/modulos/GestaoContratos'); ?>
+
+</body>
+</html>

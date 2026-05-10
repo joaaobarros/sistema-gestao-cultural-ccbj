@@ -1,0 +1,178 @@
+<!--
+@file mod_aprovacoes.html
+@type module
+@description Fila de aprovações: reservas externas e novos cadastros de usuários.
+@responsibility Estrutura HTML da aba de aprovações (#aba-aprovacoes).
+@dependencies PainelSolicitacoes.html (carregarSolicitacoes, carregarCadastrosExternos)
+-->
+      <section id="aba-aprovacoes" class="tab-content animate-fadeIn hidden pb-20">
+
+        <!-- Cabeçalho do módulo -->
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+          <div>
+            <h2 class="text-xl font-black text-slate-800 flex items-center gap-2">
+              <i class="fas fa-clipboard-check text-purple-600"></i>
+              Operacional — Aprovações
+            </h2>
+            <p class="text-xs text-slate-500 mt-0.5">Central de aprovações: reservas, chaves e novos usuários</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <button onclick="carregarSolicitacoes();carregarCadastrosExternos();carregarChavesPendentes()" class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 active:scale-95 transition-all">
+              <i class="fas fa-sync-alt text-[10px]"></i> Atualizar tudo
+            </button>
+          </div>
+        </div>
+
+        <!-- Tabs internas -->
+        <div class="flex gap-2 mb-5">
+          <button id="tab-aprov-reservas" onclick="_aprovSwitch('reservas')"
+            class="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white text-xs font-black rounded-xl uppercase transition-all">
+            <i class="fas fa-calendar-check text-[10px]"></i>Reservas
+          </button>
+          <button id="tab-aprov-usuarios" onclick="_aprovSwitch('usuarios')"
+            class="flex items-center gap-2 px-4 py-2 bg-slate-200 text-slate-600 text-xs font-black rounded-xl uppercase transition-all">
+            <i class="fas fa-user-plus text-[10px]"></i>Novos Usuários
+            <span id="badgeCadastros" class="hidden min-w-[18px] h-[18px] bg-amber-500 text-white text-[9px] font-black rounded-full flex items-center justify-center px-1">0</span>
+          </button>
+          <button id="tab-aprov-chaves" onclick="_aprovSwitch('chaves')"
+            class="flex items-center gap-2 px-4 py-2 bg-slate-200 text-slate-600 text-xs font-black rounded-xl uppercase transition-all">
+            <i class="fas fa-key text-[10px]"></i>Chaves
+            <span id="badgeChavesAprov" class="hidden min-w-[18px] h-[18px] bg-indigo-500 text-white text-[9px] font-black rounded-full flex items-center justify-center px-1">0</span>
+          </button>
+        </div>
+
+        <!-- PAINEL: Reservas -->
+        <div id="painel-aprov-reservas">
+          <div class="bg-white rounded-3xl shadow-sm border border-slate-200 p-6 mb-6">
+            <div class="flex flex-wrap items-center justify-between gap-4 mb-4">
+              <div>
+                <h3 class="text-lg font-black text-slate-800 uppercase tracking-tighter">
+                  <i class="fas fa-check-double text-purple-500 mr-2"></i>Solicitações de Reserva
+                </h3>
+                <span id="contadorSolicitacoes" class="text-[10px] text-slate-400 font-bold"></span>
+              </div>
+              <div class="flex gap-2 flex-wrap">
+                <button id="filtro-sol-pendente"
+                  onclick="filtrarSolicitacoes('PENDENTE')"
+                  class="btn-filtro-sol px-3 py-1.5 bg-slate-900 text-white text-xs font-black rounded-xl uppercase transition-all">
+                  Pendentes
+                </button>
+                <button id="filtro-sol-aprovado"
+                  onclick="filtrarSolicitacoes('APROVADO')"
+                  class="btn-filtro-sol px-3 py-1.5 bg-slate-200 text-slate-600 text-xs font-black rounded-xl uppercase transition-all">
+                  Aprovadas
+                </button>
+                <button id="filtro-sol-recusado"
+                  onclick="filtrarSolicitacoes('RECUSADO')"
+                  class="btn-filtro-sol px-3 py-1.5 bg-slate-200 text-slate-600 text-xs font-black rounded-xl uppercase transition-all">
+                  Recusadas
+                </button>
+                <button id="filtro-sol-todos"
+                  onclick="filtrarSolicitacoes('TODOS')"
+                  class="btn-filtro-sol px-3 py-1.5 bg-slate-200 text-slate-600 text-xs font-black rounded-xl uppercase transition-all">
+                  Todas
+                </button>
+                <button onclick="carregarSolicitacoes()"
+                  class="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-black rounded-xl uppercase transition-all">
+                  <i class="fas fa-sync-alt mr-1"></i>Atualizar
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div id="statsBarSolicitacoes" class="mb-4"></div>
+
+          <div id="listaSolicitacoes" class="space-y-4 max-h-[calc(100vh-360px)] overflow-y-auto pr-1 custom-scrollbar">
+            <div class="p-10 text-center text-slate-300">
+              <i class="fas fa-inbox text-3xl mb-3"></i>
+              <p class="text-sm font-bold">Abra esta aba para carregar as solicitações.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- PAINEL: Novos Usuários -->
+        <div id="painel-aprov-usuarios" class="hidden">
+          <div class="bg-white rounded-3xl shadow-sm border border-slate-200 p-6 mb-6">
+            <div class="flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <h3 class="text-lg font-black text-slate-800 uppercase tracking-tighter">
+                  <i class="fas fa-user-plus text-purple-500 mr-2"></i>Novos Usuários Externos
+                </h3>
+                <span id="contadorCadastros" class="text-[10px] text-slate-400 font-bold"></span>
+              </div>
+              <div class="flex gap-2 flex-wrap">
+                <button id="filtro-cad-pendente"
+                  onclick="filtrarCadastros('PENDENTE')"
+                  class="btn-filtro-cad px-3 py-1.5 bg-slate-900 text-white text-xs font-black rounded-xl uppercase transition-all">
+                  Pendentes
+                </button>
+                <button id="filtro-cad-aprovado"
+                  onclick="filtrarCadastros('APROVADO')"
+                  class="btn-filtro-cad px-3 py-1.5 bg-slate-200 text-slate-600 text-xs font-black rounded-xl uppercase transition-all">
+                  Aprovados
+                </button>
+                <button id="filtro-cad-recusado"
+                  onclick="filtrarCadastros('RECUSADO')"
+                  class="btn-filtro-cad px-3 py-1.5 bg-slate-200 text-slate-600 text-xs font-black rounded-xl uppercase transition-all">
+                  Recusados
+                </button>
+                <button onclick="carregarCadastrosExternos()"
+                  class="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-black rounded-xl uppercase transition-all">
+                  <i class="fas fa-sync-alt mr-1"></i>Atualizar
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div id="listaCadastros" class="space-y-4 max-h-[calc(100vh-320px)] overflow-y-auto pr-1 custom-scrollbar">
+            <div class="p-10 text-center text-slate-300">
+              <i class="fas fa-user-clock text-3xl mb-3"></i>
+              <p class="text-sm font-bold">Carregando solicitações de acesso...</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- PAINEL: Chaves -->
+        <div id="painel-aprov-chaves" class="hidden">
+          <div class="bg-white rounded-3xl shadow-sm border border-slate-200 p-6 mb-6">
+            <div class="flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <h3 class="text-lg font-black text-slate-800 uppercase tracking-tighter">
+                  <i class="fas fa-key text-purple-500 mr-2"></i>Transações de Chaves
+                </h3>
+                <span id="contadorChavesAprov" class="text-[10px] text-slate-400 font-bold"></span>
+              </div>
+              <button onclick="carregarChavesPendentes()"
+                class="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-black rounded-xl uppercase transition-all">
+                <i class="fas fa-sync-alt mr-1"></i>Atualizar
+              </button>
+            </div>
+          </div>
+          <div id="listaChavesAprov" class="space-y-4 max-h-[calc(100vh-320px)] overflow-y-auto pr-1 custom-scrollbar">
+            <div class="p-10 text-center text-slate-300">
+              <i class="fas fa-key text-3xl mb-3"></i>
+              <p class="text-sm font-bold">Abra esta aba para carregar as transações.</p>
+            </div>
+          </div>
+        </div>
+
+      </section>
+
+      <script>
+      function _aprovSwitch(aba) {
+        ['reservas', 'usuarios', 'chaves'].forEach(function(id) {
+          var p = document.getElementById('painel-aprov-' + id);
+          var b = document.getElementById('tab-aprov-' + id);
+          var ativo = id === aba;
+          if (p) p.classList.toggle('hidden', !ativo);
+          if (b) {
+            b.classList.toggle('bg-slate-900', ativo);
+            b.classList.toggle('text-white', ativo);
+            b.classList.toggle('bg-slate-200', !ativo);
+            b.classList.toggle('text-slate-600', !ativo);
+          }
+        });
+        if (aba === 'usuarios' && typeof carregarCadastrosExternos === 'function') carregarCadastrosExternos();
+        if (aba === 'chaves'   && typeof carregarChavesPendentes   === 'function') carregarChavesPendentes();
+      }
+      </script>

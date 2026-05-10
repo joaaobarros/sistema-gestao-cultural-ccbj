@@ -1,0 +1,142 @@
+<!--
+@file mod_agenda_rece.html
+@type module
+@description Agenda RECE: visualização em lista ou diagrama das reservas do setor RECE com filtros e exportação.
+@responsibility Estrutura HTML da aba de agenda RECE (#aba-agenda-rece).
+@dependencies carregarAgendaRece, renderizarAgendaRece, alternarModoVisualizacaoRece, exportarAgendaRece (mod_ui_estado_js)
+-->
+      <section id="aba-agenda-rece" class="tab-content animate-fadeIn hidden pb-20">
+
+        <!-- Cabeçalho do módulo -->
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+          <div>
+            <h2 class="text-xl font-black text-slate-800 flex items-center gap-2">
+              <i class="fas fa-star text-yellow-500"></i>
+              Agenda RECE
+            </h2>
+            <p class="text-xs text-slate-500 mt-0.5">Programação cultural — Rede de Espaços Culturais e Educativos</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <button onclick="carregarReservasRece()" class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 active:scale-95 transition-all">
+              <i class="fas fa-sync-alt text-[10px]"></i> Atualizar
+            </button>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-3xl shadow-sm border border-slate-200 p-6 mb-6">
+          <div class="flex items-center gap-2 mb-4">
+            <button id="btnModoListaRece" onclick="alternarModoVisualizacaoRece('lista')"
+              class="px-4 py-2 bg-slate-900 text-white text-xs font-black rounded-xl uppercase transition-all">
+              <i class="fas fa-list mr-1"></i>Lista
+            </button>
+            <button id="btnModoAgendaRece" onclick="alternarModoVisualizacaoRece('agenda')"
+              class="px-4 py-2 bg-slate-200 text-slate-600 text-xs font-black rounded-xl uppercase hover:bg-slate-300 transition-all">
+              <i class="fas fa-calendar-week mr-1"></i>Agenda
+            </button>
+          </div>
+          <div id="filtrosRece">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div class="relative">
+                <label class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">Busca</label>
+                <i class="fas fa-search absolute left-3 top-8 text-slate-300"></i>
+                <input type="text" id="receBusca" placeholder="Título, artista, categoria..."
+                  class="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-yellow-400/30 focus:border-yellow-400 transition-all">
+              </div>
+              <div>
+                <label class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">Data Início</label>
+                <input type="date" id="receFiltroInicio" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-yellow-400">
+              </div>
+              <div>
+                <label class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">Data Fim</label>
+                <input type="date" id="receFiltroFim" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-yellow-400">
+              </div>
+            </div>
+            <div class="flex flex-wrap gap-3 mt-4">
+              <button onclick="renderizarTabelaRece()" class="px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-white text-xs font-black rounded-xl uppercase transition-all">
+                <i class="fas fa-filter mr-1"></i> Filtrar
+              </button>
+              <button onclick="exportarReceCSV()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black rounded-xl uppercase transition-all">
+                <i class="fas fa-file-csv mr-1"></i> CSV
+              </button>
+              <button onclick="exportarRecePlanilha()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-black rounded-xl uppercase transition-all">
+                <i class="fas fa-file-excel mr-1"></i> Planilha
+              </button>
+              <button onclick="exportarRecePDF()" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-black rounded-xl uppercase transition-all">
+                <i class="fas fa-file-pdf mr-1"></i> PDF
+              </button>
+              <button onclick="limparFiltrosRece()" class="px-4 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-sm font-bold transition-all">
+                Redefinir filtros
+              </button>
+              <span id="receContador" class="ml-auto self-center text-[10px] font-black text-slate-400 uppercase"></span>
+            </div>
+          </div>
+        </div>
+
+        <div id="tabelaReceWrapper" class="bg-white rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-200 overflow-hidden">
+          <div class="overflow-x-auto">
+            <table class="w-full min-w-[860px] text-left border-collapse text-xs">
+              <thead>
+                <tr class="bg-yellow-50 border-b border-yellow-100">
+                  <th class="p-4 text-[9px] font-black text-yellow-700 uppercase tracking-widest min-w-[160px]">Título</th>
+                  <th class="p-4 text-[9px] font-black text-yellow-700 uppercase tracking-widest w-28">Datas</th>
+                  <th class="p-4 text-[9px] font-black text-yellow-700 uppercase tracking-widest w-28">Horários</th>
+                  <th class="p-4 text-[9px] font-black text-yellow-700 uppercase tracking-widest w-32">Espaço</th>
+                  <th class="p-4 text-[9px] font-black text-yellow-700 uppercase tracking-widest w-28">Categorias</th>
+                  <th class="p-4 text-[9px] font-black text-yellow-700 uppercase tracking-widest w-28">Artista</th>
+                  <th class="p-4 text-[9px] font-black text-yellow-700 uppercase tracking-widest w-24">Imagem</th>
+                  <th class="p-4 text-[9px] font-black text-yellow-700 uppercase tracking-widest w-24">Acesso</th>
+                  <th class="p-4 text-[9px] font-black text-yellow-700 uppercase tracking-widest text-center w-24">Status</th>
+                  <th class="p-4 text-[9px] font-black text-yellow-700 uppercase tracking-widest text-right w-24">Ações</th>
+                </tr>
+              </thead>
+              <tbody id="corpoTabelaRece" class="divide-y divide-slate-50"></tbody>
+            </table>
+          </div>
+          <div id="semResultadosRece" class="hidden p-20 text-center">
+            <i class="fas fa-star text-slate-200 text-3xl mb-4"></i>
+            <p class="text-slate-400 font-medium">Nenhum evento RECE encontrado.</p>
+          </div>
+        </div>
+
+        <!-- View Agenda RECE -->
+        <div id="viewAgendaRece" class="hidden space-y-4">
+          <div class="bg-white rounded-3xl shadow-sm border border-slate-200 p-5">
+            <div class="flex flex-wrap items-end gap-4">
+              <div class="flex gap-2 shrink-0">
+                <button onclick="window._agendaReceSemana=(window._agendaReceSemana||0)-1; renderizarModoAgendaRece()"
+                  class="w-9 h-9 flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-all">
+                  <i class="fas fa-chevron-left text-xs"></i>
+                </button>
+                <button onclick="window._agendaReceSemana=0; renderizarModoAgendaRece()"
+                  class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-black rounded-xl uppercase transition-all">
+                  Hoje
+                </button>
+                <button onclick="window._agendaReceSemana=(window._agendaReceSemana||0)+1; renderizarModoAgendaRece()"
+                  class="w-9 h-9 flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-all">
+                  <i class="fas fa-chevron-right text-xs"></i>
+                </button>
+              </div>
+              <div class="min-w-[160px]">
+                <label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Data</label>
+                <input type="text" id="agendaReceDatePicker" placeholder="Selecione uma data..."
+                  class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-yellow-400 cursor-pointer">
+              </div>
+              <span id="agendaReceSemanaLabel" class="text-sm font-black text-slate-600 self-center"></span>
+              <div class="flex items-center gap-2 ml-auto">
+                <label class="text-xs text-slate-500 font-bold">Espaço:</label>
+                <select id="agendaReceSala" onchange="renderizarModoAgendaRece()"
+                  class="px-3 py-2 bg-yellow-50 border border-yellow-100 rounded-xl text-sm text-yellow-700 font-bold outline-none">
+                  <option value="">Todas as salas</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          <div id="agendaReceContainer" class="min-h-[500px]">
+            <div class="p-16 text-center text-slate-300">
+              <i class="fas fa-calendar-week text-4xl mb-3"></i><br>
+              <span class="text-sm font-bold">Carregando eventos...</span>
+            </div>
+          </div>
+        </div>
+
+      </section>

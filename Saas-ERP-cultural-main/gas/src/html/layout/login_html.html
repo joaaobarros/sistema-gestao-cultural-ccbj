@@ -1,0 +1,284 @@
+<!--
+@file html/layout/login_html.html
+@layer frontend/layout
+@description Tela de login sobreposta ao app. Exibida no boot quando não há sessão válida.
+             Dois caminhos: Google Sign-In (GSI) como principal; email+senha como fallback.
+@responsibility Renderizar overlay de login; nunca conter lógica de negócio.
+@dependencies auth_login_js.html (lógica), Google Identity Services (script carregado dinamicamente)
+-->
+
+<div id="loginOverlay"
+  class="fixed inset-0 z-[300] flex items-center justify-center bg-slate-900/95 backdrop-blur-sm"
+  style="display:none">
+
+  <div id="loginCardWrapper" class="w-full max-w-md mx-4 animate-fadeIn">
+    <div class="bg-white rounded-2xl shadow-2xl overflow-hidden">
+
+      <!-- Header -->
+      <div class="bg-gradient-to-br from-purple-700 to-purple-900 px-8 pt-10 pb-8 text-center">
+        <div id="loginLogoContainer"
+             class="bg-white rounded-2xl px-6 py-3 inline-flex items-center justify-center mx-auto mb-5 shadow-lg">
+          <img src="https://ccbj.org.br/wp-content/themes/CCBJ/assets/images/logo.png"
+               alt="CCBJ" class="h-10 w-auto object-contain block"
+               onerror="document.getElementById('loginLogoContainer').style.display='none';document.getElementById('loginLogoFallback').style.display='flex'">
+        </div>
+        <div id="loginLogoFallback"
+             class="w-16 h-16 bg-white/15 rounded-2xl items-center justify-center mx-auto mb-4 border border-white/20"
+             style="display:none">
+          <i class="fas fa-building-columns text-white text-2xl"></i>
+        </div>
+        <h1 class="text-white text-2xl font-bold tracking-tight">Sistema de Gestão de Espaços</h1>
+        <p class="text-purple-300 text-sm mt-1">Centro Cultural Bom Jardim</p>
+      </div>
+
+      <!-- Body -->
+      <div class="px-8 py-7">
+
+        <!-- Erro -->
+        <div id="loginErro"
+          class="hidden mb-5 flex items-start gap-3 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">
+          <i class="fas fa-circle-exclamation mt-0.5 shrink-0"></i>
+          <span id="loginErroTexto"></span>
+        </div>
+
+        <!-- Botão Google Sign-In -->
+        <div id="loginBlocoGSI">
+          <div id="googleSignInBtn" class="flex justify-center mb-5"></div>
+
+          <!-- Spinner enquanto GSI carrega -->
+          <div id="loginGSILoader" class="flex justify-center mb-5">
+            <button disabled
+              class="w-full flex items-center justify-center gap-3 py-3 border border-slate-200 rounded-xl text-slate-500 text-sm font-medium bg-slate-50">
+              <span class="w-4 h-4 border-2 border-slate-300 border-t-purple-500 rounded-full animate-spin"></span>
+              Carregando Google Sign-In...
+            </button>
+          </div>
+
+          <!-- Separador -->
+          <div id="loginSeparador" class="hidden flex items-center gap-3 mb-5">
+            <div class="flex-1 h-px bg-slate-200"></div>
+            <span class="text-xs text-slate-400 font-medium uppercase tracking-wider">ou</span>
+            <div class="flex-1 h-px bg-slate-200"></div>
+          </div>
+        </div>
+
+        <!-- Formulário email + senha -->
+        <form id="loginForm" onsubmit="return false;" autocomplete="on">
+
+          <div class="mb-4">
+            <label class="block text-sm font-semibold text-slate-700 mb-1.5">E-mail</label>
+            <input type="email" id="loginEmail" name="email"
+              placeholder="seu@email.com" autocomplete="email"
+              class="w-full px-4 py-3 border border-slate-200 rounded-xl
+                     focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent
+                     text-sm text-slate-800 placeholder-slate-400 transition-all">
+          </div>
+
+          <div class="mb-6">
+            <label class="block text-sm font-semibold text-slate-700 mb-1.5">Senha</label>
+            <div class="relative">
+              <input type="password" id="loginSenha" name="password"
+                placeholder="••••••••" autocomplete="current-password"
+                class="w-full px-4 py-3 pr-11 border border-slate-200 rounded-xl
+                       focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent
+                       text-sm text-slate-800 placeholder-slate-400 transition-all">
+              <button type="button" onclick="_loginToggleSenha()"
+                class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors p-1">
+                <i id="loginSenhaIcon" class="fas fa-eye text-sm"></i>
+              </button>
+            </div>
+          </div>
+
+          <button type="submit" id="loginBtn" onclick="_loginSubmit()"
+            class="w-full py-3 bg-purple-600 hover:bg-purple-700 active:bg-purple-800
+                   text-white font-bold rounded-xl transition-all text-sm
+                   disabled:opacity-60 disabled:cursor-not-allowed">
+            Entrar
+          </button>
+
+        </form>
+
+      </div>
+
+      <!-- Link solicitar acesso -->
+      <div class="px-8 pb-6 text-center">
+        <p class="text-xs text-slate-400 mb-3">
+          Acesso restrito a usuários autorizados do CCBJ
+        </p>
+        <button onclick="_loginToggleCadastro()"
+          class="text-xs text-purple-500 hover:text-purple-700 font-semibold transition-colors underline underline-offset-2">
+          Sou externo — Solicitar acesso
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Card de solicitação de cadastro externo -->
+  <div id="loginCadastroCard" class="hidden w-full max-w-md mx-4 animate-fadeIn">
+    <div class="bg-white rounded-2xl shadow-2xl overflow-hidden">
+
+      <div class="bg-gradient-to-br from-purple-700 to-purple-900 px-8 pt-8 pb-6 text-center">
+        <div class="w-14 h-14 bg-white/15 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-white/20">
+          <i class="fas fa-user-plus text-white text-xl"></i>
+        </div>
+        <h2 class="text-white text-xl font-bold tracking-tight">Solicitar Acesso</h2>
+        <p class="text-purple-300 text-xs mt-1">Preencha seus dados — um administrador aprovará seu acesso</p>
+      </div>
+
+      <div class="px-8 py-6">
+
+        <div id="loginCadastroErro"
+          class="hidden mb-4 flex items-start gap-3 p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs">
+          <i class="fas fa-circle-exclamation mt-0.5 shrink-0"></i>
+          <span id="loginCadastroErroTexto"></span>
+        </div>
+
+        <div id="loginCadastroSucesso" class="hidden text-center py-4">
+          <div class="w-16 h-16 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-4">
+            <i class="fas fa-envelope-circle-check text-green-500 text-2xl"></i>
+          </div>
+          <p class="text-slate-700 font-bold text-sm mb-1">Solicitação enviada!</p>
+          <p class="text-slate-500 text-xs leading-relaxed">
+            Você receberá um e-mail quando seu acesso for aprovado pelo administrador.
+          </p>
+          <button onclick="_loginToggleCadastro()"
+            class="mt-5 text-xs text-purple-500 hover:text-purple-700 font-semibold underline underline-offset-2 transition-colors">
+            Voltar ao login
+          </button>
+        </div>
+
+        <form id="loginCadastroForm" onsubmit="return false;" class="">
+
+          <div class="mb-4">
+            <label class="block text-sm font-semibold text-slate-700 mb-1.5">Nome completo</label>
+            <input type="text" id="cadNome" placeholder="Seu nome"
+              class="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm text-slate-800 placeholder-slate-400 transition-all">
+          </div>
+
+          <div class="mb-4">
+            <label class="block text-sm font-semibold text-slate-700 mb-1.5">E-mail</label>
+            <input type="email" id="cadEmail" placeholder="seu@email.com"
+              class="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm text-slate-800 placeholder-slate-400 transition-all">
+          </div>
+
+          <div class="mb-4">
+            <label class="block text-sm font-semibold text-slate-700 mb-1.5">Senha</label>
+            <div class="relative">
+              <input type="password" id="cadSenha" placeholder="Mínimo 6 caracteres"
+                class="w-full px-4 py-3 pr-11 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm text-slate-800 placeholder-slate-400 transition-all">
+              <button type="button" onclick="_cadToggleSenha('cadSenha','cadSenhaIcon')"
+                class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1">
+                <i id="cadSenhaIcon" class="fas fa-eye text-sm"></i>
+              </button>
+            </div>
+          </div>
+
+          <div class="mb-6">
+            <label class="block text-sm font-semibold text-slate-700 mb-1.5">Confirmar senha</label>
+            <div class="relative">
+              <input type="password" id="cadSenhaConf" placeholder="Repita a senha"
+                class="w-full px-4 py-3 pr-11 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm text-slate-800 placeholder-slate-400 transition-all">
+              <button type="button" onclick="_cadToggleSenha('cadSenhaConf','cadSenhaConfIcon')"
+                class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1">
+                <i id="cadSenhaConfIcon" class="fas fa-eye text-sm"></i>
+              </button>
+            </div>
+          </div>
+
+          <button type="submit" id="cadBtn" onclick="_cadSubmit()"
+            class="w-full py-3 bg-purple-600 hover:bg-purple-700 active:bg-purple-800 text-white font-bold rounded-xl transition-all text-sm disabled:opacity-60 disabled:cursor-not-allowed">
+            <i class="fas fa-paper-plane mr-2"></i>Enviar solicitação
+          </button>
+
+        </form>
+
+      </div>
+
+      <div class="px-8 pb-6 text-center">
+        <button onclick="_loginToggleCadastro()"
+          class="text-xs text-slate-400 hover:text-slate-600 font-medium transition-colors">
+          <i class="fas fa-arrow-left mr-1"></i>Voltar ao login
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<script>
+function _loginToggleCadastro() {
+  var loginCard    = document.getElementById('loginCardWrapper');
+  var cadastroCard = document.getElementById('loginCadastroCard');
+  if (!loginCard || !cadastroCard) return;
+
+  var mostrando = !cadastroCard.classList.contains('hidden');
+  loginCard.classList.toggle('hidden', !mostrando);
+  cadastroCard.classList.toggle('hidden', mostrando);
+
+  // Reset form
+  if (!mostrando) {
+    document.getElementById('loginCadastroErro').classList.add('hidden');
+    document.getElementById('loginCadastroSucesso').classList.add('hidden');
+    document.getElementById('loginCadastroForm').classList.remove('hidden');
+    ['cadNome','cadEmail','cadSenha','cadSenhaConf'].forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el) el.value = '';
+    });
+  }
+}
+
+function _cadToggleSenha(inputId, iconId) {
+  var input = document.getElementById(inputId);
+  var icon  = document.getElementById(iconId);
+  if (!input || !icon) return;
+  if (input.type === 'password') {
+    input.type = 'text';
+    icon.className = 'fas fa-eye-slash text-sm';
+  } else {
+    input.type = 'password';
+    icon.className = 'fas fa-eye text-sm';
+  }
+}
+
+function _cadSubmit() {
+  var nome  = (document.getElementById('cadNome')?.value || '').trim();
+  var email = (document.getElementById('cadEmail')?.value || '').trim();
+  var senha = (document.getElementById('cadSenha')?.value || '').trim();
+  var conf  = (document.getElementById('cadSenhaConf')?.value || '').trim();
+
+  var erroEl = document.getElementById('loginCadastroErro');
+  var erroTxt = document.getElementById('loginCadastroErroTexto');
+
+  function mostrarErro(msg) {
+    if (erroEl && erroTxt) {
+      erroTxt.textContent = msg;
+      erroEl.classList.remove('hidden');
+    }
+  }
+  if (erroEl) erroEl.classList.add('hidden');
+
+  if (!nome)  return mostrarErro('Informe seu nome completo.');
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) return mostrarErro('E-mail inválido.');
+  if (senha.length < 6)  return mostrarErro('A senha deve ter pelo menos 6 caracteres.');
+  if (senha !== conf)    return mostrarErro('As senhas não coincidem.');
+
+  var btn = document.getElementById('cadBtn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner animate-spin mr-2"></i>Enviando...'; }
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-paper-plane mr-2"></i>Enviar solicitação'; }
+      if (!res || !res.ok) return mostrarErro(res ? res.msg : 'Erro desconhecido.');
+      document.getElementById('loginCadastroForm').classList.add('hidden');
+      document.getElementById('loginCadastroErro').classList.add('hidden');
+      document.getElementById('loginCadastroSucesso').classList.remove('hidden');
+    })
+    .withFailureHandler(function(err) {
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-paper-plane mr-2"></i>Enviar solicitação'; }
+      mostrarErro(err.message || 'Erro ao enviar. Tente novamente.');
+    })
+    .solicitarCadastroExterno(nome, email, senha);
+}
+</script>

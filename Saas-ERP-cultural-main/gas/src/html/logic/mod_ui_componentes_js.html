@@ -1,0 +1,94 @@
+<!--
+@file mod_ui_componentes_js.html
+@type logic
+@description Utilitários de interface compartilhados por todos os módulos frontend.
+@responsibility Funções puras de UI: sanitização HTML, controle do loader global e helpers de cor.
+@dependencies Nenhuma (este arquivo deve ser carregado primeiro, antes de qualquer módulo).
+-->
+<script>
+/**
+ * ========================================
+ * BLOCO: Tratamento de erros do servidor
+ * ========================================
+ * @description Handler padrão para falhas em google.script.run
+ * @context Usado como withFailureHandler em chamadas ao backend
+ * @inputs Objeto de erro retornado pelo GAS
+ * @sideEffects Esconde o loader, exibe modal de erro ao usuário
+ */
+function _handleServerError(err) {
+  showLoader(false);
+  if (err && err.message === 'EM_BREVE') {
+    Swal.fire('Em breve', 'Essa funcionalidade ainda será implementada.', 'info');
+    return;
+  }
+  Swal.fire('Erro', (err && err.message) || String(err), 'error');
+}
+
+/**
+ * ========================================
+ * BLOCO: Helpers de cor para componentes
+ * ========================================
+ * @description Mapa semântico de cor → classe Tailwind
+ * @context Usado em cards, badges e ícones dinâmicos
+ * @inputs String de cor ('blue' | 'purple' | 'amber')
+ * @outputs Classe CSS Tailwind correspondente
+ */
+function corBg(cor) {
+  return {
+    blue:   'bg-blue-100',
+    purple: 'bg-purple-100',
+    amber:  'bg-amber-100',
+    green:  'bg-emerald-100',
+    teal:   'bg-teal-100',
+    indigo: 'bg-indigo-100',
+    orange: 'bg-orange-100',
+    violet: 'bg-violet-100'
+  }[cor] || 'bg-slate-100';
+}
+
+function corTexto(cor) {
+  return {
+    blue:   'text-blue-600',
+    purple: 'text-purple-600',
+    amber:  'text-amber-600',
+    green:  'text-emerald-600',
+    teal:   'text-teal-600',
+    indigo: 'text-indigo-600',
+    orange: 'text-orange-600',
+    violet: 'text-violet-600'
+  }[cor] || 'text-slate-600';
+}
+
+/**
+ * ========================================
+ * BLOCO: Utilitários de string e segurança
+ * ========================================
+ * @description Sanitização de strings para inserção segura no DOM
+ * @context Deve ser chamado antes de qualquer interpolação de dados externos em innerHTML
+ * @inputs String arbitrária (dados do usuário ou do backend)
+ * @outputs String com caracteres especiais HTML escapados
+ * @sideEffects Nenhum
+ */
+function escaparHTML(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+/**
+ * ========================================
+ * BLOCO: Loader global
+ * ========================================
+ * @description Controla a exibição do overlay de carregamento (#globalLoader)
+ * @context Chamado antes de operações assíncronas longas (chamadas ao backend)
+ * @inputs Boolean — true para exibir, false para esconder
+ * @sideEffects Modifica classe CSS do elemento #globalLoader
+ */
+function showLoader(exibir) {
+  const loader = document.getElementById('globalLoader');
+  if (loader) exibir ? loader.classList.remove('hidden') : loader.classList.add('hidden');
+}
+</script>

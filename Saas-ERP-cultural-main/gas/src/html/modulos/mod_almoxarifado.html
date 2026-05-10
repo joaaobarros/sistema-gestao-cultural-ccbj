@@ -1,0 +1,248 @@
+<!--
+@file mod_almoxarifado.html
+@type module
+@description Controle de estoque do almoxarifado — itens, quantidades e movimentações.
+@responsibility Estrutura HTML + JS da aba #aba-almoxarifado.
+@dependencies GAS.almoxarifado, showLoader, escaparHTML, temPermissao
+-->
+<section id="aba-almoxarifado" class="tab-content hidden pb-20">
+
+  <div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+
+    <!-- HEADER -->
+    <div class="p-5 border-b border-slate-100 bg-slate-50/50 flex flex-wrap justify-between items-center gap-3">
+      <div>
+        <h3 class="font-black text-slate-800 uppercase tracking-tighter text-sm">
+          <i class="fas fa-boxes-stacked text-emerald-500 mr-2"></i>Almoxarifado
+        </h3>
+        <p class="text-[10px] text-slate-400 font-medium">Controle de estoque e movimentações</p>
+      </div>
+      <div class="flex gap-2 items-center flex-wrap">
+        <div class="relative">
+          <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 text-xs"></i>
+          <input type="text" id="almBusca" placeholder="Buscar item..."
+            oninput="_almFiltrar()"
+            style="padding:8px 12px 8px 30px;border:1.5px solid #e2e8f0;border-radius:12px;font-size:12px;outline:none;width:160px"
+            onfocus="this.style.borderColor='#10b981'" onblur="this.style.borderColor='#e2e8f0'">
+        </div>
+        <select id="almFiltroCategoria" onchange="_almFiltrar()"
+          style="padding:8px 12px;border:1.5px solid #e2e8f0;border-radius:12px;font-size:12px;outline:none;color:#475569">
+          <option value="">Todas as categorias</option>
+        </select>
+        <select id="almFiltroStatus" onchange="_almFiltrar()"
+          style="padding:8px 12px;border:1.5px solid #e2e8f0;border-radius:12px;font-size:12px;outline:none;color:#475569">
+          <option value="">Todos</option>
+          <option value="Normal">Normal</option>
+          <option value="Baixo">Estoque Baixo</option>
+          <option value="Zerado">Zerado</option>
+        </select>
+        <button onclick="abrirModalAlmoxarifado()" data-requer-permissao="almoxarifado:editar"
+          class="bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black px-4 py-2 rounded-xl transition-all uppercase flex items-center gap-1.5">
+          <i class="fas fa-plus text-[9px]"></i>Novo Item
+        </button>
+      </div>
+    </div>
+
+    <!-- TABELA -->
+    <div id="almoxarifadoContainer" class="overflow-x-auto">
+      <div class="p-8 text-center">
+        <i class="fas fa-spinner animate-spin text-emerald-300 text-xl"></i>
+        <p class="text-[11px] text-slate-400 mt-2">Carregando...</p>
+      </div>
+    </div>
+
+  </div>
+
+</section>
+
+<script>
+var _almoxCache = [];
+var _ALM_CATS_DEFAULT = ['Limpeza','Escritório','Manutenção','Evento','TI','Outro'];
+
+function _almGetCategorias() {
+  var fromCache = _almoxCache.map(function(i) { return i.categoria; }).filter(Boolean);
+  var merged = _ALM_CATS_DEFAULT.slice();
+  fromCache.forEach(function(c) { if (merged.indexOf(c) < 0) merged.push(c); });
+  return merged.sort();
+}
+
+function _almAtualizarFiltroCategoria() {
+  var sel = document.getElementById('almFiltroCategoria');
+  if (!sel) return;
+  var atual = sel.value;
+  sel.innerHTML = '<option value="">Todas as categorias</option>';
+  _almGetCategorias().forEach(function(c) {
+    var o = document.createElement('option');
+    o.value = c; o.textContent = c; if (c === atual) o.selected = true; sel.appendChild(o);
+  });
+}
+
+function _almStatus(item) {
+  var qtd = Number(item.qtd) || 0;
+  var min = Number(item.qtdMinima) || 0;
+  if (qtd <= 0) return 'Zerado';
+  if (min > 0 && qtd <= min) return 'Baixo';
+  return 'Normal';
+}
+
+function _almStatusCls(s) {
+  return { 'Normal':'background:#d1fae5;color:#065f46',
+           'Baixo': 'background:#fef3c7;color:#92400e',
+           'Zerado':'background:#fee2e2;color:#991b1b' }[s] || 'background:#f1f5f9;color:#475569';
+}
+
+function carregarAlmoxarifado() {
+  var c = document.getElementById('almoxarifadoContainer');
+  if (c) c.innerHTML = '<div class="p-8 text-center"><i class="fas fa-spinner animate-spin text-emerald-300 text-xl"></i></div>';
+  GAS.almoxarifado.listar(function(lista) {
+    _almoxCache = lista || [];
+    _almAtualizarFiltroCategoria();
+    _almRenderizar();
+  }, function() {
+    if (c) c.innerHTML = '<div class="p-8 text-center text-red-400 text-sm"><i class="fas fa-exclamation-triangle mr-2"></i>Erro ao carregar estoque.</div>';
+  });
+}
+
+function _almFiltrar() { _almRenderizar(); }
+
+function _almRenderizar() {
+  var busca = (document.getElementById('almBusca')?.value||'').toLowerCase();
+  var cat   = document.getElementById('almFiltroCategoria')?.value || '';
+  var st    = document.getElementById('almFiltroStatus')?.value || '';
+  var c     = document.getElementById('almoxarifadoContainer');
+  if (!c) return;
+
+  var lista = _almoxCache.filter(function(i) {
+    if (busca && !String(i.nome||'').toLowerCase().includes(busca)) return false;
+    if (cat && i.categoria !== cat) return false;
+    if (st && _almStatus(i) !== st) return false;
+    return true;
+  });
+
+  if (!lista.length) {
+    c.innerHTML = '<div class="p-12 text-center"><i class="fas fa-boxes-stacked text-slate-200 text-4xl mb-3"></i>'
+      + '<p class="text-slate-400 font-bold text-sm">' + (_almoxCache.length ? 'Nenhum item encontrado.' : 'Estoque vazio.') + '</p>'
+      + (temPermissao('almoxarifado','editar') ? '<button onclick="abrirModalAlmoxarifado()" class="mt-4 bg-emerald-600 text-white text-xs font-black px-4 py-2 rounded-xl">+ Novo Item</button>' : '')
+      + '</div>';
+    return;
+  }
+
+  c.innerHTML = '<table class="w-full text-sm"><thead>'
+    + '<tr class="border-b border-slate-100 bg-slate-50/50 text-left">'
+    + '<th class="px-5 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Item</th>'
+    + '<th class="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Categoria</th>'
+    + '<th class="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Qtd</th>'
+    + '<th class="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Mínimo</th>'
+    + '<th class="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Situação</th>'
+    + '<th class="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest"></th></tr></thead><tbody>'
+    + lista.map(function(i) {
+        var s = _almStatus(i);
+        return '<tr class="border-b border-slate-50 hover:bg-slate-50/50">'
+          + '<td class="px-5 py-3"><p class="font-semibold text-slate-700 text-xs">' + escaparHTML(i.nome||'') + '</p>'
+          + (i.unidade ? '<p class="text-[10px] text-slate-400">' + escaparHTML(i.unidade) + '</p>' : '') + '</td>'
+          + '<td class="px-4 py-3 text-[11px] text-slate-500">' + escaparHTML(i.categoria||'—') + '</td>'
+          + '<td class="px-4 py-3 font-black text-slate-700 text-xs">' + (Number(i.qtd)||0) + '</td>'
+          + '<td class="px-4 py-3 text-[11px] text-slate-400">' + (Number(i.qtdMinima)||0) + '</td>'
+          + '<td class="px-4 py-3"><span style="font-size:9px;font-weight:900;padding:2px 8px;border-radius:99px;' + _almStatusCls(s) + '">' + s + '</span></td>'
+          + '<td class="px-4 py-3 flex gap-1">'
+          + (temPermissao('almoxarifado','editar') ? '<button onclick="_almMovimentar(\'' + escaparHTML(i.id) + '\')" class="text-emerald-400 hover:text-emerald-600 mr-1" title="Movimentar"><i class="fas fa-exchange-alt text-xs"></i></button>' : '')
+          + (temPermissao('almoxarifado','editar') ? '<button onclick="abrirModalAlmoxarifado(\'' + escaparHTML(i.id) + '\')" class="text-indigo-400 hover:text-indigo-600 mr-1"><i class="fas fa-edit text-xs"></i></button>' : '')
+          + (temPermissao('almoxarifado','excluir') ? '<button onclick="_excluirAlmItem(\'' + escaparHTML(i.id) + '\')" class="text-red-300 hover:text-red-500"><i class="fas fa-trash text-xs"></i></button>' : '')
+          + '</td></tr>';
+      }).join('') + '</tbody></table>';
+}
+
+function abrirModalAlmoxarifado(id) {
+  var dado = id ? _almoxCache.find(function(i) { return i.id === id; }) : {};
+  dado = dado || {};
+  Swal.fire({
+    title: id ? 'Editar Item' : 'Novo Item',
+    width: Math.min(500, window.innerWidth - 32),
+    showCancelButton: true,
+    confirmButtonText: '<i class="fas fa-save mr-1"></i>Salvar',
+    cancelButtonText: 'Cancelar',
+    confirmButtonColor: '#10b981',
+    customClass:{ popup:'rounded-3xl', confirmButton:'rounded-xl font-black text-sm', cancelButton:'rounded-xl font-bold text-sm' },
+    html: '<div class="text-left" style="padding:0 20px 16px">'
+      + '<div style="margin-bottom:10px"><label style="display:block;font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">Nome *</label>'
+      + '<input id="almNome" style="width:100%;padding:9px 13px;font-size:13px;border:1.5px solid #e2e8f0;border-radius:12px;outline:none;box-sizing:border-box" value="' + escaparHTML(dado.nome||'') + '" placeholder="Nome do item"></div>'
+      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">'
+      + '<div><label style="display:block;font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">Categoria</label>'
+      + '<select id="almCat" style="width:100%;padding:9px 13px;font-size:12px;border:1.5px solid #e2e8f0;border-radius:12px;outline:none">'
+      + _almGetCategorias().map(function(cat){ return '<option'+(dado.categoria===cat?' selected':'')+'>'+cat+'</option>'; }).join('')
+      + '</select></div>'
+      + '<div><label style="display:block;font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">Unidade</label>'
+      + '<input id="almUnid" style="width:100%;padding:9px 13px;font-size:12px;border:1.5px solid #e2e8f0;border-radius:12px;outline:none;box-sizing:border-box" value="' + escaparHTML(dado.unidade||'') + '" placeholder="un, caixa, kg..."></div></div>'
+      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'
+      + '<div><label style="display:block;font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">Quantidade inicial</label>'
+      + '<input id="almQtd" type="number" min="0" style="width:100%;padding:9px 13px;font-size:12px;border:1.5px solid #e2e8f0;border-radius:12px;outline:none;box-sizing:border-box" value="' + (Number(dado.qtd)||0) + '"></div>'
+      + '<div><label style="display:block;font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">Qtd. mínima</label>'
+      + '<input id="almMin" type="number" min="0" style="width:100%;padding:9px 13px;font-size:12px;border:1.5px solid #e2e8f0;border-radius:12px;outline:none;box-sizing:border-box" value="' + (Number(dado.qtdMinima)||0) + '"></div></div></div>',
+    preConfirm: function() {
+      var n = (document.getElementById('almNome')?.value||'').trim();
+      if (!n) { Swal.showValidationMessage('Nome obrigatório'); return false; }
+      return { id:dado.id||null, nome:n,
+               categoria:document.getElementById('almCat')?.value,
+               unidade:document.getElementById('almUnid')?.value.trim(),
+               qtd:Number(document.getElementById('almQtd')?.value)||0,
+               qtdMinima:Number(document.getElementById('almMin')?.value)||0 };
+    }
+  }).then(function(r) {
+    if (!r.isConfirmed) return;
+    showLoader(true);
+    GAS.almoxarifado.salvar(r.value, function() {
+      showLoader(false); carregarAlmoxarifado();
+    }, function(e) { showLoader(false); Swal.fire('Erro', e.message,'error'); });
+  });
+}
+
+function _almMovimentar(id) {
+  var item = _almoxCache.find(function(i){ return i.id === id; });
+  if (!item) return;
+  Swal.fire({
+    title: 'Movimentação de Estoque',
+    html: '<div class="text-left" style="padding:0 20px 16px">'
+      + '<p style="font-size:12px;font-weight:700;color:#334155;margin-bottom:12px">' + escaparHTML(item.nome||'') + ' — Atual: <b>' + (Number(item.qtd)||0) + '</b></p>'
+      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'
+      + '<div><label style="display:block;font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">Tipo</label>'
+      + '<select id="movTipo" style="width:100%;padding:9px 13px;font-size:12px;border:1.5px solid #e2e8f0;border-radius:12px;outline:none">'
+      + '<option value="entrada">Entrada</option><option value="saida">Saída</option></select></div>'
+      + '<div><label style="display:block;font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">Quantidade</label>'
+      + '<input id="movQtd" type="number" min="1" value="1" style="width:100%;padding:9px 13px;font-size:12px;border:1.5px solid #e2e8f0;border-radius:12px;outline:none;box-sizing:border-box"></div></div>'
+      + '<div style="margin-top:10px"><label style="display:block;font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">Observação</label>'
+      + '<input id="movObs" style="width:100%;padding:9px 13px;font-size:12px;border:1.5px solid #e2e8f0;border-radius:12px;outline:none;box-sizing:border-box" placeholder="Motivo ou destino..."></div></div>',
+    showCancelButton: true,
+    confirmButtonText: 'Registrar',
+    confirmButtonColor: '#10b981',
+    customClass:{ popup:'rounded-3xl', confirmButton:'rounded-xl font-black text-sm', cancelButton:'rounded-xl font-bold text-sm' },
+    preConfirm: function() {
+      var q = Number(document.getElementById('movQtd')?.value)||0;
+      if (q <= 0) { Swal.showValidationMessage('Quantidade inválida'); return false; }
+      return { tipo:document.getElementById('movTipo')?.value, qtd:q, obs:document.getElementById('movObs')?.value };
+    }
+  }).then(function(r) {
+    if (!r.isConfirmed) return;
+    showLoader(true);
+    GAS.almoxarifado.movimentar(id, r.value.tipo, r.value.qtd, r.value.obs, function() {
+      showLoader(false); carregarAlmoxarifado();
+    }, function(e) { showLoader(false); Swal.fire('Erro', e.message,'error'); });
+  });
+}
+
+function _excluirAlmItem(id) {
+  Swal.fire({ title:'Excluir item?', text:'O histórico de movimentações será mantido.', icon:'warning',
+    showCancelButton:true, confirmButtonColor:'#ef4444', confirmButtonText:'Excluir', cancelButtonText:'Cancelar',
+    customClass:{popup:'rounded-3xl',confirmButton:'rounded-xl font-black text-sm',cancelButton:'rounded-xl font-bold text-sm'}
+  }).then(function(r) {
+    if (!r.isConfirmed) return;
+    showLoader(true);
+    GAS.almoxarifado.excluir(id, function() {
+      showLoader(false); carregarAlmoxarifado();
+    }, function(e) { showLoader(false); Swal.fire('Erro', e.message,'error'); });
+  });
+}
+
+window._onShow_aba_almoxarifado = function() {
+  if (!_almoxCache.length) carregarAlmoxarifado();
+};
+</script>

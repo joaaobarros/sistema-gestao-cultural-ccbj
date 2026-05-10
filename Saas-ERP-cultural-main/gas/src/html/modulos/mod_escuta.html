@@ -1,0 +1,1831 @@
+<!--
+@file mod_escuta.html
+@type module
+@description Sistema de Escuta Institucional Contínua — UI completa.
+             Pesquisas pulse adaptativas, escuta espontânea, dashboard de clima,
+             alertas institucionais, relatórios e governança de dados.
+@responsibility Estrutura HTML + JS da aba #aba-escuta e widget pulse flutuante.
+@dependencies GAS.escuta, showLoader, escaparHTML, temPermissao, AppState
+-->
+<section id="aba-escuta" class="tab-content hidden pb-20 animate-fadeIn">
+
+  <!-- Cabeçalho -->
+  <div class="mb-5 flex flex-wrap justify-between items-start gap-3">
+    <div>
+      <h2 class="text-xl font-black text-slate-800 uppercase tracking-tighter flex items-center gap-2">
+        <span class="w-8 h-8 bg-violet-100 rounded-xl flex items-center justify-center">
+          <i class="fas fa-ear-listen text-violet-600 text-sm"></i>
+        </span>
+        Escuta Institucional
+      </h2>
+      <p class="text-xs text-slate-400 font-medium mt-0.5">
+        Monitoramento contínuo do clima organizacional — NR-1 compatível
+      </p>
+    </div>
+    <div class="flex gap-2">
+      <span id="escuta-badge-confianca"
+        class="px-3 py-1.5 rounded-xl text-[10px] font-black uppercase bg-slate-100 text-slate-500">
+        <i class="fas fa-circle-dot mr-1"></i>Carregando...
+      </span>
+      <button onclick="_escutaRecarregar()"
+        class="px-3 py-1.5 bg-violet-600 hover:bg-violet-700 text-white text-[10px] font-black rounded-xl transition-all uppercase">
+        <i class="fas fa-rotate-right mr-1"></i>Atualizar
+      </button>
+    </div>
+  </div>
+
+  <!-- Sub-navegação -->
+  <div class="flex gap-2 flex-wrap mb-5" id="escuta-subnav">
+    <button onclick="_escutaSubAba('painel')"    id="escuta-nav-painel"    class="escuta-nav-btn px-4 py-2 text-xs font-black rounded-xl uppercase transition-all bg-violet-600 text-white">
+      <i class="fas fa-chart-bar mr-1"></i>Painel
+    </button>
+    <button onclick="_escutaSubAba('espontanea')" id="escuta-nav-espontanea" class="escuta-nav-btn px-4 py-2 text-xs font-black rounded-xl uppercase transition-all bg-slate-100 text-slate-600 hover:bg-slate-200">
+      <i class="fas fa-comments mr-1"></i>Escuta Livre
+    </button>
+    <button onclick="_escutaSubAba('alertas')"   id="escuta-nav-alertas"   class="escuta-nav-btn px-4 py-2 text-xs font-black rounded-xl uppercase transition-all bg-slate-100 text-slate-600 hover:bg-slate-200">
+      <i class="fas fa-bell mr-1"></i>Alertas
+      <span id="escuta-badge-alertas" class="hidden ml-1 bg-red-500 text-white text-[8px] px-1.5 py-0.5 rounded-full">0</span>
+    </button>
+    <button onclick="_escutaSubAba('relatorios')" id="escuta-nav-relatorios" class="escuta-nav-btn px-4 py-2 text-xs font-black rounded-xl uppercase transition-all bg-slate-100 text-slate-600 hover:bg-slate-200">
+      <i class="fas fa-file-chart-column mr-1"></i>Relatórios
+    </button>
+    <button onclick="_escutaSubAba('pesquisas')" id="escuta-nav-pesquisas" class="escuta-nav-btn px-4 py-2 text-xs font-black rounded-xl uppercase transition-all bg-slate-100 text-slate-600 hover:bg-slate-200"
+      data-requer-permissao="escuta:visualizar">
+      <i class="fas fa-sliders mr-1"></i>Gestão
+    </button>
+    <button onclick="_escutaSubAba('perfil')"    id="escuta-nav-perfil"    class="escuta-nav-btn px-4 py-2 text-xs font-black rounded-xl uppercase transition-all bg-slate-100 text-slate-600 hover:bg-slate-200">
+      <i class="fas fa-user-circle mr-1"></i>Meu Perfil
+    </button>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════
+       PAINEL — DASHBOARD DE CLIMA
+       ═══════════════════════════════════════════════════ -->
+  <div id="escuta-painel-painel">
+
+    <!-- Seletor de modo / filtros -->
+    <div class="flex flex-wrap gap-3 mb-4 items-center">
+      <select id="escuta-sel-periodo" onchange="_escutaAtualizarDashboard()"
+        style="padding:8px 12px;border:1.5px solid #e2e8f0;border-radius:12px;font-size:12px;outline:none;color:#475569">
+      </select>
+      <select id="escuta-sel-modo" onchange="_escutaAtualizarDashboard()"
+        style="padding:8px 12px;border:1.5px solid #e2e8f0;border-radius:12px;font-size:12px;outline:none;color:#475569">
+        <option value="geral">Visão Geral</option>
+        <option value="estratificado">Estratificado</option>
+        <option value="comparativo">Comparativo</option>
+      </select>
+    </div>
+
+    <!-- KPIs principais -->
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5" id="escuta-kpis">
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-4">
+        <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Clima Geral</p>
+        <p id="escuta-kpi-clima" class="text-3xl font-black text-slate-800 mt-1">—</p>
+        <p id="escuta-kpi-clima-nivel" class="text-[10px] text-slate-400 mt-0.5">sem dados</p>
+      </div>
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-4">
+        <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Confiança</p>
+        <p id="escuta-kpi-confianca" class="text-3xl font-black text-slate-800 mt-1">—</p>
+        <p id="escuta-kpi-conf-detail" class="text-[10px] text-slate-400 mt-0.5">respostas</p>
+      </div>
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-4">
+        <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Tendência</p>
+        <p id="escuta-kpi-tendencia" class="text-3xl font-black text-slate-800 mt-1">—</p>
+        <p id="escuta-kpi-tend-detail" class="text-[10px] text-slate-400 mt-0.5">vs. período anterior</p>
+      </div>
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-4">
+        <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Alertas Ativos</p>
+        <p id="escuta-kpi-alertas" class="text-3xl font-black text-slate-800 mt-1">—</p>
+        <p class="text-[10px] text-slate-400 mt-0.5">requerem atenção</p>
+      </div>
+    </div>
+
+    <!-- Indicadores por dimensão -->
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 mb-4">
+      <h3 class="font-black text-slate-700 text-sm uppercase tracking-tight mb-4 flex items-center gap-2">
+        <i class="fas fa-layer-group text-violet-500"></i>Indicadores por Dimensão
+      </h3>
+      <div id="escuta-dimensoes-grid" class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div class="text-center text-slate-400 text-xs py-8 col-span-2">Carregando indicadores...</div>
+      </div>
+    </div>
+
+    <!-- Gráfico de tendência -->
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 mb-4">
+      <h3 class="font-black text-slate-700 text-sm uppercase tracking-tight mb-4 flex items-center gap-2">
+        <i class="fas fa-chart-line text-violet-500"></i>Tendência — Últimos 3 Períodos
+      </h3>
+      <div id="escuta-tendencia-chart" class="space-y-2">
+        <div class="text-center text-slate-400 text-xs py-6">Carregando tendência...</div>
+      </div>
+    </div>
+
+    <!-- Escuta espontânea resumo -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
+        <h3 class="font-black text-slate-700 text-sm uppercase tracking-tight mb-4 flex items-center gap-2">
+          <i class="fas fa-comments text-violet-500"></i>Escuta Espontânea
+        </h3>
+        <div id="escuta-espontanea-resumo">
+          <div class="text-center text-slate-400 text-xs py-4">Carregando...</div>
+        </div>
+      </div>
+
+      <!-- Saturação das dimensões -->
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
+        <h3 class="font-black text-slate-700 text-sm uppercase tracking-tight mb-4 flex items-center gap-2">
+          <i class="fas fa-battery-three-quarters text-violet-500"></i>Coleta — Saturação
+        </h3>
+        <div id="escuta-saturacao-grid" class="space-y-2">
+          <div class="text-center text-slate-400 text-xs py-4">Carregando...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Vista estratificada (condicional) -->
+    <div id="escuta-estratificado-bloco" class="hidden bg-white rounded-2xl shadow-sm border border-slate-100 p-5 mb-4">
+      <h3 class="font-black text-slate-700 text-sm uppercase tracking-tight mb-4 flex items-center gap-2">
+        <i class="fas fa-sitemap text-violet-500"></i>Análise Estratificada
+        <span class="text-[9px] font-black text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">DADOS SENSÍVEIS</span>
+      </h3>
+      <div id="escuta-estratificado-content">
+        <div class="text-center text-slate-400 text-xs py-4">Selecione o modo "Estratificado" para visualizar.</div>
+      </div>
+    </div>
+
+    <!-- Aviso de confiança insuficiente -->
+    <div id="escuta-aviso-confianca" class="hidden bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-4">
+      <div class="flex items-start gap-3">
+        <i class="fas fa-triangle-exclamation text-amber-500 mt-0.5"></i>
+        <div>
+          <p class="font-black text-amber-800 text-sm">Taxa de Resposta Insuficiente</p>
+          <p class="text-amber-700 text-xs mt-1">
+            O sistema não gera conclusões com baixa taxa de resposta. Continue coletando dados para obter indicadores confiáveis.
+          </p>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════
+       PAINEL: ESCUTA ESPONTÂNEA
+       ═══════════════════════════════════════════════════ -->
+  <div id="escuta-painel-espontanea" class="hidden">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+
+      <!-- Formulário -->
+      <div class="md:col-span-1 bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
+        <h3 class="font-black text-slate-700 text-sm uppercase tracking-tight mb-4 flex items-center gap-2">
+          <i class="fas fa-pen-to-square text-violet-500"></i>Quero Registrar Algo
+        </h3>
+
+        <div class="space-y-3">
+          <div>
+            <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Categoria</label>
+            <select id="escuta-espontanea-categoria"
+              style="width:100%;margin-top:4px;padding:10px 12px;border:1.5px solid #e2e8f0;border-radius:12px;font-size:12px;outline:none;color:#475569">
+              <option value="apoio">Apoio e Suporte</option>
+              <option value="carga">Carga de Trabalho</option>
+              <option value="comunicacao">Comunicação</option>
+              <option value="conflito">Conflito / Tensão</option>
+              <option value="lideranca">Liderança</option>
+              <option value="positivo">Reconhecimento / Positivo</option>
+              <option value="ambiente">Ambiente e Cultura</option>
+              <option value="outro">Outro</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Relato (opcional)</label>
+            <textarea id="escuta-espontanea-texto" rows="4" placeholder="Descreva livremente o que deseja registrar..."
+              style="width:100%;margin-top:4px;padding:10px 12px;border:1.5px solid #e2e8f0;border-radius:12px;font-size:12px;outline:none;resize:vertical;font-family:inherit"></textarea>
+          </div>
+
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" id="escuta-espontanea-anonimo" checked class="rounded">
+            <span class="text-xs text-slate-600 font-semibold">Registrar anonimamente</span>
+          </label>
+
+          <div class="bg-slate-50 rounded-xl p-3">
+            <p class="text-[10px] text-slate-500">
+              <i class="fas fa-shield-halved text-violet-400 mr-1"></i>
+              Este não é um canal de denúncia formal. É um espaço de escuta institucional agregada.
+              Dados são analisados em grupo, nunca individualmente.
+            </p>
+          </div>
+
+          <button onclick="_escutaEnviarEspontanea()"
+            class="w-full bg-violet-600 hover:bg-violet-700 text-white text-xs font-black py-3 rounded-xl transition-all uppercase">
+            <i class="fas fa-paper-plane mr-2"></i>Registrar
+          </button>
+        </div>
+      </div>
+
+      <!-- Histórico agregado / sentimentos -->
+      <div class="md:col-span-2 space-y-4">
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
+          <h3 class="font-black text-slate-700 text-sm uppercase tracking-tight mb-4 flex items-center gap-2">
+            <i class="fas fa-chart-pie text-violet-500"></i>Sentimentos — Período Atual
+          </h3>
+          <div id="escuta-sentimentos-chart" class="grid grid-cols-3 gap-3">
+            <div class="text-center text-slate-400 text-xs py-6 col-span-3">Carregando...</div>
+          </div>
+        </div>
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
+          <h3 class="font-black text-slate-700 text-sm uppercase tracking-tight mb-4 flex items-center gap-2">
+            <i class="fas fa-tags text-violet-500"></i>Categorias Mais Frequentes
+          </h3>
+          <div id="escuta-categorias-chart">
+            <div class="text-center text-slate-400 text-xs py-6">Carregando...</div>
+          </div>
+        </div>
+
+        <!-- Feedback institucional -->
+        <div class="bg-violet-50 border border-violet-100 rounded-2xl p-5">
+          <h3 class="font-black text-violet-800 text-sm uppercase tracking-tight mb-3 flex items-center gap-2">
+            <i class="fas fa-reply text-violet-500"></i>Ciclo de Retorno
+          </h3>
+          <div id="escuta-feedback-loop" class="space-y-2">
+            <p class="text-xs text-violet-600">Com base nas escutas recebidas, a instituição tomou as seguintes ações:</p>
+            <div id="escuta-acoes-feedback">
+              <p class="text-xs text-violet-400 italic">Nenhuma ação registrada ainda neste período.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════
+       PAINEL: ALERTAS
+       ═══════════════════════════════════════════════════ -->
+  <div id="escuta-painel-alertas" class="hidden">
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+      <div class="p-5 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
+        <div>
+          <h3 class="font-black text-slate-800 text-sm uppercase tracking-tight">
+            <i class="fas fa-bell text-violet-500 mr-2"></i>Alertas Institucionais
+          </h3>
+          <p class="text-[10px] text-slate-400 mt-0.5">Gerados a partir de padrões consistentes nos dados</p>
+        </div>
+        <button onclick="_escutaCarregarAlertas()" data-requer-permissao="escuta:visualizar"
+          class="bg-violet-600 hover:bg-violet-700 text-white text-[10px] font-black px-3 py-2 rounded-xl uppercase transition-all">
+          <i class="fas fa-rotate-right mr-1"></i>Atualizar
+        </button>
+      </div>
+      <div id="escuta-alertas-lista" class="divide-y divide-slate-50">
+        <div class="text-center text-slate-400 text-xs py-12">Carregando alertas...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════
+       PAINEL: RELATÓRIOS
+       ═══════════════════════════════════════════════════ -->
+  <div id="escuta-painel-relatorios" class="hidden">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
+        <h3 class="font-black text-slate-700 text-sm uppercase tracking-tight mb-4">
+          <i class="fas fa-file-chart-column text-violet-500 mr-2"></i>Gerar Relatório
+        </h3>
+        <div class="space-y-3">
+          <div>
+            <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Tipo</label>
+            <select id="escuta-rel-tipo"
+              style="width:100%;margin-top:4px;padding:10px 12px;border:1.5px solid #e2e8f0;border-radius:12px;font-size:12px;outline:none;color:#475569">
+              <option value="institucional">Institucional (Completo)</option>
+              <option value="setor">Por Setor</option>
+              <option value="dimensao">Por Dimensão</option>
+              <option value="comparativo">Comparativo de Períodos</option>
+            </select>
+          </div>
+          <div>
+            <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Período</label>
+            <select id="escuta-rel-periodo"
+              style="width:100%;margin-top:4px;padding:10px 12px;border:1.5px solid #e2e8f0;border-radius:12px;font-size:12px;outline:none;color:#475569">
+            </select>
+          </div>
+          <button onclick="_escutaGerarRelatorio()"
+            class="w-full bg-violet-600 hover:bg-violet-700 text-white text-xs font-black py-3 rounded-xl uppercase transition-all">
+            <i class="fas fa-file-export mr-2"></i>Gerar
+          </button>
+        </div>
+      </div>
+
+      <div class="md:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
+        <h3 class="font-black text-slate-700 text-sm uppercase tracking-tight mb-4">
+          <i class="fas fa-eye text-violet-500 mr-2"></i>Pré-visualização
+        </h3>
+        <div id="escuta-relatorio-preview">
+          <div class="text-center text-slate-300 py-16">
+            <i class="fas fa-file-chart-column text-5xl mb-3"></i>
+            <p class="text-sm">Selecione os parâmetros e clique em Gerar.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════
+       PAINEL: GESTÃO DE PESQUISAS
+       ═══════════════════════════════════════════════════ -->
+  <div id="escuta-painel-pesquisas" class="hidden">
+
+    <!-- Tabs de gestão -->
+    <div class="flex gap-2 flex-wrap mb-4">
+      <button onclick="_escutaGestaoAba('config')"    id="escuta-g-nav-config"    class="escuta-g-nav px-3 py-2 text-[10px] font-black rounded-xl uppercase transition-all bg-violet-600 text-white">
+        <i class="fas fa-toggle-on mr-1"></i>Configuração
+      </button>
+      <button onclick="_escutaGestaoAba('perguntas')" id="escuta-g-nav-perguntas" class="escuta-g-nav px-3 py-2 text-[10px] font-black rounded-xl uppercase transition-all bg-slate-100 text-slate-600 hover:bg-slate-200">
+        <i class="fas fa-list-check mr-1"></i>Perguntas Padrão
+      </button>
+      <button onclick="_escutaGestaoAba('pesqs')"     id="escuta-g-nav-pesqs"     class="escuta-g-nav px-3 py-2 text-[10px] font-black rounded-xl uppercase transition-all bg-slate-100 text-slate-600 hover:bg-slate-200">
+        <i class="fas fa-clipboard-list mr-1"></i>Pesquisas Personalizadas
+      </button>
+      <button onclick="_escutaGestaoAba('banco')"     id="escuta-g-nav-banco"     class="escuta-g-nav px-3 py-2 text-[10px] font-black rounded-xl uppercase transition-all bg-slate-100 text-slate-600 hover:bg-slate-200">
+        <i class="fas fa-database mr-1"></i>Banco de Templates
+      </button>
+    </div>
+
+    <!-- Config global -->
+    <div id="escuta-gestao-config">
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
+        <div class="flex items-center gap-3 mb-5">
+          <h3 class="font-black text-slate-700 text-sm uppercase tracking-tight">Controle do Sistema</h3>
+          <span id="cfg-status-msg" class="hidden text-[10px] text-green-600 font-black"><i class="fas fa-check-circle mr-1"></i>Salvo</span>
+          <span id="cfg-erro-msg"   class="hidden text-[10px] text-red-500 font-black"><i class="fas fa-exclamation-circle mr-1"></i>Erro ao salvar</span>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+
+          <!-- Toggles de ativação -->
+          <div class="space-y-4">
+            <h4 class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Ativação</h4>
+
+            <label class="flex items-center justify-between p-3 bg-slate-50 rounded-xl cursor-pointer">
+              <div>
+                <p class="text-xs font-black text-slate-700">Sistema Global</p>
+                <p class="text-[10px] text-slate-400">Ativar/desativar todo o sistema de pesquisas</p>
+              </div>
+              <div class="relative inline-flex items-center">
+                <input type="checkbox" id="cfg-ativo" class="sr-only peer" onchange="_escutaSalvarConfig()">
+                <div class="w-9 h-5 bg-slate-200 peer-checked:bg-violet-600 rounded-full transition-all peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:w-4 after:h-4 after:bg-white after:rounded-full after:transition-all after:shadow-sm"></div>
+              </div>
+            </label>
+
+            <label class="flex items-center justify-between p-3 bg-slate-50 rounded-xl cursor-pointer">
+              <div>
+                <p class="text-xs font-black text-slate-700">Pesquisas Padrão</p>
+                <p class="text-[10px] text-slate-400">Banco institucional de perguntas fixas</p>
+              </div>
+              <div class="relative inline-flex items-center">
+                <input type="checkbox" id="cfg-ativoPadrao" class="sr-only peer" onchange="_escutaSalvarConfig()">
+                <div class="w-9 h-5 bg-slate-200 peer-checked:bg-violet-600 rounded-full transition-all peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:w-4 after:h-4 after:bg-white after:rounded-full after:transition-all after:shadow-sm"></div>
+              </div>
+            </label>
+
+            <label class="flex items-center justify-between p-3 bg-slate-50 rounded-xl cursor-pointer">
+              <div>
+                <p class="text-xs font-black text-slate-700">Pesquisas Personalizadas</p>
+                <p class="text-[10px] text-slate-400">Criadas manualmente por gestores</p>
+              </div>
+              <div class="relative inline-flex items-center">
+                <input type="checkbox" id="cfg-ativoPersonalizado" class="sr-only peer" onchange="_escutaSalvarConfig()">
+                <div class="w-9 h-5 bg-slate-200 peer-checked:bg-violet-600 rounded-full transition-all peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:w-4 after:h-4 after:bg-white after:rounded-full after:transition-all after:shadow-sm"></div>
+              </div>
+            </label>
+
+            <label class="flex items-center justify-between p-3 bg-slate-50 rounded-xl cursor-pointer">
+              <div>
+                <p class="text-xs font-black text-slate-700">Escuta Espontânea</p>
+                <p class="text-[10px] text-slate-400">Registro livre de relatos</p>
+              </div>
+              <div class="relative inline-flex items-center">
+                <input type="checkbox" id="cfg-ativoEspontanea" class="sr-only peer" onchange="_escutaSalvarConfig()">
+                <div class="w-9 h-5 bg-slate-200 peer-checked:bg-violet-600 rounded-full transition-all peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:w-4 after:h-4 after:bg-white after:rounded-full after:transition-all after:shadow-sm"></div>
+              </div>
+            </label>
+          </div>
+
+          <!-- Parâmetros numéricos -->
+          <div class="space-y-4">
+            <h4 class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Parâmetros</h4>
+
+            <div>
+              <label class="text-[10px] font-black text-slate-500">Limite de perguntas por dia por usuário</label>
+              <input type="number" id="cfg-limiteDia" min="1" max="10" onblur="_escutaSalvarConfig()"
+                style="width:100%;margin-top:4px;padding:8px 12px;border:1.5px solid #e2e8f0;border-radius:10px;font-size:12px;outline:none">
+            </div>
+            <div>
+              <label class="text-[10px] font-black text-slate-500">Intervalo mínimo entre perguntas (horas)</label>
+              <input type="number" id="cfg-antiSpamHoras" min="1" max="24" onblur="_escutaSalvarConfig()"
+                style="width:100%;margin-top:4px;padding:8px 12px;border:1.5px solid #e2e8f0;border-radius:10px;font-size:12px;outline:none">
+            </div>
+            <div>
+              <label class="text-[10px] font-black text-slate-500">Grupo mínimo para análise estratificada</label>
+              <input type="number" id="cfg-grupoMinimo" min="3" max="20" onblur="_escutaSalvarConfig()"
+                style="width:100%;margin-top:4px;padding:8px 12px;border:1.5px solid #e2e8f0;border-radius:10px;font-size:12px;outline:none">
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Perguntas padrão -->
+    <div id="escuta-gestao-perguntas" class="hidden">
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+        <div class="p-5 border-b border-slate-100 bg-slate-50/50">
+          <h3 class="font-black text-slate-800 text-sm uppercase tracking-tight">
+            Banco de Perguntas Padrão (Hardcoded)
+          </h3>
+          <p class="text-[10px] text-slate-400 mt-0.5">Cada pergunta pode ser ativada/desativada individualmente</p>
+        </div>
+        <div id="escuta-perguntas-lista" class="divide-y divide-slate-50">
+          <div class="text-center text-slate-400 text-xs py-8">Carregando...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pesquisas personalizadas -->
+    <div id="escuta-gestao-pesqs" class="hidden">
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+        <div class="p-5 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
+          <div>
+            <h3 class="font-black text-slate-800 text-sm uppercase tracking-tight">Pesquisas Personalizadas</h3>
+            <p class="text-[10px] text-slate-400 mt-0.5">Crianção e gestão de pesquisas direcionadas</p>
+          </div>
+          <button onclick="_escutaAbrirModalPesquisa()"
+            class="bg-violet-600 hover:bg-violet-700 text-white text-[10px] font-black px-3 py-2 rounded-xl uppercase transition-all">
+            <i class="fas fa-plus mr-1"></i>Nova Pesquisa
+          </button>
+        </div>
+        <div id="escuta-pesqs-lista" class="divide-y divide-slate-50">
+          <div class="text-center text-slate-400 text-xs py-8">Carregando...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Banco de templates -->
+    <div id="escuta-gestao-banco" class="hidden">
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+        <div class="p-5 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
+          <h3 class="font-black text-slate-800 text-sm uppercase tracking-tight">Banco de Templates</h3>
+          <button onclick="_escutaAbrirModalTemplate()"
+            class="bg-violet-600 hover:bg-violet-700 text-white text-[10px] font-black px-3 py-2 rounded-xl uppercase transition-all">
+            <i class="fas fa-plus mr-1"></i>Novo Template
+          </button>
+        </div>
+        <div id="escuta-banco-lista" class="divide-y divide-slate-50">
+          <div class="text-center text-slate-400 text-xs py-8">Carregando...</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════
+       PAINEL: PERFIL ANALÍTICO
+       ═══════════════════════════════════════════════════ -->
+  <div id="escuta-painel-perfil" class="hidden">
+    <div class="max-w-xl">
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
+        <h3 class="font-black text-slate-700 text-sm uppercase tracking-tight mb-2">Meu Perfil Analítico</h3>
+        <p class="text-xs text-slate-400 mb-5">
+          Dados opcionais usados apenas em análises agregadas. Nunca exibidos individualmente.
+          Seu perfil não é obrigatório e pode ser atualizado a qualquer momento.
+        </p>
+
+        <div class="bg-violet-50 border border-violet-100 rounded-xl p-3 mb-5">
+          <p class="text-[10px] text-violet-700">
+            <i class="fas fa-shield-halved mr-1"></i>
+            Os dados abaixo são usados exclusivamente para análises de equidade e desigualdade organizacional.
+            Apenas grupos com mínimo de 5 pessoas são analisados.
+          </p>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Gênero</label>
+            <select id="perfil-genero" style="width:100%;margin-top:4px;padding:8px 12px;border:1.5px solid #e2e8f0;border-radius:10px;font-size:12px;outline:none;color:#475569">
+              <option value="">Prefiro não informar</option>
+              <option>Mulher cisgênero</option><option>Homem cisgênero</option>
+              <option>Mulher transgênero</option><option>Homem transgênero</option>
+              <option>Não-binário</option><option>Outro</option>
+            </select>
+          </div>
+          <div>
+            <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Raça/Cor</label>
+            <select id="perfil-raca" style="width:100%;margin-top:4px;padding:8px 12px;border:1.5px solid #e2e8f0;border-radius:10px;font-size:12px;outline:none;color:#475569">
+              <option value="">Prefiro não informar</option>
+              <option>Branca</option><option>Preta</option><option>Parda</option>
+              <option>Amarela</option><option>Indígena</option>
+            </select>
+          </div>
+          <div>
+            <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Orientação Sexual</label>
+            <select id="perfil-orientacao" style="width:100%;margin-top:4px;padding:8px 12px;border:1.5px solid #e2e8f0;border-radius:10px;font-size:12px;outline:none;color:#475569">
+              <option value="">Prefiro não informar</option>
+              <option>Heterossexual</option><option>Homossexual</option>
+              <option>Bissexual</option><option>Pansexual</option><option>Outro</option>
+            </select>
+          </div>
+          <div>
+            <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Faixa Salarial</label>
+            <select id="perfil-faixaSalarial" style="width:100%;margin-top:4px;padding:8px 12px;border:1.5px solid #e2e8f0;border-radius:10px;font-size:12px;outline:none;color:#475569">
+              <option value="">Prefiro não informar</option>
+              <option>Até 1 SM</option><option>1–2 SM</option><option>2–4 SM</option>
+              <option>4–8 SM</option><option>Acima de 8 SM</option>
+            </select>
+          </div>
+          <div>
+            <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Vínculo</label>
+            <select id="perfil-vinculo" style="width:100%;margin-top:4px;padding:8px 12px;border:1.5px solid #e2e8f0;border-radius:10px;font-size:12px;outline:none;color:#475569">
+              <option value="">Não informar</option>
+              <option>CLT</option><option>PJ</option><option>Terceirizado</option>
+              <option>Bolsa</option><option>Estágio</option><option>Voluntário</option>
+            </select>
+          </div>
+          <div>
+            <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Nível</label>
+            <select id="perfil-nivel" style="width:100%;margin-top:4px;padding:8px 12px;border:1.5px solid #e2e8f0;border-radius:10px;font-size:12px;outline:none;color:#475569">
+              <option value="">Não informar</option>
+              <option value="operacional">Operacional</option>
+              <option value="tático">Tático</option>
+              <option value="estratégico">Estratégico</option>
+            </select>
+          </div>
+          <div>
+            <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Tempo de Casa</label>
+            <select id="perfil-tempoCasa" style="width:100%;margin-top:4px;padding:8px 12px;border:1.5px solid #e2e8f0;border-radius:10px;font-size:12px;outline:none;color:#475569">
+              <option value="">Não informar</option>
+              <option>Menos de 6 meses</option><option>6 meses – 1 ano</option>
+              <option>1–3 anos</option><option>3–5 anos</option><option>Mais de 5 anos</option>
+            </select>
+          </div>
+          <div>
+            <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Região</label>
+            <select id="perfil-regiao" style="width:100%;margin-top:4px;padding:8px 12px;border:1.5px solid #e2e8f0;border-radius:10px;font-size:12px;outline:none;color:#475569">
+              <option value="">Não informar</option>
+              <option>Norte</option><option>Nordeste</option><option>Centro-Oeste</option>
+              <option>Sudeste</option><option>Sul</option>
+            </select>
+          </div>
+        </div>
+
+        <button onclick="_escutaSalvarPerfil()"
+          class="mt-5 w-full bg-violet-600 hover:bg-violet-700 text-white text-xs font-black py-3 rounded-xl uppercase transition-all">
+          <i class="fas fa-floppy-disk mr-2"></i>Salvar Perfil
+        </button>
+      </div>
+    </div>
+  </div>
+
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════
+     WIDGET PULSE — Flutuante, não-invasivo
+     ═══════════════════════════════════════════════════════════ -->
+<div id="escuta-pulse-widget"
+  class="fixed bottom-6 right-6 z-50 hidden w-80 bg-white rounded-2xl shadow-2xl border border-violet-100 overflow-hidden transition-all"
+  style="animation: slideInRight 0.3s ease-out;">
+
+  <div class="bg-gradient-to-r from-violet-600 to-purple-600 px-4 py-3 flex justify-between items-center">
+    <div class="flex items-center gap-2">
+      <i class="fas fa-ear-listen text-white text-sm"></i>
+      <span class="text-white text-xs font-black uppercase tracking-wider">Pesquisa Rápida</span>
+    </div>
+    <button onclick="_escutaDismissWidget()" class="text-white/70 hover:text-white transition-colors">
+      <i class="fas fa-times text-xs"></i>
+    </button>
+  </div>
+
+  <div class="p-4">
+    <p id="escuta-widget-pergunta" class="text-sm font-semibold text-slate-700 leading-snug mb-4"></p>
+
+    <!-- Escala 1–5 -->
+    <div id="escuta-widget-escala" class="flex gap-2 justify-center mb-2">
+      <button onclick="_escutaResponderWidget(1)" class="escuta-opcao-btn w-10 h-10 rounded-xl bg-slate-100 hover:bg-violet-100 text-slate-700 hover:text-violet-700 font-black text-sm transition-all">1</button>
+      <button onclick="_escutaResponderWidget(2)" class="escuta-opcao-btn w-10 h-10 rounded-xl bg-slate-100 hover:bg-violet-100 text-slate-700 hover:text-violet-700 font-black text-sm transition-all">2</button>
+      <button onclick="_escutaResponderWidget(3)" class="escuta-opcao-btn w-10 h-10 rounded-xl bg-slate-100 hover:bg-violet-100 text-slate-700 hover:text-violet-700 font-black text-sm transition-all">3</button>
+      <button onclick="_escutaResponderWidget(4)" class="escuta-opcao-btn w-10 h-10 rounded-xl bg-slate-100 hover:bg-violet-100 text-slate-700 hover:text-violet-700 font-black text-sm transition-all">4</button>
+      <button onclick="_escutaResponderWidget(5)" class="escuta-opcao-btn w-10 h-10 rounded-xl bg-slate-100 hover:bg-violet-100 text-slate-700 hover:text-violet-700 font-black text-sm transition-all">5</button>
+    </div>
+    <div class="flex justify-between text-[9px] text-slate-400 mb-3 px-1">
+      <span>Muito baixo</span><span>Muito alto</span>
+    </div>
+
+    <!-- Emojis -->
+    <div id="escuta-widget-emoji" class="hidden flex gap-2 justify-center mb-3">
+      <button onclick="_escutaResponderWidget(1)" class="escuta-opcao-btn text-2xl hover:scale-125 transition-transform">😢</button>
+      <button onclick="_escutaResponderWidget(2)" class="escuta-opcao-btn text-2xl hover:scale-125 transition-transform">😕</button>
+      <button onclick="_escutaResponderWidget(3)" class="escuta-opcao-btn text-2xl hover:scale-125 transition-transform">😐</button>
+      <button onclick="_escutaResponderWidget(4)" class="escuta-opcao-btn text-2xl hover:scale-125 transition-transform">🙂</button>
+      <button onclick="_escutaResponderWidget(5)" class="escuta-opcao-btn text-2xl hover:scale-125 transition-transform">😊</button>
+    </div>
+
+    <div class="flex items-center gap-2 mt-2">
+      <button onclick="_escutaDismissWidget()" class="flex-1 text-[10px] text-slate-400 hover:text-slate-600 transition-colors py-1.5">
+        Responder depois
+      </button>
+      <label class="flex items-center gap-1.5 cursor-pointer">
+        <input type="checkbox" id="escuta-widget-anonimo" checked class="rounded text-violet-600">
+        <span class="text-[10px] text-slate-500">Anônimo</span>
+      </label>
+    </div>
+
+    <p class="text-[9px] text-slate-300 text-center mt-2">Dados analisados em grupo, nunca individualmente.</p>
+  </div>
+</div>
+
+<!-- Modal: criar/editar pesquisa personalizada -->
+<div id="escuta-modal-pesquisa" class="fixed inset-0 z-[90] hidden">
+  <div class="absolute inset-0 bg-black/50" onclick="_escutaFecharModalPesquisa()"></div>
+  <div class="absolute inset-4 md:inset-12 lg:inset-24 bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+    <div class="bg-gradient-to-r from-violet-600 to-purple-600 px-6 py-4 flex justify-between items-center shrink-0">
+      <h3 class="text-white font-black uppercase tracking-tight">
+        <i class="fas fa-clipboard-list mr-2"></i>
+        <span id="escuta-modal-pesquisa-titulo">Nova Pesquisa</span>
+      </h3>
+      <button onclick="_escutaFecharModalPesquisa()" class="text-white/70 hover:text-white">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+    <div class="flex-1 overflow-y-auto p-6 space-y-4">
+      <input type="hidden" id="modal-pesq-id">
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Título</label>
+          <input type="text" id="modal-pesq-titulo" placeholder="Nome da pesquisa"
+            style="width:100%;margin-top:4px;padding:10px 12px;border:1.5px solid #e2e8f0;border-radius:12px;font-size:13px;outline:none">
+        </div>
+        <div>
+          <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Status</label>
+          <select id="modal-pesq-status"
+            style="width:100%;margin-top:4px;padding:10px 12px;border:1.5px solid #e2e8f0;border-radius:12px;font-size:13px;outline:none;color:#475569">
+            <option value="ativo">Ativo</option>
+            <option value="inativo">Inativo</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Início do Período</label>
+          <input type="date" id="modal-pesq-inicio"
+            style="width:100%;margin-top:4px;padding:10px 12px;border:1.5px solid #e2e8f0;border-radius:12px;font-size:13px;outline:none">
+        </div>
+        <div>
+          <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Fim do Período</label>
+          <input type="date" id="modal-pesq-fim"
+            style="width:100%;margin-top:4px;padding:10px 12px;border:1.5px solid #e2e8f0;border-radius:12px;font-size:13px;outline:none">
+        </div>
+        <div>
+          <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Prioridade (1–10)</label>
+          <input type="number" id="modal-pesq-prioridade" min="1" max="10" value="1"
+            style="width:100%;margin-top:4px;padding:10px 12px;border:1.5px solid #e2e8f0;border-radius:12px;font-size:13px;outline:none">
+        </div>
+      </div>
+
+      <!-- Direcionamento -->
+      <div class="bg-slate-50 rounded-xl p-4">
+        <h4 class="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3">
+          <i class="fas fa-crosshairs text-violet-500 mr-1"></i>Direcionamento (opcional)
+        </h4>
+        <p class="text-[10px] text-slate-400 mb-3">Deixe em branco para aplicar a todos os usuários.</p>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div>
+            <label class="text-[10px] font-black text-slate-500">Vínculos</label>
+            <select id="dir-vinculo" multiple size="4"
+              style="width:100%;margin-top:4px;padding:6px 8px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:11px;outline:none">
+              <option>CLT</option><option>PJ</option><option>Terceirizado</option>
+              <option>Bolsa</option><option>Estágio</option>
+            </select>
+          </div>
+          <div>
+            <label class="text-[10px] font-black text-slate-500">Nível</label>
+            <select id="dir-nivel" multiple size="4"
+              style="width:100%;margin-top:4px;padding:6px 8px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:11px;outline:none">
+              <option value="operacional">Operacional</option>
+              <option value="tático">Tático</option>
+              <option value="estratégico">Estratégico</option>
+            </select>
+          </div>
+          <div>
+            <label class="text-[10px] font-black text-slate-500">Tempo de Casa</label>
+            <select id="dir-tempoCasa" multiple size="4"
+              style="width:100%;margin-top:4px;padding:6px 8px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:11px;outline:none">
+              <option>Menos de 6 meses</option><option>6 meses – 1 ano</option>
+              <option>1–3 anos</option><option>3–5 anos</option><option>Mais de 5 anos</option>
+            </select>
+          </div>
+          <div>
+            <label class="text-[10px] font-black text-slate-500">Setor</label>
+            <select id="dir-setor" multiple size="4"
+              style="width:100%;margin-top:4px;padding:6px 8px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:11px;outline:none">
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Perguntas da pesquisa -->
+      <div>
+        <div class="flex justify-between items-center mb-2">
+          <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Perguntas</label>
+          <button onclick="_escutaAdicionarPerguntaModal()"
+            class="text-[10px] bg-violet-600 text-white px-2 py-1 rounded-lg font-black transition-all hover:bg-violet-700">
+            <i class="fas fa-plus mr-1"></i>Adicionar
+          </button>
+        </div>
+        <div id="modal-pesq-perguntas" class="space-y-2">
+          <p class="text-xs text-slate-400 italic">Nenhuma pergunta adicionada.</p>
+        </div>
+      </div>
+    </div>
+    <div class="border-t border-slate-100 px-6 py-4 flex gap-3 justify-end shrink-0">
+      <button onclick="_escutaFecharModalPesquisa()" class="px-4 py-2 text-xs text-slate-500 hover:text-slate-700 font-black">Cancelar</button>
+      <button onclick="_escutaSalvarPesquisaModal()"
+        class="bg-violet-600 hover:bg-violet-700 text-white text-xs font-black px-5 py-2 rounded-xl transition-all uppercase">
+        <i class="fas fa-floppy-disk mr-1"></i>Salvar Pesquisa
+      </button>
+    </div>
+  </div>
+</div>
+
+<style>
+@keyframes slideInRight {
+  from { transform: translateX(100%); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+.escuta-nav-btn.ativo { background: #7c3aed !important; color: white !important; }
+.escuta-g-nav.ativo   { background: #7c3aed !important; color: white !important; }
+</style>
+
+<script>
+/**
+ * @file mod_escuta.html (script inline)
+ * @layer frontend/module
+ * @description Lógica de frontend do Sistema de Escuta Institucional Contínua.
+ * @responsibility Gerenciar sub-abas, widget pulse, dashboard, formulários,
+ *                 alertas, relatórios, gestão de pesquisas e perfil analítico.
+ * @dependencies GAS.escuta, AppState, showLoader, escaparHTML
+ */
+
+// ── Estado local ─────────────────────────────────────────────
+
+var _escutaCache = {
+  dashboard:   null,
+  alertas:     [],
+  pesquisas:   [],
+  banco:       [],
+  perguntas:   [],
+  config:      {},
+  perfil:      null,
+  periodos:    [],
+  widgetPergunta: null,
+  widgetPesquisaId: null
+};
+
+var _escutaWidgetTimer  = null;
+var _escutaAbaPesquisasPerguntas = [];
+
+// Lazy load: registra carregamento ao entrar na aba
+window._onShow_aba_escuta = function() { _escutaInit(); };
+
+// ── Inicialização ─────────────────────────────────────────────
+
+function _escutaInit() {
+  if (_escutaCache.dashboard) { _escutaRenderTudo(); return; }
+  _escutaRecarregar();
+}
+
+function _escutaRecarregar() {
+  showLoader(true);
+  GAS._call('obterDadosEscuta', [], function(res) {
+    showLoader(false);
+    if (!res || !res.ok) {
+      Swal.fire('Escuta', res ? res.msg : 'Erro ao carregar dados.', 'error');
+      return;
+    }
+    _escutaCache.dashboard  = res.dashboard;
+    _escutaCache.alertas    = res.alertas    || [];
+    _escutaCache.pesquisas  = res.pesquisas  || [];
+    _escutaCache.banco      = res.banco      || [];
+    _escutaCache.perguntas  = res.perguntas  || [];
+    _escutaCache.config     = res.config     || {};
+    _escutaCache.perfil     = res.perfil;
+    _escutaCache.periodos   = _escutaGerarPeriodos(12);
+
+    _escutaRenderTudo();
+    _escutaAgendarWidget();
+  });
+}
+
+function _escutaGerarPeriodos(n) {
+  var periodos = [];
+  var d = new Date();
+  for (var i = 0; i < n; i++) {
+    var p = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+    periodos.push(p);
+    d.setMonth(d.getMonth() - 1);
+  }
+  return periodos;
+}
+
+function _escutaRenderTudo() {
+  _escutaPopularSelects();
+  _escutaRenderDashboard();
+  _escutaRenderAlertas();
+  _escutaRenderConfig();
+  _escutaRenderPerguntas();
+  _escutaRenderPesquisas();
+  _escutaRenderBanco();
+  _escutaCarregarFeedback();
+  if (_escutaCache.perfil) _escutaPreencherPerfil(_escutaCache.perfil);
+}
+
+// ── Sub-navegação ─────────────────────────────────────────────
+
+function _escutaSubAba(nome) {
+  var paineis = ['painel','espontanea','alertas','relatorios','pesquisas','perfil'];
+  paineis.forEach(function(p) {
+    var el = document.getElementById('escuta-painel-' + p);
+    if (el) el.classList.toggle('hidden', p !== nome);
+    var btn = document.getElementById('escuta-nav-' + p);
+    if (btn) {
+      btn.classList.toggle('bg-violet-600', p === nome);
+      btn.classList.toggle('text-white',    p === nome);
+      btn.classList.toggle('bg-slate-100',  p !== nome);
+      btn.classList.toggle('text-slate-600',p !== nome);
+    }
+  });
+  if (nome === 'espontanea') _escutaRenderEspontanea();
+  if (nome === 'relatorios') _escutaIniciarRelatorios();
+}
+
+function _escutaGestaoAba(nome) {
+  ['config','perguntas','pesqs','banco'].forEach(function(g) {
+    var el = document.getElementById('escuta-gestao-' + g);
+    if (el) el.classList.toggle('hidden', g !== nome);
+    var btn = document.getElementById('escuta-g-nav-' + g);
+    if (btn) {
+      btn.classList.toggle('bg-violet-600', g === nome);
+      btn.classList.toggle('text-white',    g === nome);
+      btn.classList.toggle('bg-slate-100',  g !== nome);
+      btn.classList.toggle('text-slate-600',g !== nome);
+    }
+  });
+}
+
+// ── Dashboard ─────────────────────────────────────────────────
+
+function _escutaPopularSelects() {
+  var periodos = _escutaCache.periodos;
+  ['escuta-sel-periodo','escuta-rel-periodo'].forEach(function(id) {
+    var sel = document.getElementById(id);
+    if (!sel) return;
+    sel.innerHTML = periodos.map(function(p, i) {
+      return '<option value="' + p + '"' + (i === 0 ? ' selected' : '') + '>' + p + '</option>';
+    }).join('');
+  });
+}
+
+function _escutaAtualizarDashboard() {
+  var periodo = (document.getElementById('escuta-sel-periodo') || {}).value || '';
+  var modo    = (document.getElementById('escuta-sel-modo')    || {}).value || 'geral';
+  showLoader(true);
+  GAS._call('obterDashboardEscuta', [{ periodo: periodo, modo: modo }], function(res) {
+    showLoader(false);
+    if (res && res.ok) {
+      _escutaCache.dashboard = res.dados;
+      _escutaRenderDashboard();
+    }
+  });
+}
+
+function _escutaRenderDashboard() {
+  var d = _escutaCache.dashboard;
+  if (!d) return;
+
+  // Confiança badge
+  var conf = d.confianca || {};
+  var badgeEl = document.getElementById('escuta-badge-confianca');
+  if (badgeEl) {
+    badgeEl.className = 'px-3 py-1.5 rounded-xl text-[10px] font-black uppercase ' +
+      (conf.suficiente ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700');
+    badgeEl.innerHTML = '<i class="fas fa-circle-dot mr-1"></i>' +
+      (conf.percentual || 0) + '% de resposta';
+  }
+
+  // Alerta de confiança insuficiente
+  var avisoEl = document.getElementById('escuta-aviso-confianca');
+  if (avisoEl) avisoEl.classList.toggle('hidden', conf.suficiente !== false);
+
+  // KPIs
+  var ind = d.indicadores || {};
+  var cg  = ind._climaGeral || {};
+  _escutaSetEl('escuta-kpi-clima',       cg.media ? cg.media.toFixed(1) : '—');
+  _escutaSetEl('escuta-kpi-clima-nivel', _escutaLabelNivel(cg.nivel));
+  _escutaSetEl('escuta-kpi-confianca',   (conf.percentual || 0) + '%');
+  _escutaSetEl('escuta-kpi-conf-detail', (conf.participantes || 0) + ' / ' + (conf.total || '?') + ' pessoas');
+  _escutaSetEl('escuta-kpi-alertas',     String(d.alertasAtivos || 0));
+
+  // Badge alertas no nav
+  var badgeA = document.getElementById('escuta-badge-alertas');
+  if (badgeA) {
+    var qtd = d.alertasAtivos || 0;
+    badgeA.textContent = qtd;
+    badgeA.classList.toggle('hidden', qtd === 0);
+  }
+
+  // Tendência
+  var tend = (d.tendencia || []);
+  if (tend.length >= 2) {
+    var ultimo   = tend[tend.length - 1];
+    var anterior = tend[tend.length - 2];
+    var diff = ultimo.climaGeral && anterior.climaGeral
+      ? (ultimo.climaGeral - anterior.climaGeral) : null;
+    _escutaSetEl('escuta-kpi-tendencia',
+      diff !== null ? (diff >= 0 ? '+' : '') + diff.toFixed(1) : '—');
+    _escutaSetEl('escuta-kpi-tend-detail',
+      diff !== null ? (diff >= 0 ? 'em alta' : 'em queda') + ' vs. período anterior' : '');
+  }
+
+  // Dimensões
+  _escutaRenderDimensoes(ind, d.bloqueado);
+
+  // Tendência chart
+  _escutaRenderTendenciaChart(d.tendencia || []);
+
+  // Saturação
+  _escutaRenderSaturacao(d.saturacao || [], d.saturacao && d.saturacao.meta);
+
+  // Estratificado
+  var blocoEst = document.getElementById('escuta-estratificado-bloco');
+  if (blocoEst) {
+    var modo = (document.getElementById('escuta-sel-modo') || {}).value;
+    blocoEst.classList.toggle('hidden', modo !== 'estratificado');
+    if (modo === 'estratificado' && d.estratificado) {
+      _escutaRenderEstratificado(d.estratificado, d.bloqueado);
+    }
+  }
+}
+
+function _escutaRenderDimensoes(ind, bloqueado) {
+  var el = document.getElementById('escuta-dimensoes-grid');
+  if (!el) return;
+
+  if (bloqueado) {
+    el.innerHTML = '<div class="col-span-2 text-center py-8 text-amber-600 text-xs bg-amber-50 rounded-xl">' +
+      '<i class="fas fa-lock mr-2"></i>Dados insuficientes para exibir indicadores. Aguarde mais respostas.</div>';
+    return;
+  }
+
+  var labels = {
+    energia:'Energia', carga:'Carga de Trabalho', clareza:'Clareza',
+    apoio:'Apoio', autonomia:'Autonomia', cultura:'Cultura',
+    lideranca:'Liderança', risco_psicossocial:'Risco Psicossocial (NR-1)'
+  };
+  var icons = {
+    energia:'fas fa-bolt', carga:'fas fa-weight-scale', clareza:'fas fa-bullseye',
+    apoio:'fas fa-hands-holding', autonomia:'fas fa-user-shield', cultura:'fas fa-star',
+    lideranca:'fas fa-chess-king', risco_psicossocial:'fas fa-triangle-exclamation'
+  };
+  var cores = {
+    excelente:'bg-green-100 text-green-700', bom:'bg-blue-100 text-blue-700',
+    regular:'bg-yellow-100 text-yellow-700', baixo:'bg-orange-100 text-orange-700',
+    critico:'bg-red-100 text-red-700', sem_dados:'bg-slate-100 text-slate-400'
+  };
+
+  el.innerHTML = ['energia','carga','clareza','apoio','autonomia','cultura','lideranca','risco_psicossocial']
+    .map(function(d) {
+      var i   = ind[d] || {};
+      var cor = cores[i.nivel] || cores.sem_dados;
+      var pct = i.media ? Math.round(((i.media - 1) / 4) * 100) : 0;
+      var barCor = (i.nivel === 'excelente' || i.nivel === 'bom') ? 'bg-green-400' :
+                   (i.nivel === 'regular')  ? 'bg-yellow-400' :
+                   (i.nivel === 'baixo' || i.nivel === 'critico') ? 'bg-red-400' : 'bg-slate-200';
+      return '<div class="flex items-center gap-3 p-3 rounded-xl ' + cor + '">' +
+        '<i class="' + (icons[d]||'fas fa-circle') + ' text-sm w-5 text-center"></i>' +
+        '<div class="flex-1 min-w-0">' +
+          '<div class="flex justify-between items-center mb-1">' +
+            '<span class="text-[10px] font-black uppercase tracking-wider">' + (labels[d]||d) + '</span>' +
+            '<span class="text-sm font-black">' + (i.media ? i.media.toFixed(1) : '—') + '</span>' +
+          '</div>' +
+          '<div class="w-full h-1.5 bg-white/50 rounded-full">' +
+            '<div class="h-1.5 rounded-full ' + barCor + '" style="width:' + pct + '%"></div>' +
+          '</div>' +
+          '<span class="text-[9px] mt-0.5 block">' + (i.n || 0) + ' respostas</span>' +
+        '</div></div>';
+    }).join('');
+}
+
+function _escutaRenderTendenciaChart(tendencia) {
+  var el = document.getElementById('escuta-tendencia-chart');
+  if (!el || !tendencia.length) return;
+
+  var max = 5;
+  el.innerHTML = tendencia.map(function(t) {
+    var pct = t.climaGeral ? Math.round((t.climaGeral / max) * 100) : 0;
+    var cor = pct >= 70 ? 'bg-green-500' : pct >= 50 ? 'bg-yellow-500' : 'bg-red-400';
+    return '<div class="flex items-center gap-3">' +
+      '<span class="text-[10px] font-mono text-slate-500 w-16 shrink-0">' + t.periodo + '</span>' +
+      '<div class="flex-1 h-6 bg-slate-100 rounded-lg overflow-hidden">' +
+        '<div class="h-full ' + cor + ' rounded-lg flex items-center px-2 transition-all" style="width:' + pct + '%">' +
+          (t.climaGeral ? '<span class="text-white text-[9px] font-black">' + t.climaGeral.toFixed(2) + '</span>' : '') +
+        '</div>' +
+      '</div>' +
+      '<span class="text-[10px] text-slate-400 w-12 text-right">' + (t.n || 0) + ' resp.</span>' +
+    '</div>';
+  }).join('');
+}
+
+function _escutaRenderSaturacao(saturacao, meta) {
+  var el = document.getElementById('escuta-saturacao-grid');
+  if (!el) return;
+  var labels = {
+    energia:'Energia', carga:'Carga', clareza:'Clareza', apoio:'Apoio',
+    autonomia:'Autonomia', cultura:'Cultura', lideranca:'Liderança',
+    risco_psicossocial:'Risco Psico.'
+  };
+  var porDimensao = {};
+  saturacao.forEach(function(s) { porDimensao[s.dimensao] = s; });
+
+  el.innerHTML = ['energia','carga','clareza','apoio','autonomia','cultura','lideranca','risco_psicossocial']
+    .map(function(d) {
+      var s   = porDimensao[d] || {};
+      var col = parseInt(s.coletados) || 0;
+      var m   = parseInt(s.meta || meta) || 10;
+      var pct = Math.min(100, Math.round((col / m) * 100));
+      var sat = s.saturado === 'true' || s.saturado === true;
+      var cor = sat ? 'bg-green-400' : (pct >= 60 ? 'bg-blue-400' : 'bg-slate-300');
+      return '<div class="flex items-center gap-2">' +
+        '<span class="text-[9px] text-slate-500 w-20 shrink-0">' + (labels[d]||d) + '</span>' +
+        '<div class="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">' +
+          '<div class="h-full rounded-full ' + cor + ' transition-all" style="width:' + pct + '%"></div>' +
+        '</div>' +
+        '<span class="text-[9px] text-slate-400 w-12 text-right">' + col + '/' + m + '</span>' +
+        (sat ? '<i class="fas fa-check-circle text-green-500 text-[10px]"></i>' : '') +
+      '</div>';
+    }).join('');
+}
+
+function _escutaRenderEstratificado(estratificado, bloqueado) {
+  var el = document.getElementById('escuta-estratificado-content');
+  if (!el) return;
+
+  if (bloqueado) {
+    el.innerHTML = '<p class="text-xs text-amber-600 bg-amber-50 rounded-xl p-3">Grupo muito pequeno para análise estratificada segura.</p>';
+    return;
+  }
+
+  var gaps = estratificado.gaps || [];
+  var gapsHtml = gaps.length
+    ? '<div class="space-y-2">' + gaps.map(function(g) {
+        return '<div class="flex items-start gap-3 p-3 bg-red-50 rounded-xl border border-red-100">' +
+          '<i class="fas fa-triangle-exclamation text-red-500 mt-0.5"></i>' +
+          '<div><p class="text-xs font-black text-red-800">Gap em ' + g.atributo + '</p>' +
+          '<p class="text-[10px] text-red-600">' +
+            g.menor.grupo + ' (' + g.menor.media.toFixed(1) + ') vs ' +
+            g.maior.grupo + ' (' + g.maior.media.toFixed(1) + ') — Δ' + g.gap + '</p>' +
+          '</div></div>';
+      }).join('') + '</div>'
+    : '<p class="text-xs text-green-700 bg-green-50 rounded-xl p-3"><i class="fas fa-check mr-1"></i>Nenhuma desigualdade estrutural significativa detectada neste período.</p>';
+
+  el.innerHTML = '<h4 class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Desigualdades Detectadas</h4>' + gapsHtml;
+}
+
+// ── Escuta Espontânea ─────────────────────────────────────────
+
+function _escutaRenderEspontanea() {
+  var d   = _escutaCache.dashboard;
+  var res = d && d.resumoEspontanea;
+  if (!res) return;
+
+  // Sentimentos
+  var sEl = document.getElementById('escuta-sentimentos-chart');
+  if (sEl) {
+    var s = res.sentimentos || {};
+    var total = (s.positivo||0) + (s.negativo||0) + (s.neutro||0) || 1;
+    sEl.innerHTML = [
+      { label: 'Positivo', val: s.positivo||0, cor: 'bg-green-500', emoji: '😊' },
+      { label: 'Neutro',   val: s.neutro  ||0, cor: 'bg-slate-400', emoji: '😐' },
+      { label: 'Negativo', val: s.negativo||0, cor: 'bg-red-400',   emoji: '😢' }
+    ].map(function(x) {
+      var pct = Math.round((x.val / total) * 100);
+      return '<div class="text-center">' +
+        '<div class="text-2xl mb-1">' + x.emoji + '</div>' +
+        '<div class="text-xl font-black text-slate-800">' + pct + '%</div>' +
+        '<div class="text-[10px] text-slate-500 uppercase font-black">' + x.label + '</div>' +
+        '<div class="mt-1 h-1.5 bg-slate-100 rounded-full">' +
+          '<div class="h-1.5 ' + x.cor + ' rounded-full" style="width:' + pct + '%"></div>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+  }
+
+  // Categorias
+  var cEl = document.getElementById('escuta-categorias-chart');
+  if (cEl) {
+    var cats = res.categorias || {};
+    var total2 = Object.values(cats).reduce(function(s, v) { return s + v; }, 0) || 1;
+    var labels = { apoio:'Apoio', carga:'Carga', comunicacao:'Comunicação',
+                   conflito:'Conflito', lideranca:'Liderança', positivo:'Positivo',
+                   ambiente:'Ambiente', outro:'Outro' };
+    cEl.innerHTML = Object.keys(cats).sort(function(a,b){return cats[b]-cats[a];}).map(function(k) {
+      var pct = Math.round((cats[k] / total2) * 100);
+      return '<div class="flex items-center gap-2 mb-2">' +
+        '<span class="text-[10px] text-slate-500 w-24 shrink-0">' + (labels[k]||k) + '</span>' +
+        '<div class="flex-1 h-3 bg-slate-100 rounded-full overflow-hidden">' +
+          '<div class="h-3 bg-violet-400 rounded-full" style="width:' + pct + '%"></div>' +
+        '</div>' +
+        '<span class="text-[10px] font-black text-slate-700 w-8 text-right">' + cats[k] + '</span>' +
+      '</div>';
+    }).join('') || '<p class="text-xs text-slate-400 italic">Sem registros no período.</p>';
+  }
+}
+
+function _escutaEnviarEspontanea() {
+  var cfg = _escutaCache.config || {};
+  if (cfg.ativo === 'false' || cfg.ativoEspontanea === 'false') {
+    Swal.fire('Escuta desativada', 'A escuta espontânea está temporariamente inativa.', 'info');
+    return;
+  }
+  var categoria = document.getElementById('escuta-espontanea-categoria').value;
+  var texto     = (document.getElementById('escuta-espontanea-texto').value || '').trim();
+  var anonimo   = document.getElementById('escuta-espontanea-anonimo').checked;
+
+  GAS._call('registrarEscutaEspontanea', [{ categoria: categoria, texto: texto, anonimo: anonimo }],
+    function(res) {
+      if (res && res.ok) {
+        Swal.fire({ icon: 'success', title: 'Registrado', text: 'Sua escuta foi registrada. Obrigado!',
+          timer: 2500, showConfirmButton: false });
+        document.getElementById('escuta-espontanea-texto').value = '';
+        _escutaRecarregar();
+      } else {
+        Swal.fire('Erro', res ? res.msg : 'Erro ao registrar.', 'error');
+      }
+    });
+}
+
+// ── Alertas ───────────────────────────────────────────────────
+
+function _escutaCarregarAlertas() {
+  GAS._call('obterAlertasEscuta', [], function(res) {
+    if (res && res.ok) {
+      _escutaCache.alertas = res.dados || [];
+      _escutaRenderAlertas();
+    }
+  });
+}
+
+function _escutaRenderAlertas() {
+  var el  = document.getElementById('escuta-alertas-lista');
+  if (!el) return;
+  var lst = _escutaCache.alertas || [];
+
+  if (!lst.length) {
+    el.innerHTML = '<div class="text-center py-12 text-slate-400 text-xs">' +
+      '<i class="fas fa-check-circle text-3xl text-green-300 mb-3 block"></i>Nenhum alerta ativo neste período.</div>';
+    return;
+  }
+
+  var cores = { critico:'red', alto:'orange', moderado:'amber', baixo:'slate' };
+  el.innerHTML = lst.map(function(a) {
+    var c = cores[a.nivel] || 'slate';
+    return '<div class="p-4 hover:bg-slate-50 transition-colors">' +
+      '<div class="flex items-start gap-3">' +
+        '<span class="mt-0.5 w-6 h-6 flex items-center justify-center rounded-full bg-' + c + '-100">' +
+          '<i class="fas fa-triangle-exclamation text-' + c + '-600 text-[10px]"></i>' +
+        '</span>' +
+        '<div class="flex-1">' +
+          '<div class="flex items-center gap-2 flex-wrap">' +
+            '<span class="text-xs font-black text-slate-800">' + escaparHTML(a.tipo || '') + '</span>' +
+            '<span class="text-[9px] font-black px-1.5 py-0.5 rounded-full bg-' + c + '-100 text-' + c + '-700 uppercase">' + (a.nivel || '') + '</span>' +
+          '</div>' +
+          '<p class="text-[10px] text-slate-500 mt-1">' + escaparHTML(a.descricao || '') + '</p>' +
+          '<p class="text-[9px] text-slate-400 mt-0.5">' + _escutaFmtData(a.timestamp) + '</p>' +
+        '</div>' +
+        '<button onclick="_escutaResolverAlerta(\'' + escaparHTML(a.id) + '\')" ' +
+          'class="text-[9px] bg-green-100 hover:bg-green-200 text-green-700 font-black px-2 py-1 rounded-lg transition-all shrink-0">Resolver</button>' +
+      '</div></div>';
+  }).join('');
+}
+
+function _escutaResolverAlerta(id) {
+  Swal.fire({
+    title: 'Resolver Alerta', input: 'textarea',
+    inputPlaceholder: 'Descreva a ação tomada...',
+    showCancelButton: true, confirmButtonText: 'Resolver', cancelButtonText: 'Cancelar',
+    confirmButtonColor: '#7c3aed'
+  }).then(function(result) {
+    if (!result.isConfirmed) return;
+    GAS._call('resolverAlertaEscuta', [id, result.value], function(res) {
+      if (res && res.ok) {
+        Swal.fire({ icon: 'success', title: 'Resolvido', timer: 1800, showConfirmButton: false });
+        _escutaCarregarAlertas();
+      }
+    });
+  });
+}
+
+// ── Relatórios ────────────────────────────────────────────────
+
+function _escutaIniciarRelatorios() {
+  _escutaPopularSelects();
+}
+
+function _escutaGerarRelatorio() {
+  var tipo    = (document.getElementById('escuta-rel-tipo')    || {}).value || 'institucional';
+  var periodo = (document.getElementById('escuta-rel-periodo') || {}).value || '';
+  showLoader(true);
+  GAS._call('gerarRelatorioEscuta', [tipo, periodo], function(res) {
+    showLoader(false);
+    if (!res || !res.ok) { Swal.fire('Erro', res ? res.msg : 'Erro.', 'error'); return; }
+    _escutaRenderRelatorio(res.dados);
+  });
+}
+
+function _escutaRenderRelatorio(rel) {
+  var el = document.getElementById('escuta-relatorio-preview');
+  if (!el || !rel) return;
+  var conf = rel.confianca || {};
+  var ind  = rel.indicadores || {};
+  var cg   = ind._climaGeral || {};
+  var recs = rel.recomendacoes || [];
+
+  el.innerHTML =
+    '<div class="space-y-4">' +
+      '<div class="bg-violet-50 rounded-xl p-4 flex justify-between items-start">' +
+        '<div>' +
+          '<p class="font-black text-violet-900 text-sm uppercase">' + (rel.tipo||'').replace(/_/g,' ') + '</p>' +
+          '<p class="text-[10px] text-violet-600">Período: ' + (rel.periodo||'') + '</p>' +
+          '<p class="text-[10px] text-violet-600">Gerado em: ' + _escutaFmtData(rel.geradoEm) + '</p>' +
+        '</div>' +
+        '<div class="text-right">' +
+          '<p class="font-black text-violet-800 text-lg">' + (cg.media ? cg.media.toFixed(2) : '—') + '</p>' +
+          '<p class="text-[10px] text-violet-600">Clima Geral</p>' +
+        '</div>' +
+      '</div>' +
+      '<div class="grid grid-cols-3 gap-2">' +
+        '<div class="text-center bg-slate-50 rounded-xl p-3"><p class="text-lg font-black text-slate-800">' + (conf.percentual||0) + '%</p><p class="text-[10px] text-slate-500">Confiança</p></div>' +
+        '<div class="text-center bg-slate-50 rounded-xl p-3"><p class="text-lg font-black text-slate-800">' + (conf.participantes||0) + '</p><p class="text-[10px] text-slate-500">Participantes</p></div>' +
+        '<div class="text-center bg-slate-50 rounded-xl p-3"><p class="text-lg font-black text-slate-800">' + (rel.alertas && rel.alertas.total||0) + '</p><p class="text-[10px] text-slate-500">Alertas</p></div>' +
+      '</div>' +
+      (recs.length ? '<div><p class="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Recomendações</p>' +
+        recs.map(function(r) {
+          var cor = r.prioridade === 'critica' ? 'red' : r.prioridade === 'alta' ? 'orange' : 'amber';
+          return '<div class="flex items-start gap-2 p-2 bg-' + cor + '-50 rounded-lg mb-1">' +
+            '<i class="fas fa-arrow-right text-' + cor + '-500 mt-0.5 text-[10px]"></i>' +
+            '<p class="text-[10px] text-' + cor + '-800">' + escaparHTML(r.acao) + '</p></div>';
+        }).join('') + '</div>' : '') +
+    '</div>';
+}
+
+// ── Configuração ──────────────────────────────────────────────
+
+function _escutaRenderConfig() {
+  var cfg = _escutaCache.config || {};
+  _escutaSetChk('cfg-ativo',             cfg.ativo             !== 'false');
+  _escutaSetChk('cfg-ativoPadrao',       cfg.ativoPadrao       !== 'false');
+  _escutaSetChk('cfg-ativoPersonalizado',cfg.ativoPersonalizado!== 'false');
+  _escutaSetChk('cfg-ativoEspontanea',   cfg.ativoEspontanea   !== 'false');
+  _escutaSetVal('cfg-limiteDia',         cfg.limiteDia         || '3');
+  _escutaSetVal('cfg-antiSpamHoras',     cfg.antiSpamHoras     || '4');
+  _escutaSetVal('cfg-grupoMinimo',       cfg.grupoMinimo       || '5');
+}
+
+function _escutaSalvarConfig() {
+  var novosCfg = {
+    ativo:              document.getElementById('cfg-ativo').checked             ? 'true' : 'false',
+    ativoPadrao:        document.getElementById('cfg-ativoPadrao').checked       ? 'true' : 'false',
+    ativoPersonalizado: document.getElementById('cfg-ativoPersonalizado').checked? 'true' : 'false',
+    ativoEspontanea:    document.getElementById('cfg-ativoEspontanea').checked   ? 'true' : 'false',
+    limiteDia:          document.getElementById('cfg-limiteDia').value,
+    antiSpamHoras:      document.getElementById('cfg-antiSpamHoras').value,
+    grupoMinimo:        document.getElementById('cfg-grupoMinimo').value
+  };
+  GAS._call('salvarConfiguracaoEscuta', [novosCfg], function(res) {
+    var ok = document.getElementById('cfg-status-msg');
+    var er = document.getElementById('cfg-erro-msg');
+    if (res && res.ok) {
+      Object.assign(_escutaCache.config, novosCfg);
+      if (ok) { ok.classList.remove('hidden'); setTimeout(function() { ok.classList.add('hidden'); }, 2000); }
+    } else {
+      if (er) { er.classList.remove('hidden'); setTimeout(function() { er.classList.add('hidden'); }, 3000); }
+    }
+  });
+}
+
+// ── Perguntas padrão ──────────────────────────────────────────
+
+function _escutaRenderPerguntas() {
+  var el = document.getElementById('escuta-perguntas-lista');
+  if (!el) return;
+  var perguntas = _escutaCache.perguntas || [];
+  if (!perguntas.length) { el.innerHTML = '<div class="p-6 text-center text-xs text-slate-400">Sem perguntas.</div>'; return; }
+
+  var labels = {
+    energia:'Energia', carga:'Carga', clareza:'Clareza', apoio:'Apoio',
+    autonomia:'Autonomia', cultura:'Cultura', lideranca:'Liderança', risco_psicossocial:'Risco Psico.'
+  };
+
+  el.innerHTML = perguntas.map(function(p) {
+    var ativa = p.ativa !== false && p.ativa !== 'false';
+    return '<div class="p-4 flex items-start gap-3 hover:bg-slate-50 transition-colors">' +
+      '<div class="relative inline-flex items-center mt-0.5">' +
+        '<input type="checkbox" ' + (ativa ? 'checked' : '') + ' class="sr-only peer" id="pq-' + p.id + '"' +
+          ' onchange="_escutaTogglePergunta(\'' + p.id + '\', this.checked)">' +
+        '<div class="w-8 h-4 bg-slate-200 peer-checked:bg-violet-600 rounded-full transition-all peer-checked:after:translate-x-full after:content-[\'\'] after:absolute after:top-0 after:left-0 after:w-4 after:h-4 after:bg-white after:rounded-full after:transition-all after:shadow-sm"></div>' +
+      '</div>' +
+      '<div class="flex-1">' +
+        '<p class="text-xs font-semibold text-slate-700">' + escaparHTML(p.texto) + '</p>' +
+        '<div class="flex gap-2 mt-1">' +
+          '<span class="text-[9px] bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded-full font-black">' + (labels[p.dimensao]||p.dimensao) + '</span>' +
+          '<span class="text-[9px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded-full">' + (p.tipo||'') + '</span>' +
+          '<span class="text-[9px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded-full">' + (p.tipoTempo||'') + '</span>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function _escutaTogglePergunta(id, ativo) {
+  GAS._call('atualizarPerguntaEscuta', [id, { ativa: ativo }], function(res) {
+    if (res && res.ok) {
+      var p = (_escutaCache.perguntas || []).find(function(x) { return x.id === id; });
+      if (p) p.ativa = ativo;
+    }
+  });
+}
+
+// ── Pesquisas personalizadas ──────────────────────────────────
+
+function _escutaDirLabel(dir) {
+  if (!dir) return '';
+  var partes = [];
+  var labels = { vinculo:'Vínculo', nivelFuncao:'Nível', tempoCasa:'Casa', setores:'Setor' };
+  Object.keys(labels).forEach(function(k) {
+    if (Array.isArray(dir[k]) && dir[k].length) partes.push(labels[k] + ': ' + dir[k].join(', '));
+  });
+  return partes.join(' · ');
+}
+
+function _escutaRenderPesquisas() {
+  var el  = document.getElementById('escuta-pesqs-lista');
+  if (!el) return;
+  var lst = _escutaCache.pesquisas || [];
+  if (!lst.length) {
+    el.innerHTML = '<div class="p-6 text-center text-xs text-slate-400">Nenhuma pesquisa personalizada. <button onclick="_escutaAbrirModalPesquisa()" class="text-violet-600 font-black underline">Criar primeira</button></div>';
+    return;
+  }
+  el.innerHTML = lst.map(function(p) {
+    var ativa   = p.status === 'ativo';
+    var novoSt  = ativa ? 'inativo' : 'ativo';
+    var dirInfo = _escutaDirLabel(p.direcionamento);
+    return '<div class="p-4 hover:bg-slate-50 transition-colors">' +
+      '<div class="flex items-start gap-3">' +
+        // Toggle de ativação inline
+        '<div class="relative inline-flex items-center mt-0.5 shrink-0">' +
+          '<input type="checkbox" ' + (ativa ? 'checked' : '') + ' class="sr-only peer" id="pesq-toggle-' + p.id + '"' +
+            ' onchange="_escutaToggleStatusPesquisa(\'' + escaparHTML(p.id) + '\', this.checked)">' +
+          '<div class="w-8 h-4 bg-slate-200 peer-checked:bg-violet-600 rounded-full transition-all peer-checked:after:translate-x-full after:content-[\'\'] after:absolute after:top-0 after:left-0 after:w-4 after:h-4 after:bg-white after:rounded-full after:transition-all after:shadow-sm"></div>' +
+        '</div>' +
+        '<div class="flex-1 min-w-0">' +
+          '<div class="flex items-center gap-2 flex-wrap">' +
+            '<p class="text-xs font-black text-slate-800">' + escaparHTML(p.titulo||'') + '</p>' +
+            (ativa
+              ? '<span class="text-[8px] bg-green-100 text-green-700 font-black px-1.5 py-0.5 rounded-full uppercase">Ativa</span>'
+              : '<span class="text-[8px] bg-slate-100 text-slate-500 font-black px-1.5 py-0.5 rounded-full uppercase">Inativa</span>') +
+            (p.direcionamento ? '<span class="text-[8px] bg-violet-100 text-violet-700 font-black px-1.5 py-0.5 rounded-full uppercase">Direcionada</span>' : '') +
+          '</div>' +
+          '<p class="text-[10px] text-slate-400 mt-0.5">' +
+            (p.periodoInicio||'—') + ' → ' + (p.periodoFim||'—') +
+            ' · ' + (Array.isArray(p.perguntas) ? p.perguntas.length : 0) + ' pergunta' + (Array.isArray(p.perguntas) && p.perguntas.length !== 1 ? 's' : '') +
+            ' · prioridade ' + (p.prioridade||1) +
+          '</p>' +
+          (dirInfo ? '<p class="text-[9px] text-violet-600 mt-1"><i class="fas fa-crosshairs mr-1"></i>' + escaparHTML(dirInfo) + '</p>' : '') +
+        '</div>' +
+        '<div class="flex gap-1 shrink-0">' +
+          '<button onclick="_escutaEditarPesquisa(\'' + escaparHTML(p.id) + '\')" class="text-[9px] bg-blue-100 hover:bg-blue-200 text-blue-700 font-black px-2 py-1 rounded-lg transition-all">Editar</button>' +
+          '<button onclick="_escutaExcluirPesquisa(\'' + escaparHTML(p.id) + '\')" class="text-[9px] bg-red-100 hover:bg-red-200 text-red-700 font-black px-2 py-1 rounded-lg transition-all">Excluir</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function _escutaToggleStatusPesquisa(id, ativar) {
+  var p = (_escutaCache.pesquisas || []).find(function(x) { return x.id === id; });
+  if (!p) return;
+  var dados = Object.assign({}, p, { status: ativar ? 'ativo' : 'inativo' });
+  GAS._call('salvarPesquisaEscuta', [dados], function(res) {
+    if (res && res.ok) {
+      p.status = dados.status;
+      _escutaRenderPesquisas();
+    } else {
+      // Reverte o toggle visual em caso de erro
+      var chk = document.getElementById('pesq-toggle-' + id);
+      if (chk) chk.checked = !ativar;
+      Swal.fire('Erro', res ? res.msg : 'Erro ao salvar.', 'error');
+    }
+  });
+}
+
+function _escutaAbrirModalPesquisa(id) {
+  document.getElementById('modal-pesq-id').value      = id || '';
+  document.getElementById('escuta-modal-pesquisa-titulo').textContent = id ? 'Editar Pesquisa' : 'Nova Pesquisa';
+  document.getElementById('modal-pesq-titulo').value  = '';
+  document.getElementById('modal-pesq-status').value  = 'ativo';
+  document.getElementById('modal-pesq-inicio').value  = '';
+  document.getElementById('modal-pesq-fim').value     = '';
+  document.getElementById('modal-pesq-prioridade').value = '1';
+  document.getElementById('modal-pesq-perguntas').innerHTML = '<p class="text-xs text-slate-400 italic">Nenhuma pergunta adicionada.</p>';
+  _escutaAbaPesquisasPerguntas = [];
+
+  // Limpa todas as seleções de direcionamento
+  ['dir-vinculo','dir-nivel','dir-tempoCasa','dir-setor'].forEach(function(selId) {
+    var sel = document.getElementById(selId);
+    if (sel) Array.from(sel.options).forEach(function(o) { o.selected = false; });
+  });
+
+  // Popula dir-setor com setores da base de configuração (primeira vez)
+  var dirSetor = document.getElementById('dir-setor');
+  if (dirSetor && dirSetor.options.length === 0) {
+    (AppState.colecoes?.setores || []).filter(Boolean).forEach(function(s) {
+      var o = document.createElement('option'); o.value = s; o.textContent = s; dirSetor.appendChild(o);
+    });
+  }
+
+  if (id) {
+    var p = (_escutaCache.pesquisas || []).find(function(x) { return x.id === id; });
+    if (p) {
+      document.getElementById('modal-pesq-titulo').value     = p.titulo    || '';
+      document.getElementById('modal-pesq-status').value     = p.status    || 'ativo';
+      document.getElementById('modal-pesq-inicio').value     = p.periodoInicio || '';
+      document.getElementById('modal-pesq-fim').value        = p.periodoFim    || '';
+      document.getElementById('modal-pesq-prioridade').value = p.prioridade    || 1;
+      _escutaAbaPesquisasPerguntas = Array.isArray(p.perguntas) ? p.perguntas.slice() : [];
+      _escutaRenderPerguntasModal();
+
+      // Restaura seleções de direcionamento
+      var dir = p.direcionamento || {};
+      var mapa = { 'dir-vinculo': dir.vinculo, 'dir-nivel': dir.nivelFuncao, 'dir-tempoCasa': dir.tempoCasa, 'dir-setor': dir.setores };
+      Object.keys(mapa).forEach(function(selId) {
+        var vals = mapa[selId];
+        if (!Array.isArray(vals) || !vals.length) return;
+        var sel = document.getElementById(selId);
+        if (!sel) return;
+        Array.from(sel.options).forEach(function(o) { o.selected = vals.includes(o.value); });
+      });
+    }
+  }
+  document.getElementById('escuta-modal-pesquisa').classList.remove('hidden');
+}
+
+function _escutaFecharModalPesquisa() {
+  document.getElementById('escuta-modal-pesquisa').classList.add('hidden');
+}
+
+function _escutaEditarPesquisa(id) { _escutaAbrirModalPesquisa(id); }
+
+function _escutaAdicionarPerguntaModal() {
+  Swal.fire({
+    title: 'Nova Pergunta',
+    html: '<input id="swal-ptexto" class="swal2-input" placeholder="Texto da pergunta">' +
+          '<select id="swal-pdim" class="swal2-select" style="margin-top:10px">' +
+            ['energia','carga','clareza','apoio','autonomia','cultura','lideranca','risco_psicossocial']
+            .map(function(d){ return '<option value="'+d+'">'+d+'</option>'; }).join('') +
+          '</select>' +
+          '<select id="swal-ptipo" class="swal2-select" style="margin-top:10px">' +
+            '<option value="escala">Escala (1–5)</option><option value="emoji">Emojis</option><option value="texto">Texto livre</option>' +
+          '</select>' +
+          '<select id="swal-pttempo" class="swal2-select" style="margin-top:10px">' +
+            '<option value="instantanea">Instantânea</option><option value="acumulativa">Acumulativa (≥50%)</option><option value="final">Final (≥75%)</option>' +
+          '</select>',
+    showCancelButton: true, confirmButtonText: 'Adicionar', confirmButtonColor: '#7c3aed',
+    preConfirm: function() {
+      var t = document.getElementById('swal-ptexto').value.trim();
+      if (!t) { Swal.showValidationMessage('Texto obrigatório'); return false; }
+      return {
+        id:        'C' + Date.now(),
+        texto:     t,
+        dimensao:  document.getElementById('swal-pdim').value,
+        tipo:      document.getElementById('swal-ptipo').value,
+        tipoTempo: document.getElementById('swal-pttempo').value,
+        peso:      1.0, ativa: true
+      };
+    }
+  }).then(function(result) {
+    if (result.isConfirmed && result.value) {
+      _escutaAbaPesquisasPerguntas.push(result.value);
+      _escutaRenderPerguntasModal();
+    }
+  });
+}
+
+function _escutaRenderPerguntasModal() {
+  var el = document.getElementById('modal-pesq-perguntas');
+  if (!el) return;
+  if (!_escutaAbaPesquisasPerguntas.length) {
+    el.innerHTML = '<p class="text-xs text-slate-400 italic">Nenhuma pergunta adicionada.</p>';
+    return;
+  }
+  el.innerHTML = _escutaAbaPesquisasPerguntas.map(function(p, i) {
+    return '<div class="flex items-start gap-2 p-2 bg-slate-50 rounded-xl">' +
+      '<span class="text-[10px] text-slate-400 font-mono mt-1">' + (i+1) + '.</span>' +
+      '<div class="flex-1">' +
+        '<p class="text-xs font-semibold text-slate-700">' + escaparHTML(p.texto) + '</p>' +
+        '<p class="text-[9px] text-slate-400">' + p.dimensao + ' · ' + p.tipo + ' · ' + p.tipoTempo + '</p>' +
+      '</div>' +
+      '<button onclick="_escutaRemoverPerguntaModal(' + i + ')" class="text-red-400 hover:text-red-600 text-[10px]">' +
+        '<i class="fas fa-times"></i></button>' +
+    '</div>';
+  }).join('');
+}
+
+function _escutaRemoverPerguntaModal(i) {
+  _escutaAbaPesquisasPerguntas.splice(i, 1);
+  _escutaRenderPerguntasModal();
+}
+
+function _escutaSalvarPesquisaModal() {
+  var id        = document.getElementById('modal-pesq-id').value;
+  var titulo    = document.getElementById('modal-pesq-titulo').value.trim();
+  var inicio    = document.getElementById('modal-pesq-inicio').value;
+  var fim       = document.getElementById('modal-pesq-fim').value;
+  var status    = document.getElementById('modal-pesq-status').value;
+  var prioridade = parseInt(document.getElementById('modal-pesq-prioridade').value) || 1;
+
+  if (!titulo)  { Swal.fire('Validação', 'Título obrigatório.', 'warning'); return; }
+  if (!inicio)  { Swal.fire('Validação', 'Data de início obrigatória.', 'warning'); return; }
+  if (!fim)     { Swal.fire('Validação', 'Data de fim obrigatória.', 'warning'); return; }
+
+  // Coletar direcionamento
+  function _selVals(id) {
+    var sel = document.getElementById(id);
+    if (!sel) return [];
+    return Array.from(sel.selectedOptions).map(function(o) { return o.value; });
+  }
+  var dir = {
+    vinculo:     _selVals('dir-vinculo'),
+    nivelFuncao: _selVals('dir-nivel'),
+    tempoCasa:   _selVals('dir-tempoCasa'),
+    setores:     _selVals('dir-setor')
+  };
+  var temDir = Object.values(dir).some(function(v) { return v.length > 0; });
+
+  var dados = {
+    id: id || null,
+    titulo: titulo, perguntas: _escutaAbaPesquisasPerguntas,
+    periodoInicio: inicio, periodoFim: fim, status: status, prioridade: prioridade,
+    direcionamento: temDir ? dir : null
+  };
+
+  GAS._call('salvarPesquisaEscuta', [dados], function(res) {
+    if (res && res.ok) {
+      _escutaFecharModalPesquisa();
+      Swal.fire({ icon: 'success', title: 'Salvo', timer: 1800, showConfirmButton: false });
+      _escutaRecarregar();
+    } else {
+      Swal.fire('Erro', res ? res.msg : 'Erro.', 'error');
+    }
+  });
+}
+
+function _escutaExcluirPesquisa(id) {
+  Swal.fire({
+    title: 'Excluir pesquisa?', text: 'Esta ação não pode ser desfeita.',
+    icon: 'warning', showCancelButton: true, confirmButtonColor: '#dc2626',
+    confirmButtonText: 'Excluir', cancelButtonText: 'Cancelar'
+  }).then(function(r) {
+    if (!r.isConfirmed) return;
+    GAS._call('excluirPesquisaEscuta', [id], function(res) {
+      if (res && res.ok) {
+        Swal.fire({ icon: 'success', title: 'Excluído', timer: 1500, showConfirmButton: false });
+        _escutaRecarregar();
+      }
+    });
+  });
+}
+
+// ── Banco de Templates ────────────────────────────────────────
+
+function _escutaRenderBanco() {
+  var el  = document.getElementById('escuta-banco-lista');
+  if (!el) return;
+  var lst = _escutaCache.banco || [];
+  if (!lst.length) {
+    el.innerHTML = '<div class="p-6 text-center text-xs text-slate-400">Nenhum template no banco.</div>';
+    return;
+  }
+  el.innerHTML = lst.map(function(t) {
+    return '<div class="p-4 hover:bg-slate-50 transition-colors">' +
+      '<div class="flex justify-between items-start gap-2">' +
+        '<div>' +
+          '<p class="text-xs font-black text-slate-800">' + escaparHTML(t.titulo||'') + '</p>' +
+          '<p class="text-[10px] text-slate-400">' + escaparHTML(t.descricao||'') + ' · ' +
+            (Array.isArray(t.perguntas) ? t.perguntas.length : 0) + ' perguntas' +
+            (t.tema ? ' · ' + escaparHTML(t.tema) : '') + '</p>' +
+        '</div>' +
+        '<button onclick="_escutaUsarTemplate(\'' + t.id + '\')"' +
+          ' class="text-[9px] bg-violet-100 hover:bg-violet-200 text-violet-700 font-black px-2 py-1 rounded-lg shrink-0">Usar</button>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function _escutaAbrirModalTemplate() {
+  Swal.fire({
+    title: 'Novo Template',
+    html: '<input id="tmpl-titulo"    class="swal2-input" placeholder="Título do template">' +
+          '<input id="tmpl-descricao" class="swal2-input" placeholder="Descrição">' +
+          '<input id="tmpl-tema"      class="swal2-input" placeholder="Tema (ex: bem-estar, liderança)">',
+    showCancelButton: true, confirmButtonText: 'Criar', confirmButtonColor: '#7c3aed',
+    preConfirm: function() {
+      var t = document.getElementById('tmpl-titulo').value.trim();
+      if (!t) { Swal.showValidationMessage('Título obrigatório'); return false; }
+      return { titulo: t, descricao: document.getElementById('tmpl-descricao').value,
+               tema: document.getElementById('tmpl-tema').value, perguntas: [] };
+    }
+  }).then(function(r) {
+    if (!r.isConfirmed) return;
+    GAS._call('salvarTemplateBancoPesquisas', [r.value], function(res) {
+      if (res && res.ok) {
+        Swal.fire({ icon: 'success', title: 'Template criado', timer: 1500, showConfirmButton: false });
+        _escutaRecarregar();
+      }
+    });
+  });
+}
+
+function _escutaUsarTemplate(id) {
+  var t = (_escutaCache.banco || []).find(function(x) { return x.id === id; });
+  if (!t) return;
+  _escutaGestaoAba('pesqs');
+  _escutaAbrirModalPesquisa();
+  document.getElementById('modal-pesq-titulo').value = t.titulo || '';
+  _escutaAbaPesquisasPerguntas = Array.isArray(t.perguntas) ? t.perguntas.slice() : [];
+  _escutaRenderPerguntasModal();
+}
+
+// ── Perfil Analítico ──────────────────────────────────────────
+
+function _escutaPreencherPerfil(p) {
+  if (!p) return;
+  _escutaSetVal('perfil-genero',       p.genero            || '');
+  _escutaSetVal('perfil-raca',         p.raca              || '');
+  _escutaSetVal('perfil-orientacao',   p.orientacaoSexual  || '');
+  _escutaSetVal('perfil-faixaSalarial',p.faixaSalarial     || '');
+  _escutaSetVal('perfil-vinculo',      p.vinculo           || '');
+  _escutaSetVal('perfil-nivel',        p.nivel             || '');
+  _escutaSetVal('perfil-tempoCasa',    p.tempoCasa         || '');
+  _escutaSetVal('perfil-regiao',       p.regiao            || '');
+}
+
+function _escutaSalvarPerfil() {
+  var dados = {
+    genero:           (_val('perfil-genero')       || ''),
+    raca:             (_val('perfil-raca')         || ''),
+    orientacaoSexual: (_val('perfil-orientacao')   || ''),
+    faixaSalarial:    (_val('perfil-faixaSalarial')|| ''),
+    vinculo:          (_val('perfil-vinculo')      || ''),
+    nivel:            (_val('perfil-nivel')        || ''),
+    tempoCasa:        (_val('perfil-tempoCasa')    || ''),
+    regiao:           (_val('perfil-regiao')       || '')
+  };
+  GAS._call('salvarPerfilAnaliticoEscuta', [dados], function(res) {
+    if (res && res.ok) {
+      Swal.fire({ icon: 'success', title: 'Perfil salvo', timer: 1800, showConfirmButton: false });
+      _escutaCache.perfil = dados;
+    } else {
+      Swal.fire('Erro', res ? res.msg : 'Erro.', 'error');
+    }
+  });
+}
+
+// ── Widget Pulse ──────────────────────────────────────────────
+
+function _escutaAgendarWidget() {
+  if (_escutaWidgetTimer) clearTimeout(_escutaWidgetTimer);
+  var cfg = _escutaCache.config || {};
+  if (cfg.ativo === 'false') return;
+
+  // Verificar após 8 minutos de inatividade para exibir
+  _escutaWidgetTimer = setTimeout(function() {
+    _escutaVerificarExibirWidget();
+  }, 8 * 60 * 1000);
+}
+
+function _escutaVerificarExibirWidget() {
+  GAS._call('obterPerguntaPulse', [], function(res) {
+    if (!res || !res.ok || !res.pergunta) {
+      // Tentar novamente em 15 minutos
+      _escutaWidgetTimer = setTimeout(_escutaVerificarExibirWidget, 15 * 60 * 1000);
+      return;
+    }
+    _escutaExibirWidget(res.pergunta, res.sourcePesquisaId);
+  });
+}
+
+function _escutaExibirWidget(pergunta, pesquisaId) {
+  if (!pergunta) return;
+  _escutaCache.widgetPergunta   = pergunta;
+  _escutaCache.widgetPesquisaId = pesquisaId || null;
+
+  var el = document.getElementById('escuta-pulse-widget');
+  var pq = document.getElementById('escuta-widget-pergunta');
+  var escEl  = document.getElementById('escuta-widget-escala');
+  var emoEl  = document.getElementById('escuta-widget-emoji');
+
+  if (!el || !pq) return;
+  pq.textContent = pergunta.texto || '';
+
+  var tipo = pergunta.tipo || 'escala';
+  if (escEl) escEl.classList.toggle('hidden', tipo === 'emoji');
+  if (emoEl) emoEl.classList.toggle('hidden', tipo !== 'emoji');
+
+  el.classList.remove('hidden');
+  el.style.animation = 'slideInRight 0.3s ease-out';
+}
+
+function _escutaDismissWidget() {
+  var el = document.getElementById('escuta-pulse-widget');
+  if (el) el.classList.add('hidden');
+  // Tentar novamente em 30 minutos
+  _escutaWidgetTimer = setTimeout(_escutaVerificarExibirWidget, 30 * 60 * 1000);
+}
+
+function _escutaResponderWidget(valor) {
+  var p = _escutaCache.widgetPergunta;
+  if (!p) return;
+
+  var anonimo = (document.getElementById('escuta-widget-anonimo') || {}).checked !== false;
+  var dados   = {
+    perguntaId:      p.id,
+    resposta:        valor,
+    dimensao:        p.dimensao,
+    tipo:            p.tipo,
+    tipoTempo:       p.tipoTempo,
+    anonimo:         anonimo,
+    sourcePesquisaId:_escutaCache.widgetPesquisaId || ''
+  };
+
+  GAS._call('registrarRespostaPulse', [dados], function(res) {
+    var el = document.getElementById('escuta-pulse-widget');
+    if (el) {
+      el.innerHTML = '<div class="p-6 text-center"><i class="fas fa-heart text-violet-500 text-2xl mb-2"></i>' +
+        '<p class="font-black text-slate-700 text-sm">Obrigado pela resposta!</p>' +
+        '<p class="text-xs text-slate-400 mt-1">Sua contribuição fortalece a instituição.</p></div>';
+      setTimeout(function() { el.classList.add('hidden'); }, 3000);
+    }
+    _escutaCache.widgetPergunta = null;
+  });
+}
+
+// ── Feedback loop ─────────────────────────────────────────────
+
+function _escutaCarregarFeedback() {
+  GAS._call('obterFeedbackEscuta', [], function(res) {
+    if (!res || !res.ok || !res.dados || !res.dados.length) return;
+    var el = document.getElementById('escuta-acoes-feedback');
+    if (!el) return;
+    el.innerHTML = res.dados.map(function(a) {
+      return '<div class="flex items-start gap-2 p-2 bg-white rounded-xl border border-violet-100">' +
+        '<i class="fas fa-check-circle text-green-500 mt-0.5"></i>' +
+        '<div><p class="text-[10px] font-black text-violet-900">' + escaparHTML(a.tipo||'') + '</p>' +
+        '<p class="text-[10px] text-violet-700">' + escaparHTML(a.acao||'') + '</p></div>' +
+      '</div>';
+    }).join('');
+  });
+}
+
+// ── Helpers UI ────────────────────────────────────────────────
+
+function _escutaSetEl(id, val) {
+  var el = document.getElementById(id);
+  if (el) el.textContent = val;
+}
+function _escutaSetVal(id, val) {
+  var el = document.getElementById(id);
+  if (el) el.value = val;
+}
+function _escutaSetChk(id, val) {
+  var el = document.getElementById(id);
+  if (el) el.checked = val;
+}
+function _val(id) {
+  var el = document.getElementById(id);
+  return el ? el.value : '';
+}
+function _escutaLabelNivel(nivel) {
+  var m = { excelente:'Excelente', bom:'Bom', regular:'Regular',
+             baixo:'Baixo', critico:'Crítico', sem_dados:'Sem dados' };
+  return m[nivel] || nivel || 'Sem dados';
+}
+function _escutaFmtData(ts) {
+  if (!ts) return '';
+  try {
+    var d = new Date(ts);
+    return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' });
+  } catch(e) { return String(ts); }
+}
+
+</script>
