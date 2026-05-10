@@ -225,6 +225,9 @@ function _chvPopularSelects() {
 
   if (btnEntregaDireta) btnEntregaDireta.classList.toggle('hidden', !ehInfra);
   if (btnEntregaDireta) btnEntregaDireta.style.display = ehInfra ? 'flex' : 'none';
+  const btnRetiradaOp = document.getElementById('chv-btn-retirada-op');
+  if (btnRetiradaOp) btnRetiradaOp.classList.toggle('hidden', !ehInfra);
+  if (btnRetiradaOp) btnRetiradaOp.style.display = ehInfra ? 'flex' : 'none';
   if (tabGerenciar) tabGerenciar.classList.toggle('hidden', !ehInfra);
   if (tabAdmin) {
     const isAdmin = typeof AppState !== 'undefined' && AppState.usuario && AppState.usuario.isAdmin;
@@ -234,7 +237,7 @@ function _chvPopularSelects() {
   // Espacos nos selects — todos usam espacosComChave (possuiChaves = true)
   const espacosComChave = d.espacos || [];
   [
-    'chv-sol-espaco', 'chv-ed-espaco', 'chv-form-chave-espaco',
+    'chv-sol-espaco', 'chv-ed-espaco', 'chv-rop-espaco', 'chv-form-chave-espaco',
     'chv-rel-espaco', 'chv-filtro-todos-espaco', 'chv-admin-espaco-filtro'
   ].forEach(function(selId) {
     const sel = document.getElementById(selId);
@@ -620,9 +623,16 @@ function _chvBotoesAcao(p, email, ehInfra) {
     }
   }
 
+  // Infra: devolução direta (sem etapa intermediária) — para responsáveis sem acesso ao sistema
+  if (ehInfra && ['RETIRADA','ATRASADA','TRANSFERIDA'].includes(p.status)) {
+    btns.push(_chvBtnAcao('fas fa-check-double', 'Dev. Direta', `_chvDevolucaoOperacional('${p.id}')`, 'text-orange-700 bg-orange-50 border-orange-200 hover:bg-orange-100'));
+    btns.push(_chvBtnAcao('fas fa-people-arrows', 'Transfer. (Op.)', `_chvAbrirModalTransferenciaOp('${p.id}')`, 'text-orange-700 bg-orange-50 border-orange-200 hover:bg-orange-100'));
+  }
+
   // Infra: confirmar devolução
   if (ehInfra && p.status === 'AGUARDANDO_CONFIRMACAO_INFRA') {
     btns.push(_chvBtnAcao('fas fa-check-double', 'Confirmar Devolução', `_chvConfirmarDevolucao('${p.id}')`, 'text-blue-700 bg-blue-50 border-blue-200 hover:bg-blue-100'));
+    btns.push(_chvBtnAcao('fas fa-check-double', 'Dev. Direta', `_chvDevolucaoOperacional('${p.id}')`, 'text-orange-700 bg-orange-50 border-orange-200 hover:bg-orange-100'));
   }
 
   // Transferência: confirmar ou cancelar
@@ -953,6 +963,31 @@ function _chvAbrirModalEntregaDireta() {
   _chvAbrirModal('chv-modal-entrega-direta');
 }
 
+function _chvAbrirModalRetiradaOp() {
+  document.getElementById('chv-rop-espaco').value = '';
+  document.getElementById('chv-rop-chave').innerHTML = '<option value="">Selecione o espaço primeiro</option>';
+  document.getElementById('chv-rop-nome').value = '';
+  document.getElementById('chv-rop-setor').value = '';
+  document.getElementById('chv-rop-devolucao').value = '';
+  document.getElementById('chv-rop-obs').value = '';
+  _chvAbrirModal('chv-modal-retirada-op');
+}
+
+function _chvAbrirModalTransferenciaOp(protocoloId) {
+  const d = _chvState.dados;
+  const todas = (d && d.protocolosAtivos) ? d.protocolosAtivos : [];
+  const p = todas.find(function(x) { return x.id === protocoloId; }) ||
+            (_chvState.protocolos || []).find(function(x) { return x.id === protocoloId; });
+  document.getElementById('chv-top-protocolo-id').value = protocoloId;
+  document.getElementById('chv-top-info').textContent = p
+    ? _chvNomeEspaco(p.espacoId) + ' · ' + (p.responsavelNome || p.solicitanteNome || protocoloId)
+    : protocoloId;
+  document.getElementById('chv-top-nome').value = '';
+  document.getElementById('chv-top-setor').value = '';
+  document.getElementById('chv-top-obs').value = '';
+  _chvAbrirModal('chv-modal-transf-op');
+}
+
 function _chvAbrirModalTransferencia(protocoloId) {
   const d = _chvState.dados;
   const todas = (d && d.protocolosAtivos) ? d.protocolosAtivos : [];
@@ -1006,6 +1041,11 @@ function _chvCarregarChavesDoEspaco() {
 function _chvCarregarChavesDoEspacoEd() {
   const espacoId = document.getElementById('chv-ed-espaco').value;
   _chvPopularSelectChaves('chv-ed-chave', espacoId);
+}
+
+function _chvCarregarChavesDoEspacoRop() {
+  const espacoId = document.getElementById('chv-rop-espaco').value;
+  _chvPopularSelectChaves('chv-rop-chave', espacoId);
 }
 
 function _chvPopularSelectChaves(selectId, espacoId) {
@@ -1074,6 +1114,74 @@ function _chvEnviarEntregaDireta() {
     if (res && res.ok) {
       _chvFecharModal('chv-modal-entrega-direta');
       Swal.fire({ icon: 'success', title: 'Entrega registrada!', text: 'Aguardando confirmação do usuário.', timer: 2500, showConfirmButton: false });
+      _chvAtualizarDados();
+    } else Swal.fire('Erro', (res && res.msg) || 'Falha.', 'error');
+  }, function(err) { _chvBtnLoading(btn, false); Swal.fire('Erro', String(err), 'error'); });
+}
+
+function _chvEnviarRetiradaOp() {
+  const chaveId  = document.getElementById('chv-rop-chave').value;
+  const espacoId = document.getElementById('chv-rop-espaco').value;
+  const nome     = document.getElementById('chv-rop-nome').value.trim();
+  if (!chaveId || !espacoId) { Swal.fire('Atenção', 'Selecione espaço e chave.', 'warning'); return; }
+  if (!nome) { Swal.fire('Atenção', 'Informe o nome do responsável.', 'warning'); return; }
+
+  const dados = {
+    chaveId, espacoId,
+    destinoNome: nome,
+    destinoSetor: document.getElementById('chv-rop-setor').value || '',
+    dtPrevistaDevolucao: document.getElementById('chv-rop-devolucao').value || '',
+    observacoes: document.getElementById('chv-rop-obs').value || ''
+  };
+  const btn = document.getElementById('chv-btn-retirada-op-submit');
+  _chvBtnLoading(btn, true);
+  GAS.chaves.retiradaOperacional(dados, _chvEmailAtual(), function(res) {
+    _chvBtnLoading(btn, false);
+    if (res && res.ok) {
+      _chvFecharModal('chv-modal-retirada-op');
+      Swal.fire({ icon: 'success', title: 'Retirada registrada!', text: nome + ' consta como responsável pela chave.', timer: 2500, showConfirmButton: false });
+      _chvAtualizarDados();
+    } else Swal.fire('Erro', (res && res.msg) || 'Falha ao registrar.', 'error');
+  }, function(err) { _chvBtnLoading(btn, false); Swal.fire('Erro', String(err), 'error'); });
+}
+
+function _chvDevolucaoOperacional(protocoloId) {
+  const email = _chvEmailAtual();
+  Swal.fire({
+    title: 'Devolução Direta',
+    text: 'Registrar devolução imediata da chave (sem etapa de confirmação)?',
+    icon: 'question',
+    input: 'textarea', inputPlaceholder: 'Observação (opcional)',
+    showCancelButton: true, confirmButtonText: 'Confirmar Devolução', confirmButtonColor: '#ea580c', cancelButtonText: 'Cancelar',
+    showLoaderOnConfirm: true, allowOutsideClick: function() { return !Swal.isLoading(); },
+    preConfirm: function(obs) {
+      return new Promise(function(resolve) {
+        GAS.chaves.devolucaoOperacional(protocoloId, obs || '', email,
+          function(res) { res && res.ok ? resolve() : Swal.showValidationMessage((res && res.msg) || 'Falha.'); },
+          function(err) { Swal.showValidationMessage(String(err)); });
+      });
+    }
+  }).then(function(r) {
+    if (!r.isConfirmed) return;
+    Swal.fire({ icon: 'success', title: 'Devolução registrada!', text: 'Chave devolvida ao estoque.', timer: 2500, showConfirmButton: false });
+    _chvAtualizarDados();
+  });
+}
+
+function _chvEnviarTransferenciaOp() {
+  const protocoloId = document.getElementById('chv-top-protocolo-id').value;
+  const nome = document.getElementById('chv-top-nome').value.trim();
+  if (!nome) { Swal.fire('Atenção', 'Informe o nome do novo responsável.', 'warning'); return; }
+  const setor = document.getElementById('chv-top-setor').value || '';
+  const obs = document.getElementById('chv-top-obs').value || '';
+
+  const btn = document.getElementById('chv-btn-transf-op-submit');
+  _chvBtnLoading(btn, true);
+  GAS.chaves.transferenciaOperacional(protocoloId, nome, setor, obs, _chvEmailAtual(), function(res) {
+    _chvBtnLoading(btn, false);
+    if (res && res.ok) {
+      _chvFecharModal('chv-modal-transf-op');
+      Swal.fire({ icon: 'success', title: 'Transferência registrada!', text: nome + ' é o novo responsável pela chave.', timer: 2500, showConfirmButton: false });
       _chvAtualizarDados();
     } else Swal.fire('Erro', (res && res.msg) || 'Falha.', 'error');
   }, function(err) { _chvBtnLoading(btn, false); Swal.fire('Erro', String(err), 'error'); });

@@ -592,7 +592,11 @@ const GAS = {
     negar:                 function(id, motivo, email, cb, err)        { GAS._call('chaves_negar',                 [id, motivo, email],          cb, err); },
 
     salvarCamposEspaco:    function(id, dados, email, cb, err)         { GAS._call('chaves_salvarCamposEspaco',    [id, dados, email],           cb, err); },
-    listarEspacosCompletos: function(email, cb, err)                   { GAS._call('chaves_listarEspacosCompletos', [email],                     cb, err); }
+    listarEspacosCompletos: function(email, cb, err)                   { GAS._call('chaves_listarEspacosCompletos', [email],                     cb, err); },
+
+    retiradaOperacional:      function(dados, email, cb, err)                    { GAS._call('chaves_retiradaOperacional',      [dados, email],               cb, err); },
+    devolucaoOperacional:     function(id, obs, email, cb, err)                  { GAS._call('chaves_devolucaoOperacional',     [id, obs, email],             cb, err); },
+    transferenciaOperacional: function(id, nome, setor, obs, email, cb, err)     { GAS._call('chaves_transferenciaOperacional', [id, nome, setor, obs, email], cb, err); }
   },
 
   /**

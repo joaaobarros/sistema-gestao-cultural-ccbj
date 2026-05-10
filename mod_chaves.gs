@@ -1248,3 +1248,183 @@ function chaves_listarEspacosCompletos(emailAtual) {
     throw new Error('Erro ao listar espaços: ' + e.message);
   }
 }
+
+// ══════════════════════════════════════════════════════════════════
+// BLOCO: Fluxo Operacional — sem confirmação do usuário receptor
+//        Para equipes sem acesso ágil ao sistema (Zeladoria, Segurança, Elétrica)
+// ══════════════════════════════════════════════════════════════════
+
+/**
+ * Operador registra retirada por trabalhador sem acesso ao sistema.
+ * Vai direto para RETIRADA (sem etapa de confirmação pelo receptor).
+ * Responsável identificado por nome/setor, não requer email.
+ */
+function chaves_retiradaOperacional(dados, emailAtual) {
+  try {
+    const email = obterEmailUsuario(emailAtual || '');
+    _chvExigeInfraOuAdmin(email);
+
+    if (!dados || !dados.chaveId)  throw new Error('Chave obrigatória.');
+    if (!dados.espacoId)           throw new Error('Espaço obrigatório.');
+    if (!dados.destinoNome || !String(dados.destinoNome).trim())
+      throw new Error('Nome do responsável obrigatório.');
+
+    const lock = obterLockComRetry('chaves_retiradaOperacional', 8000, 3);
+    try {
+      _chvValidarChaveDisponivel(dados.chaveId);
+      _chvVerificarChaveJaEmUso(dados.chaveId);
+
+      const nomeInfra   = _chvResolverNome(email);
+      const destinoNome = String(dados.destinoNome).trim();
+      const setor       = String(dados.destinoSetor || '');
+      const agora       = new Date().toISOString();
+      const novoId      = gerarId('PCH');
+
+      const aba = _chvGetProtocolos();
+      if (!aba) throw new Error('Aba ProtocolosChaves não encontrada.');
+
+      const row = new Array(25).fill('');
+      row[PROT_COL.ID]                     = novoId;
+      row[PROT_COL.CHAVE_ID]              = dados.chaveId;
+      row[PROT_COL.ESPACO_ID]             = dados.espacoId;
+      row[PROT_COL.RESPONSAVEL_ATUAL_ID]   = '';
+      row[PROT_COL.RESPONSAVEL_ATUAL_NOME] = destinoNome;
+      row[PROT_COL.SOLICITANTE_ID]         = '';
+      row[PROT_COL.SOLICITANTE_NOME]       = destinoNome;
+      row[PROT_COL.SETOR_ID]              = setor;
+      row[PROT_COL.SETOR_NOME]            = setor;
+      row[PROT_COL.DT_SOLICITACAO]        = agora;
+      row[PROT_COL.DT_RETIRADA]           = agora;
+      row[PROT_COL.DT_PREVISTA_DEVOLUCAO] = String(dados.dtPrevistaDevolucao || '');
+      row[PROT_COL.STATUS]                = CHV_STATUS_PROTOCOLO.RETIRADA;
+      row[PROT_COL.OBSERVACOES]           = String(dados.observacoes || '');
+      row[PROT_COL.ENTREGUE_POR_ID]       = email;
+      row[PROT_COL.ENTREGUE_POR_NOME]     = nomeInfra;
+      row[PROT_COL.RECEBIDO_POR_ID]       = '';
+      row[PROT_COL.RECEBIDO_POR_NOME]     = destinoNome;
+      row[PROT_COL.RESERVA_VINCULADA_ID]  = String(dados.reservaId || '');
+      row[PROT_COL.ORIGEM]                = 'RETIRADA_OPERACIONAL';
+
+      aba.appendRow(row);
+      _chvAtualizarStatusChaveNaPlanilha(dados.chaveId, CHV_STATUS_CHAVE.EM_USO);
+
+      _chvRegistrarHistorico(novoId, dados.chaveId, 'RETIRADA_OPERACIONAL', email, nomeInfra,
+        CHV_STATUS_CHAVE.DISPONIVEL, CHV_STATUS_PROTOCOLO.RETIRADA,
+        'Para: ' + destinoNome + (setor ? ' (' + setor + ')' : '') + '. ' + (dados.observacoes || ''), 'INFRA');
+      registrarLog('PROTOCOLO_CHAVE', 'CHAVE', novoId, 'Retirada operacional registrada.', null, dados, email);
+
+      return { ok: true, protocoloId: novoId };
+    } finally {
+      lock.releaseLock();
+    }
+  } catch(e) {
+    throw new Error('Erro ao registrar retirada operacional: ' + e.message);
+  }
+}
+
+/**
+ * Operador registra devolução diretamente, sem etapa intermediária.
+ * Válido para RETIRADA, ATRASADA, TRANSFERIDA e AGUARDANDO_CONFIRMACAO_INFRA.
+ */
+function chaves_devolucaoOperacional(protocoloId, obs, emailAtual) {
+  try {
+    const email = obterEmailUsuario(emailAtual || '');
+    _chvExigeInfraOuAdmin(email);
+
+    const lock = obterLockComRetry('chaves_devolucaoOperacional', 8000, 3);
+    try {
+      const r = _chvEncontrarProtocoloLinha(protocoloId);
+      if (!r) throw new Error('Protocolo não encontrado.');
+      const p = _chvMapearProtocolo(r.dados);
+
+      const statusPermitidos = [
+        CHV_STATUS_PROTOCOLO.RETIRADA,
+        CHV_STATUS_PROTOCOLO.ATRASADA,
+        CHV_STATUS_PROTOCOLO.TRANSFERIDA,
+        CHV_STATUS_PROTOCOLO.AGUARDANDO_CONFIRMACAO_INFRA
+      ];
+      if (!statusPermitidos.includes(p.status))
+        throw new Error('Status inválido para devolução operacional: ' + p.status);
+
+      const nome  = _chvResolverNome(email);
+      const agora = new Date().toISOString();
+      const extras = {};
+      extras[PROT_COL.STATUS]                      = CHV_STATUS_PROTOCOLO.DEVOLVIDA;
+      extras[PROT_COL.DT_DEVOLUCAO]                = agora;
+      extras[PROT_COL.DEVOLUCAO_RECEBIDA_POR_ID]   = email;
+      extras[PROT_COL.DEVOLUCAO_RECEBIDA_POR_NOME] = nome;
+      if (obs) extras[PROT_COL.OBSERVACOES] = String(obs);
+
+      _chvAtualizarProtocoloStatus(r.linha, CHV_STATUS_PROTOCOLO.DEVOLVIDA, extras);
+      _chvAtualizarStatusChaveNaPlanilha(p.chaveId, CHV_STATUS_CHAVE.DISPONIVEL);
+
+      _chvRegistrarHistorico(protocoloId, p.chaveId, 'DEVOLUCAO_OPERACIONAL', email, nome,
+        p.status, CHV_STATUS_PROTOCOLO.DEVOLVIDA, obs, 'INFRA');
+
+      return { ok: true };
+    } finally {
+      lock.releaseLock();
+    }
+  } catch(e) {
+    throw new Error('Erro ao registrar devolução operacional: ' + e.message);
+  }
+}
+
+/**
+ * Operador registra transferência direta entre pessoas sem acesso ao sistema.
+ * Vai direto para TRANSFERIDA sem aguardar confirmação do novo responsável.
+ */
+function chaves_transferenciaOperacional(protocoloId, destinoNome, destinoSetor, obs, emailAtual) {
+  try {
+    const email = obterEmailUsuario(emailAtual || '');
+    _chvExigeInfraOuAdmin(email);
+
+    if (!destinoNome || !String(destinoNome).trim())
+      throw new Error('Nome do novo responsável obrigatório.');
+
+    const lock = obterLockComRetry('chaves_transferenciaOperacional', 8000, 3);
+    try {
+      const r = _chvEncontrarProtocoloLinha(protocoloId);
+      if (!r) throw new Error('Protocolo não encontrado.');
+      const p = _chvMapearProtocolo(r.dados);
+
+      const statusPermitidos = [
+        CHV_STATUS_PROTOCOLO.RETIRADA,
+        CHV_STATUS_PROTOCOLO.ATRASADA,
+        CHV_STATUS_PROTOCOLO.TRANSFERIDA,
+        CHV_STATUS_PROTOCOLO.TRANSFERENCIA_PENDENTE
+      ];
+      if (!statusPermitidos.includes(p.status))
+        throw new Error('Transferência operacional requer chave em uso. Status: ' + p.status);
+
+      const nomeNovo  = String(destinoNome).trim();
+      const setor     = String(destinoSetor || '');
+      const nomeInfra = _chvResolverNome(email);
+      const extras = {};
+      extras[PROT_COL.STATUS]                     = CHV_STATUS_PROTOCOLO.TRANSFERIDA;
+      extras[PROT_COL.RESPONSAVEL_ATUAL_ID]        = '';
+      extras[PROT_COL.RESPONSAVEL_ATUAL_NOME]      = nomeNovo;
+      extras[PROT_COL.RECEBIDO_POR_ID]            = '';
+      extras[PROT_COL.RECEBIDO_POR_NOME]          = nomeNovo;
+      extras[PROT_COL.DT_RETIRADA]                = new Date().toISOString();
+      extras[PROT_COL.SETOR_ID]                   = setor;
+      extras[PROT_COL.SETOR_NOME]                 = setor;
+      extras[PROT_COL.TRANSFERENCIA_DESTINO_ID]   = '';
+      extras[PROT_COL.TRANSFERENCIA_DESTINO_NOME] = '';
+      if (obs) extras[PROT_COL.OBSERVACOES] = String(obs);
+
+      _chvAtualizarProtocoloStatus(r.linha, CHV_STATUS_PROTOCOLO.TRANSFERIDA, extras);
+      _chvAtualizarStatusChaveNaPlanilha(p.chaveId, CHV_STATUS_CHAVE.EM_USO);
+
+      _chvRegistrarHistorico(protocoloId, p.chaveId, 'TRANSFERENCIA_OPERACIONAL', email, nomeInfra,
+        p.status, CHV_STATUS_PROTOCOLO.TRANSFERIDA,
+        'Para: ' + nomeNovo + (setor ? ' (' + setor + ')' : '') + '. ' + (obs || ''), 'INFRA');
+
+      return { ok: true };
+    } finally {
+      lock.releaseLock();
+    }
+  } catch(e) {
+    throw new Error('Erro ao registrar transferência operacional: ' + e.message);
+  }
+}

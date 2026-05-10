@@ -31,6 +31,11 @@
         flex items-center gap-1.5 px-4 py-1.5 text-xs font-black text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-all">
         <i class="fas fa-hand-holding-medical text-[10px]"></i> Entrega Direta
       </button>
+      <button id="chv-btn-retirada-op" onclick="_chvAbrirModalRetiradaOp()" class="hidden
+        flex items-center gap-1.5 px-4 py-1.5 text-xs font-black text-white bg-orange-600 hover:bg-orange-700 rounded-xl transition-all"
+        title="Registrar retirada por equipe sem acesso ao sistema (Zeladoria, Segurança, Elétrica)">
+        <i class="fas fa-hard-hat text-[10px]"></i> Retirada Op.
+      </button>
     </div>
   </div>
 
@@ -456,6 +461,120 @@
       </button>
     </div>
     <div id="chv-modal-detalhe-conteudo" class="p-5"></div>
+  </div>
+</div>
+
+<!-- Modal: Retirada Operacional (Zeladoria / Segurança / Elétrica) -->
+<div id="chv-modal-retirada-op" class="fixed inset-0 z-[200] hidden items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+    <div class="flex items-center justify-between p-5 border-b border-slate-100">
+      <h3 class="text-base font-black text-slate-800 flex items-center gap-2">
+        <i class="fas fa-hard-hat text-orange-500"></i> Retirada Operacional
+      </h3>
+      <button onclick="_chvFecharModal('chv-modal-retirada-op')" class="text-slate-400 hover:text-slate-700 transition-colors">
+        <i class="fas fa-times text-lg"></i>
+      </button>
+    </div>
+    <div class="p-4 bg-orange-50 border-b border-orange-100 text-[10px] text-orange-700 flex items-start gap-2">
+      <i class="fas fa-info-circle mt-0.5 shrink-0"></i>
+      <span>Para equipes sem acesso ao sistema (Zeladoria, Segurança, Elétrica). O operador registra a retirada em nome do responsável físico — sem etapa de confirmação pelo receptor.</span>
+    </div>
+    <div class="p-5 space-y-4">
+      <div>
+        <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Espaço *</label>
+        <select id="chv-rop-espaco" onchange="_chvCarregarChavesDoEspacoRop()" class="w-full text-sm border border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-orange-300 outline-none">
+          <option value="">Selecione o espaço...</option>
+        </select>
+      </div>
+      <div>
+        <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Chave *</label>
+        <select id="chv-rop-chave" class="w-full text-sm border border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-orange-300 outline-none">
+          <option value="">Selecione o espaço primeiro</option>
+        </select>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Nome do responsável *</label>
+          <input type="text" id="chv-rop-nome" placeholder="Ex.: João da Zeladoria" class="w-full text-sm border border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-orange-300 outline-none">
+        </div>
+        <div>
+          <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Equipe / Setor</label>
+          <select id="chv-rop-setor" class="w-full text-sm border border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-orange-300 outline-none">
+            <option value="">Selecione...</option>
+            <option value="Zeladoria">Zeladoria</option>
+            <option value="Segurança">Segurança</option>
+            <option value="Elétrica">Elétrica</option>
+            <option value="Manutenção">Manutenção</option>
+            <option value="Outro">Outro</option>
+          </select>
+        </div>
+      </div>
+      <div>
+        <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Devolução prevista</label>
+        <input type="datetime-local" id="chv-rop-devolucao" class="w-full text-sm border border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-orange-300 outline-none">
+      </div>
+      <div>
+        <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Observações</label>
+        <textarea id="chv-rop-obs" rows="2" class="w-full text-sm border border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-orange-300 outline-none resize-none"></textarea>
+      </div>
+    </div>
+    <div class="flex justify-end gap-2 px-5 pb-5">
+      <button onclick="_chvFecharModal('chv-modal-retirada-op')" class="px-4 py-2 text-xs font-bold text-slate-600 bg-slate-100 rounded-xl hover:bg-slate-200 transition-all">Cancelar</button>
+      <button id="chv-btn-retirada-op-submit" onclick="_chvEnviarRetiradaOp()" class="px-5 py-2 text-xs font-black text-white bg-orange-600 hover:bg-orange-700 active:scale-95 rounded-xl transition-all cursor-pointer">
+        <i class="fas fa-hard-hat mr-1.5"></i>Registrar Retirada
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Transferência Operacional (Zeladoria / Segurança / Elétrica) -->
+<div id="chv-modal-transf-op" class="fixed inset-0 z-[200] hidden items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+    <div class="flex items-center justify-between p-5 border-b border-slate-100">
+      <h3 class="text-base font-black text-slate-800 flex items-center gap-2">
+        <i class="fas fa-people-arrows text-orange-500"></i> Transferência Operacional
+      </h3>
+      <button onclick="_chvFecharModal('chv-modal-transf-op')" class="text-slate-400 hover:text-slate-700 transition-colors">
+        <i class="fas fa-times text-lg"></i>
+      </button>
+    </div>
+    <div class="p-4 bg-orange-50 border-b border-orange-100 text-[10px] text-orange-700 flex items-start gap-2">
+      <i class="fas fa-info-circle mt-0.5 shrink-0"></i>
+      <span>Para equipes sem acesso ao sistema. O operador registra a mudança de responsável — sem etapa de confirmação pelo novo receptor.</span>
+    </div>
+    <div class="p-5 space-y-4">
+      <input type="hidden" id="chv-top-protocolo-id">
+      <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs text-slate-600">
+        <span class="font-black">Protocolo:</span> <span id="chv-top-info"></span>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Novo responsável *</label>
+          <input type="text" id="chv-top-nome" placeholder="Ex.: Maria da Segurança" class="w-full text-sm border border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-orange-300 outline-none">
+        </div>
+        <div>
+          <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Equipe / Setor</label>
+          <select id="chv-top-setor" class="w-full text-sm border border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-orange-300 outline-none">
+            <option value="">Selecione...</option>
+            <option value="Zeladoria">Zeladoria</option>
+            <option value="Segurança">Segurança</option>
+            <option value="Elétrica">Elétrica</option>
+            <option value="Manutenção">Manutenção</option>
+            <option value="Outro">Outro</option>
+          </select>
+        </div>
+      </div>
+      <div>
+        <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Motivo / Observações</label>
+        <textarea id="chv-top-obs" rows="2" class="w-full text-sm border border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-orange-300 outline-none resize-none"></textarea>
+      </div>
+    </div>
+    <div class="flex justify-end gap-2 px-5 pb-5">
+      <button onclick="_chvFecharModal('chv-modal-transf-op')" class="px-4 py-2 text-xs font-bold text-slate-600 bg-slate-100 rounded-xl hover:bg-slate-200 transition-all">Cancelar</button>
+      <button id="chv-btn-transf-op-submit" onclick="_chvEnviarTransferenciaOp()" class="px-5 py-2 text-xs font-black text-white bg-orange-600 hover:bg-orange-700 active:scale-95 rounded-xl transition-all cursor-pointer">
+        <i class="fas fa-people-arrows mr-1.5"></i>Registrar Transferência
+      </button>
+    </div>
   </div>
 </div>
 
