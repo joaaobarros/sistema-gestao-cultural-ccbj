@@ -28,6 +28,7 @@
         <button onclick="mudarAbaManual('admin')"        id="tab-manual-admin"        class="tab-manual px-4 py-3 text-[10px] font-black uppercase tracking-wider whitespace-nowrap text-slate-400 border-b-2 border-transparent hover:text-purple-500 hover:border-purple-300 transition-colors cursor-pointer">Configurações</button>
         <button onclick="mudarAbaManual('permissoes')"   id="tab-manual-permissoes"   class="tab-manual px-4 py-3 text-[10px] font-black uppercase tracking-wider whitespace-nowrap text-slate-400 border-b-2 border-transparent hover:text-purple-500 hover:border-purple-300 transition-colors cursor-pointer">Permissões</button>
         <button onclick="mudarAbaManual('chaves')"       id="tab-manual-chaves"        class="tab-manual px-4 py-3 text-[10px] font-black uppercase tracking-wider whitespace-nowrap text-slate-400 border-b-2 border-transparent hover:text-purple-500 hover:border-purple-300 transition-colors cursor-pointer">Protocolo de Chaves</button>
+        <button onclick="mudarAbaManual('habdiaria')"    id="tab-manual-habdiaria"    class="tab-manual px-4 py-3 text-[10px] font-black uppercase tracking-wider whitespace-nowrap text-slate-400 border-b-2 border-transparent hover:text-purple-500 hover:border-purple-300 transition-colors cursor-pointer">Hab. Diária</button>
         <button onclick="mudarAbaManual('auditoria')"    id="tab-manual-auditoria"    class="tab-manual px-4 py-3 text-[10px] font-black uppercase tracking-wider whitespace-nowrap text-slate-400 border-b-2 border-transparent hover:text-purple-500 hover:border-purple-300 transition-colors cursor-pointer">Auditoria</button>
         <button onclick="mudarAbaManual('ia')"           id="tab-manual-ia"           class="tab-manual px-4 py-3 text-[10px] font-black uppercase tracking-wider whitespace-nowrap text-slate-400 border-b-2 border-transparent hover:text-purple-500 hover:border-purple-300 transition-colors cursor-pointer">Inteligência</button>
       </div>
@@ -83,6 +84,12 @@
           <div class="p-3 bg-amber-50 border border-amber-100 rounded-xl text-[11px] text-amber-700">
             <i class="fas fa-tools mr-1"></i>O módulo Infraestrutura é visível apenas para o setor responsável configurado e para administradores.
           </div>
+        </div>
+
+        <div id="conteudo-manual-habdiaria" class="conteudo-manual hidden space-y-4">
+          <h3 class="font-black text-slate-800 flex items-center gap-2"><i class="fas fa-clipboard-check text-purple-500"></i> Habilitação Diária de Espaços</h3>
+          <p class="text-[12px] text-slate-600">Registro operacional de check-in: confirme que cada espaço está preparado antes de cada evento, acompanhe pontualidade e identifique gargalos.</p>
+          <div id="manual-habdiaria-cards" class="space-y-3"></div>
         </div>
 
         <div id="conteudo-manual-auditoria" class="conteudo-manual hidden space-y-4">

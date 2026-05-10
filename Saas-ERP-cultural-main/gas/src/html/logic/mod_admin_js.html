@@ -2285,6 +2285,8 @@ function renderizarManualCompleto() {
           'Valida solicitações de reserva e cadastros de novos usuários externos.'),
     _card('fa-tools',       'blue',  'Infraestrutura',
           'Protocolo de Chaves: controle de retirada, devolução e transferência de chaves físicas. Visível para o setor responsável configurado e para admins.'),
+    _card('fa-clipboard-check', 'green', 'Habilitação Diária',
+          'Relatório operacional dentro da Agenda Geral: registre quando cada espaço foi preparado antes do evento, acompanhe pontualidade e identifique atrasos por sala/horário.'),
     _card('fa-chart-bar',   'green', 'Estratégia',
           'Dashboard com indicadores de uso, ocupação e análise de IA integrada.'),
     _card('fa-server',      'amber', 'Sistema (admin)',
@@ -2564,6 +2566,52 @@ function renderizarManualCompleto() {
       'Configure o responsável pelo espaço em Configurações → Espaços (campo "Responsáveis por dias da semana e turno"). Usuários do setor cadastrado ganham acesso às abas de gestão e confirmação no Protocolo de Chaves.'),
     _tip('fa-circle-check', 'green',
       'Se nenhum setor for configurado, o sistema usa como fallback o setor com o nome "INFRAESTRUTURA". Recomenda-se sempre configurar explicitamente.')
+  ].join('');
+
+  // ── HABILITAÇÃO DIÁRIA ────────────────────────────────────────
+
+  const elHabD = document.getElementById('manual-habdiaria-cards');
+  if (elHabD) elHabD.innerHTML = [
+    _heading('O que é e para que serve'),
+    _card('fa-clipboard-check', 'purple', 'Habilitação Diária',
+      'Relatório operacional que mostra todos os espaços com agendamento no dia e permite registrar quando cada um foi <b>fisicamente preparado</b> para receber o evento. Acessado pelo botão <b>Hab. Diária</b> na Agenda Geral.'),
+    _card('fa-chart-line', 'green', 'Eficiência de entrega',
+      'O sistema calcula automaticamente o atraso (em minutos) entre o horário de início do evento e o momento em que o espaço foi habilitado. Isso gera o indicador de pontualidade da equipe.'),
+
+    _heading('Acessar o relatório'),
+    _step(1, 'Abrir a Agenda Geral',
+      'No menu lateral, clique em <b>Espaços → Agenda Geral</b>. O painel de Habilitação Diária fica dentro desta aba.'),
+    _step(2, 'Clicar em "Hab. Diária"',
+      'Clique no botão <b>Hab. Diária</b> no seletor de modos de visualização (ao lado de Lista, Agenda e Diagrama). O relatório do dia atual é carregado automaticamente.'),
+    _step(3, 'Navegar entre datas',
+      'Use os botões ← e → para ir ao dia anterior ou próximo. Clique em <b>Hoje</b> para voltar à data atual. Ou use o campo de data para ir direto a qualquer dia.'),
+
+    _heading('Registrar a habilitação de um espaço'),
+    _step(4, 'Localizar o espaço na tabela',
+      'Cada linha da tabela é uma reserva do dia. O status <b>⏳ Pendente</b> indica que o espaço ainda não foi registrado como habilitado.'),
+    _step(5, 'Clicar em "Habilitar"',
+      'Clique no botão roxo <b>Habilitar</b> na linha do espaço. Um modal abre com a hora atual pré-preenchida no campo "Hora de habilitação".'),
+    _step(6, 'Confirmar hora e observação',
+      'Ajuste a hora se necessário (caso esteja registrando retroativamente). Adicione uma observação opcional — útil para registrar causas de atraso (limpeza, problema técnico, etc.). Clique em <b>Confirmar</b>.'),
+    _tip('fa-clock', 'blue',
+      'A hora de habilitação é editável: se você habilitou o espaço às 13:45 mas só registrou no sistema às 14:00, ajuste o campo para 13:45 antes de confirmar.'),
+
+    _heading('Entendendo o relatório'),
+    _step(7, 'Cards de métricas',
+      'No topo aparecem 4 cards: <b>Total</b> (agendamentos no dia), <b>No Prazo</b> (habilitados antes do início), <b>Atrasados</b> (habilitados após o início) e <b>Pendentes</b> (ainda não registrados).'),
+    _step(8, 'Colunas da tabela',
+      '<b>Espaço</b> — sala agendada. <b>Evento</b> — nome da ação e setor responsável. <b>Início</b> — horário de início agendado. <b>Habilitado às</b> — hora registrada de check-in. <b>Pontualidade</b> — status calculado com o atraso em minutos.'),
+    _step(9, 'Interpretando a pontualidade',
+      '<b>✅ X min adiant.</b> — espaço habilitado antes do início. <b>⚠️ X min atraso</b> — espaço habilitado após o início do evento. <b>⏳ Pendente</b> — ainda sem registro de check-in.'),
+
+    _heading('Re-habilitar um espaço'),
+    _step(10, 'Quando usar',
+      'Se a hora registrada estiver errada ou o espaço precisou de nova preparação, clique em <b>Re-habilitar</b> (aparece no lugar de "Habilitar" quando já há registro). O sistema sobrescreve o registro anterior, mantendo apenas o mais recente.'),
+
+    _tip('fa-info-circle', 'blue',
+      'Qualquer usuário autenticado pode registrar habilitações. O nome e e-mail de quem registrou ficam gravados e são exibidos na coluna Responsável.'),
+    _tip('fa-triangle-exclamation', 'amber',
+      'Antes de usar, o administrador do sistema deve executar o setup para criar a aba <b>HabDiaria</b> na planilha ACOES. Use a função <code>recriarEstrutura()</code> no editor Google Apps Script.')
   ].join('');
 
   // ── AUDITORIA ─────────────────────────────────────────────────
