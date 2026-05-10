@@ -14,7 +14,7 @@
       <i class="fas fa-users mr-1"></i>Equipe
     </button>
     <button onclick="_rhSubAba('cargos')"      id="rh-nav-cargos"      class="rh-nav-btn px-4 py-2 text-xs font-black rounded-xl uppercase transition-all bg-slate-100 text-slate-600 hover:bg-slate-200">
-      <i class="fas fa-sitemap mr-1"></i>Cargos
+      <i class="fas fa-sitemap mr-1"></i>PCCS
     </button>
     <button onclick="_rhSubAba('historico')"   id="rh-nav-historico"   class="rh-nav-btn px-4 py-2 text-xs font-black rounded-xl uppercase transition-all bg-slate-100 text-slate-600 hover:bg-slate-200">
       <i class="fas fa-history mr-1"></i>Histórico
@@ -85,24 +85,133 @@
   </div>
 
   <!-- ═══════════════════════════════════════════════════
-       PAINEL: CARGOS
+       PAINEL: PCCS
        ═══════════════════════════════════════════════════ -->
-  <div id="rh-painel-cargos" class="hidden">
-    <div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
-      <div class="p-5 border-b border-slate-100 flex justify-between items-center">
+  <div id="rh-painel-cargos" class="hidden space-y-4">
+
+    <!-- Sub-nav PCCS -->
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm">
+      <div class="p-4 border-b border-slate-100 flex flex-wrap justify-between items-center gap-3">
         <div>
-          <h3 class="font-black text-slate-800 text-sm uppercase"><i class="fas fa-sitemap text-indigo-500 mr-2"></i>Cargos e Estrutura</h3>
-          <p class="text-[10px] text-slate-400">Posições, níveis e faixas salariais</p>
+          <h3 class="font-black text-slate-800 text-sm uppercase">
+            <i class="fas fa-sitemap text-indigo-500 mr-2"></i>PCCS — Plano de Cargos, Carreiras e Salários
+          </h3>
+          <p class="text-[10px] text-slate-400">Estrutura IDM 2025 · Reajuste base: 5% · Step: 7,5%</p>
         </div>
-        <button onclick="_rhAbrirModalCargo()" data-requer-permissao="rh:editar"
-          class="bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-black px-4 py-2 rounded-xl uppercase">
-          <i class="fas fa-plus mr-1"></i>Novo Cargo
-        </button>
+        <div class="flex gap-2 flex-wrap">
+          <button onclick="_pccsSubAba('cargos')" id="pccs-nav-cargos"
+            class="pccs-nav-btn px-4 py-2 text-[10px] font-black rounded-xl uppercase bg-indigo-600 text-white transition-all">
+            <i class="fas fa-users-cog mr-1"></i>Cargos
+          </button>
+          <button onclick="_pccsSubAba('tabela')" id="pccs-nav-tabela"
+            class="pccs-nav-btn px-4 py-2 text-[10px] font-black rounded-xl uppercase bg-slate-100 text-slate-600 hover:bg-slate-200 transition-all">
+            <i class="fas fa-table mr-1"></i>Tabela Salarial
+          </button>
+          <button onclick="_pccsSubAba('parametros')" id="pccs-nav-parametros"
+            class="pccs-nav-btn px-4 py-2 text-[10px] font-black rounded-xl uppercase bg-slate-100 text-slate-600 hover:bg-slate-200 transition-all">
+            <i class="fas fa-sliders-h mr-1"></i>Parâmetros
+          </button>
+        </div>
       </div>
-      <div id="rhCargosContainer" class="p-5">
-        <div class="p-8 text-center"><i class="fas fa-spinner animate-spin text-indigo-300 text-xl"></i></div>
+
+      <!-- ── Cargos por Área ─────────────────────────────── -->
+      <div id="pccs-panel-cargos">
+        <div class="p-4 border-b border-slate-100 flex flex-wrap gap-3 items-center justify-between">
+          <div class="flex gap-2 items-center flex-wrap">
+            <div class="relative">
+              <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 text-xs"></i>
+              <input type="text" id="pccsBusca" placeholder="Buscar cargo..."
+                oninput="_pccsRenderCargos()"
+                style="padding:7px 12px 7px 28px;border:1.5px solid #e2e8f0;border-radius:10px;font-size:11px;outline:none;width:160px"
+                onfocus="this.style.borderColor='#6366f1'" onblur="this.style.borderColor='#e2e8f0'">
+            </div>
+            <select id="pccsFiltroArea" onchange="_pccsRenderCargos()"
+              style="padding:7px 12px;border:1.5px solid #e2e8f0;border-radius:10px;font-size:11px;outline:none;color:#475569">
+              <option value="">Todas as áreas</option>
+            </select>
+            <select id="pccsFiltroGrupo" onchange="_pccsRenderCargos()"
+              style="padding:7px 12px;border:1.5px solid #e2e8f0;border-radius:10px;font-size:11px;outline:none;color:#475569">
+              <option value="">Todos os grupos</option>
+              <option>Gestão Estratégica</option>
+              <option>Assessoramento</option>
+              <option>Gestão Tática</option>
+              <option>Administrativo</option>
+              <option>Operacional</option>
+            </select>
+          </div>
+          <button onclick="_pccsAbrirModalCargo()" data-requer-permissao="rh:editar"
+            class="bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-black px-4 py-2 rounded-xl uppercase flex items-center gap-1.5">
+            <i class="fas fa-plus text-[9px]"></i>Novo Cargo
+          </button>
+        </div>
+        <div id="pccsCargosContainer" class="p-5">
+          <div class="p-8 text-center"><i class="fas fa-spinner animate-spin text-indigo-300 text-xl"></i></div>
+        </div>
+      </div>
+
+      <!-- ── Tabela Salarial ─────────────────────────────── -->
+      <div id="pccs-panel-tabela" class="hidden">
+        <div class="p-4 border-b border-slate-100 flex flex-wrap gap-3 items-center justify-between">
+          <div class="flex gap-2">
+            <button onclick="_pccsTipoTabela('FIXA')" id="pccs-tab-fixa"
+              class="pccs-tipo-btn px-3 py-1.5 text-[10px] font-black rounded-lg uppercase bg-emerald-600 text-white">
+              Faixa Fixa
+            </button>
+            <button onclick="_pccsTipoTabela('ORIENTADOR')" id="pccs-tab-orientador"
+              class="pccs-tipo-btn px-3 py-1.5 text-[10px] font-black rounded-lg uppercase bg-slate-100 text-slate-600 hover:bg-slate-200">
+              Orientador
+            </button>
+          </div>
+          <div class="text-[10px] text-slate-400 font-medium">
+            Clique em <i class="fas fa-edit text-indigo-400"></i> para editar valores individualmente
+          </div>
+        </div>
+        <div id="pccsTabelaContainer" class="overflow-x-auto p-2">
+          <div class="p-8 text-center"><i class="fas fa-spinner animate-spin text-emerald-300 text-xl"></i></div>
+        </div>
+      </div>
+
+      <!-- ── Parâmetros ──────────────────────────────────── -->
+      <div id="pccs-panel-parametros" class="hidden p-6">
+        <div class="grid grid-cols-1 gap-6 max-w-2xl">
+
+          <div class="p-4 bg-amber-50 border border-amber-200 rounded-2xl">
+            <h4 class="text-xs font-black text-amber-800 uppercase mb-3">
+              <i class="fas fa-percent mr-1"></i>Reajuste Geral de Salários
+            </h4>
+            <p class="text-[10px] text-amber-700 mb-3">Aplica um percentual de reajuste a todos os steps e valores base da tabela salarial. Operação irreversível — confirme o percentual antes de aplicar.</p>
+            <div class="flex gap-3 items-end">
+              <div>
+                <label class="text-[10px] font-black text-amber-700 uppercase block mb-1">Percentual (%)</label>
+                <input id="pccsReajustePct" type="number" min="0.1" max="50" step="0.1" placeholder="Ex: 5"
+                  style="padding:8px 12px;border:1.5px solid #fbbf24;border-radius:10px;font-size:13px;outline:none;width:120px">
+              </div>
+              <button onclick="_pccsAplicarReajuste()" data-requer-permissao="rh:editar"
+                class="bg-amber-500 hover:bg-amber-600 text-white text-[10px] font-black px-5 py-2.5 rounded-xl uppercase">
+                <i class="fas fa-bolt mr-1"></i>Aplicar Reajuste
+              </button>
+            </div>
+          </div>
+
+          <div class="p-4 bg-white border border-slate-200 rounded-2xl">
+            <h4 class="text-xs font-black text-slate-700 uppercase mb-3">
+              <i class="fas fa-cog mr-1 text-slate-400"></i>Parâmetros do Plano
+            </h4>
+            <div id="pccsParametrosForm" class="grid grid-cols-2 gap-4">
+              <div class="p-6 text-center col-span-2"><i class="fas fa-spinner animate-spin text-slate-300 text-lg"></i></div>
+            </div>
+            <div class="flex justify-end mt-4">
+              <button onclick="_pccsSalvarParametros()" data-requer-permissao="rh:editar"
+                class="bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-black px-5 py-2.5 rounded-xl uppercase">
+                <i class="fas fa-save mr-1"></i>Salvar Parâmetros
+              </button>
+            </div>
+          </div>
+
+        </div>
       </div>
     </div>
+
   </div>
 
   <!-- ═══════════════════════════════════════════════════
@@ -343,11 +452,15 @@
       </div>
       <div class="grid grid-cols-2 gap-3">
         <div>
-          <label class="text-[10px] font-black text-slate-400 uppercase block mb-1">Cargo</label>
-          <select id="rhMCargo"
+          <label class="text-[10px] font-black text-slate-400 uppercase block mb-1">Cargo (PCCS)</label>
+          <select id="rhMCargo" onchange="_rhCargoSelecionado()"
             class="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm outline-none focus:border-teal-400">
             <option value="">Selecione...</option>
           </select>
+          <div id="rhMCargoInfo" class="mt-1 hidden">
+            <span id="rhMCargoClasse" style="font-size:8px;font-weight:900;padding:2px 8px;border-radius:99px;background:#ede9fe;color:#5b21b6;margin-right:4px"></span>
+            <span id="rhMCargoGrupo"  style="font-size:8px;font-weight:900;padding:2px 8px;border-radius:99px;background:#dbeafe;color:#1e40af"></span>
+          </div>
         </div>
         <div>
           <label class="text-[10px] font-black text-slate-400 uppercase block mb-1">Setor *</label>
@@ -405,22 +518,33 @@
           </select>
         </div>
         <div>
-          <label class="text-[10px] font-black text-slate-400 uppercase block mb-1">Salário Base (R$)</label>
-          <input id="rhMSalario" type="number" min="0" step="100" placeholder="0,00"
+          <label class="text-[10px] font-black text-slate-400 uppercase block mb-1">Step PCCS</label>
+          <select id="rhMStep" onchange="_rhStepSelecionado()"
             class="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm outline-none focus:border-teal-400">
+            <option value="">— selecione o cargo primeiro —</option>
+            <option value="1">Step 1</option>
+            <option value="2">Step 2</option>
+            <option value="3">Step 3</option>
+            <option value="4">Step 4</option>
+            <option value="5">Step 5</option>
+          </select>
         </div>
       </div>
       <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="text-[10px] font-black text-slate-400 uppercase block mb-1">Salário Base (R$)</label>
+          <input id="rhMSalario" type="number" min="0" step="0.01" placeholder="0,00"
+            class="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm outline-none focus:border-teal-400">
+          <p class="text-[9px] text-slate-400 mt-1">Preenchido automaticamente pelo PCCS. Pode ser ajustado manualmente.</p>
+        </div>
         <div>
           <label class="text-[10px] font-black text-slate-400 uppercase block mb-1">Benefícios (R$)</label>
           <input id="rhMBeneficios" type="number" min="0" placeholder="0,00"
             class="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm outline-none focus:border-teal-400">
         </div>
-        <div>
-          <label class="text-[10px] font-black text-slate-400 uppercase block mb-1">Faixa Salarial</label>
-          <input id="rhMFaixa" type="text" placeholder="Ex: Júnior / Pleno / Sênior"
-            class="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm outline-none focus:border-teal-400">
-        </div>
+      </div>
+      <div class="p-3 bg-indigo-50 border border-indigo-100 rounded-xl text-xs text-indigo-700">
+        <i class="fas fa-sitemap mr-1"></i>Salário calculado automaticamente com base na classe e step PCCS do cargo selecionado.
       </div>
       <div class="p-3 bg-purple-50 border border-purple-100 rounded-xl text-xs text-purple-700">
         <i class="fas fa-info-circle mr-1"></i>Dados financeiros visíveis apenas para superadmin e RH.
@@ -564,7 +688,7 @@ function _rhSubAba(nome) {
   if (painel) painel.classList.remove('hidden');
 
   if (nome === 'equipe'      && !_rhCache.length)     carregarRH();
-  else if (nome === 'cargos')     _rhCarregarCargos();
+  else if (nome === 'cargos')     _pccsCarregar();
   else if (nome === 'historico')  _rhCarregarHistorico();
   else if (nome === 'avaliacoes') _rhCarregarAvaliacoes();
   else if (nome === 'ponto')      _rhCarregarPonto();
@@ -688,21 +812,6 @@ function _rhAbrirModalColaborador(id) {
   document.getElementById('rhMVinculo').value   = dado.vinculo || 'CLT';
   document.getElementById('rhMSalario').value   = dado.salarioBase || '';
   document.getElementById('rhMBeneficios').value= dado.beneficios || '';
-  document.getElementById('rhMFaixa').value     = dado.faixaSalarial || '';
-
-  // Carregar cargos no dropdown
-  var selCargo = document.getElementById('rhMCargo');
-  selCargo.innerHTML = '<option value="">Selecione...</option>';
-
-  GAS.rh.obterCargos(function(lista) {
-    (lista || []).forEach(function(c) {
-      var o = document.createElement('option');
-      o.value = c.nome;
-      o.textContent = c.nome;
-      if (dado.cargo === c.nome) o.selected = true;
-      selCargo.appendChild(o);
-    });
-  });
 
   var selSetor = document.getElementById('rhMSetor');
   selSetor.innerHTML = '<option value="">Selecione...</option>';
@@ -723,6 +832,40 @@ function _rhAbrirModalColaborador(id) {
   });
 
   document.getElementById('rhMStatus').value = dado.status || 'Ativo';
+  var stepEl = document.getElementById('rhMStep');
+  if (stepEl) stepEl.value = dado.pccsStep || '';
+
+  // Carregar cargos do PCCS no dropdown
+  var selCargo = document.getElementById('rhMCargo');
+  selCargo.innerHTML = '<option value="">Selecione...</option>';
+  var cargoInicial = dado.cargo || '';
+  GAS.rh.obterCargosPCCS(function(lista) {
+    var porArea = {};
+    (lista || []).forEach(function(c) {
+      if (!porArea[c.area]) porArea[c.area] = [];
+      porArea[c.area].push(c);
+    });
+    Object.keys(porArea).sort().forEach(function(area) {
+      var grp = document.createElement('optgroup');
+      grp.label = area;
+      porArea[area].forEach(function(c) {
+        var o = document.createElement('option');
+        o.value = c.nome;
+        o.textContent = c.nome;
+        o.dataset.classe = c.classe;
+        o.dataset.tipo = c.tipoClasse;
+        o.dataset.grupo = c.grupo;
+        if (cargoInicial === c.nome) o.selected = true;
+        grp.appendChild(o);
+      });
+      selCargo.appendChild(grp);
+    });
+    _rhCargoSelecionado();
+    if (dado.pccsStep && dado.salarioBase) {
+      var stepEl2 = document.getElementById('rhMStep');
+      if (stepEl2) stepEl2.value = dado.pccsStep;
+    }
+  });
 
   if (id) {
     GAS.rh.obterPerfilSocial(id, function(perfil) {
@@ -774,19 +917,29 @@ function _rhSalvarColaborador() {
   var setor = document.getElementById('rhMSetor')?.value;
   if (!setor) { Swal.fire('Atenção','Selecione um setor.','warning'); return; }
 
+  var cargoOpt = (function() {
+    var sel = document.getElementById('rhMCargo');
+    var opt = sel && sel.options[sel.selectedIndex];
+    return opt || {};
+  }());
   var dados = {
     id: _rhEditandoId || null,
     nome: nome,
     cargo:        document.getElementById('rhMCargo')?.value.trim(),
     setor:        setor,
-    email:        document.getElementById('rhMEmail')?.value.trim(),
+    email:        document.getElementById('rhMEmail')?.value.trim() || document.getElementById('rhMEmailInstitucional')?.value.trim(),
+    emailInstitucional: document.getElementById('rhMEmailInstitucional')?.value.trim(),
+    emailPessoal: document.getElementById('rhMEmailPessoal')?.value.trim(),
     telefone:     document.getElementById('rhMTel')?.value.trim(),
     dataAdmissao: document.getElementById('rhMAdmissao')?.value,
     status:       document.getElementById('rhMStatus')?.value,
     vinculo:      document.getElementById('rhMVinculo')?.value,
     salarioBase:  parseFloat(document.getElementById('rhMSalario')?.value)||0,
     beneficios:   parseFloat(document.getElementById('rhMBeneficios')?.value)||0,
-    faixaSalarial:document.getElementById('rhMFaixa')?.value.trim(),
+    pccsStep:     parseInt(document.getElementById('rhMStep')?.value)||null,
+    pccsClasse:   cargoOpt.dataset && cargoOpt.dataset.classe || null,
+    pccsTipo:     cargoOpt.dataset && cargoOpt.dataset.tipo   || null,
+    pccsGrupo:    cargoOpt.dataset && cargoOpt.dataset.grupo  || null,
     gestorDireto: document.getElementById('rhMGestor')?.value
   };
 
@@ -833,99 +986,383 @@ function _rhExcluirColaborador(id) {
   });
 }
 
-// ── Cargos ────────────────────────────────────────────────────────────────────
-function _rhCarregarCargos() {
-  var c = document.getElementById('rhCargosContainer');
-  if (c) c.innerHTML = '<div class="p-8 text-center"><i class="fas fa-spinner animate-spin text-indigo-300 text-xl"></i></div>';
-  GAS.rh.obterCargos(function(lista) {
-    _rhCargosCache = lista || [];
-    _rhRenderCargos();
+// ── PCCS ──────────────────────────────────────────────────────────────────────
+var _pccsDados = null;
+var _pccsTipoAtivo = 'FIXA';
+
+function _pccsCarregar() {
+  GAS.rh.obterPCCS(function(dados) {
+    _pccsDados = dados;
+    _pccsPopularFiltroArea();
+    _pccsSubAba('cargos');
   });
 }
 
-function _rhRenderCargos() {
-  var c = document.getElementById('rhCargosContainer');
-  if (!c) return;
-  if (!_rhCargosCache.length) {
-    c.innerHTML = '<div class="p-12 text-center text-slate-400 text-sm">Nenhum cargo cadastrado.</div>';
-    return;
-  }
-  c.innerHTML = '<div class="overflow-x-auto"><table class="w-full text-left text-xs border-collapse">'
-    + '<thead><tr class="bg-indigo-50">'
-    + '<th class="p-3 font-black text-indigo-700 uppercase text-[9px]">Cargo</th>'
-    + '<th class="p-3 font-black text-indigo-700 uppercase text-[9px]">Setor</th>'
-    + '<th class="p-3 font-black text-indigo-700 uppercase text-[9px]">Nível</th>'
-    + '<th class="p-3 font-black text-indigo-700 uppercase text-[9px]">Faixa</th>'
-    + '<th class="p-3 font-black text-indigo-700 uppercase text-[9px] text-right">Ações</th>'
-    + '</tr></thead><tbody class="divide-y divide-slate-50">'
-    + _rhCargosCache.map(function(g) {
-        var faixa = (g.faixaMin && g.faixaMax) ? _rhFmt(g.faixaMin) + ' – ' + _rhFmt(g.faixaMax) : '—';
-        return '<tr class="hover:bg-slate-50">'
-          + '<td class="p-3 font-semibold text-slate-800">' + escaparHTML(g.nome||'') + '</td>'
-          + '<td class="p-3 text-slate-500">' + escaparHTML(g.setor||'—') + '</td>'
-          + '<td class="p-3 text-slate-500">' + escaparHTML(g.nivel||'—') + '</td>'
-          + '<td class="p-3 text-slate-500">' + faixa + '</td>'
-          + '<td class="p-3 text-right">'
-          + (temPermissao('rh','editar') ? '<button onclick="_rhAbrirModalCargo(\'' + g.id + '\')" class="text-indigo-600 hover:underline text-xs mr-2">Editar</button>' : '')
-          + (temPermissao('rh','excluir') ? '<button onclick="_rhExcluirCargo(\'' + g.id + '\')" class="text-red-500 hover:underline text-xs">Excluir</button>' : '')
-          + '</td></tr>';
-      }).join('')
-    + '</tbody></table></div>';
+function _pccsPopularFiltroArea() {
+  var sel = document.getElementById('pccsFiltroArea');
+  if (!sel || !_pccsDados) return;
+  var areas = [];
+  (_pccsDados.cargos || []).forEach(function(c) {
+    if (c.area && areas.indexOf(c.area) < 0) areas.push(c.area);
+  });
+  areas.sort();
+  sel.innerHTML = '<option value="">Todas as áreas</option>'
+    + areas.map(function(a) { return '<option>' + a + '</option>'; }).join('');
 }
 
-function _rhAbrirModalCargo(id) {
-  var dado = id ? (_rhCargosCache.find(function(c){ return c.id===id; })||{}) : {};
-  var setores = (AppState.colecoes?.setores||[]).filter(Boolean);
+function _pccsSubAba(aba) {
+  document.querySelectorAll('.pccs-nav-btn').forEach(function(b) {
+    b.className = 'pccs-nav-btn px-4 py-2 text-[10px] font-black rounded-xl uppercase bg-slate-100 text-slate-600 hover:bg-slate-200 transition-all';
+  });
+  var nb = document.getElementById('pccs-nav-' + aba);
+  if (nb) nb.className = 'pccs-nav-btn px-4 py-2 text-[10px] font-black rounded-xl uppercase bg-indigo-600 text-white transition-all';
+  ['cargos','tabela','parametros'].forEach(function(p) {
+    var el = document.getElementById('pccs-panel-' + p);
+    if (el) el.classList.add('hidden');
+  });
+  var panel = document.getElementById('pccs-panel-' + aba);
+  if (panel) panel.classList.remove('hidden');
+  if (aba === 'cargos')     _pccsRenderCargos();
+  if (aba === 'tabela')     _pccsRenderTabela();
+  if (aba === 'parametros') _pccsRenderParametros();
+}
+
+function _pccsGrupoStyle(grupo) {
+  return {
+    'Gestão Estratégica': 'background:#ede9fe;color:#5b21b6',
+    'Assessoramento':     'background:#fce7f3;color:#9d174d',
+    'Gestão Tática':      'background:#dbeafe;color:#1e40af',
+    'Administrativo':     'background:#d1fae5;color:#065f46',
+    'Operacional':        'background:#fef3c7;color:#92400e'
+  }[grupo] || 'background:#f1f5f9;color:#475569';
+}
+
+function _pccsTipoStyle(tipo) {
+  return tipo === 'ORIENTADOR'
+    ? 'background:#ede9fe;color:#7c3aed'
+    : 'background:#ecfdf5;color:#065f46';
+}
+
+function _pccsRenderCargos() {
+  var c = document.getElementById('pccsCargosContainer');
+  if (!c || !_pccsDados) return;
+  var busca  = (document.getElementById('pccsBusca')?.value||'').toLowerCase();
+  var area   = document.getElementById('pccsFiltroArea')?.value || '';
+  var grupo  = document.getElementById('pccsFiltroGrupo')?.value || '';
+  var lista  = (_pccsDados.cargos || []).filter(function(cargo) {
+    if (cargo.ativo === false) return false;
+    if (busca && !cargo.nome.toLowerCase().includes(busca)) return false;
+    if (area  && cargo.area  !== area)  return false;
+    if (grupo && cargo.grupo !== grupo) return false;
+    return true;
+  });
+  if (!lista.length) {
+    c.innerHTML = '<div class="p-12 text-center text-slate-400 text-sm">Nenhum cargo encontrado.</div>';
+    return;
+  }
+  // Group by area
+  var byArea = {};
+  lista.forEach(function(cargo) {
+    if (!byArea[cargo.area]) byArea[cargo.area] = [];
+    byArea[cargo.area].push(cargo);
+  });
+  var html = '';
+  Object.keys(byArea).sort().forEach(function(areaKey) {
+    html += '<div class="mb-4">'
+      + '<div class="px-4 py-2 bg-slate-50 border-b border-slate-100">'
+      + '<span class="text-[9px] font-black text-slate-500 uppercase tracking-widest">' + escaparHTML(areaKey) + '</span>'
+      + '<span class="ml-2 text-[9px] text-slate-400">(' + byArea[areaKey].length + ' cargos)</span></div>'
+      + '<table class="w-full text-left text-xs border-collapse"><tbody class="divide-y divide-slate-50">'
+      + byArea[areaKey].map(function(cargo) {
+          var gStyle = _pccsGrupoStyle(cargo.grupo);
+          var tStyle = _pccsTipoStyle(cargo.tipoClasse);
+          var salario = _pccsGetSalario(cargo.tipoClasse, cargo.classe, 1);
+          var salarioFmt = salario ? _rhFmt(salario) + ' – ' + _rhFmt(_pccsGetSalario(cargo.tipoClasse, cargo.classe, 5)) : '—';
+          return '<tr class="hover:bg-slate-50">'
+            + '<td class="p-3 font-semibold text-slate-800 text-xs">' + escaparHTML(cargo.nome) + '</td>'
+            + '<td class="p-3"><span style="font-size:8px;font-weight:900;padding:2px 8px;border-radius:99px;' + tStyle + '">'
+            + escaparHTML(cargo.tipoClasse === 'ORIENTADOR' ? 'ORIENTADOR-' + cargo.classe : 'Classe ' + cargo.classe) + '</span></td>'
+            + '<td class="p-3"><span style="font-size:8px;font-weight:900;padding:2px 8px;border-radius:99px;' + gStyle + '">' + escaparHTML(cargo.grupo) + '</span></td>'
+            + '<td class="p-3 text-[10px] text-slate-500">' + salarioFmt + '</td>'
+            + '<td class="p-3 text-right">'
+            + (temPermissao('rh','editar') ? '<button onclick="_pccsAbrirModalCargo(\'' + cargo.id + '\')" style="font-size:10px;color:#6366f1;background:#eef2ff;border:none;border-radius:6px;padding:3px 8px;cursor:pointer;margin-right:4px"><i class="fas fa-edit"></i></button>' : '')
+            + (temPermissao('rh','excluir') ? '<button onclick="_pccsExcluirCargo(\'' + cargo.id + '\')" style="font-size:10px;color:#ef4444;background:#fee2e2;border:none;border-radius:6px;padding:3px 8px;cursor:pointer"><i class="fas fa-trash"></i></button>' : '')
+            + '</td></tr>';
+        }).join('')
+      + '</tbody></table></div>';
+  });
+  c.innerHTML = '<div class="divide-y divide-slate-100">' + html + '</div>';
+}
+
+function _pccsGetSalario(tipo, classe, step) {
+  if (!_pccsDados || !_pccsDados.tabelaSalarial) return 0;
+  var row = null;
+  for (var i = 0; i < _pccsDados.tabelaSalarial.length; i++) {
+    var r = _pccsDados.tabelaSalarial[i];
+    if (r.tipo === tipo && r.classe === classe) { row = r; break; }
+  }
+  if (!row || !row.steps) return 0;
+  return row.steps[(step || 1) - 1] || 0;
+}
+
+function _pccsAbrirModalCargo(id) {
+  var dado = id ? ((_pccsDados.cargos||[]).find(function(c){ return c.id===id; })||{}) : {};
+  var areas = [];
+  (_pccsDados && _pccsDados.cargos || []).forEach(function(c) {
+    if (c.area && areas.indexOf(c.area) < 0) areas.push(c.area);
+  });
+  areas.sort();
+  var classesFixa = ['PISO','A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q'];
+  var classesOrientador = ['F','G','H','I','J','K','L','M','N','O','P','Q'];
   Swal.fire({
-    title: id ? 'Editar Cargo' : 'Novo Cargo',
-    width: 480,
+    title: id ? 'Editar Cargo PCCS' : 'Novo Cargo PCCS',
+    width: 540,
     showCancelButton: true,
     confirmButtonText: 'Salvar',
     cancelButtonText: 'Cancelar',
     confirmButtonColor: '#6366f1',
-    customClass:{popup:'rounded-3xl'},
+    customClass: { popup: 'rounded-3xl' },
     html: '<div class="text-left space-y-3 px-2">'
       + '<div><label class="text-[10px] font-black text-slate-400 uppercase block mb-1">Nome do Cargo *</label>'
-      + '<input id="cNome" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none" value="' + escaparHTML(dado.nome||'') + '"></div>'
+      + '<input id="pccsNome" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none" value="' + escaparHTML(dado.nome||'') + '"></div>'
       + '<div class="grid grid-cols-2 gap-3">'
-      + '<div><label class="text-[10px] font-black text-slate-400 uppercase block mb-1">Setor</label>'
-      + '<select id="cSetor" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none">'
-      + '<option value="">—</option>' + setores.map(function(s){ return '<option'+(dado.setor===s?' selected':'')+'>'+s+'</option>'; }).join('')
+      + '<div><label class="text-[10px] font-black text-slate-400 uppercase block mb-1">Área *</label>'
+      + '<input id="pccsArea" list="pccsAreaList" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none" value="' + escaparHTML(dado.area||'') + '">'
+      + '<datalist id="pccsAreaList">' + areas.map(function(a){ return '<option value="'+a+'">'; }).join('') + '</datalist></div>'
+      + '<div><label class="text-[10px] font-black text-slate-400 uppercase block mb-1">Grupo *</label>'
+      + '<select id="pccsGrupo" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none">'
+      + ['Gestão Estratégica','Assessoramento','Gestão Tática','Administrativo','Operacional'].map(function(g){
+          return '<option'+(dado.grupo===g?' selected':'')+'>'+g+'</option>';
+        }).join('') + '</select></div></div>'
+      + '<div class="grid grid-cols-2 gap-3">'
+      + '<div><label class="text-[10px] font-black text-slate-400 uppercase block mb-1">Tipo de Classe *</label>'
+      + '<select id="pccsTipoClasse" onchange="_pccsAtualizarClassesModal()" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none">'
+      + '<option value="FIXA"'+(dado.tipoClasse==='FIXA'?' selected':'')+'>Faixa Fixa</option>'
+      + '<option value="ORIENTADOR"'+(dado.tipoClasse==='ORIENTADOR'?' selected':'')+'>Orientador</option>'
       + '</select></div>'
-      + '<div><label class="text-[10px] font-black text-slate-400 uppercase block mb-1">Nível</label>'
-      + '<input id="cNivel" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none" value="' + escaparHTML(dado.nivel||'') + '" placeholder="Júnior/Pleno/Sênior"></div>'
-      + '</div>'
-      + '<div class="grid grid-cols-2 gap-3">'
-      + '<div><label class="text-[10px] font-black text-slate-400 uppercase block mb-1">Faixa Mín (R$)</label>'
-      + '<input id="cFaixaMin" type="number" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none" value="' + (dado.faixaMin||'') + '"></div>'
-      + '<div><label class="text-[10px] font-black text-slate-400 uppercase block mb-1">Faixa Máx (R$)</label>'
-      + '<input id="cFaixaMax" type="number" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none" value="' + (dado.faixaMax||'') + '"></div>'
-      + '</div></div>',
+      + '<div><label class="text-[10px] font-black text-slate-400 uppercase block mb-1">Classe *</label>'
+      + '<select id="pccsClasse" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none">'
+      + (dado.tipoClasse==='ORIENTADOR'?classesOrientador:classesFixa).map(function(cl){
+          return '<option'+(dado.classe===cl?' selected':'')+'>'+cl+'</option>';
+        }).join('') + '</select></div></div>'
+      + '</div>',
+    didOpen: function() { _pccsAtualizarClassesModal(); },
     preConfirm: function() {
-      var n = (document.getElementById('cNome')?.value||'').trim();
-      if (!n) { Swal.showValidationMessage('Nome obrigatório'); return false; }
-      return { id:dado.id||null, nome:n,
-               setor: document.getElementById('cSetor')?.value,
-               nivel: document.getElementById('cNivel')?.value.trim(),
-               faixaMin: parseFloat(document.getElementById('cFaixaMin')?.value)||0,
-               faixaMax: parseFloat(document.getElementById('cFaixaMax')?.value)||0 };
+      var nome = (document.getElementById('pccsNome')?.value||'').trim();
+      var area = (document.getElementById('pccsArea')?.value||'').trim();
+      if (!nome || !area) { Swal.showValidationMessage('Nome e Área são obrigatórios'); return false; }
+      return {
+        id: dado.id || null,
+        nome: nome,
+        area: area,
+        grupo: document.getElementById('pccsGrupo')?.value,
+        tipoClasse: document.getElementById('pccsTipoClasse')?.value,
+        classe: document.getElementById('pccsClasse')?.value,
+        ativo: true
+      };
     }
   }).then(function(r) {
     if (!r.isConfirmed) return;
     showLoader(true);
-    GAS.rh.salvarCargo(r.value, function() { showLoader(false); _rhCarregarCargos(); },
-      function() { showLoader(false); Swal.fire('Erro','Erro ao salvar cargo.','error'); });
+    GAS.rh.salvarCargoPCCS(r.value, function(res) {
+      showLoader(false);
+      GAS.rh.obterPCCS(function(dados) { _pccsDados = dados; _pccsRenderCargos(); });
+    }, function() { showLoader(false); Swal.fire('Erro','Erro ao salvar cargo.','error'); });
   });
 }
 
-function _rhExcluirCargo(id) {
-  Swal.fire({ title:'Excluir cargo?', icon:'warning', showCancelButton:true,
+function _pccsAtualizarClassesModal() {
+  var tipo = document.getElementById('pccsTipoClasse')?.value;
+  var sel  = document.getElementById('pccsClasse');
+  if (!sel) return;
+  var classes = tipo === 'ORIENTADOR'
+    ? ['F','G','H','I','J','K','L','M','N','O','P','Q']
+    : ['PISO','A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q'];
+  sel.innerHTML = classes.map(function(c){ return '<option>'+c+'</option>'; }).join('');
+}
+
+function _pccsExcluirCargo(id) {
+  Swal.fire({ title:'Excluir cargo PCCS?', icon:'warning', showCancelButton:true,
     confirmButtonColor:'#ef4444', confirmButtonText:'Excluir', cancelButtonText:'Cancelar',
     customClass:{popup:'rounded-3xl'}
   }).then(function(r) {
     if (!r.isConfirmed) return;
     showLoader(true);
-    GAS.rh.excluirCargo(id, function() { showLoader(false); _rhCarregarCargos(); });
+    GAS.rh.excluirCargoPCCS(id, function() {
+      showLoader(false);
+      GAS.rh.obterPCCS(function(dados) { _pccsDados = dados; _pccsRenderCargos(); });
+    });
+  });
+}
+
+function _pccsTipoTabela(tipo) {
+  _pccsTipoAtivo = tipo;
+  document.querySelectorAll('.pccs-tipo-btn').forEach(function(b) {
+    b.className = 'pccs-tipo-btn px-3 py-1.5 text-[10px] font-black rounded-lg uppercase bg-slate-100 text-slate-600 hover:bg-slate-200';
+  });
+  var nb = document.getElementById('pccs-tab-' + tipo.toLowerCase());
+  if (nb) nb.className = 'pccs-tipo-btn px-3 py-1.5 text-[10px] font-black rounded-lg uppercase bg-emerald-600 text-white';
+  _pccsRenderTabela();
+}
+
+function _pccsRenderTabela() {
+  var c = document.getElementById('pccsTabelaContainer');
+  if (!c || !_pccsDados) return;
+  var rows = (_pccsDados.tabelaSalarial || []).filter(function(r) { return r.tipo === _pccsTipoAtivo; });
+  if (!rows.length) {
+    c.innerHTML = '<div class="p-8 text-center text-slate-400 text-sm">Nenhum dado disponível.</div>';
+    return;
+  }
+  var cor = _pccsTipoAtivo === 'ORIENTADOR' ? '#7c3aed' : '#059669';
+  var html = '<table class="w-full text-left text-xs border-collapse" style="min-width:700px">'
+    + '<thead><tr style="background:' + (_pccsTipoAtivo==='ORIENTADOR'?'#f5f3ff':'#ecfdf5') + '">'
+    + '<th class="p-3 font-black uppercase text-[9px]" style="color:'+cor+'">Classe</th>'
+    + '<th class="p-3 font-black uppercase text-[9px]" style="color:'+cor+'">Pontos</th>'
+    + '<th class="p-3 font-black uppercase text-[9px]" style="color:'+cor+'">Step 1</th>'
+    + '<th class="p-3 font-black uppercase text-[9px]" style="color:'+cor+'">Step 2</th>'
+    + '<th class="p-3 font-black uppercase text-[9px]" style="color:'+cor+'">Step 3</th>'
+    + '<th class="p-3 font-black uppercase text-[9px]" style="color:'+cor+'">Step 4</th>'
+    + '<th class="p-3 font-black uppercase text-[9px]" style="color:'+cor+'">Step 5</th>'
+    + '<th class="p-3 font-black uppercase text-[9px]" style="color:'+cor+'">Base Reajuste</th>'
+    + (temPermissao('rh','editar') ? '<th class="p-3 font-black uppercase text-[9px] text-right" style="color:'+cor+'">Editar</th>' : '')
+    + '</tr></thead><tbody class="divide-y divide-slate-100">'
+    + rows.map(function(row) {
+        var pontos = row.classe === 'PISO' ? '—'
+          : (row.pontosMin && row.pontosMax ? row.pontosMin + ' – ' + row.pontosMax : '—');
+        return '<tr class="hover:bg-slate-50">'
+          + '<td class="p-3 font-black text-slate-700">' + (_pccsTipoAtivo==='ORIENTADOR' ? 'ORIENTADOR-' : '') + escaparHTML(row.classe) + '</td>'
+          + '<td class="p-3 text-slate-500 text-[10px]">' + pontos + '</td>'
+          + row.steps.map(function(s) {
+              return '<td class="p-3 text-slate-700 font-semibold text-[10px]">' + _rhFmt(s) + '</td>';
+            }).join('')
+          + '<td class="p-3 text-slate-400 text-[10px]">' + (row.valorBase ? _rhFmt(row.valorBase) : '—') + '</td>'
+          + (temPermissao('rh','editar') ? '<td class="p-3 text-right"><button onclick="_pccsEditarLinhTabela(\'' + row.tipo + '\',\'' + row.classe + '\')" style="font-size:10px;color:#6366f1;background:#eef2ff;border:none;border-radius:6px;padding:3px 8px;cursor:pointer"><i class="fas fa-edit"></i></button></td>' : '')
+          + '</tr>';
+      }).join('')
+    + '</tbody></table>';
+  c.innerHTML = html;
+}
+
+function _pccsEditarLinhTabela(tipo, classe) {
+  var row = null;
+  for (var i = 0; i < (_pccsDados.tabelaSalarial||[]).length; i++) {
+    if (_pccsDados.tabelaSalarial[i].tipo === tipo && _pccsDados.tabelaSalarial[i].classe === classe) {
+      row = _pccsDados.tabelaSalarial[i]; break;
+    }
+  }
+  if (!row) return;
+  var label = tipo === 'ORIENTADOR' ? 'ORIENTADOR-' + classe : 'Classe ' + classe;
+  Swal.fire({
+    title: 'Editar ' + label,
+    width: 560,
+    showCancelButton: true,
+    confirmButtonText: 'Salvar',
+    cancelButtonText: 'Cancelar',
+    confirmButtonColor: '#059669',
+    customClass: { popup: 'rounded-3xl' },
+    html: '<div class="text-left space-y-3 px-2">'
+      + '<div class="grid grid-cols-5 gap-2">'
+      + row.steps.map(function(v, i) {
+          return '<div><label class="text-[10px] font-black text-slate-400 uppercase block mb-1">Step ' + (i+1) + '</label>'
+            + '<input id="pccsStep' + (i+1) + '" type="number" step="0.01" class="w-full px-2 py-2 border border-slate-200 rounded-lg text-xs outline-none" value="' + v + '"></div>';
+        }).join('')
+      + '</div>'
+      + '<div class="grid grid-cols-3 gap-2">'
+      + '<div><label class="text-[10px] font-black text-slate-400 uppercase block mb-1">Base Reajuste</label>'
+      + '<input id="pccsValorBase" type="number" step="0.01" class="w-full px-2 py-2 border border-slate-200 rounded-lg text-xs outline-none" value="' + (row.valorBase||'') + '"></div>'
+      + '<div><label class="text-[10px] font-black text-slate-400 uppercase block mb-1">Pontos Mín</label>'
+      + '<input id="pccsPtosMin" type="number" class="w-full px-2 py-2 border border-slate-200 rounded-lg text-xs outline-none" value="' + (row.pontosMin||'') + '"></div>'
+      + '<div><label class="text-[10px] font-black text-slate-400 uppercase block mb-1">Pontos Máx</label>'
+      + '<input id="pccsPtosMax" type="number" class="w-full px-2 py-2 border border-slate-200 rounded-lg text-xs outline-none" value="' + (row.pontosMax||'') + '"></div></div>'
+      + '</div>',
+    preConfirm: function() {
+      var steps = [1,2,3,4,5].map(function(n) { return parseFloat(document.getElementById('pccsStep'+n)?.value)||0; });
+      return {
+        tipo: row.tipo, classe: row.classe, grupo: row.grupo,
+        pontosMin: parseInt(document.getElementById('pccsPtosMin')?.value)||null,
+        pontosMax: parseInt(document.getElementById('pccsPtosMax')?.value)||null,
+        valorBase: parseFloat(document.getElementById('pccsValorBase')?.value)||null,
+        steps: steps
+      };
+    }
+  }).then(function(r) {
+    if (!r.isConfirmed) return;
+    showLoader(true);
+    GAS.rh.salvarTabelaRowPCCS(r.value, function() {
+      showLoader(false);
+      GAS.rh.obterPCCS(function(dados) { _pccsDados = dados; _pccsRenderTabela(); });
+    }, function() { showLoader(false); Swal.fire('Erro','Erro ao salvar.','error'); });
+  });
+}
+
+function _pccsRenderParametros() {
+  if (!_pccsDados) return;
+  var p = _pccsDados.parametros || {};
+  var c = document.getElementById('pccsParametrosForm');
+  if (!c) return;
+  c.innerHTML = [
+    ['crescimentoStep', 'Crescimento entre Steps (%)', (p.crescimentoStep||0)*100, 'Percentual de crescimento salarial entre steps consecutivos'],
+    ['amplitudeFaixa', 'Amplitude de Faixa (%)', (p.amplitudeFaixa||0)*100, 'Variação percentual total dentro de uma classe (do step 1 ao 5)'],
+    ['crescimentoMedioClasse', 'Crescimento Médio entre Classes (%)', (p.crescimentoMedioClasse||0)*100, 'Percentual médio de crescimento de uma classe para a próxima'],
+    ['pisoFaixaFixa', 'Piso Faixa Fixa (R$)', p.pisoFaixaFixa||0, 'Salário mínimo para cargos da tabela de faixa fixa'],
+    ['pisoOrientador', 'Piso Orientador (R$)', p.pisoOrientador||0, 'Salário mínimo para cargos da tabela orientador'],
+    ['anoReferencia', 'Ano de Referência', p.anoReferencia||2025, 'Ano base desta tabela salarial']
+  ].map(function(row) {
+    return '<div>'
+      + '<label class="text-[10px] font-black text-slate-500 uppercase block mb-1">' + row[1] + '</label>'
+      + '<input id="pccsParam_' + row[0] + '" type="number" step="0.01" value="' + row[2] + '"'
+      + ' class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-400">'
+      + (row[3] ? '<p class="text-[9px] text-slate-400 mt-1">' + row[3] + '</p>' : '')
+      + '</div>';
+  }).join('');
+  if (p.atualizadoEm) {
+    c.innerHTML += '<div class="col-span-2 text-[9px] text-slate-400 mt-2"><i class="fas fa-clock mr-1"></i>Atualizado em: ' + p.atualizadoEm.slice(0,10) + '</div>';
+  }
+}
+
+function _pccsSalvarParametros() {
+  var fields = ['crescimentoStep','amplitudeFaixa','crescimentoMedioClasse','pisoFaixaFixa','pisoOrientador','anoReferencia'];
+  var params = {};
+  fields.forEach(function(f) {
+    var el = document.getElementById('pccsParam_' + f);
+    if (!el) return;
+    var v = parseFloat(el.value);
+    if (isNaN(v)) return;
+    // Convert % fields back to decimal
+    if (['crescimentoStep','amplitudeFaixa','crescimentoMedioClasse'].indexOf(f) >= 0) v = v / 100;
+    params[f] = v;
+  });
+  showLoader(true);
+  GAS.rh.salvarParametrosPCCS(params, function() {
+    showLoader(false);
+    GAS.rh.obterPCCS(function(dados) { _pccsDados = dados; });
+    Swal.fire({ title:'Parâmetros salvos!', icon:'success', timer:1800, showConfirmButton:false, customClass:{popup:'rounded-3xl'} });
+  }, function() { showLoader(false); Swal.fire('Erro','Erro ao salvar parâmetros.','error'); });
+}
+
+function _pccsAplicarReajuste() {
+  var pct = parseFloat(document.getElementById('pccsReajustePct')?.value);
+  if (!pct || pct <= 0) { Swal.fire('Atenção','Informe um percentual válido maior que zero.','warning'); return; }
+  Swal.fire({
+    title: 'Aplicar reajuste de ' + pct + '%?',
+    text: 'Esta ação atualiza todos os steps e valores base da tabela salarial. Não é reversível.',
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonColor: '#f59e0b',
+    confirmButtonText: 'Aplicar',
+    cancelButtonText: 'Cancelar',
+    customClass: { popup: 'rounded-3xl' }
+  }).then(function(r) {
+    if (!r.isConfirmed) return;
+    showLoader(true);
+    GAS.rh.aplicarReajustePCCS(pct, function() {
+      showLoader(false);
+      GAS.rh.obterPCCS(function(dados) {
+        _pccsDados = dados;
+        _pccsRenderTabela();
+        Swal.fire({ title: 'Reajuste de ' + pct + '% aplicado!', icon: 'success', timer: 2000, showConfirmButton: false, customClass:{popup:'rounded-3xl'} });
+      });
+    }, function() { showLoader(false); Swal.fire('Erro','Erro ao aplicar reajuste.','error'); });
   });
 }
 
@@ -1530,6 +1967,52 @@ function _rhMiniChart(mapa, cor) {
   }).join('') + '</div>';
 }
 
+// ── PCCS auto-fill no modal de colaborador ────────────────────────────────────
+function _rhCargoSelecionado() {
+  var sel = document.getElementById('rhMCargo');
+  var info = document.getElementById('rhMCargoInfo');
+  var classeEl = document.getElementById('rhMCargoClasse');
+  var grupoEl  = document.getElementById('rhMCargoGrupo');
+  var stepSel  = document.getElementById('rhMStep');
+  if (!sel) return;
+  var opt = sel.options[sel.selectedIndex];
+  var classe = opt && opt.dataset && opt.dataset.classe;
+  var tipo   = opt && opt.dataset && opt.dataset.tipo;
+  var grupo  = opt && opt.dataset && opt.dataset.grupo;
+  if (classe && tipo) {
+    if (info) info.classList.remove('hidden');
+    if (classeEl) classeEl.textContent = tipo === 'ORIENTADOR' ? 'ORIENTADOR-' + classe : 'Classe ' + classe;
+    if (grupoEl) grupoEl.textContent = grupo || '';
+    if (stepSel) {
+      var currentStep = stepSel.value;
+      stepSel.innerHTML = '<option value="">— selecione o step —</option>'
+        + [1,2,3,4,5].map(function(n) {
+            var sal = _pccsDados ? _pccsGetSalario(tipo, classe, n) : 0;
+            return '<option value="'+n+'"'+(currentStep==n?' selected':'')+'>'
+              + 'Step ' + n + (sal ? ' — ' + _rhFmt(sal) : '') + '</option>';
+          }).join('');
+    }
+  } else {
+    if (info) info.classList.add('hidden');
+    if (stepSel) stepSel.innerHTML = '<option value="">— selecione o cargo primeiro —</option>'
+      + [1,2,3,4,5].map(function(n){ return '<option value="'+n+'">Step '+n+'</option>'; }).join('');
+  }
+}
+
+function _rhStepSelecionado() {
+  var sel    = document.getElementById('rhMCargo');
+  var stepSel = document.getElementById('rhMStep');
+  var salEl  = document.getElementById('rhMSalario');
+  if (!sel || !stepSel || !salEl) return;
+  var opt    = sel.options[sel.selectedIndex];
+  var classe = opt && opt.dataset && opt.dataset.classe;
+  var tipo   = opt && opt.dataset && opt.dataset.tipo;
+  var step   = parseInt(stepSel.value);
+  if (!classe || !tipo || !step || !_pccsDados) return;
+  var sal = _pccsGetSalario(tipo, classe, step);
+  if (sal) salEl.value = sal;
+}
+
 // ── onShow ────────────────────────────────────────────────────────────────────
 window._onShow_aba_rh = function() {
   var selSetor = document.getElementById('rhFiltroSetor');
@@ -1538,6 +2021,9 @@ window._onShow_aba_rh = function() {
       var o = document.createElement('option');
       o.value = s; o.textContent = s; selSetor.appendChild(o);
     });
+  }
+  if (!_pccsDados) {
+    GAS.rh.obterPCCS(function(dados) { _pccsDados = dados; });
   }
   if (_rhCache.length) {
     _rhPopularSelectsColaboradores();

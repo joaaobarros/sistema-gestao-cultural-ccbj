@@ -53,8 +53,9 @@
             <i class="fas fa-stream mr-1"></i>Diagrama
           </button>
           <button id="btnModoHabilitacoes" onclick="alternarModoVisualizacao('habilitacoes')"
+            title="Relatório de habilitação diária dos espaços"
             class="px-4 py-2 bg-slate-200 text-slate-600 text-xs font-black rounded-xl uppercase hover:bg-slate-300 transition-all">
-            <i class="fas fa-id-card-alt mr-1"></i>Habilitações
+            <i class="fas fa-clipboard-check mr-1"></i>Hab. Diária
           </button>
           <button onclick="bloquearDiaCCBJ()" id="btnCCBJFechado"
             class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-black rounded-xl uppercase transition-all flex items-center gap-2 hidden">
@@ -264,14 +265,51 @@
         <div id="diagramaContainer" class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden mt-2"></div>
       </div>
 
-      <!-- View Habilitações (integrada à Agenda Geral) -->
+      <!-- View Habilitação Diária de Espaços -->
       <div id="viewHabilitacoes" class="hidden space-y-4 mt-4">
-        <div id="habAgendaConteudo">
-          <div class="p-16 text-center text-slate-300">
-            <i class="fas fa-id-card-alt text-4xl mb-3"></i><br>
-            <span class="text-sm font-bold">Carregando habilitações...</span>
+
+        <!-- Cabeçalho + navegação de data -->
+        <div class="bg-white rounded-3xl shadow-sm border border-slate-200 p-5">
+          <div class="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <h3 class="text-sm font-black text-slate-800 flex items-center gap-2">
+                <i class="fas fa-clipboard-check text-purple-500"></i>
+                Habilitação Diária de Espaços
+              </h3>
+              <p class="text-xs text-slate-400 mt-0.5">Acompanhe a pontualidade de entrega dos espaços agendados</p>
+            </div>
+            <div class="flex items-center gap-2 flex-wrap">
+              <button onclick="habDiariaNavegar(-1)"
+                class="w-9 h-9 flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-all">
+                <i class="fas fa-chevron-left text-xs"></i>
+              </button>
+              <input type="date" id="habDDataInput"
+                onchange="habDiariaDefinirDataInput(this.value)"
+                class="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-purple-400 cursor-pointer">
+              <button onclick="habDiariaIrHoje()"
+                class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-black rounded-xl uppercase transition-all">
+                Hoje
+              </button>
+              <button onclick="habDiariaNavegar(1)"
+                class="w-9 h-9 flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-all">
+                <i class="fas fa-chevron-right text-xs"></i>
+              </button>
+              <button onclick="habDiariaAtualizar()"
+                class="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-all">
+                <i class="fas fa-sync-alt text-[10px]"></i> Atualizar
+              </button>
+            </div>
           </div>
         </div>
+
+        <!-- Conteúdo dinâmico: métricas + tabela -->
+        <div id="habDConteudo">
+          <div class="p-16 text-center text-slate-300">
+            <i class="fas fa-clipboard-check text-4xl mb-3"></i><br>
+            <span class="text-sm font-bold">Selecione uma data para carregar o relatório</span>
+          </div>
+        </div>
+
       </div>
 
       </section>

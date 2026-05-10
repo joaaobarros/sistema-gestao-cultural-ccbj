@@ -2389,9 +2389,10 @@ function alternarModoVisualizacao(modo) {
     window._diagramaDia    = window._diagramaDia    !== undefined ? window._diagramaDia : (new Date().getDay()===0?6:new Date().getDay()-1);
     renderizarModoDiagrama();
   } else if (modo === 'habilitacoes') {
-    // Habilitações tem seu próprio painel; navegar direto para ele
-    mostrarAba('aba-habilitacoes');
-    return;
+    hideAll();
+    habV?.classList.remove('hidden');
+    setAtivo(btnHab);
+    habDiariaInicializar();
   } else {
     hideAll();
     lista?.classList.remove('hidden');

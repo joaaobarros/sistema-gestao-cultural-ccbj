@@ -501,7 +501,14 @@ const GAS = {
     obterPerfilSocial:  function(id, cb, err)    { GAS._call('obterPerfilSocialRH', [id], cb, err); },
     salvarPerfilSocial: function(dados, cb, err) { GAS._call('salvarPerfilSocialRH',[dados], cb, err); },
     indicadores:        function(cb, err)        { GAS._call('obterIndicadoresRH',  [], cb, err); },
-    diversidade:        function(cb, err)        { GAS._call('obterDiversidadeRH',  [], cb, err); }
+    diversidade:        function(cb, err)        { GAS._call('obterDiversidadeRH',  [], cb, err); },
+    obterPCCS:          function(cb, err)        { GAS._call('obterPCCS',           [], cb, err); },
+    salvarParametrosPCCS: function(p, cb, err)   { GAS._call('salvarParametrosPCCS',[p], cb, err); },
+    aplicarReajustePCCS: function(pct, cb, err)  { GAS._call('aplicarReajustePCCS', [pct], cb, err); },
+    salvarTabelaRowPCCS: function(row, cb, err)  { GAS._call('salvarTabelaRowPCCS', [row], cb, err); },
+    obterCargosPCCS:    function(cb, err)        { GAS._call('obterCargosPCCS',     [], cb, err); },
+    salvarCargoPCCS:    function(d, cb, err)     { GAS._call('salvarCargoPCCS',     [d], cb, err); },
+    excluirCargoPCCS:   function(id, cb, err)    { GAS._call('excluirCargoPCCS',    [id], cb, err); }
   },
 
   /**
@@ -699,6 +706,22 @@ const GAS = {
     metricas: function(cb, err) {
       var em = GAS._sessao();
       GAS._call('obterMetricasHabilitacoes', [em], cb, err);
+    }
+  },
+
+  /**
+   * BLOCO: Habilitação Diária
+   * @context Check-in operacional de espaços antes de cada evento agendado.
+   *          Rastreia pontualidade e gera relatório de eficiência de entrega.
+   */
+  habDiaria: {
+    relatorio: function(dataISO, cb, err) {
+      var em = GAS._sessao();
+      GAS._call('obterRelatorioDiario', [dataISO, em], cb, err);
+    },
+    registrar: function(dados, cb, err) {
+      var em = GAS._sessao();
+      GAS._call('registrarHabilitacaoDiaria', [dados, em], cb, err);
     }
   }
 

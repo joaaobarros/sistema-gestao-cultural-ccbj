@@ -581,6 +581,10 @@ const MODULOS = {
         'descricao', 'status', 'data_envio', 'data_analise', 'responsavel_analise',
         'observacoes', 'documentos', 'criado_por', 'criado_em', 'atualizado_em'
       ],
+      'HabDiaria': [
+        'id', 'reserva_id', 'sala_id', 'data', 'hora_evento', 'hora_habilitacao',
+        'responsavel', 'responsavel_nome', 'observacao', 'criado_em'
+      ],
     }
   },
 

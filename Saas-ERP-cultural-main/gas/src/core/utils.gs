@@ -110,6 +110,7 @@ const ABA_PARA_MODULO = {
   'Acoes':                'ACOES',
   'AcoesRecursos':        'ACOES',
   'Habilitacoes':         'ACOES',
+  'HabDiaria':            'ACOES',
 
   // OBSERVABILIDADE (EventLog na MASTER)
   'EventLog':             'MASTER',
