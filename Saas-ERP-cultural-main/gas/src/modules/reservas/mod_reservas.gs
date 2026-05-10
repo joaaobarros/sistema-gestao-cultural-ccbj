@@ -1244,6 +1244,10 @@ function criarReservaController(dados, datas) {
         usuario: responsavelNorm, origem: 'mod_reservas',
         contexto: { sala: dados.sala, data: dados.data || (datas && datas[0]) }
       });
+      // Vincula reserva a uma Ação institucional quando informada (vínculo fraco)
+      if (dados.acaoId) {
+        try { associarRecurso(dados.acaoId, 'reserva', id, responsavelNorm); } catch(_) {}
+      }
     });
 
     return { sucesso: true, ids: idsGerados };

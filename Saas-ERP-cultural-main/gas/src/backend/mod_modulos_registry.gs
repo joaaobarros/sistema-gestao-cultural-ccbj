@@ -184,6 +184,14 @@ var _MOD_DEFAULTS = [
     rotas: ['aba-contratos-fin'],
     menus: [],
     dependencias: [], status_operacional: 'beta'
+  },
+  {
+    moduleId: 'acoes', nome: 'Ações Institucionais', categoria: 'programacao',
+    descricao: 'Gestão de iniciativas, eventos e projetos — núcleo integrador da plataforma', versao: '1.0',
+    ativo: true, nucleo: false,
+    rotas: ['aba-acoes'],
+    menus: [{ grupo: 'mod-programacao', btn: 'aba-acoes' }],
+    dependencias: [], status_operacional: 'beta'
   }
 ];
 

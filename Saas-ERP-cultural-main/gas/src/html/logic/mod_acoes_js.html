@@ -1,0 +1,363 @@
+<!--
+@file mod_acoes_js.html
+@layer frontend/domain
+@description Lógica frontend do módulo de Ações Institucionais.
+             Lazy-loading via _onShow_aba-acoes; estado em AppState.acoes.
+@responsibility Renderizar lista, formulário CRUD e painel de detalhes com transições de estado.
+@dependencies GAS.acoes (server_bridge_js), AppState (app_state_js), mostrarAba (navegacao_ui_js)
+-->
+<script>
+
+// ─────────────────────────────────────────────────────────────
+// ESTADO LOCAL
+// ─────────────────────────────────────────────────────────────
+
+window._acoesDetalheAtual = null;  // Ação aberta no painel de detalhe
+var _acoesFiltroAtivo = '';        // filtro de status atual
+
+// Mapa de exibição de status
+var _ACOES_STATUS_LABEL = {
+  rascunho:     'Rascunho',
+  planejamento: 'Planejamento',
+  aprovado:     'Aprovado',
+  em_execucao:  'Em Execução',
+  pausado:      'Pausado',
+  concluido:    'Concluído',
+  arquivado:    'Arquivado'
+};
+
+var _ACOES_STATUS_COR = {
+  rascunho:     'bg-slate-200 text-slate-600',
+  planejamento: 'bg-blue-100 text-blue-700',
+  aprovado:     'bg-emerald-100 text-emerald-700',
+  em_execucao:  'bg-purple-100 text-purple-700',
+  pausado:      'bg-amber-100 text-amber-700',
+  concluido:    'bg-teal-100 text-teal-700',
+  arquivado:    'bg-slate-100 text-slate-400'
+};
+
+var _ACOES_TIPO_LABEL = {
+  curso:                'Curso',
+  oficina:              'Oficina',
+  espetaculo:           'Espetáculo',
+  evento:               'Evento',
+  campanha:             'Campanha',
+  laboratorio:          'Laboratório',
+  projeto_formativo:    'Projeto Formativo',
+  difusao:              'Difusão',
+  atividade_territorial:'Atividade Territorial',
+  outro:                'Outro'
+};
+
+// Transições válidas por status (espelha action_engine.gs)
+var _ACOES_TRANSICOES = {
+  rascunho:    ['planejamento'],
+  planejamento:['aprovado', 'rascunho'],
+  aprovado:    ['em_execucao', 'planejamento'],
+  em_execucao: ['pausado', 'concluido'],
+  pausado:     ['em_execucao', 'arquivado'],
+  concluido:   ['arquivado'],
+  arquivado:   []
+};
+
+var _ACOES_TRANSICAO_LABEL = {
+  planejamento: 'Enviar para Planejamento',
+  aprovado:     'Aprovar',
+  em_execucao:  'Iniciar Execução',
+  pausado:      'Pausar',
+  concluido:    'Concluir',
+  arquivado:    'Arquivar',
+  rascunho:     'Voltar para Rascunho'
+};
+
+// ─────────────────────────────────────────────────────────────
+// LAZY-LOADING — _onShow registrado em navegacao_ui_js
+// ─────────────────────────────────────────────────────────────
+
+function _onShow_aba_acoes() {
+  _acoesCarregar();
+}
+
+// ─────────────────────────────────────────────────────────────
+// CARREGAMENTO
+// ─────────────────────────────────────────────────────────────
+
+function _acoesCarregar() {
+  document.getElementById('acoes-lista-loading').classList.remove('hidden');
+  document.getElementById('acoes-lista').innerHTML = '';
+  document.getElementById('acoes-lista-vazia').classList.add('hidden');
+
+  GAS.acoes.listar({}, function(lista) {
+    AppState.acoes = AppState.acoes || {};
+    AppState.acoes.lista = lista || [];
+    document.getElementById('acoes-lista-loading').classList.add('hidden');
+    _acoesRenderizarLista();
+  }, function(e) {
+    document.getElementById('acoes-lista-loading').classList.add('hidden');
+    document.getElementById('acoes-lista').innerHTML =
+      '<p class="text-red-500 text-xs text-center py-6">Erro ao carregar ações: ' + (e.message || e) + '</p>';
+  });
+}
+
+function _acoesFiltrar(status) {
+  _acoesFiltroAtivo = status;
+
+  // Atualizar visual dos botões de filtro
+  document.querySelectorAll('.acoes-filtro').forEach(function(btn) {
+    btn.className = 'acoes-filtro px-3 py-1 text-[10px] font-black rounded-full uppercase tracking-wide transition-all bg-slate-100 text-slate-500 hover:bg-slate-200';
+  });
+  var btnAtivo = document.getElementById('acoes-f-' + (status || 'todos'));
+  if (btnAtivo) btnAtivo.className = 'acoes-filtro acoes-filtro-ativo px-3 py-1 text-[10px] font-black rounded-full uppercase tracking-wide transition-all bg-slate-900 text-white';
+
+  _acoesRenderizarLista();
+}
+
+function _acoesRenderizarLista() {
+  var lista = (AppState.acoes && AppState.acoes.lista) || [];
+  if (_acoesFiltroAtivo) {
+    lista = lista.filter(function(a) { return a.status === _acoesFiltroAtivo; });
+  }
+
+  var container = document.getElementById('acoes-lista');
+  var vazio     = document.getElementById('acoes-lista-vazia');
+
+  if (!lista.length) {
+    container.innerHTML = '';
+    vazio.classList.remove('hidden');
+    return;
+  }
+  vazio.classList.add('hidden');
+
+  container.innerHTML = lista.map(function(a) {
+    var cor   = _ACOES_STATUS_COR[a.status]  || 'bg-slate-100 text-slate-500';
+    var tipo  = _ACOES_TIPO_LABEL[a.tipo]    || a.tipo;
+    var label = _ACOES_STATUS_LABEL[a.status] || a.status;
+    var datas = '';
+    if (a.dataInicio) datas += a.dataInicio;
+    if (a.dataInicio && a.dataFim) datas += ' → ';
+    if (a.dataFim) datas += a.dataFim;
+
+    return [
+      '<div onclick="_acoesAbrirDetalhe(' + "'" + escaparHTML(a.id) + "'" + ')"',
+      '  class="bg-white border border-slate-200 rounded-2xl p-4 cursor-pointer hover:border-purple-300 hover:shadow-sm transition-all group">',
+      '  <div class="flex items-start justify-between gap-2">',
+      '    <div class="flex-1 min-w-0">',
+      '      <p class="text-sm font-black text-slate-800 truncate group-hover:text-purple-700 transition-colors">' + escaparHTML(a.nome) + '</p>',
+      '      <p class="text-[10px] text-slate-400 font-semibold uppercase tracking-wide mt-0.5">' + escaparHTML(tipo) + (datas ? ' · ' + datas : '') + '</p>',
+      '    </div>',
+      '    <span class="shrink-0 px-2 py-0.5 text-[9px] font-black rounded-full uppercase ' + cor + '">' + escaparHTML(label) + '</span>',
+      '  </div>',
+      a.descricao ? '<p class="text-xs text-slate-500 mt-1.5 line-clamp-2">' + escaparHTML(a.descricao) + '</p>' : '',
+      '  <p class="text-[10px] text-slate-400 mt-2"><i class="fas fa-user mr-1"></i>' + escaparHTML(a.responsavel) + '</p>',
+      '</div>'
+    ].join('');
+  }).join('');
+}
+
+// ─────────────────────────────────────────────────────────────
+// PAINEL DE DETALHE
+// ─────────────────────────────────────────────────────────────
+
+function _acoesAbrirDetalhe(id) {
+  var lista = (AppState.acoes && AppState.acoes.lista) || [];
+  var acao  = lista.find(function(a) { return a.id === id; });
+  if (!acao) return;
+
+  window._acoesDetalheAtual = acao;
+
+  // Preenche cabeçalho
+  document.getElementById('acoes-d-nome').textContent      = acao.nome;
+  document.getElementById('acoes-d-tipo').textContent      = _ACOES_TIPO_LABEL[acao.tipo] || acao.tipo;
+  document.getElementById('acoes-d-responsavel').textContent = acao.responsavel;
+
+  // Status badge
+  var badge = document.getElementById('acoes-d-status-badge');
+  badge.textContent = _ACOES_STATUS_LABEL[acao.status] || acao.status;
+  badge.className   = 'px-2 py-0.5 text-[9px] font-black rounded-full uppercase ' + (_ACOES_STATUS_COR[acao.status] || 'bg-slate-100 text-slate-500');
+
+  // Datas
+  var datas = '';
+  if (acao.dataInicio) datas += acao.dataInicio;
+  if (acao.dataInicio && acao.dataFim) datas += ' → ';
+  if (acao.dataFim)   datas += acao.dataFim;
+  var datasRow = document.getElementById('acoes-d-datas-row');
+  if (datas) {
+    document.getElementById('acoes-d-datas').textContent = datas;
+    datasRow.classList.remove('hidden');
+  } else {
+    datasRow.classList.add('hidden');
+  }
+
+  // Descrição
+  var descRow = document.getElementById('acoes-d-desc-row');
+  if (acao.descricao) {
+    document.getElementById('acoes-d-desc').textContent = acao.descricao;
+    descRow.classList.remove('hidden');
+  } else {
+    descRow.classList.add('hidden');
+  }
+
+  // Transições de estado
+  var transContainer = document.getElementById('acoes-d-transicoes');
+  var proximos = _ACOES_TRANSICOES[acao.status] || [];
+  transContainer.innerHTML = proximos.map(function(proximo) {
+    var corBtn = proximo === 'arquivado' ? 'bg-red-100 text-red-700 hover:bg-red-200' :
+                 proximo === 'concluido' ? 'bg-teal-100 text-teal-700 hover:bg-teal-200' :
+                 proximo === 'aprovado'  ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' :
+                 'bg-slate-100 text-slate-700 hover:bg-slate-200';
+    return '<button onclick="_acoesMudarStatus(\'' + acao.id + '\',\'' + proximo + '\')" ' +
+           'class="px-3 py-1 text-[10px] font-bold rounded-xl transition-all ' + corBtn + '">' +
+           (_ACOES_TRANSICAO_LABEL[proximo] || proximo) + '</button>';
+  }).join('');
+
+  // Recursos
+  _acoesCarregarRecursos(acao.id);
+
+  // Mostrar painel
+  document.getElementById('acoes-form-container').classList.add('hidden');
+  document.getElementById('acoes-detalhe-container').classList.remove('hidden');
+  document.getElementById('acoes-painel').classList.remove('hidden');
+}
+
+function _acoesCarregarRecursos(acaoId) {
+  var loading = document.getElementById('acoes-d-recursos-loading');
+  var vazio   = document.getElementById('acoes-d-recursos-vazio');
+  var lista   = document.getElementById('acoes-d-recursos');
+
+  loading.classList.remove('hidden');
+  vazio.classList.add('hidden');
+  lista.innerHTML = '';
+
+  GAS.acoes.obterRecursos(acaoId, function(recursos) {
+    loading.classList.add('hidden');
+    if (!recursos || !recursos.length) { vazio.classList.remove('hidden'); return; }
+
+    var iconePorTipo = { reserva: 'fa-calendar-alt', contrato: 'fa-file-contract',
+                         chave: 'fa-key', tarefa: 'fa-check-square', relatorio: 'fa-chart-bar' };
+
+    lista.innerHTML = recursos.map(function(r) {
+      var icone = iconePorTipo[r.tipo] || 'fa-link';
+      return '<li class="flex items-center gap-2 text-xs text-slate-600">' +
+             '<i class="fas ' + icone + ' text-slate-400 w-4 text-center text-[10px]"></i>' +
+             '<span class="font-semibold text-slate-500 uppercase text-[9px]">' + escaparHTML(r.tipo) + '</span>' +
+             '<span class="text-slate-400 font-mono text-[9px] truncate">' + escaparHTML(String(r.recursoId)) + '</span>' +
+             '</li>';
+    }).join('');
+  });
+}
+
+// ─────────────────────────────────────────────────────────────
+// FORMULÁRIO CRIAR / EDITAR
+// ─────────────────────────────────────────────────────────────
+
+function _acoesAbrirForm(acao) {
+  var editando = acao && acao.id;
+
+  document.getElementById('acoes-form-titulo').textContent = editando ? 'Editar Ação' : 'Nova Ação';
+  document.getElementById('acoes-form-btn').textContent    = editando ? 'Salvar alterações' : 'Criar ação';
+  document.getElementById('acoes-form-id').value           = editando ? acao.id : '';
+  document.getElementById('acoes-f-nome').value            = editando ? (acao.nome || '') : '';
+  document.getElementById('acoes-f-tipo').value            = editando ? (acao.tipo || '') : '';
+  document.getElementById('acoes-f-responsavel').value     = editando ? (acao.responsavel || '') : (AppState.usuario && AppState.usuario.email || '');
+  document.getElementById('acoes-f-inicio').value          = editando ? (acao.dataInicio || '') : '';
+  document.getElementById('acoes-f-fim').value             = editando ? (acao.dataFim || '') : '';
+  document.getElementById('acoes-f-descricao').value       = editando ? (acao.descricao || '') : '';
+
+  document.getElementById('acoes-detalhe-container').classList.add('hidden');
+  document.getElementById('acoes-form-container').classList.remove('hidden');
+  document.getElementById('acoes-painel').classList.remove('hidden');
+}
+
+function _acoesSubmit() {
+  var id     = document.getElementById('acoes-form-id').value;
+  var editando = !!id;
+
+  var dados = {
+    nome:        document.getElementById('acoes-f-nome').value.trim(),
+    tipo:        document.getElementById('acoes-f-tipo').value,
+    responsavel: document.getElementById('acoes-f-responsavel').value.trim(),
+    dataInicio:  document.getElementById('acoes-f-inicio').value,
+    dataFim:     document.getElementById('acoes-f-fim').value,
+    descricao:   document.getElementById('acoes-f-descricao').value.trim()
+  };
+
+  if (!dados.nome)        { alert('Nome é obrigatório.'); return; }
+  if (!dados.tipo)        { alert('Tipo é obrigatório.'); return; }
+  if (!dados.responsavel) { alert('Responsável é obrigatório.'); return; }
+
+  var btn = document.getElementById('acoes-form-btn');
+  btn.disabled    = true;
+  btn.textContent = 'Salvando...';
+
+  var onSuccess = function(res) {
+    btn.disabled    = false;
+    btn.textContent = editando ? 'Salvar alterações' : 'Criar ação';
+
+    if (!res || !res.ok) {
+      alert('Erro: ' + (res && res.erro ? res.erro : 'Falha desconhecida'));
+      return;
+    }
+    _acoesPainelFechar();
+    _acoesCarregar();
+  };
+
+  var onError = function(e) {
+    btn.disabled    = false;
+    btn.textContent = editando ? 'Salvar alterações' : 'Criar ação';
+    alert('Erro ao salvar: ' + (e.message || e));
+  };
+
+  if (editando) {
+    GAS.acoes.atualizar(id, dados, onSuccess, onError);
+  } else {
+    GAS.acoes.criar(dados, onSuccess, onError);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// TRANSIÇÃO DE ESTADO
+// ─────────────────────────────────────────────────────────────
+
+function _acoesMudarStatus(id, novoStatus) {
+  var labelNovo = _ACOES_STATUS_LABEL[novoStatus] || novoStatus;
+  if (!confirm('Confirmar transição para "' + labelNovo + '"?')) return;
+
+  GAS.acoes.mudarStatus(id, novoStatus, '', function(res) {
+    if (!res || !res.ok) {
+      alert('Erro: ' + (res && res.erro ? res.erro : 'Falha desconhecida'));
+      return;
+    }
+    _acoesPainelFechar();
+    _acoesCarregar();
+  }, function(e) {
+    alert('Erro: ' + (e.message || e));
+  });
+}
+
+// ─────────────────────────────────────────────────────────────
+// UTILITÁRIOS
+// ─────────────────────────────────────────────────────────────
+
+function _acoesPainelFechar() {
+  window._acoesDetalheAtual = null;
+  document.getElementById('acoes-painel').classList.add('hidden');
+  document.getElementById('acoes-form-container').classList.add('hidden');
+  document.getElementById('acoes-detalhe-container').classList.add('hidden');
+}
+
+// Inicializa filtros visuais
+(function() {
+  document.addEventListener('DOMContentLoaded', function() {
+    // Estilo padrão dos filtros (aplicado via JS para evitar duplicação de classes)
+    var filtros = document.querySelectorAll('.acoes-filtro');
+    filtros.forEach(function(btn) {
+      if (!btn.classList.contains('acoes-filtro-ativo')) {
+        btn.className = 'acoes-filtro px-3 py-1 text-[10px] font-black rounded-full uppercase tracking-wide transition-all bg-slate-100 text-slate-500 hover:bg-slate-200';
+      } else {
+        btn.className = 'acoes-filtro acoes-filtro-ativo px-3 py-1 text-[10px] font-black rounded-full uppercase tracking-wide transition-all bg-slate-900 text-white';
+      }
+    });
+  });
+})();
+
+</script>
