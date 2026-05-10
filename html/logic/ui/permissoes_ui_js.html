@@ -73,10 +73,16 @@ document.addEventListener('DOMContentLoaded', function() {
         carregarPermissoes(function() {
           configurarInterfacePorPermissao();
 
-          // Carrega status dos módulos após permissões — fail-open
+          if (typeof EventBus !== 'undefined') {
+            EventBus.emit('permissoes:prontas', { email: AppState.usuario.email });
+          }
+
           if (typeof carregarStatusModulos === 'function') {
             carregarStatusModulos(function() {
               aplicarEstadoModulos && aplicarEstadoModulos();
+              if (typeof EventBus !== 'undefined') {
+                EventBus.emit('app:modulos:carregados', AppState.modulos);
+              }
             });
           }
 

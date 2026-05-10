@@ -35,7 +35,6 @@
 
 // Deve coincidir com PROP.DATA em Setup.js
 const DATA_FOLDER_PROP = 'FOLDER_ID_DATA';
-const DATA_FOLDER_NAME = 'CCBJ_DATA';
 
 // Cache em memória — válido apenas dentro de uma única execução GAS
 var _dataFolderCache = null;
@@ -57,8 +56,9 @@ function getDataFolder() {
   }
 
   // Fallback: busca por nome e registra o ID encontrado/criado
-  const iter   = DriveApp.getFoldersByName(DATA_FOLDER_NAME);
-  const folder = iter.hasNext() ? iter.next() : DriveApp.createFolder(DATA_FOLDER_NAME);
+  const dataFolderName = (typeof getOrgConfig === 'function') ? getOrgConfig().dataFolder : 'CCBJ_DATA';
+  const iter   = DriveApp.getFoldersByName(dataFolderName);
+  const folder = iter.hasNext() ? iter.next() : DriveApp.createFolder(dataFolderName);
   props.setProperty(DATA_FOLDER_PROP, folder.getId());
   _dataFolderCache = folder;
   console.log('DataLayer: pasta re-registrada → ' + folder.getId());

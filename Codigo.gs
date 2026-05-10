@@ -3,28 +3,21 @@
  * @description Ponto de entrada do servidor GAS. Define doGet/doPost e
  *              a função include() para composição de templates HTML.
  * @layer backend
- * @responsibility Roteamento HTTP, notificações de cancelamento,
- *                 stubs para funcionalidades em desenvolvimento.
+ * @responsibility Roteamento HTTP, notificações de cancelamento.
  * @dependencies mod_admin.gs (aprovarSolicitacao, recusarSolicitacao),
- *               mod_reservas.gs (via helpers), utils.gs (gerarId, isMesmoDia)
+ *               mod_reservas.gs (via helpers), utils.js (gerarId, isMesmoDia)
  */
-
-const BASE_URL_FALLBACK =
-  "https://script.google.com/macros/s/AKfycbzw2Gum2jte37SUmkEvbHUkwkxD_BRg51s_E7p3VUeODP2pIZUyO76yL5E2JuiuMUp1wg/exec";
 
 /**
  * ========================================
- * BLOCO: URL base e configuração de deployment
+ * BLOCO: URL base
  * ========================================
- * @description Resolve a URL pública do webapp. Usa a URL dinâmica do ScriptApp quando
- *              disponível, ou cai no fallback hardcoded para ambientes de teste local.
- * @sideEffects Nenhum
  */
 function getBaseUrl() {
   try {
-    return ScriptApp.getService().getUrl() || BASE_URL_FALLBACK;
+    return ScriptApp.getService().getUrl() || '';
   } catch (e) {
-    return BASE_URL_FALLBACK;
+    return '';
   }
 }
 
@@ -72,23 +65,6 @@ function _notificarCancelamentoMesmoDia({ sala, nome, inicio, fim, emailAtual })
   } catch (e) {
     console.warn("Notificação de cancelamento falhou:", e.message);
   }
-}
-
-// Mantida para compatibilidade
-function chat_enviarMensagem(texto) {
-  console.log("[ALERTA INTERNO]", texto);
-}
-
-// Stubs EM_BREVE
-function obterMetricasCODIP() {
-  throw new Error("EM_BREVE");
-}
-function gerarDocumentoDownload() {
-  throw new Error("EM_BREVE");
-}
-
-function testeVSCode() {
-  Logger.log("funcionando");
 }
 
 /**
@@ -145,12 +121,11 @@ function doGet(e) {
   try { emailInicial = Session.getActiveUser().getEmail() || ''; } catch(_) {}
 
   const tmpl = HtmlService.createTemplateFromFile('Index');
-  tmpl.emailInicial  = emailInicial;
-  tmpl.sessaoInicial = '';
-  tmpl.appUrl        = getBaseUrl();
+  tmpl.emailInicial = emailInicial;
+  tmpl.appUrl       = getBaseUrl();
 
   return tmpl.evaluate()
-    .setTitle('Sistema CCBJ')
+    .setTitle(getOrgConfig().titulo)
     .addMetaTag('viewport', 'width=device-width, initial-scale=1')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }

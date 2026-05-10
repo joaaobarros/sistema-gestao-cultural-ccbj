@@ -1819,6 +1819,10 @@ function inicializarApp() {
       AppState.usuario.isSuperadmin = dados.isSuperadmin;
       AppState.usuario.setor = dados.setorUsuario || '';
 
+      if (typeof EventBus !== 'undefined') {
+        EventBus.emit('app:usuario:carregado', { email: dados.usuarioEmail, isAdmin: dados.isAdmin, isSuperadmin: dados.isSuperadmin });
+      }
+
       if (typeof carregarPerfilUsuario === 'function') {
         try { carregarPerfilUsuario(); } catch (e) { console.warn(e); }
       }
@@ -1914,7 +1918,10 @@ function inicializarApp() {
         }
       }
 
-       console.log('Sistema pronto. Usuário:', AppState.usuario.email);
+      console.log('Sistema pronto. Usuário:', AppState.usuario.email);
+      if (typeof EventBus !== 'undefined') {
+        EventBus.emit('app:pronto', { email: AppState.usuario.email });
+      }
       // Carrega badge de solicitações pendentes + inicia polling em tempo real
       setTimeout(function() { _pollSolicitacoes(true); }, 2000);
       // ATIVA PREVISÃO AUTOMÁTICA NO FORM

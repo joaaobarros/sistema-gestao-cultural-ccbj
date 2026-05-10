@@ -7,7 +7,7 @@
  *              risco psicossocial (NR-1), alertas institucionais, governança metodológica
  *              e geração de relatórios.
  * @dependencies SpreadsheetApp, PropertiesService, LockService, CacheService,
- *               mod_permissoes.gs (podeEditar, podeExcluir), utils.js (_getSheet — opcional)
+ *               mod_permissoes_v2.gs (podeEditar, podeExcluir, podeAcessarModulo), utils.js (_getSheet — opcional)
  * @version 2.0 — assíncrono, permissões, LockService, PropertiesService, governança
  */
 
@@ -319,13 +319,12 @@ function definirTotalColaboradoresEscuta(total) {
 
 /**
  * Verifica permissão de escuta para ação crítica.
- * Integra com mod_permissoes.gs se disponível; fallback via PropertiesService (Administradores).
+ * Integra com mod_permissoes_v2.gs; fallback via aba Administradores.
  * Ações: 'visualizar', 'editar', 'excluir'
  */
 function verificarPermissaoEscuta(email, acao) {
   if (!email) return false;
   try {
-    // Integração com mod_permissoes.gs
     if (typeof podeExcluir === 'function' && acao === 'excluir') {
       return podeExcluir(email, 'escuta');
     }

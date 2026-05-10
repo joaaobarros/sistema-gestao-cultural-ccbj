@@ -215,6 +215,10 @@ function mostrarAba(idAba) {
     if (typeof carregarChavesPendentes === 'function') carregarChavesPendentes();
   }
 
+  if (typeof EventBus !== 'undefined') {
+    EventBus.emit('aba:' + idAba + ':show', { id: idAba });
+  }
+
   var _dynHandler = window['_onShow_' + idAba.replace(/-/g, '_')];
   if (typeof _dynHandler === 'function') _dynHandler();
 

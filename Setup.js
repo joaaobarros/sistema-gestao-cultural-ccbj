@@ -97,9 +97,8 @@ const PROP = {
 // Catálogo canônico de arquivos JSON gerenciados pelo DataLayer.
 // Adicionar aqui sempre que um novo arquivo JSON for introduzido em qualquer módulo.
 const _DATA_FILES = [
-  // Permissões
+  // Permissões (v2)
   'permissoes_v2.json', 'usuarios_sistema.json', 'auditoria_permissoes.json',
-  'permissoes.json',
   // Equipes / RH
   'funcionarios.json', 'escalas.json', 'avaliacoes.json', 'ferias.json',
   'rh_cargos.json', 'rh_historico.json', 'rh_avaliacoes.json',

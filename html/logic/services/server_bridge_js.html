@@ -625,30 +625,14 @@ const GAS = {
   },
 
   /**
-   * BLOCO: Permissões modulares (mod_permissoes.gs)
+   * BLOCO: Permissões modulares (mod_permissoes_v2.gs)
    */
   permissoes: {
-
-    // ── V1 (LEGADO) ─────────────────────
-    obter:   function(cb, err)        { GAS._call('obterPermissoesUsuario',   [], cb, err); },
-    listar:  function(cb, err)        { GAS._call('listarPermissoes',         [], cb, err); },
-    salvar:  function(dados, cb, err) { GAS._call('salvarPermissaoUsuario',   [dados], cb, err); },
-    excluir: function(email, cb, err) { GAS._call('excluirPermissaoUsuario',  [email], cb, err); },
-    podacessar: function(email, mod, cb, err) { GAS._call('podeAcessarModulo', [email, mod], cb, err); },
-
-    // ── V2 (NOVO) ───────────────────────
-    obterV2: function(email, cb, err) {
-      GAS._call('obterPermissoesUsuarioV2', [email], cb, err);
-    },
-
-    salvarV2: function(dados, cb, err) {
-      GAS._call('salvarPermissoesUsuarioV2', [dados], cb, err);
-    },
-
-    listarV2: function(cb, err) {
-      GAS._call('listarPermissoesV2', [], cb, err);
-    }
-
+    obter:      function(email, cb, err)       { GAS._call('obterPermissoesUsuarioV2',  [email],  cb, err); },
+    salvar:     function(dados, cb, err)        { GAS._call('salvarPermissoesUsuarioV2', [dados],  cb, err); },
+    listar:     function(cb, err)               { GAS._call('listarPermissoesV2',        [],       cb, err); },
+    auditoria:  function(cb, err)               { GAS._call('obterAuditoriaPermissoes',  [],       cb, err); },
+    sincronizar:function(cb, err)               { GAS._call('sincronizarUsuariosSistema',[],       cb, err); }
   }
 
 };
