@@ -68,10 +68,23 @@
             <span class="text-xs font-semibold">Novo Agendamento</span>
           </button>
 
+        </div>
+      </div>
+
+      <!-- ── OPERACIONAL ─────────────────────────────────────── -->
+      <div class="mb-1">
+        <button onclick="toggleModulo('mod-operacional')"
+          class="w-full flex items-center justify-between px-3 py-2 text-[9px] font-black text-slate-500 uppercase tracking-widest hover:text-purple-300 transition-colors">
+          <span><i class="fas fa-clipboard-check mr-2 text-slate-600"></i>Operacional</span>
+          <i id="icon-mod-operacional" class="fas fa-chevron-up text-[8px] text-slate-600"></i>
+        </button>
+
+        <div id="mod-operacional" class="space-y-0.5 pl-2">
+
           <button data-aba="aba-aprovacoes" class="tab-btn nav-item w-full">
             <i class="fas fa-check-double w-5 text-center text-xs"></i>
             <span class="text-xs font-semibold flex-1 text-left">Aprovações</span>
-            <span id="badgeSolicitacoes" class="hidden min-w-[18px] h-[18px] bg-red-500 text-white text-[9px] font-black rounded-full flex items-center justify-center px-1">0</span>
+            <span id="badgeAprovacoes" class="hidden min-w-[18px] h-[18px] bg-red-500 text-white text-[9px] font-black rounded-full flex items-center justify-center px-1">0</span>
           </button>
 
         </div>
@@ -238,8 +251,8 @@
 
 <script>
 (function() {
-  var STORE_KEY = 'sidebar_modules_v2';
-  var GRUPOS = ['mod-espacos','mod-infraestrutura','mod-comunicacao','mod-estrategia'];
+  var STORE_KEY = 'sidebar_modules_v3';
+  var GRUPOS = ['mod-espacos','mod-operacional','mod-infraestrutura','mod-comunicacao','mod-estrategia'];
   var FAV_BLOQUEADOS = ['aba-tarefas','aba-processos','aba-almoxarifado','aba-balcao',
     'aba-rh','aba-eficiencia','aba-contratos-fin','aba-contratacoes',
     'aba-codip','aba-rel-financeiros','aba-escuta','aba-permissoes-v2'];
@@ -265,6 +278,9 @@
     });
     try { localStorage.setItem(STORE_KEY, JSON.stringify(estado)); } catch(e) {}
   }
+
+  // Limpa estado legado (v2) para forçar defaults da v3
+  try { localStorage.removeItem('sidebar_modules_v2'); } catch(e) {}
 
   function _contarFavoritosValidos() {
     try {

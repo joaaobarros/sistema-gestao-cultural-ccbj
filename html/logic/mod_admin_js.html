@@ -373,18 +373,23 @@ function carregarUsuariosPermissoes() {
 }
 
 function selecionarUsuarioConfig(email) {
-  if (typeof mostrarAba === 'function') mostrarAba('aba-permissoes-v2');
+  // Abre configurações e rola para o editor de usuário inline
+  if (typeof mostrarAba === 'function') mostrarAba('aba-gestao-admin');
   setTimeout(function() {
     if (typeof p2SelecionarUsuario === 'function') p2SelecionarUsuario(email);
-  }, 400);
+    var editor = document.getElementById('p2EditorUsuario');
+    if (editor) editor.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, 300);
 }
 
 function _abrirConfigUsuarioExterno(email) {
-  // Chamado após aprovação de cadastro externo — abre painel de permissões com usuário pré-selecionado
-  if (typeof mostrarAba === 'function') mostrarAba('aba-permissoes-v2');
+  // Após aprovação de cadastro externo — navega para gestão e seleciona usuário
+  if (typeof mostrarAba === 'function') mostrarAba('aba-gestao-admin');
   setTimeout(function() {
     if (typeof p2SelecionarUsuario === 'function') p2SelecionarUsuario(email);
-  }, 400);
+    var editor = document.getElementById('p2EditorUsuario');
+    if (editor) editor.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, 300);
 }
 
 /**
@@ -2015,11 +2020,77 @@ function carregarDashboard() {
 
       const _s7 = _s7kpis + _s7barras;
 
+      // ─── S0: PAINEL OPERACIONAL HOJE ──────────────────────────
+      const _hoje = (() => {
+        const todayISO = new Date().toISOString().slice(0,10); // yyyy-mm-dd
+        const todayParts = todayISO.split('-');
+        const todayBR = todayParts[2]+'/'+todayParts[1]+'/'+todayParts[0]; // dd/mm/yyyy
+        const reservas = (typeof AppState !== 'undefined' && AppState.colecoes && AppState.colecoes.reservas) ? AppState.colecoes.reservas : [];
+        const reservasHoje = reservas.filter(r => {
+          // r[1] = data da reserva (pode ser Date, yyyy-mm-dd ou dd/mm/yyyy)
+          const raw = r[1];
+          if (!raw) return false;
+          if (raw instanceof Date) return raw.toISOString().slice(0,10) === todayISO;
+          const d = String(raw).trim();
+          return d === todayISO || d === todayBR || d.startsWith(todayISO);
+        });
+        // r[13] = status da reserva
+        const confirmadasHoje  = reservasHoje.filter(r => r[13]==='CONFIRMADO' || r[13]==='HABILITADO').length;
+        const canceladasHoje   = reservasHoje.filter(r => r[13]==='CANCELADO').length;
+        const solPend = m.solPendentes || 0;
+        const pendCad = (typeof _cadastrosCache !== 'undefined' ? (_cadastrosCache||[]) : []).filter(c=>c.status==='PENDENTE').length;
+        const pendChavAprov = (typeof _chavesAprovCache !== 'undefined' ? (_chavesAprovCache||[]) : []).length;
+        const pendChavPend  = (typeof _chvState !== 'undefined' && _chvState.dados ? (_chvState.dados.protocolos||[]).filter(p=>p.status==='ATRASADA').length : 0);
+        const totalPend = solPend + pendCad + pendChavAprov;
+        const _card = (icon,cor,bg,val,label,acao,hint) => `
+          <div style="background:${bg};border:1px solid ${cor}30;border-radius:16px;padding:16px 18px;cursor:${acao?'pointer':'default'};transition:box-shadow 0.2s"
+               ${acao ? `onclick="${acao}" title="${hint||''}"` : ''}>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+              <div style="width:36px;height:36px;border-radius:10px;background:${cor}20;display:flex;align-items:center;justify-content:center">
+                <i class="fas ${icon}" style="color:${cor};font-size:14px"></i>
+              </div>
+              ${acao ? `<i class="fas fa-arrow-right" style="color:${cor};font-size:10px;opacity:0.6"></i>` : ''}
+            </div>
+            <div style="font-size:28px;font-weight:900;color:#1e293b;line-height:1">${val}</div>
+            <div style="font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;margin-top:4px">${label}</div>
+          </div>`;
+        const alertas = [];
+        if (pendChavPend > 0) alertas.push(`<div style="display:flex;align-items:center;gap:8px;background:#fef3c7;border:1px solid #fbbf24;border-radius:10px;padding:10px 14px"><i class="fas fa-triangle-exclamation" style="color:#d97706"></i><span style="font-size:11px;font-weight:700;color:#92400e">${pendChavPend} chave(s) em atraso — verifique o módulo de Protocolo de Chaves</span></div>`);
+        if (totalPend > 0) alertas.push(`<div style="display:flex;align-items:center;gap:8px;background:#fef2f2;border:1px solid #fca5a5;border-radius:10px;padding:10px 14px;cursor:pointer" onclick="mostrarAba('aba-aprovacoes')"><i class="fas fa-clock" style="color:#dc2626"></i><span style="font-size:11px;font-weight:700;color:#991b1b">${totalPend} pendência(s) aguardam aprovação — clique para abrir Aprovações</span></div>`);
+        return `
+          <div style="background:#fff;border:1px solid #e2e8f0;border-radius:20px;overflow:hidden;margin-bottom:8px">
+            <div style="padding:14px 20px;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;justify-content:space-between;background:linear-gradient(135deg,#f8fafc,#f1f5f9)">
+              <div style="display:flex;align-items:center;gap:10px">
+                <div style="width:32px;height:32px;border-radius:10px;background:#7c3aed20;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                  <i class="fas fa-sun" style="color:#7c3aed;font-size:13px"></i>
+                </div>
+                <div>
+                  <span style="font-size:12px;font-weight:900;color:#334155;text-transform:uppercase;letter-spacing:0.06em">Operacional — Hoje</span>
+                  <div style="font-size:10px;color:#94a3b8;font-weight:600">${new Date().toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'long'})}</div>
+                </div>
+              </div>
+              ${totalPend > 0 ? `<span style="background:#dc2626;color:#fff;font-size:10px;font-weight:900;border-radius:99px;padding:2px 10px">${totalPend} pendente${totalPend>1?'s':''}</span>` : '<span style="background:#dcfce7;color:#16a34a;font-size:10px;font-weight:900;border-radius:99px;padding:2px 10px">Em dia</span>'}
+            </div>
+            <div style="padding:16px 20px">
+              ${alertas.length ? `<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px">${alertas.join('')}</div>` : ''}
+              <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px">
+                ${_card('fa-calendar-check','#7c3aed','#faf5ff', reservasHoje.length,'Reservas hoje',`mostrarAba('aba-lista-reservas')`,'Ver Agenda Geral')}
+                ${_card('fa-check-circle','#16a34a','#f0fdf4', confirmadasHoje,'Confirmadas hoje','','')}
+                ${_card('fa-hourglass-half','#f59e0b','#fffbeb', solPend,'Aguardam aprovação',`mostrarAba('aba-aprovacoes')`, 'Abrir Aprovações')}
+                ${_card('fa-user-plus','#0891b2','#f0f9ff', pendCad,'Novos usuários',`mostrarAba('aba-aprovacoes');setTimeout(()=>_aprovSwitch('usuarios'),200)`,'Ver cadastros pendentes')}
+                ${_card('fa-key','#6366f1','#eef2ff', pendChavAprov,'Transações chave',`mostrarAba('aba-aprovacoes');setTimeout(()=>_aprovSwitch('chaves'),200)`,'Ver chaves pendentes')}
+                ${pendChavPend > 0 ? _card('fa-triangle-exclamation','#dc2626','#fff1f2', pendChavPend,'Chaves atrasadas',`mostrarAba('aba-protocolo-chaves')`,'Abrir Protocolo de Chaves') : _card('fa-shield-check','#059669','#f0fdf4',0,'Chaves em dia','','')}
+              </div>
+            </div>
+          </div>`;
+      })();
+
       cont.innerHTML = `
         <div style="display:flex;align-items:center;gap:8px;padding:8px 14px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;width:fit-content;margin-bottom:16px">
           <i class="fas fa-calendar-alt" style="color:#7c3aed;font-size:11px"></i>
           <span style="font-size:11px;font-weight:900;color:#7c3aed;text-transform:uppercase;letter-spacing:0.06em">${escaparHTML(labelPeriodo)}</span>
         </div>
+        ${_hoje}
         ${_secao('Visão Geral',              'fa-chart-bar',       '#7c3aed', _s1)}
         ${_secao('Espaços',                  'fa-map-marker-alt',  '#7c3aed', _s2)}
         ${_secao('Setores & Pessoas',        'fa-users',           '#6366f1', _s3)}

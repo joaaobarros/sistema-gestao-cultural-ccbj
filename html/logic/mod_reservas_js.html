@@ -22,8 +22,10 @@
  */
 function sincronizarAbaAtual() {
   if (typeof showLoader === "function") showLoader(true);
-  const btnSync = document.querySelector('.fa-sync-alt')?.parentElement;
-  if (btnSync) btnSync.classList.add('animate-spin');
+  // Anima todos os botões de sync visíveis na aba atual
+  const icones = document.querySelectorAll('.fa-sync-alt');
+  icones.forEach(function(ic) { ic.classList.add('animate-spin'); });
+  const btnSync = icones[0]?.parentElement;
 
   GAS.admin.obterDados(function(dados) {
       AppState.colecoes.salas          = dados.salas || [];
@@ -39,13 +41,13 @@ function sincronizarAbaAtual() {
       if (typeof renderizarReservas     === "function") renderizarReservas();
 
       if (typeof showLoader === "function") showLoader(false);
-      if (btnSync) btnSync.classList.remove('animate-spin');
+      document.querySelectorAll('.fa-sync-alt').forEach(function(ic) { ic.classList.remove('animate-spin'); });
 
       Swal.mixin({ toast: true, position: 'top-end', showConfirmButton: false, timer: 2000, timerProgressBar: true })
         .fire({ icon: 'success', title: 'Dados sincronizados com a planilha' });
     }, function(err) {
       if (typeof showLoader === "function") showLoader(false);
-      if (btnSync) btnSync.classList.remove('animate-spin');
+      document.querySelectorAll('.fa-sync-alt').forEach(function(ic) { ic.classList.remove('animate-spin'); });
       Swal.fire('Erro na Sincronização', err.message, 'error');
     });
 }
@@ -2061,7 +2063,7 @@ function _pollSolicitacoes(primeiro) {
           Swal.mixin({ toast:true, position:'top-end', showConfirmButton:false, timer:6000, timerProgressBar:true })
             .fire({ icon:'info', title:'Nova solicitação pendente', text: pendentes+' aguardando aprovação' });
           // Pulsa o ícone na sidebar
-          const badge = document.getElementById('badgeSolicitacoes');
+          const badge = document.getElementById('badgeAprovacoes') || document.getElementById('badgeSolicitacoes');
           if (badge) {
             badge.style.transform = 'scale(1.6)';
             setTimeout(function(){ badge.style.transform=''; }, 600);

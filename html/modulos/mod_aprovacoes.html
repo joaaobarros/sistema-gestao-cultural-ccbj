@@ -7,6 +7,22 @@
 -->
       <section id="aba-aprovacoes" class="tab-content animate-fadeIn hidden pb-20">
 
+        <!-- Cabeçalho do módulo -->
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+          <div>
+            <h2 class="text-xl font-black text-slate-800 flex items-center gap-2">
+              <i class="fas fa-clipboard-check text-purple-600"></i>
+              Operacional — Aprovações
+            </h2>
+            <p class="text-xs text-slate-500 mt-0.5">Central de aprovações: reservas, chaves e novos usuários</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <button onclick="carregarSolicitacoes();carregarCadastrosExternos();carregarChavesPendentes()" class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 active:scale-95 transition-all">
+              <i class="fas fa-sync-alt text-[10px]"></i> Atualizar tudo
+            </button>
+          </div>
+        </div>
+
         <!-- Tabs internas -->
         <div class="flex gap-2 mb-5">
           <button id="tab-aprov-reservas" onclick="_aprovSwitch('reservas')"

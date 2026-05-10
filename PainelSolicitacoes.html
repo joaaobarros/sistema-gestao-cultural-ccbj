@@ -76,7 +76,7 @@ function _atualizarBadgeSolicitacoes() {
   const pendentesCadastros = (_cadastrosCache || []).filter(c => c.status === 'PENDENTE').length;
   const pendentesChaves = (_chavesAprovCache || []).length;
   const total = pendentesReservas + pendentesCadastros + pendentesChaves;
-  const badge = document.getElementById('badgeSolicitacoes');
+  const badge = document.getElementById('badgeAprovacoes') || document.getElementById('badgeSolicitacoes');
   if (!badge) return;
   if (total > 0) {
     badge.textContent = total;

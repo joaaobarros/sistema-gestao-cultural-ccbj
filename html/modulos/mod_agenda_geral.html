@@ -8,7 +8,23 @@
 @dependencies renderizarReservas, aplicarAtalhoPeriodo, exportarAgendaCSV,
               renderizarModoDiagrama (mod_reservas_js)
 -->
-      <section id="aba-lista-reservas" class="tab-content animate-fadeIn space-y-6">
+      <section id="aba-lista-reservas" class="tab-content animate-fadeIn space-y-6 pb-20">
+
+        <!-- Cabeçalho do módulo -->
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-2">
+          <div>
+            <h2 class="text-xl font-black text-slate-800 flex items-center gap-2">
+              <i class="fas fa-calendar-alt text-purple-600"></i>
+              Agenda Geral
+            </h2>
+            <p class="text-xs text-slate-500 mt-0.5">Todas as reservas e agendamentos do CCBJ</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <button onclick="sincronizarAbaAtual()" class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 active:scale-95 transition-all">
+              <i class="fas fa-sync-alt text-[10px]"></i> Atualizar
+            </button>
+          </div>
+        </div>
 
         <!-- Seletor de modo de visualização -->
         <div class="flex items-center gap-2 mb-4">

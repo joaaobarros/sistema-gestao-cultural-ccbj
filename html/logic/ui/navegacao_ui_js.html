@@ -100,7 +100,7 @@ function mostrarAba(idAba) {
       'aba-gestao-admin':      'Configurações do Sistema',
       'aba-auditoria':         'Painel de Auditoria',
       'aba-dashboard':         'Dashboard',
-      'aba-aprovacoes':        'Aprovações',
+      'aba-aprovacoes':        'Operacional — Aprovações',
       'aba-permissoes-v2':     'Gestão de Permissões',
       'aba-protocolo-chaves':  'Protocolo de Chaves'
     };
@@ -167,12 +167,22 @@ function mostrarAba(idAba) {
   }
 
   if (idAba === 'aba-dashboard') {
+    // Na primeira abertura aplica filtro padrão de 30 dias
+    if (!window._dashboardJaAberto) {
+      window._dashboardJaAberto = true;
+      if (typeof aplicarAtalhoDashboard === 'function') {
+        aplicarAtalhoDashboard('30');
+        var sel = document.getElementById('dashFiltroAtalho');
+        if (sel) sel.value = '30';
+      }
+    }
     if (typeof carregarDashboard === 'function') carregarDashboard();
   }
 
   if (idAba === 'aba-aprovacoes') {
-    if (typeof carregarSolicitacoes === 'function') carregarSolicitacoes();
+    if (typeof carregarSolicitacoes    === 'function') carregarSolicitacoes();
     if (typeof carregarCadastrosExternos === 'function') carregarCadastrosExternos();
+    if (typeof carregarChavesPendentes === 'function') carregarChavesPendentes();
   }
 
   var _dynHandler = window['_onShow_' + idAba.replace(/-/g, '_')];
