@@ -438,7 +438,8 @@ function chaves_listarProtocolos(filtros, emailAtual) {
         CHV_STATUS_PROTOCOLO.AGUARDANDO_CONFIRMACAO_INFRA,
         CHV_STATUS_PROTOCOLO.RETIRADA,
         CHV_STATUS_PROTOCOLO.ATRASADA,
-        CHV_STATUS_PROTOCOLO.TRANSFERENCIA_PENDENTE
+        CHV_STATUS_PROTOCOLO.TRANSFERENCIA_PENDENTE,
+        CHV_STATUS_PROTOCOLO.TRANSFERIDA
       ];
       lista = lista.filter(function(p) { return statusAtivos.includes(p.status); });
     }
@@ -827,7 +828,7 @@ function chaves_registrarDevolucao(protocoloId, obs, emailAtual) {
       if (!r) throw new Error('Protocolo não encontrado.');
       const p = _chvMapearProtocolo(r.dados);
 
-      const statusPermitidos = [CHV_STATUS_PROTOCOLO.RETIRADA, CHV_STATUS_PROTOCOLO.ATRASADA];
+      const statusPermitidos = [CHV_STATUS_PROTOCOLO.RETIRADA, CHV_STATUS_PROTOCOLO.ATRASADA, CHV_STATUS_PROTOCOLO.TRANSFERIDA];
       if (!statusPermitidos.includes(p.status))
         throw new Error('Protocolo não está em posse do usuário. Status: ' + p.status);
 
@@ -1112,7 +1113,8 @@ function chaves_verificarAtrasos() {
     for (let i = 0; i < dados.length; i++) {
       const p = _chvMapearProtocolo(dados[i]);
       if (!p) continue;
-      if (p.status !== CHV_STATUS_PROTOCOLO.RETIRADA) continue;
+      const statusVerificaveis = [CHV_STATUS_PROTOCOLO.RETIRADA, CHV_STATUS_PROTOCOLO.TRANSFERIDA];
+      if (!statusVerificaveis.includes(p.status)) continue;
       if (!p.dtPrevistaDev) continue;
 
       const prevista = new Date(p.dtPrevistaDev);

@@ -209,8 +209,8 @@ function _chvRenderizarIndicadores() {
   const p = d.pendencias || {};
   const chaves = d.chaves || [];
   const disponiveis = chaves.filter(function(c) { return c.status === 'DISPONIVEL'; }).length;
-  const emUso = chaves.filter(function(c) { return c.status === 'EM_USO'; }).length;
-  const atrasados = (p.atrasadas || []).length;
+  const emUso = (p.emUso || []).length;
+  const atrasados = (d.protocolosAtivos || []).filter(_chvEhAtrasado).length;
   const pendInfra = (p.aguardandoInfra || []).length + (p.solicitadas || []).length;
   const pendUsr = (p.aguardandoUsuario || []).length;
   const transf = (p.transferenciasPend || []).length;
@@ -344,7 +344,7 @@ function _chvFiltrarTodosAtivos() {
   if (!d) return;
 
   const statusAtivos = ['SOLICITADA','AGUARDANDO_CONFIRMACAO_USUARIO','AGUARDANDO_CONFIRMACAO_INFRA',
-                        'RETIRADA','ATRASADA','TRANSFERENCIA_PENDENTE'];
+                        'RETIRADA','ATRASADA','TRANSFERENCIA_PENDENTE','TRANSFERIDA'];
   let lista = (d.protocolosAtivos || []).filter(function(p) { return statusAtivos.includes(p.status); });
 
   if (espacoFiltro) lista = lista.filter(function(p) { return p.espacoId === espacoFiltro; });
@@ -517,7 +517,7 @@ function _chvRenderizarCard(p) {
           ${p.setorNome ? `<div><i class="fas fa-sitemap text-slate-300 mr-1"></i>${p.setorNome}</div>` : ''}
           <div><i class="fas fa-clock text-slate-300 mr-1"></i>Solicitado: ${_chvFormatarDt(p.dtSolicitacao)}</div>
           ${p.dtPrevistaDev ? `<div class="${atrasado ? 'text-red-600 font-bold' : 'text-slate-400'}"><i class="fas fa-calendar-check mr-1"></i>Devolução prevista: ${_chvFormatarDt(p.dtPrevistaDev)}</div>` : ''}
-          ${p.transferenciaDestinoId ? `<div class="text-blue-600"><i class="fas fa-arrow-right mr-1"></i>Transferência para: <b>${p.transferenciaDestinoNome || p.transferenciaDestinoId}</b></div>` : ''}
+          ${p.transferenciaDestinoId && p.status !== 'TRANSFERIDA' ? `<div class="text-blue-600"><i class="fas fa-arrow-right mr-1"></i>Transferência para: <b>${p.transferenciaDestinoNome || p.transferenciaDestinoId}</b></div>` : ''}
         </div>
       </div>
       <button class="text-slate-300 hover:text-purple-500 transition-colors shrink-0 mt-1" onclick="_chvAbrirDetalhe('${p.id}'); event.stopPropagation()">
@@ -543,7 +543,7 @@ function _chvBotoesAcao(p, email, ehInfra) {
   }
 
   // Usuário: registrar devolução (se responsável)
-  if (['RETIRADA','ATRASADA'].includes(p.status) && (p.responsavelId === email || ehInfra)) {
+  if (['RETIRADA','ATRASADA','TRANSFERIDA'].includes(p.status) && (p.responsavelId === email || ehInfra)) {
     btns.push(_chvBtnAcao('fas fa-undo', 'Devolver', `_chvRegistrarDevolucao('${p.id}')`, 'text-blue-700 bg-blue-50 border-blue-200 hover:bg-blue-100'));
     if (p.status === 'RETIRADA') {
       btns.push(_chvBtnAcao('fas fa-exchange-alt', 'Transferir', `_chvAbrirModalTransferencia('${p.id}')`, 'text-purple-700 bg-purple-50 border-purple-200 hover:bg-purple-100'));
