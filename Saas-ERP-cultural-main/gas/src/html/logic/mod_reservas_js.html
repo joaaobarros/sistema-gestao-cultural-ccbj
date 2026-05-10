@@ -2356,8 +2356,10 @@ function alternarModoVisualizacao(modo) {
     btn.classList.remove('bg-slate-900', 'text-white');
   };
 
-  const diagramaV  = document.getElementById('viewDiagrama');
-  const btnDiag    = document.getElementById('btnModoDiagrama');
+  const diagramaV     = document.getElementById('viewDiagrama');
+  const btnDiag       = document.getElementById('btnModoDiagrama');
+  const habV          = document.getElementById('viewHabilitacoes');
+  const btnHab        = document.getElementById('btnModoHabilitacoes');
 
   const hideAll = () => {
     lista?.classList.add('hidden');
@@ -2365,7 +2367,8 @@ function alternarModoVisualizacao(modo) {
     semRes?.classList.add('hidden');
     agendaV?.classList.add('hidden');
     diagramaV?.classList.add('hidden');
-    setInativo(btnLista); setInativo(btnAgend); setInativo(btnDiag);
+    habV?.classList.add('hidden');
+    setInativo(btnLista); setInativo(btnAgend); setInativo(btnDiag); setInativo(btnHab);
   };
 
   if (modo === 'agenda') {
@@ -2373,7 +2376,6 @@ function alternarModoVisualizacao(modo) {
     agendaV?.classList.remove('hidden');
     setAtivo(btnAgend);
     window._agendaGoogleSemana = window._agendaGoogleSemana || 0;
-    // Padrão: mostrar todos os espaços (Todas as salas) ao entrar no modo Agenda
     window._agendaGoogleSalaForced = false;
     const selAgenda = document.getElementById('agendaGoogleSala');
     if (selAgenda) selAgenda.value = '';
@@ -2386,6 +2388,10 @@ function alternarModoVisualizacao(modo) {
     window._diagramaSemana = window._diagramaSemana || 0;
     window._diagramaDia    = window._diagramaDia    !== undefined ? window._diagramaDia : (new Date().getDay()===0?6:new Date().getDay()-1);
     renderizarModoDiagrama();
+  } else if (modo === 'habilitacoes') {
+    // Habilitações tem seu próprio painel; navegar direto para ele
+    mostrarAba('aba-habilitacoes');
+    return;
   } else {
     hideAll();
     lista?.classList.remove('hidden');
@@ -2808,12 +2814,12 @@ function renderizarModoAgendaGoogle() {
         </div>`;
     }).join('');
 
-    // Área clicável para agendar (apenas modo sala específica)
-    const areaClicar = (!apenasMinhas && salaId) ? `
+    // Área clicável para agendar (sempre disponível, sala pré-selecionada quando disponível)
+    const areaClicar = !apenasMinhas ? `
       <div
         class="absolute inset-0 cursor-crosshair hover:bg-purple-50/40 transition-colors"
         onclick="abrirFormularioNoSlot('${salaId}', '${dataStr}', event)"
-        title="Clique para agendar">
+        title="Clique para novo agendamento">
       </div>` : '';
 
     return `<div style="position:relative;border-left:1px solid #f1f5f9;height:${TOTAL_PX}px;background:${ehPassado?'rgba(248,250,252,0.4)':ehHoje?'rgba(124,58,237,0.03)':'transparent'}">

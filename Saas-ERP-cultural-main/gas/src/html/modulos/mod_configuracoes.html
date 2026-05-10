@@ -182,20 +182,17 @@
     });
   }
 
-  // Preenche com AppState.config no boot (já disponível ao renderizar a aba)
-  EventBus.on('aba:aba-gestao-admin:show', function() {
-    if (typeof AppState !== 'undefined' && AppState.config) {
-      _preencherForm(AppState.config);
-    }
-  });
-
+  // Definido antes de qualquer uso de EventBus para garantir disponibilidade imediata
   window.salvarConfigGlobal = function() {
     var cfg = {};
     _CAMPOS_CONFIG.forEach(function(k) {
       var el = document.getElementById('cfg-' + k);
       if (el && el.value) cfg[k] = el.value;
     });
-    if (!Object.keys(cfg).length) return;
+    if (!Object.keys(cfg).length) {
+      Swal.fire('Atenção', 'Preencha ao menos um campo antes de salvar.', 'warning');
+      return;
+    }
     showLoader(true);
     GAS.admin.salvarSistemaConfig(cfg, function(res) {
       showLoader(false);
@@ -210,5 +207,16 @@
       Swal.fire('Erro', String(e), 'error');
     });
   };
+
+  // EventBus carrega APÓS este inline script — registrar somente após DOMContentLoaded
+  document.addEventListener('DOMContentLoaded', function() {
+    if (typeof EventBus !== 'undefined') {
+      EventBus.on('aba:aba-gestao-admin:show', function() {
+        if (typeof AppState !== 'undefined' && AppState.config) {
+          _preencherForm(AppState.config);
+        }
+      });
+    }
+  });
 })();
 </script>

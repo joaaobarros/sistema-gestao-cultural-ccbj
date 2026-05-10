@@ -145,6 +145,18 @@ function removerFavorito(index) {
   renderizarFavoritos();
 }
 
+function adicionarFavorito(aba, nome, icon) {
+  if (!aba) return;
+  if (favoritos.some(function(f) { return f.aba === aba; })) {
+    Swal.fire({ icon: 'info', title: 'Já nos favoritos', text: nome + ' já está nos seus favoritos.', timer: 1800, showConfirmButton: false });
+    return;
+  }
+  favoritos.push({ aba: aba, nome: nome || aba, icon: icon || 'fas fa-star w-5 text-center text-xs' });
+  salvarFavoritos();
+  renderizarFavoritos();
+  Swal.fire({ icon: 'success', title: 'Adicionado!', text: nome + ' adicionado aos favoritos.', timer: 1500, showConfirmButton: false });
+}
+
 // ══════════════════════════════════════════════════════
 // RENDERIZAÇÃO
 // ══════════════════════════════════════════════════════

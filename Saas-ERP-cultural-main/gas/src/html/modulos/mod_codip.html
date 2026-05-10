@@ -12,28 +12,33 @@
             <div class="flex-1 min-w-[140px]">
               <label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Mês Ref.</label>
               <input type="text" id="codipFiltroMes" placeholder="04/2026"
+                oninput="typeof renderizarTabelaCODIP==='function'&&renderizarTabelaCODIP()"
                 class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-500">
             </div>
             <div class="flex-1 min-w-[160px]">
               <label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Tipo de Ação</label>
               <input type="text" id="codipFiltroTipo" placeholder="Curso/Oficina, Apresentação..."
+                oninput="typeof renderizarTabelaCODIP==='function'&&renderizarTabelaCODIP()"
                 class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-500">
             </div>
             <div class="flex-1 min-w-[140px]">
               <label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Setor</label>
               <input type="text" id="codipFiltroSetor" placeholder="NArTE, Escola..."
+                oninput="typeof renderizarTabelaCODIP==='function'&&renderizarTabelaCODIP()"
                 class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-500">
             </div>
             <div class="flex-1 min-w-[160px]">
               <label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Contrato</label>
-              <select id="codipFiltroCtr" class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-500">
+              <select id="codipFiltroCtr"
+                onchange="typeof renderizarTabelaCODIP==='function'&&renderizarTabelaCODIP()"
+                class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-500">
                 <option value="">Todos os contratos</option>
               </select>
             </div>
-            <div class="flex gap-2 shrink-0">
-              <button onclick="renderizarTabelaCODIP()"
-                class="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black rounded-xl uppercase transition-all">
-                <i class="fas fa-filter mr-1"></i>Filtrar
+            <div class="flex gap-2 shrink-0 items-end">
+              <button onclick="document.getElementById('codipFiltroMes').value='';document.getElementById('codipFiltroTipo').value='';document.getElementById('codipFiltroSetor').value='';document.getElementById('codipFiltroCtr').value='';renderizarTabelaCODIP();"
+                class="px-4 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-black rounded-xl uppercase transition-all">
+                <i class="fas fa-rotate-left mr-1"></i>Redefinir
               </button>
               <button onclick="exportarCODIPCSV()"
                 class="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black rounded-xl uppercase transition-all">
