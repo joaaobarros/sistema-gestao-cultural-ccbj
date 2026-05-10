@@ -133,33 +133,16 @@ var _BANCO_PERGUNTAS_PADRAO = [
 // HELPERS — SHEETS (COM INTEGRAÇÃO _getSheet)
 // ═══════════════════════════════════════════════════════════════
 
-function _escutaSS() {
-  return SpreadsheetApp.getActiveSpreadsheet();
-}
-
 /**
- * Retorna a aba solicitada. Tenta _getSheet centralizado primeiro;
- * se indisponível ou nulo, cai no fallback de criação automática na planilha ativa.
+ * Retorna a aba solicitada via data layer centralizado (_getSheet).
+ * Não acessa SpreadsheetApp diretamente — toda resolução de planilha
+ * passa pelo ABA_PARA_MODULO em utils.gs.
  */
 function _escutaSheet(nome) {
   try {
-    if (typeof _getSheet === 'function') {
-      var sh = _getSheet(nome);
-      if (sh) return sh;
-    }
-  } catch(e) {}
-
-  try {
-    var ss = _escutaSS();
-    if (!ss) throw new Error('Planilha ativa indisponível');
-    var sh = ss.getSheetByName(nome);
-    if (!sh) {
-      sh = ss.insertSheet(nome);
-      _escutaInicializarCabecalhos(sh, nome);
-    }
-    return sh;
+    return _getSheet(nome) || null;
   } catch(e) {
-    Logger.log('[Escuta] _escutaSheet("' + nome + '"): ' + e.message);
+    Logger.error('escuta', '_escutaSheet("' + nome + '")', e.message);
     return null;
   }
 }

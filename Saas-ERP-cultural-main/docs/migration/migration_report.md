@@ -3,7 +3,7 @@
 **Data:** 2026-05-10  
 **Branch:** refactor-fase2  
 **Autor:** Arquitetura / JP Barros  
-**Status:** Fase 1 concluída (migração estrutural + instrumentação)
+**Status:** Fase 3 concluída (refactor estrutural)
 
 ---
 
@@ -194,13 +194,30 @@ Identificados em fases anteriores e já removidos do sistema legado:
 
 ---
 
-## 9. Próximas Etapas (Fase 2)
+## 9. Trabalho Realizado — Fase 2 e Fase 3
 
-1. **Integrar Action Engine** nos módulos de negócio (reservas, contratos, tarefas)
-2. **Eventos pendentes**: `PAYMENT_REGISTERED` em financeiro, `REPORT_CREATED/APPROVED` em relatorios
-3. **Data Layer centralizado**: eliminar acessos diretos a `SpreadsheetApp` dentro de regras de negócio
-4. **Regressão automatizada**: criar suite de testes GAS para operações críticas
-5. **Deploy**: publicar nova arquitetura (`gas/src/`) como substituta definitiva
+### Fase 2 — Action Engine integrado (concluída)
+
+1. ✅ `GAS.acoes` adicionado ao server_bridge_js.html (7 métodos)
+2. ✅ `associarRecurso` automático em `criarReservaController` via `dados.acaoId`
+3. ✅ `mod_acoes.html` e `mod_acoes_js.html` — UI completa com máquina de estados
+4. ✅ Sidebar "Programação", navegação, títulos, GRUPOS, AppState.acoes
+5. ✅ Módulo `acoes` registrado no mod_modulos_registry (ativo: true)
+
+### Fase 3 — Refactor estrutural (concluída)
+
+1. ✅ **Data Layer centralizado**: `_escutaSS()` removido; `_escutaSheet()` delega 100% ao `_getSheet` — nenhum acesso direto a `SpreadsheetApp` fora de `core/`
+2. ✅ **Eventos financeiro**: `CONTRACT_CREATED/UPDATED` em `salvarContratacao`; `PAYMENT_REGISTERED` em `registrarPagamento`
+3. ✅ **Eventos relatorios**: `CONTRACT_CREATED/UPDATED` em `salvarContrato`; `INDICATOR_UPDATED` em `salvarMeta` e `salvarIndicador`
+4. ✅ **HTML normalizado**: `GestaoContratos.html` → `mod_gestao_contratos.html`; `PainelSolicitacoes.html` → `mod_painel_solicitacoes.html`
+5. ✅ **console.*** — zero ocorrências restantes em modules/ e backend/
+
+### Próximas etapas (opcionais)
+
+- Regressão automatizada: suite de testes GAS para operações críticas
+- Deploy: publicar `gas/src/` como substituta definitiva da raiz legada
+- Vincular Ações no formulário de nova reserva (selector `acaoId` na UI)
+- Integrar contratos e chaves às Ações via `associarRecurso`
 
 ---
 

@@ -535,6 +535,15 @@ function salvarContrato(dados, email) {
       "",
       String(email || ""),
     );
+    try {
+      SystemEvents.emit(
+        !id ? SystemEventTypes.CONTRACT_CREATED : SystemEventTypes.CONTRACT_UPDATED,
+        { entidade: 'contrato', entidadeId: linha[0],
+          usuario: String(email || ''), origem: 'mod_relatorios',
+          contexto: { nome: dados.nome || null, numero: dados.numero || null, status: dados.status || null }
+        }
+      );
+    } catch(_) {}
     return true;
   } catch (e) {
     Logger.error('relatorios', 'salvarContrato', e.message);
@@ -660,6 +669,13 @@ function salvarMeta(dados, email) {
       "",
       String(email || ""),
     );
+    try {
+      SystemEvents.emit(SystemEventTypes.INDICATOR_UPDATED, {
+        entidade: 'meta', entidadeId: linha[0],
+        usuario: String(email || ''), origem: 'mod_relatorios',
+        contexto: { titulo: dados.titulo || null, idContrato: dados.idContrato || null }
+      });
+    } catch(_) {}
     return true;
   } catch (e) {
     Logger.error('relatorios', 'salvarMeta', e.message);
@@ -821,6 +837,15 @@ function salvarIndicador(dados, email) {
       "",
       String(email || ""),
     );
+    try {
+      SystemEvents.emit(SystemEventTypes.INDICATOR_UPDATED, {
+        entidade: 'indicador', entidadeId: linha[0],
+        usuario: String(email || ''), origem: 'mod_relatorios',
+        contexto: { nome: dados.nome || dados.texto || null,
+                    idMeta: dados.idMeta || null, idContrato: dados.idContrato || null,
+                    ano: anoRef }
+      });
+    } catch(_) {}
     return true;
   } catch (e) {
     Logger.error('relatorios', 'salvarIndicador', e.message);

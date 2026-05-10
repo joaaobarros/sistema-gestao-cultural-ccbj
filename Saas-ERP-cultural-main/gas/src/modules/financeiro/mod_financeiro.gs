@@ -14,7 +14,8 @@ function obterContratacoes() {
 
 function salvarContratacao(dados) {
   var lista = readJSON('contratacoes.json');
-  if (!dados.id) {
+  var isNovo = !dados.id;
+  if (isNovo) {
     dados.id = 'ctt_' + Date.now();
     dados.criadoEm = new Date().toISOString();
     lista.push(dados);
@@ -26,6 +27,16 @@ function salvarContratacao(dados) {
     if (!encontrado) lista.push(dados);
   }
   writeJSON('contratacoes.json', lista);
+  try {
+    SystemEvents.emit(
+      isNovo ? SystemEventTypes.CONTRACT_CREATED : SystemEventTypes.CONTRACT_UPDATED,
+      { entidade: 'contratacao', entidadeId: dados.id,
+        usuario: dados.email || dados.responsavel || '',
+        origem: 'mod_financeiro',
+        contexto: { nome: dados.nome || dados.descricao || null, valor: dados.valor || null }
+      }
+    );
+  } catch(_) {}
   return { ok: true, id: dados.id };
 }
 
@@ -47,6 +58,15 @@ function registrarPagamento(dados) {
   dados.criadoEm = new Date().toISOString();
   lista.push(dados);
   writeJSON('pagamentos.json', lista);
+  try {
+    SystemEvents.emit(SystemEventTypes.PAYMENT_REGISTERED, {
+      entidade: 'pagamento', entidadeId: dados.id,
+      usuario: dados.email || dados.responsavel || '',
+      origem: 'mod_financeiro',
+      contexto: { valor: dados.valor || null, descricao: dados.descricao || null,
+                  contratacaoId: dados.contratacaoId || null }
+    });
+  } catch(_) {}
   return { ok: true, id: dados.id };
 }
 
