@@ -13,11 +13,12 @@
 // ══════════════════════════════════════════════════════════════════
 
 const _chvState = {
-  dados: null,         // retorno de chaves_obterDados
-  protocolos: [],      // lista completa
+  dados: null,
+  protocolos: [],
   subAbaaAtiva: 'painel',
   subGerenciarAtiva: 'solicitadas',
-  carregado: false
+  carregado: false,
+  pollingId: null
 };
 
 // ══════════════════════════════════════════════════════════════════
@@ -84,8 +85,23 @@ function _chvFormatarData(iso) {
 }
 
 function _chvEhAtrasado(protocolo) {
-  if (!protocolo.dtPrevistaDev || protocolo.status === 'DEVOLVIDA') return false;
+  if (!protocolo.dtPrevistaDev) return false;
+  if (['DEVOLVIDA','CANCELADA','NEGADA'].includes(protocolo.status)) return false;
   return new Date(protocolo.dtPrevistaDev) < new Date();
+}
+
+// Status efetivo para fins de filtragem: ATRASADA se data vencida, senão status real
+function _chvStatusEfetivo(p) {
+  return _chvEhAtrasado(p) ? 'ATRASADA' : p.status;
+}
+
+// Verifica se protocolo corresponde ao filtro de status selecionado
+function _chvMatchStatus(p, filtro) {
+  if (!filtro) return true;
+  if (filtro === 'ATRASADA') return _chvEhAtrasado(p);
+  // Para outros status: inclui o protocolo se seu status real bate,
+  // independentemente de também estar atrasado
+  return p.status === filtro;
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -98,21 +114,69 @@ window._onShow_aba_protocolo_chaves = function() {
   } else {
     _chvRenderizarTudo();
   }
+  _chvIniciarPolling();
 };
 
-function _chvAtualizarDados() {
+function _chvIniciarPolling() {
+  _chvPararPolling();
+  _chvState.pollingId = setInterval(function() {
+    const mod = document.getElementById('aba-protocolo-chaves');
+    if (!mod || mod.classList.contains('hidden')) return;
+    _chvAtualizarDadosSilencioso();
+  }, 30000);
+}
+
+function _chvPararPolling() {
+  if (_chvState.pollingId) { clearInterval(_chvState.pollingId); _chvState.pollingId = null; }
+}
+
+function _chvAtualizarDadosSilencioso() {
   const email = (typeof AppState !== 'undefined' && AppState.usuario && AppState.usuario.email)
     ? AppState.usuario.email : '';
   GAS.chaves.obterDados(email, function(res) {
+    if (!res || !res.ok) return;
+    _chvState.dados = res;
+    _chvAtualizarTimestamp();
+    _chvRenderizarTudo();
+  }, function() {});
+}
+
+function _chvAtualizarTimestamp() {
+  const el = document.getElementById('chv-ultima-atualizacao');
+  if (el) el.textContent = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+}
+
+function _chvBtnLoading(btn, loading) {
+  if (!btn) return;
+  if (loading) {
+    btn.disabled = true;
+    btn.dataset.html = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1.5"></i>Aguarde...';
+  } else {
+    btn.disabled = false;
+    btn.innerHTML = btn.dataset.html || btn.innerHTML;
+  }
+}
+
+function _chvAtualizarDados() {
+  const btn = document.getElementById('chv-btn-atualizar');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin text-[10px]"></i> Atualizando...'; }
+
+  const email = (typeof AppState !== 'undefined' && AppState.usuario && AppState.usuario.email)
+    ? AppState.usuario.email : '';
+  GAS.chaves.obterDados(email, function(res) {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-sync-alt text-[10px]"></i> Atualizar'; }
     if (!res || !res.ok) {
       Swal.fire('Erro', res && res.msg ? res.msg : 'Falha ao carregar dados.', 'error');
       return;
     }
     _chvState.dados = res;
     _chvState.carregado = true;
+    _chvAtualizarTimestamp();
     _chvPopularSelects();
     _chvRenderizarTudo();
   }, function(err) {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-sync-alt text-[10px]"></i> Atualizar'; }
     Swal.fire('Erro', String(err), 'error');
   });
 }
@@ -314,7 +378,7 @@ function _chvFiltrarMeus() {
   let lista = _chvState.protocolos.filter(function(p) {
     return p.solicitanteId === email || p.responsavelId === email || p.transferenciaDestinoId === email;
   });
-  if (status) lista = lista.filter(function(p) { return p.status === status; });
+  if (status) lista = lista.filter(function(p) { return _chvMatchStatus(p, status); });
   _chvRenderizarListaEl('chv-lista-meus', lista, 'Nenhum protocolo com o filtro selecionado.');
 }
 
@@ -364,8 +428,12 @@ function _chvFiltrarTodosAtivos() {
 
 function _chvCarregarRelatorio() {
   const email = _chvState.dados ? _chvState.dados.emailUsuario : '';
+  const statusFiltro = document.getElementById('chv-rel-status').value;
+
+  // ATRASADA é status computado (data vencida), não armazenado isoladamente —
+  // buscamos sem filtro de status no servidor e filtramos client-side
   const filtros = {
-    status:     document.getElementById('chv-rel-status').value || undefined,
+    status:     (statusFiltro && statusFiltro !== 'ATRASADA') ? statusFiltro : undefined,
     espacoId:   document.getElementById('chv-rel-espaco').value || undefined,
     dataInicio: document.getElementById('chv-rel-data-ini').value || undefined,
     dataFim:    document.getElementById('chv-rel-data-fim').value || undefined
@@ -377,7 +445,9 @@ function _chvCarregarRelatorio() {
 
   GAS.chaves.listarProtocolos(filtros, email, function(res) {
     if (!res || !res.ok) { Swal.fire('Erro', 'Falha ao carregar relatório.', 'error'); return; }
-    _chvRenderizarRelatorio(res.protocolos || []);
+    let lista = res.protocolos || [];
+    if (statusFiltro === 'ATRASADA') lista = lista.filter(_chvEhAtrasado);
+    _chvRenderizarRelatorio(lista);
   });
 }
 
@@ -575,7 +645,7 @@ function _chvBotoesAcao(p, email, ehInfra) {
 
 function _chvBtnAcao(icon, label, onclick, classes) {
   return `<button onclick="${onclick}; event.stopPropagation()"
-    class="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-black border rounded-xl transition-all ${classes}">
+    class="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-black border rounded-xl transition-all cursor-pointer select-none active:scale-95 active:opacity-80 ${classes}">
     <i class="${icon} text-[9px]"></i>${label}
   </button>`;
 }
@@ -665,160 +735,189 @@ function _chvHTMLDetalhe(p, historico) {
 // BLOCO: Handlers de ações de protocolo
 // ══════════════════════════════════════════════════════════════════
 
+function _chvEmailAtual() {
+  return (_chvState.dados && _chvState.dados.emailUsuario) ? _chvState.dados.emailUsuario : '';
+}
+
+function _chvPreConfirm(gasFn, args) {
+  return function(inputVal) {
+    return new Promise(function(resolve) {
+      gasFn.apply(null, args.concat([inputVal || ''], [function(res) {
+        if (res && res.ok) { resolve(res); }
+        else { Swal.showValidationMessage(res && res.msg ? res.msg : 'Erro ao processar. Tente novamente.'); }
+      }, function(err) {
+        Swal.showValidationMessage(String(err));
+      }]));
+    });
+  };
+}
+
 function _chvAprovarEntrega(protocoloId) {
+  const email = _chvEmailAtual();
   Swal.fire({
     title: 'Aprovar Entrega',
-    input: 'textarea',
-    inputPlaceholder: 'Observação (opcional)',
-    showCancelButton: true,
-    confirmButtonText: 'Aprovar',
-    confirmButtonColor: '#16a34a',
-    cancelButtonText: 'Cancelar'
-  }).then(function(result) {
-    if (!result.isConfirmed) return;
-    const email = _chvState.dados ? _chvState.dados.emailUsuario : '';
-    GAS.chaves.aprovarEntrega(protocoloId, result.value || '', email, function(res) {
-      if (res && res.ok) { Swal.fire('Aprovado!', 'Aguardando confirmação do usuário.', 'success'); _chvAtualizarDados(); }
-      else Swal.fire('Erro', (res && res.msg) || 'Falha ao aprovar.', 'error');
-    });
+    input: 'textarea', inputPlaceholder: 'Observação (opcional)',
+    showCancelButton: true, confirmButtonText: 'Aprovar', confirmButtonColor: '#16a34a', cancelButtonText: 'Cancelar',
+    showLoaderOnConfirm: true, allowOutsideClick: function() { return !Swal.isLoading(); },
+    preConfirm: function(obs) {
+      return new Promise(function(resolve) {
+        GAS.chaves.aprovarEntrega(protocoloId, obs || '', email,
+          function(res) { res && res.ok ? resolve() : Swal.showValidationMessage((res && res.msg) || 'Falha ao aprovar.'); },
+          function(err) { Swal.showValidationMessage(String(err)); });
+      });
+    }
+  }).then(function(r) {
+    if (!r.isConfirmed) return;
+    Swal.fire({ icon: 'success', title: 'Aprovado!', text: 'Aguardando confirmação do usuário.', timer: 2500, showConfirmButton: false });
+    _chvAtualizarDados();
   });
 }
 
 function _chvNegar(protocoloId) {
+  const email = _chvEmailAtual();
   Swal.fire({
     title: 'Negar Solicitação',
-    input: 'textarea',
-    inputPlaceholder: 'Motivo da negativa *',
-    showCancelButton: true,
-    confirmButtonText: 'Negar',
-    confirmButtonColor: '#dc2626',
-    cancelButtonText: 'Cancelar',
-    preConfirm: function(v) { if (!v || !v.trim()) { Swal.showValidationMessage('Informe o motivo.'); } }
-  }).then(function(result) {
-    if (!result.isConfirmed) return;
-    const email = _chvState.dados ? _chvState.dados.emailUsuario : '';
-    GAS.chaves.negar(protocoloId, result.value, email, function(res) {
-      if (res && res.ok) { Swal.fire('Negado', '', 'info'); _chvAtualizarDados(); }
-      else Swal.fire('Erro', (res && res.msg) || 'Falha.', 'error');
-    });
+    input: 'textarea', inputPlaceholder: 'Motivo da negativa *',
+    showCancelButton: true, confirmButtonText: 'Negar', confirmButtonColor: '#dc2626', cancelButtonText: 'Cancelar',
+    showLoaderOnConfirm: true, allowOutsideClick: function() { return !Swal.isLoading(); },
+    preConfirm: function(motivo) {
+      if (!motivo || !motivo.trim()) { Swal.showValidationMessage('Informe o motivo.'); return false; }
+      return new Promise(function(resolve) {
+        GAS.chaves.negar(protocoloId, motivo, email,
+          function(res) { res && res.ok ? resolve() : Swal.showValidationMessage((res && res.msg) || 'Falha.'); },
+          function(err) { Swal.showValidationMessage(String(err)); });
+      });
+    }
+  }).then(function(r) {
+    if (!r.isConfirmed) return;
+    Swal.fire({ icon: 'info', title: 'Solicitação negada', timer: 2000, showConfirmButton: false });
+    _chvAtualizarDados();
   });
 }
 
 function _chvConfirmarRecebimento(protocoloId) {
+  const email = _chvEmailAtual();
   Swal.fire({
-    title: 'Confirmar Recebimento',
-    text: 'Você confirma que recebeu a chave?',
-    input: 'textarea',
-    inputPlaceholder: 'Observação (opcional)',
-    showCancelButton: true,
-    confirmButtonText: 'Confirmar',
-    confirmButtonColor: '#16a34a',
-    cancelButtonText: 'Cancelar'
-  }).then(function(result) {
-    if (!result.isConfirmed) return;
-    const email = _chvState.dados ? _chvState.dados.emailUsuario : '';
-    GAS.chaves.confirmarRecebimento(protocoloId, result.value || '', email, function(res) {
-      if (res && res.ok) { Swal.fire('Recebimento confirmado!', 'Chave em seu poder.', 'success'); _chvAtualizarDados(); }
-      else Swal.fire('Erro', (res && res.msg) || 'Falha.', 'error');
-    });
+    title: 'Confirmar Recebimento', text: 'Você confirma que recebeu a chave?',
+    input: 'textarea', inputPlaceholder: 'Observação (opcional)',
+    showCancelButton: true, confirmButtonText: 'Confirmar', confirmButtonColor: '#16a34a', cancelButtonText: 'Cancelar',
+    showLoaderOnConfirm: true, allowOutsideClick: function() { return !Swal.isLoading(); },
+    preConfirm: function(obs) {
+      return new Promise(function(resolve) {
+        GAS.chaves.confirmarRecebimento(protocoloId, obs || '', email,
+          function(res) { res && res.ok ? resolve() : Swal.showValidationMessage((res && res.msg) || 'Falha.'); },
+          function(err) { Swal.showValidationMessage(String(err)); });
+      });
+    }
+  }).then(function(r) {
+    if (!r.isConfirmed) return;
+    Swal.fire({ icon: 'success', title: 'Recebimento confirmado!', text: 'Chave em seu poder.', timer: 2500, showConfirmButton: false });
+    _chvAtualizarDados();
   });
 }
 
 function _chvRegistrarDevolucao(protocoloId) {
+  const email = _chvEmailAtual();
   Swal.fire({
-    title: 'Registrar Devolução',
-    text: 'Confirma a entrega da chave à infraestrutura?',
-    input: 'textarea',
-    inputPlaceholder: 'Observação (opcional)',
-    showCancelButton: true,
-    confirmButtonText: 'Registrar',
-    confirmButtonColor: '#2563eb',
-    cancelButtonText: 'Cancelar'
-  }).then(function(result) {
-    if (!result.isConfirmed) return;
-    const email = _chvState.dados ? _chvState.dados.emailUsuario : '';
-    GAS.chaves.registrarDevolucao(protocoloId, result.value || '', email, function(res) {
-      if (res && res.ok) { Swal.fire('Devolução registrada!', 'Aguardando confirmação da Infraestrutura.', 'success'); _chvAtualizarDados(); }
-      else Swal.fire('Erro', (res && res.msg) || 'Falha.', 'error');
-    });
+    title: 'Registrar Devolução', text: 'Confirma a entrega da chave à infraestrutura?',
+    input: 'textarea', inputPlaceholder: 'Observação (opcional)',
+    showCancelButton: true, confirmButtonText: 'Registrar', confirmButtonColor: '#2563eb', cancelButtonText: 'Cancelar',
+    showLoaderOnConfirm: true, allowOutsideClick: function() { return !Swal.isLoading(); },
+    preConfirm: function(obs) {
+      return new Promise(function(resolve) {
+        GAS.chaves.registrarDevolucao(protocoloId, obs || '', email,
+          function(res) { res && res.ok ? resolve() : Swal.showValidationMessage((res && res.msg) || 'Falha.'); },
+          function(err) { Swal.showValidationMessage(String(err)); });
+      });
+    }
+  }).then(function(r) {
+    if (!r.isConfirmed) return;
+    Swal.fire({ icon: 'success', title: 'Devolução registrada!', text: 'Aguardando confirmação da Infraestrutura.', timer: 2500, showConfirmButton: false });
+    _chvAtualizarDados();
   });
 }
 
 function _chvConfirmarDevolucao(protocoloId) {
+  const email = _chvEmailAtual();
   Swal.fire({
-    title: 'Confirmar Devolução',
-    text: 'Infraestrutura confirma o recebimento da chave?',
-    input: 'textarea',
-    inputPlaceholder: 'Observação (opcional)',
-    showCancelButton: true,
-    confirmButtonText: 'Confirmar',
-    confirmButtonColor: '#2563eb',
-    cancelButtonText: 'Cancelar'
-  }).then(function(result) {
-    if (!result.isConfirmed) return;
-    const email = _chvState.dados ? _chvState.dados.emailUsuario : '';
-    GAS.chaves.confirmarDevolucao(protocoloId, result.value || '', email, function(res) {
-      if (res && res.ok) { Swal.fire('Devolução confirmada!', 'Chave devolvida ao estoque.', 'success'); _chvAtualizarDados(); }
-      else Swal.fire('Erro', (res && res.msg) || 'Falha.', 'error');
-    });
+    title: 'Confirmar Devolução', text: 'Infraestrutura confirma o recebimento da chave?',
+    input: 'textarea', inputPlaceholder: 'Observação (opcional)',
+    showCancelButton: true, confirmButtonText: 'Confirmar', confirmButtonColor: '#2563eb', cancelButtonText: 'Cancelar',
+    showLoaderOnConfirm: true, allowOutsideClick: function() { return !Swal.isLoading(); },
+    preConfirm: function(obs) {
+      return new Promise(function(resolve) {
+        GAS.chaves.confirmarDevolucao(protocoloId, obs || '', email,
+          function(res) { res && res.ok ? resolve() : Swal.showValidationMessage((res && res.msg) || 'Falha.'); },
+          function(err) { Swal.showValidationMessage(String(err)); });
+      });
+    }
+  }).then(function(r) {
+    if (!r.isConfirmed) return;
+    Swal.fire({ icon: 'success', title: 'Devolução confirmada!', text: 'Chave devolvida ao estoque.', timer: 2500, showConfirmButton: false });
+    _chvAtualizarDados();
   });
 }
 
 function _chvConfirmarTransferencia(protocoloId) {
+  const email = _chvEmailAtual();
   Swal.fire({
-    title: 'Aceitar Transferência',
-    text: 'Você confirma que recebeu a chave por transferência?',
-    input: 'textarea',
-    inputPlaceholder: 'Observação (opcional)',
-    showCancelButton: true,
-    confirmButtonText: 'Aceitar',
-    confirmButtonColor: '#16a34a',
-    cancelButtonText: 'Cancelar'
-  }).then(function(result) {
-    if (!result.isConfirmed) return;
-    const email = _chvState.dados ? _chvState.dados.emailUsuario : '';
-    GAS.chaves.confirmarTransferencia(protocoloId, result.value || '', email, function(res) {
-      if (res && res.ok) { Swal.fire('Transferência aceita!', 'Você é o novo responsável pela chave.', 'success'); _chvAtualizarDados(); }
-      else Swal.fire('Erro', (res && res.msg) || 'Falha.', 'error');
-    });
+    title: 'Aceitar Transferência', text: 'Você confirma que recebeu a chave por transferência?',
+    input: 'textarea', inputPlaceholder: 'Observação (opcional)',
+    showCancelButton: true, confirmButtonText: 'Aceitar', confirmButtonColor: '#16a34a', cancelButtonText: 'Cancelar',
+    showLoaderOnConfirm: true, allowOutsideClick: function() { return !Swal.isLoading(); },
+    preConfirm: function(obs) {
+      return new Promise(function(resolve) {
+        GAS.chaves.confirmarTransferencia(protocoloId, obs || '', email,
+          function(res) { res && res.ok ? resolve() : Swal.showValidationMessage((res && res.msg) || 'Falha.'); },
+          function(err) { Swal.showValidationMessage(String(err)); });
+      });
+    }
+  }).then(function(r) {
+    if (!r.isConfirmed) return;
+    Swal.fire({ icon: 'success', title: 'Transferência aceita!', text: 'Você é o novo responsável pela chave.', timer: 2500, showConfirmButton: false });
+    _chvAtualizarDados();
   });
 }
 
 function _chvCancelarTransferencia(protocoloId) {
+  const email = _chvEmailAtual();
   Swal.fire({
     title: 'Cancelar Transferência',
-    input: 'textarea',
-    inputPlaceholder: 'Motivo (opcional)',
-    showCancelButton: true,
-    confirmButtonText: 'Cancelar Transferência',
-    confirmButtonColor: '#dc2626',
-    cancelButtonText: 'Voltar'
-  }).then(function(result) {
-    if (!result.isConfirmed) return;
-    const email = _chvState.dados ? _chvState.dados.emailUsuario : '';
-    GAS.chaves.cancelarTransferencia(protocoloId, result.value || '', email, function(res) {
-      if (res && res.ok) { Swal.fire('Cancelada', 'Você continua como responsável.', 'info'); _chvAtualizarDados(); }
-      else Swal.fire('Erro', (res && res.msg) || 'Falha.', 'error');
-    });
+    input: 'textarea', inputPlaceholder: 'Motivo (opcional)',
+    showCancelButton: true, confirmButtonText: 'Cancelar Transferência', confirmButtonColor: '#dc2626', cancelButtonText: 'Voltar',
+    showLoaderOnConfirm: true, allowOutsideClick: function() { return !Swal.isLoading(); },
+    preConfirm: function(obs) {
+      return new Promise(function(resolve) {
+        GAS.chaves.cancelarTransferencia(protocoloId, obs || '', email,
+          function(res) { res && res.ok ? resolve() : Swal.showValidationMessage((res && res.msg) || 'Falha.'); },
+          function(err) { Swal.showValidationMessage(String(err)); });
+      });
+    }
+  }).then(function(r) {
+    if (!r.isConfirmed) return;
+    Swal.fire({ icon: 'info', title: 'Transferência cancelada', text: 'Você continua como responsável.', timer: 2000, showConfirmButton: false });
+    _chvAtualizarDados();
   });
 }
 
 function _chvCancelar(protocoloId) {
+  const email = _chvEmailAtual();
   Swal.fire({
     title: 'Cancelar Solicitação',
-    input: 'textarea',
-    inputPlaceholder: 'Motivo (opcional)',
-    showCancelButton: true,
-    confirmButtonText: 'Cancelar Solicitação',
-    confirmButtonColor: '#dc2626',
-    cancelButtonText: 'Voltar'
-  }).then(function(result) {
-    if (!result.isConfirmed) return;
-    const email = _chvState.dados ? _chvState.dados.emailUsuario : '';
-    GAS.chaves.cancelar(protocoloId, result.value || '', email, function(res) {
-      if (res && res.ok) { Swal.fire('Cancelado', '', 'info'); _chvAtualizarDados(); }
-      else Swal.fire('Erro', (res && res.msg) || 'Falha.', 'error');
-    });
+    input: 'textarea', inputPlaceholder: 'Motivo (opcional)',
+    showCancelButton: true, confirmButtonText: 'Cancelar Solicitação', confirmButtonColor: '#dc2626', cancelButtonText: 'Voltar',
+    showLoaderOnConfirm: true, allowOutsideClick: function() { return !Swal.isLoading(); },
+    preConfirm: function(obs) {
+      return new Promise(function(resolve) {
+        GAS.chaves.cancelar(protocoloId, obs || '', email,
+          function(res) { res && res.ok ? resolve() : Swal.showValidationMessage((res && res.msg) || 'Falha.'); },
+          function(err) { Swal.showValidationMessage(String(err)); });
+      });
+    }
+  }).then(function(r) {
+    if (!r.isConfirmed) return;
+    Swal.fire({ icon: 'info', title: 'Solicitação cancelada', timer: 2000, showConfirmButton: false });
+    _chvAtualizarDados();
   });
 }
 
@@ -939,20 +1038,21 @@ function _chvEnviarSolicitacao() {
   if (!chaveId || !espacoId) { Swal.fire('Atenção', 'Selecione espaço e chave.', 'warning'); return; }
 
   const dados = {
-    chaveId:           chaveId,
-    espacoId:          espacoId,
+    chaveId, espacoId,
     dtPrevistaDevolucao: document.getElementById('chv-sol-devolucao').value || '',
-    reservaId:         document.getElementById('chv-sol-reserva').value || '',
-    observacoes:       document.getElementById('chv-sol-obs').value || ''
+    reservaId:  document.getElementById('chv-sol-reserva').value || '',
+    observacoes: document.getElementById('chv-sol-obs').value || ''
   };
-  const email = _chvState.dados ? _chvState.dados.emailUsuario : '';
-  GAS.chaves.solicitar(dados, email, function(res) {
+  const btn = document.getElementById('chv-btn-solicitar-submit');
+  _chvBtnLoading(btn, true);
+  GAS.chaves.solicitar(dados, _chvEmailAtual(), function(res) {
+    _chvBtnLoading(btn, false);
     if (res && res.ok) {
       _chvFecharModal('chv-modal-solicitar');
-      Swal.fire('Solicitação enviada!', 'Aguarde aprovação da Infraestrutura.', 'success');
+      Swal.fire({ icon: 'success', title: 'Solicitação enviada!', text: 'Aguarde aprovação da Infraestrutura.', timer: 2500, showConfirmButton: false });
       _chvAtualizarDados();
     } else Swal.fire('Erro', (res && res.msg) || 'Falha ao solicitar.', 'error');
-  });
+  }, function(err) { _chvBtnLoading(btn, false); Swal.fire('Erro', String(err), 'error'); });
 }
 
 function _chvEnviarEntregaDireta() {
@@ -963,20 +1063,20 @@ function _chvEnviarEntregaDireta() {
   if (!destino || !destino.includes('@')) { Swal.fire('Atenção', 'Informe o email do destinatário.', 'warning'); return; }
 
   const dados = {
-    chaveId:           chaveId,
-    espacoId:          espacoId,
-    destinoEmail:      destino,
+    chaveId, espacoId, destinoEmail: destino,
     dtPrevistaDevolucao: document.getElementById('chv-ed-devolucao').value || '',
-    observacoes:       document.getElementById('chv-ed-obs').value || ''
+    observacoes: document.getElementById('chv-ed-obs').value || ''
   };
-  const email = _chvState.dados ? _chvState.dados.emailUsuario : '';
-  GAS.chaves.iniciarEntregaDireta(dados, email, function(res) {
+  const btn = document.getElementById('chv-btn-entrega-submit');
+  _chvBtnLoading(btn, true);
+  GAS.chaves.iniciarEntregaDireta(dados, _chvEmailAtual(), function(res) {
+    _chvBtnLoading(btn, false);
     if (res && res.ok) {
       _chvFecharModal('chv-modal-entrega-direta');
-      Swal.fire('Entrega registrada!', 'Aguardando confirmação do usuário.', 'success');
+      Swal.fire({ icon: 'success', title: 'Entrega registrada!', text: 'Aguardando confirmação do usuário.', timer: 2500, showConfirmButton: false });
       _chvAtualizarDados();
     } else Swal.fire('Erro', (res && res.msg) || 'Falha.', 'error');
-  });
+  }, function(err) { _chvBtnLoading(btn, false); Swal.fire('Erro', String(err), 'error'); });
 }
 
 function _chvEnviarTransferencia() {
@@ -984,14 +1084,17 @@ function _chvEnviarTransferencia() {
   const destino = document.getElementById('chv-tr-destino').value.trim();
   if (!destino || !destino.includes('@')) { Swal.fire('Atenção', 'Informe email válido.', 'warning'); return; }
   const obs = document.getElementById('chv-tr-obs').value || '';
-  const email = _chvState.dados ? _chvState.dados.emailUsuario : '';
-  GAS.chaves.solicitarTransferencia(protocoloId, destino, obs, email, function(res) {
+
+  const btn = document.getElementById('chv-btn-transferencia-submit');
+  _chvBtnLoading(btn, true);
+  GAS.chaves.solicitarTransferencia(protocoloId, destino, obs, _chvEmailAtual(), function(res) {
+    _chvBtnLoading(btn, false);
     if (res && res.ok) {
       _chvFecharModal('chv-modal-transferencia');
-      Swal.fire('Transferência solicitada!', `${destino} precisa confirmar o recebimento.`, 'success');
+      Swal.fire({ icon: 'success', title: 'Transferência solicitada!', text: `${destino} precisa confirmar o recebimento.`, timer: 2500, showConfirmButton: false });
       _chvAtualizarDados();
     } else Swal.fire('Erro', (res && res.msg) || 'Falha.', 'error');
-  });
+  }, function(err) { _chvBtnLoading(btn, false); Swal.fire('Erro', String(err), 'error'); });
 }
 
 function _chvSalvarChave() {
@@ -1001,30 +1104,30 @@ function _chvSalvarChave() {
   const obs      = document.getElementById('chv-form-chave-obs').value || '';
   if (!espacoId) { Swal.fire('Atenção', 'Selecione o espaço.', 'warning'); return; }
 
-  const btn = document.querySelector('#chv-modal-nova-chave button[onclick="_chvSalvarChave()"]');
-  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1.5"></i>Salvando...'; }
-
+  const btn = document.getElementById('chv-btn-nova-chave-submit');
+  _chvBtnLoading(btn, true);
   const dados = { id: id || undefined, espacoId, tipo, observacoes: obs, ativa: true };
-  const email = _chvState.dados ? _chvState.dados.emailUsuario : '';
-  GAS.chaves.salvarChave(dados, email, function(res) {
-    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save mr-1.5"></i>Salvar'; }
+  GAS.chaves.salvarChave(dados, _chvEmailAtual(), function(res) {
+    _chvBtnLoading(btn, false);
     if (res && res.ok) {
       _chvFecharModal('chv-modal-nova-chave');
-      Swal.fire('Salvo!', '', 'success');
+      Swal.fire({ icon: 'success', title: 'Salvo!', timer: 2000, showConfirmButton: false });
       _chvAtualizarDados();
     } else Swal.fire('Erro', (res && res.msg) || 'Falha.', 'error');
-  });
+  }, function(err) { _chvBtnLoading(btn, false); Swal.fire('Erro', String(err), 'error'); });
 }
 
 function _chvEnviarStatusChave() {
   const chaveId    = document.getElementById('chv-sc-id').value;
   const novoStatus = document.getElementById('chv-sc-status').value;
   const obs        = document.getElementById('chv-sc-obs').value || '';
-  const email      = _chvState.dados ? _chvState.dados.emailUsuario : '';
-  GAS.chaves.alterarStatusChave(chaveId, novoStatus, obs, email, function(res) {
+  const btn        = document.getElementById('chv-btn-status-chave-submit');
+  _chvBtnLoading(btn, true);
+  GAS.chaves.alterarStatusChave(chaveId, novoStatus, obs, _chvEmailAtual(), function(res) {
+    _chvBtnLoading(btn, false);
     if (res && res.ok) {
       _chvFecharModal('chv-modal-status-chave');
-      Swal.fire('Status alterado!', '', 'success');
+      Swal.fire({ icon: 'success', title: 'Status alterado!', timer: 2000, showConfirmButton: false });
       _chvAtualizarDados();
     } else Swal.fire('Erro', (res && res.msg) || 'Falha.', 'error');
   });

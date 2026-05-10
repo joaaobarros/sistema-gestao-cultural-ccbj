@@ -19,7 +19,8 @@
       <p class="text-xs text-slate-500 mt-0.5">Controle de retirada, devolução e rastreabilidade de chaves físicas</p>
     </div>
     <div class="flex items-center gap-2" id="chv-header-actions">
-      <button onclick="_chvAtualizarDados()" class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-all">
+      <span id="chv-ultima-atualizacao" class="text-[10px] text-slate-400 hidden sm:inline"></span>
+      <button id="chv-btn-atualizar" onclick="_chvAtualizarDados()" class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 active:scale-95 transition-all cursor-pointer">
         <i class="fas fa-sync-alt text-[10px]"></i> Atualizar
       </button>
       <button id="chv-btn-solicitar" onclick="_chvAbrirModalSolicitar()"
@@ -137,6 +138,7 @@
           <option value="AGUARDANDO_CONFIRMACAO_INFRA">Devolução pendente</option>
           <option value="ATRASADA">Atrasada</option>
           <option value="TRANSFERENCIA_PENDENTE">Transferência pendente</option>
+          <option value="TRANSFERIDA">Transferida</option>
           <option value="DEVOLVIDA">Devolvida</option>
           <option value="CANCELADA">Cancelada</option>
           <option value="NEGADA">Negada</option>
@@ -316,7 +318,7 @@
     </div>
     <div class="flex justify-end gap-2 px-5 pb-5">
       <button onclick="_chvFecharModal('chv-modal-solicitar')" class="px-4 py-2 text-xs font-bold text-slate-600 bg-slate-100 rounded-xl hover:bg-slate-200 transition-all">Cancelar</button>
-      <button onclick="_chvEnviarSolicitacao()" class="px-5 py-2 text-xs font-black text-white bg-purple-600 hover:bg-purple-700 rounded-xl transition-all">
+      <button id="chv-btn-solicitar-submit" onclick="_chvEnviarSolicitacao()" class="px-5 py-2 text-xs font-black text-white bg-purple-600 hover:bg-purple-700 active:scale-95 rounded-xl transition-all cursor-pointer">
         <i class="fas fa-paper-plane mr-1.5"></i>Solicitar
       </button>
     </div>
@@ -362,7 +364,7 @@
     </div>
     <div class="flex justify-end gap-2 px-5 pb-5">
       <button onclick="_chvFecharModal('chv-modal-entrega-direta')" class="px-4 py-2 text-xs font-bold text-slate-600 bg-slate-100 rounded-xl hover:bg-slate-200 transition-all">Cancelar</button>
-      <button onclick="_chvEnviarEntregaDireta()" class="px-5 py-2 text-xs font-black text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-all">
+      <button id="chv-btn-entrega-submit" onclick="_chvEnviarEntregaDireta()" class="px-5 py-2 text-xs font-black text-white bg-blue-600 hover:bg-blue-700 active:scale-95 rounded-xl transition-all cursor-pointer">
         <i class="fas fa-hand-holding-medical mr-1.5"></i>Registrar Entrega
       </button>
     </div>
@@ -396,7 +398,7 @@
     </div>
     <div class="flex justify-end gap-2 px-5 pb-5">
       <button onclick="_chvFecharModal('chv-modal-transferencia')" class="px-4 py-2 text-xs font-bold text-slate-600 bg-slate-100 rounded-xl hover:bg-slate-200 transition-all">Cancelar</button>
-      <button onclick="_chvEnviarTransferencia()" class="px-5 py-2 text-xs font-black text-white bg-purple-600 hover:bg-purple-700 rounded-xl transition-all">
+      <button id="chv-btn-transferencia-submit" onclick="_chvEnviarTransferencia()" class="px-5 py-2 text-xs font-black text-white bg-purple-600 hover:bg-purple-700 active:scale-95 rounded-xl transition-all cursor-pointer">
         <i class="fas fa-exchange-alt mr-1.5"></i>Solicitar Transferência
       </button>
     </div>
@@ -437,7 +439,7 @@
     </div>
     <div class="flex justify-end gap-2 px-5 pb-5">
       <button onclick="_chvFecharModal('chv-modal-nova-chave')" class="px-4 py-2 text-xs font-bold text-slate-600 bg-slate-100 rounded-xl hover:bg-slate-200 transition-all">Cancelar</button>
-      <button onclick="_chvSalvarChave()" class="px-5 py-2 text-xs font-black text-white bg-purple-600 hover:bg-purple-700 rounded-xl transition-all">
+      <button id="chv-btn-nova-chave-submit" onclick="_chvSalvarChave()" class="px-5 py-2 text-xs font-black text-white bg-purple-600 hover:bg-purple-700 active:scale-95 rounded-xl transition-all cursor-pointer">
         <i class="fas fa-save mr-1.5"></i>Salvar
       </button>
     </div>
@@ -484,7 +486,7 @@
     </div>
     <div class="flex justify-end gap-2 px-5 pb-5">
       <button onclick="_chvFecharModal('chv-modal-status-chave')" class="px-4 py-2 text-xs font-bold text-slate-600 bg-slate-100 rounded-xl hover:bg-slate-200 transition-all">Cancelar</button>
-      <button onclick="_chvEnviarStatusChave()" class="px-5 py-2 text-xs font-black text-white bg-orange-600 hover:bg-orange-700 rounded-xl transition-all">
+      <button id="chv-btn-status-chave-submit" onclick="_chvEnviarStatusChave()" class="px-5 py-2 text-xs font-black text-white bg-orange-600 hover:bg-orange-700 active:scale-95 rounded-xl transition-all cursor-pointer">
         Confirmar Alteração
       </button>
     </div>
@@ -506,8 +508,10 @@
   border-left: none;
   border-right: none;
   cursor: pointer;
+  user-select: none;
 }
 .chv-tab-btn:hover { color: #7c3aed; }
+.chv-tab-btn:active { opacity: 0.7; }
 .chv-tab-ativo {
   color: #7c3aed !important;
   border-bottom-color: #7c3aed !important;
@@ -523,8 +527,10 @@
   border-radius: 10px;
   cursor: pointer;
   transition: all 0.15s;
+  user-select: none;
 }
 .chv-stab-btn:hover { background: #f1f5f9; }
+.chv-stab-btn:active { transform: scale(0.96); }
 .chv-stab-ativo { background: #7c3aed !important; color: white !important; border-color: #7c3aed !important; }
 
 /* ── Cards de protocolo ──────────────────────────────────── */
