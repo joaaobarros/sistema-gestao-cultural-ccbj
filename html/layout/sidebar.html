@@ -152,6 +152,105 @@
         </div>
       </div>
 
+      <!-- ── TRABALHO (hidden — controlado por módulos) ───── -->
+      <div class="mb-1 hidden" id="modulo-trabalho">
+        <button onclick="toggleModulo('mod-trabalho')"
+          class="w-full flex items-center justify-between px-3 py-2 text-[9px] font-black text-slate-500 uppercase tracking-widest hover:text-purple-300 transition-colors">
+          <span><i class="fas fa-tasks mr-2 text-slate-600"></i>Trabalho</span>
+          <i id="icon-mod-trabalho" class="fas fa-chevron-up text-[8px] text-slate-600"></i>
+        </button>
+        <div id="mod-trabalho" class="space-y-0.5 pl-2">
+          <button data-aba="aba-tarefas" class="tab-btn nav-item w-full hidden">
+            <i class="fas fa-check-square w-5 text-center text-xs"></i>
+            <span class="text-xs font-semibold">Tarefas</span>
+          </button>
+          <button data-aba="aba-processos" class="tab-btn nav-item w-full hidden">
+            <i class="fas fa-project-diagram w-5 text-center text-xs"></i>
+            <span class="text-xs font-semibold">Processos</span>
+          </button>
+          <button data-aba="aba-eficiencia" class="tab-btn nav-item w-full hidden">
+            <i class="fas fa-tachometer-alt w-5 text-center text-xs"></i>
+            <span class="text-xs font-semibold">Eficiência</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- ── ATENDIMENTO (hidden — controlado por módulos) ── -->
+      <div class="mb-1 hidden" id="modulo-atendimento">
+        <button onclick="toggleModulo('mod-atendimento')"
+          class="w-full flex items-center justify-between px-3 py-2 text-[9px] font-black text-slate-500 uppercase tracking-widest hover:text-purple-300 transition-colors">
+          <span><i class="fas fa-hands-helping mr-2 text-slate-600"></i>Atendimento</span>
+          <i id="icon-mod-atendimento" class="fas fa-chevron-up text-[8px] text-slate-600"></i>
+        </button>
+        <div id="mod-atendimento" class="space-y-0.5 pl-2">
+          <button data-aba="aba-balcao" class="tab-btn nav-item w-full hidden">
+            <i class="fas fa-concierge-bell w-5 text-center text-xs"></i>
+            <span class="text-xs font-semibold">Balcão de Atendimento</span>
+          </button>
+          <button data-aba="aba-almoxarifado" class="tab-btn nav-item w-full hidden">
+            <i class="fas fa-boxes w-5 text-center text-xs"></i>
+            <span class="text-xs font-semibold">Almoxarifado</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- ── PESSOAS (hidden — controlado por módulos) ──────── -->
+      <div class="mb-1 hidden" id="modulo-pessoas">
+        <button onclick="toggleModulo('mod-pessoas')"
+          class="w-full flex items-center justify-between px-3 py-2 text-[9px] font-black text-slate-500 uppercase tracking-widest hover:text-purple-300 transition-colors">
+          <span><i class="fas fa-users mr-2 text-slate-600"></i>Pessoas</span>
+          <i id="icon-mod-pessoas" class="fas fa-chevron-up text-[8px] text-slate-600"></i>
+        </button>
+        <div id="mod-pessoas" class="space-y-0.5 pl-2">
+          <button data-aba="aba-rh" class="tab-btn nav-item w-full hidden">
+            <i class="fas fa-id-card w-5 text-center text-xs"></i>
+            <span class="text-xs font-semibold">RH / Depto. Pessoal</span>
+          </button>
+          <button data-aba="aba-contratacoes" class="tab-btn nav-item w-full hidden">
+            <i class="fas fa-file-contract w-5 text-center text-xs"></i>
+            <span class="text-xs font-semibold">Contratações</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- ── FINANCEIRO (hidden — controlado por módulos) ───── -->
+      <div class="mb-1 hidden" id="modulo-financeiro">
+        <button onclick="toggleModulo('mod-financeiro')"
+          class="w-full flex items-center justify-between px-3 py-2 text-[9px] font-black text-slate-500 uppercase tracking-widest hover:text-purple-300 transition-colors">
+          <span><i class="fas fa-chart-line mr-2 text-slate-600"></i>Financeiro</span>
+          <i id="icon-mod-financeiro" class="fas fa-chevron-up text-[8px] text-slate-600"></i>
+        </button>
+        <div id="mod-financeiro" class="space-y-0.5 pl-2">
+          <button data-aba="aba-contratos-fin" class="tab-btn nav-item w-full hidden">
+            <i class="fas fa-file-invoice-dollar w-5 text-center text-xs"></i>
+            <span class="text-xs font-semibold">Financeiro</span>
+          </button>
+          <button data-aba="aba-rel-financeiros" class="tab-btn nav-item w-full hidden">
+            <i class="fas fa-chart-pie w-5 text-center text-xs"></i>
+            <span class="text-xs font-semibold">Relatórios Financeiros</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- ── INSTITUCIONAL (hidden — controlado por módulos) ── -->
+      <div class="mb-1 hidden" id="modulo-institucional">
+        <button onclick="toggleModulo('mod-institucional')"
+          class="w-full flex items-center justify-between px-3 py-2 text-[9px] font-black text-slate-500 uppercase tracking-widest hover:text-purple-300 transition-colors">
+          <span><i class="fas fa-landmark mr-2 text-slate-600"></i>Institucional</span>
+          <i id="icon-mod-institucional" class="fas fa-chevron-up text-[8px] text-slate-600"></i>
+        </button>
+        <div id="mod-institucional" class="space-y-0.5 pl-2">
+          <button data-aba="aba-escuta" class="tab-btn nav-item w-full hidden">
+            <i class="fas fa-headphones w-5 text-center text-xs"></i>
+            <span class="text-xs font-semibold">Escuta Institucional</span>
+          </button>
+          <button data-aba="aba-codip" class="tab-btn nav-item w-full hidden">
+            <i class="fas fa-shield-alt w-5 text-center text-xs"></i>
+            <span class="text-xs font-semibold">CODIP</span>
+          </button>
+        </div>
+      </div>
+
       <!-- ── SISTEMA (superadmin/admin) ───────────────────── -->
       <div class="mb-1 hidden" id="modulo-sistema">
         <button onclick="toggleModulo('mod-sistema')"
@@ -256,7 +355,8 @@
 <script>
 (function() {
   var STORE_KEY = 'sidebar_modules_v3';
-  var GRUPOS = ['mod-espacos','mod-operacional','mod-infraestrutura','mod-comunicacao','mod-estrategia'];
+  var GRUPOS = ['mod-espacos','mod-operacional','mod-infraestrutura','mod-comunicacao','mod-estrategia',
+                'mod-trabalho','mod-atendimento','mod-pessoas','mod-financeiro','mod-institucional'];
   var FAV_BLOQUEADOS = ['aba-tarefas','aba-processos','aba-almoxarifado','aba-balcao',
     'aba-rh','aba-eficiencia','aba-contratos-fin','aba-contratacoes',
     'aba-codip','aba-rel-financeiros','aba-escuta','aba-permissoes-v2','aba-gestao-modulos'];
