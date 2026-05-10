@@ -171,6 +171,14 @@ const GAS = {
     salvarSetor: function(emailAlvo, setor, cb, err) {
       var emailSolicitante = (typeof AppState !== 'undefined' && AppState.usuario && AppState.usuario.email) || '';
       GAS._call('salvarSetorUsuario', [emailAlvo, setor, emailSolicitante], cb, err);
+    },
+    obterSistemaConfig: function(cb, err) {
+      GAS._call('obterSistemaConfigAdmin', [], cb, err);
+    },
+    salvarSistemaConfig: function(cfg, cb, err) {
+      var emailFallback = (window.__EMAIL_INICIAL__ && window.__EMAIL_INICIAL__.indexOf('@') >= 0)
+        ? window.__EMAIL_INICIAL__ : '';
+      GAS._call('salvarSistemaConfigAdmin', [cfg, emailFallback], cb, err);
     }
   },
 

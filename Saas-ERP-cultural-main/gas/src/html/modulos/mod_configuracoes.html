@@ -89,4 +89,109 @@
             </div>
           </div>
         </div>
+
+        <!-- ── CONFIG GLOBAL DO SISTEMA ──────────────────────────────────── -->
+        <div class="mt-6 bg-white rounded-2xl shadow-sm border border-slate-100 p-5" id="secaoConfigGlobal">
+          <div class="flex items-center justify-between mb-4">
+            <div>
+              <h3 class="font-black text-slate-800 uppercase tracking-tighter text-sm">Configurações Globais do Sistema</h3>
+              <p class="text-[10px] text-slate-400 mt-0.5">Horários padrão e turnos. Alterações entram em vigor imediatamente para todos.</p>
+            </div>
+            <button onclick="salvarConfigGlobal()"
+              class="bg-slate-800 text-white text-[10px] font-black px-4 py-2 rounded-xl hover:bg-slate-700 shadow transition-all uppercase">
+              Salvar
+            </button>
+          </div>
+
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-4" id="formConfigGlobal">
+
+            <div>
+              <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Abertura (mín.)</label>
+              <input type="time" id="cfg-reservaHoraInicio" class="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm">
+            </div>
+            <div>
+              <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Encerramento (máx.)</label>
+              <input type="time" id="cfg-reservaHoraFim" class="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm">
+            </div>
+
+            <div class="col-span-2 md:col-span-4 border-t border-slate-100 pt-3 mt-1">
+              <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Turnos padrão</p>
+              <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+                <div>
+                  <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Manhã — início</label>
+                  <input type="time" id="cfg-turnoManhaIni" class="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm">
+                </div>
+                <div>
+                  <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Manhã — fim</label>
+                  <input type="time" id="cfg-turnoManhaTer" class="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm">
+                </div>
+                <div>
+                  <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Tarde — início</label>
+                  <input type="time" id="cfg-turnoTardeIni" class="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm">
+                </div>
+                <div>
+                  <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Tarde — fim</label>
+                  <input type="time" id="cfg-turnoTardeTer" class="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm">
+                </div>
+                <div>
+                  <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Noite — início</label>
+                  <input type="time" id="cfg-turnoNoiteIni" class="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm">
+                </div>
+                <div>
+                  <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Noite — fim</label>
+                  <input type="time" id="cfg-turnoNoiteTer" class="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm">
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
       </section>
+
+<script>
+(function() {
+  var _CAMPOS_CONFIG = [
+    'reservaHoraInicio','reservaHoraFim',
+    'turnoManhaIni','turnoManhaTer',
+    'turnoTardeIni','turnoTardeTer',
+    'turnoNoiteIni','turnoNoiteTer'
+  ];
+
+  function _preencherForm(cfg) {
+    _CAMPOS_CONFIG.forEach(function(k) {
+      var el = document.getElementById('cfg-' + k);
+      if (el && cfg[k]) el.value = cfg[k];
+    });
+  }
+
+  // Preenche com AppState.config no boot (já disponível ao renderizar a aba)
+  EventBus.on('aba:aba-gestao-admin:show', function() {
+    if (typeof AppState !== 'undefined' && AppState.config) {
+      _preencherForm(AppState.config);
+    }
+  });
+
+  window.salvarConfigGlobal = function() {
+    var cfg = {};
+    _CAMPOS_CONFIG.forEach(function(k) {
+      var el = document.getElementById('cfg-' + k);
+      if (el && el.value) cfg[k] = el.value;
+    });
+    if (!Object.keys(cfg).length) return;
+    showLoader(true);
+    GAS.admin.salvarSistemaConfig(cfg, function(res) {
+      showLoader(false);
+      if (res && res.ok) {
+        Object.assign(AppState.config, res.config);
+        Swal.fire({ icon: 'success', title: 'Configurações salvas', timer: 1500, showConfirmButton: false });
+      } else {
+        Swal.fire('Erro', (res && res.msg) || 'Não foi possível salvar.', 'error');
+      }
+    }, function(e) {
+      showLoader(false);
+      Swal.fire('Erro', String(e), 'error');
+    });
+  };
+})();
+</script>

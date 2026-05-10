@@ -1833,6 +1833,7 @@ function inicializarApp() {
       AppState.colecoes.setores = dados.setores || [];
       AppState.colecoes.administradores = dados.administradores || [];
       AppState.mapaSalas = dados.mapaSalas || {};
+      if (dados.sistemaConfig) Object.assign(AppState.config, dados.sistemaConfig);
       AppState.mapaNomes = dados.mapaNomes || {};
       AppState.mapaSetoresAdmin = dados.mapaSetoresAdmin || {};
       AppState.mapaFlagsEspacos = dados.mapaFlagsEspacos || {};

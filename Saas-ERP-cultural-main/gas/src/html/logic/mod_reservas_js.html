@@ -288,8 +288,9 @@ function configurarCalendario(modoLote) {
 
         } else {
 
-          if (inputInicio) inputInicio.min = "08:00";
-          if (inputTermino) inputTermino.min = "08:00";
+          var _hMin = (typeof AppState !== 'undefined' && AppState.config && AppState.config.reservaHoraInicio) || '08:00';
+          if (inputInicio) inputInicio.min = _hMin;
+          if (inputTermino) inputTermino.min = _hMin;
 
         }
       }
@@ -3281,11 +3282,12 @@ function _ccbjConfirmar() {
              d.getFullYear();
     });
 
+  var _cfg = (typeof AppState !== 'undefined' && AppState.config) || {};
   const _horasTurno = {
-    integral: { ini: '08:00', ter: '22:00', label: 'MULTITURNO' },
-    manha:    { ini: '08:00', ter: '12:00', label: 'MANHÃ' },
-    tarde:    { ini: '12:00', ter: '18:00', label: 'TARDE' },
-    noite:    { ini: '18:00', ter: '22:00', label: 'NOITE' }
+    integral: { ini: _cfg.reservaHoraInicio || '08:00', ter: _cfg.reservaHoraFim    || '22:00', label: 'MULTITURNO' },
+    manha:    { ini: _cfg.turnoManhaIni     || '08:00', ter: _cfg.turnoManhaTer     || '12:00', label: 'MANHÃ' },
+    tarde:    { ini: _cfg.turnoTardeIni     || '12:00', ter: _cfg.turnoTardeTer     || '18:00', label: 'TARDE' },
+    noite:    { ini: _cfg.turnoNoiteIni     || '18:00', ter: _cfg.turnoNoiteTer     || '22:00', label: 'NOITE' }
   };
   const ht = _horasTurno[turno] || _horasTurno.integral;
 

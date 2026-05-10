@@ -686,14 +686,20 @@ function carregarPermissoes(cb) {
 
 function aplicarPermissoesUI() {
   document.querySelectorAll('[data-requer-permissao]').forEach(function(el) {
+    // Botões de nav (data-aba) são gerenciados por aplicarEstadoModulos() — não interferir
+    if (el.hasAttribute('data-aba')) return;
     var val = el.getAttribute('data-requer-permissao') || '';
     var partes = val.split(':');
     var modulo = partes[0];
     var acao   = partes[1] || 'visualizar';
     if (!temPermissao(modulo, acao)) {
       el.style.display = 'none';
+    } else {
+      el.style.display = '';
     }
   });
+  // Garante que grupos da sidebar sem itens visíveis sejam ocultados
+  if (typeof _autoHideGruposVazios === 'function') _autoHideGruposVazios();
 }
 
 // ── Helpers DOM ──────────────────────────────────────────────

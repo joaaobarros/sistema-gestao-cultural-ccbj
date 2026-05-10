@@ -49,7 +49,7 @@
     <nav class="flex-1 px-3 py-4 overflow-y-auto custom-scrollbar space-y-1">
 
       <!-- ── ESPAÇOS ──────────────────────────────────────── -->
-      <div class="mb-1">
+      <div id="modulo-espacos-grp" class="mb-1">
         <button onclick="toggleModulo('mod-espacos')"
           class="w-full flex items-center justify-between px-3 py-2 text-[9px] font-black text-slate-500 uppercase tracking-widest hover:text-purple-300 transition-colors">
           <span><i class="fas fa-building mr-2 text-slate-600"></i>Espaços</span>
@@ -58,12 +58,12 @@
 
         <div id="mod-espacos" class="space-y-0.5 pl-2">
 
-          <button data-aba="aba-lista-reservas" class="tab-btn nav-item w-full">
+          <button data-aba="aba-lista-reservas" data-requer-permissao="agenda:visualizar" class="tab-btn nav-item w-full">
             <i class="fas fa-calendar-alt w-5 text-center text-xs"></i>
             <span class="text-xs font-semibold">Agenda Geral</span>
           </button>
 
-          <button data-aba="aba-nova-reserva" onclick="resetarFormulario()" class="tab-btn nav-item w-full">
+          <button data-aba="aba-nova-reserva" data-requer-permissao="reservas:editar" onclick="resetarFormulario()" class="tab-btn nav-item w-full">
             <i class="fas fa-plus-circle w-5 text-center text-xs"></i>
             <span class="text-xs font-semibold">Novo Agendamento</span>
           </button>
@@ -72,7 +72,7 @@
       </div>
 
       <!-- ── PROGRAMAÇÃO ────────────────────────────────────── -->
-      <div class="mb-1">
+      <div id="modulo-programacao" class="mb-1">
         <button onclick="toggleModulo('mod-programacao')"
           class="w-full flex items-center justify-between px-3 py-2 text-[9px] font-black text-slate-500 uppercase tracking-widest hover:text-purple-300 transition-colors">
           <span><i class="fas fa-theater-masks mr-2 text-slate-600"></i>Programação</span>
@@ -81,7 +81,7 @@
 
         <div id="mod-programacao" class="space-y-0.5 pl-2">
 
-          <button data-aba="aba-acoes" class="tab-btn nav-item w-full">
+          <button data-aba="aba-acoes" data-requer-permissao="reservas:visualizar" class="tab-btn nav-item w-full">
             <i class="fas fa-theater-masks w-5 text-center text-xs"></i>
             <span class="text-xs font-semibold">Ações</span>
           </button>
@@ -90,7 +90,7 @@
       </div>
 
       <!-- ── OPERACIONAL ─────────────────────────────────────── -->
-      <div class="mb-1">
+      <div id="modulo-operacional" class="mb-1">
         <button onclick="toggleModulo('mod-operacional')"
           class="w-full flex items-center justify-between px-3 py-2 text-[9px] font-black text-slate-500 uppercase tracking-widest hover:text-purple-300 transition-colors">
           <span><i class="fas fa-clipboard-check mr-2 text-slate-600"></i>Operacional</span>
@@ -99,7 +99,7 @@
 
         <div id="mod-operacional" class="space-y-0.5 pl-2">
 
-          <button data-aba="aba-aprovacoes" class="tab-btn nav-item w-full">
+          <button data-aba="aba-aprovacoes" data-requer-permissao="reservas:editar" class="tab-btn nav-item w-full">
             <i class="fas fa-check-double w-5 text-center text-xs"></i>
             <span class="text-xs font-semibold flex-1 text-left">Aprovações</span>
             <span id="badgeAprovacoes" class="hidden min-w-[18px] h-[18px] bg-red-500 text-white text-[9px] font-black rounded-full flex items-center justify-center px-1">0</span>
@@ -109,7 +109,7 @@
       </div>
 
       <!-- ── COMUNICAÇÃO ──────────────────────────────────── -->
-      <div class="mb-1">
+      <div id="modulo-comunicacao-grp" class="mb-1">
         <button onclick="toggleModulo('mod-comunicacao')"
           class="w-full flex items-center justify-between px-3 py-2 text-[9px] font-black text-slate-500 uppercase tracking-widest hover:text-purple-300 transition-colors">
           <span><i class="fas fa-bullhorn mr-2 text-slate-600"></i>Comunicação</span>
@@ -118,7 +118,7 @@
 
         <div id="mod-comunicacao" class="space-y-0.5 pl-2">
 
-          <button id="btn-aba-rece" data-aba="aba-agenda-rece" class="tab-btn nav-item w-full">
+          <button id="btn-aba-rece" data-aba="aba-agenda-rece" data-requer-permissao="comunicacao:visualizar" class="tab-btn nav-item w-full">
             <i class="fas fa-star w-5 text-center text-xs"></i>
             <span class="text-xs font-semibold">Agenda RECE</span>
           </button>
@@ -127,7 +127,7 @@
       </div>
 
       <!-- ── INFRAESTRUTURA ─────────────────────────────────── -->
-      <div class="mb-1">
+      <div id="modulo-infraestrutura-grp" class="mb-1">
         <button onclick="toggleModulo('mod-infraestrutura')"
           class="w-full flex items-center justify-between px-3 py-2 text-[9px] font-black text-slate-500 uppercase tracking-widest hover:text-purple-300 transition-colors">
           <span><i class="fas fa-tools mr-2 text-slate-600"></i>Infraestrutura</span>
@@ -136,7 +136,7 @@
 
         <div id="mod-infraestrutura" class="space-y-0.5 pl-2">
 
-          <button data-aba="aba-protocolo-chaves" class="tab-btn nav-item w-full">
+          <button data-aba="aba-protocolo-chaves" data-requer-permissao="espacos:visualizar" class="tab-btn nav-item w-full">
             <i class="fas fa-key w-5 text-center text-xs"></i>
             <span class="text-xs font-semibold flex-1 text-left">Protocolo de Chaves</span>
             <span id="badgeChavesPendentes" class="hidden min-w-[18px] h-[18px] bg-amber-500 text-white text-[9px] font-black rounded-full flex items-center justify-center px-1">0</span>
@@ -146,7 +146,7 @@
       </div>
 
       <!-- ── ESTRATÉGIA ────────────────────────────────────── -->
-      <div class="mb-1">
+      <div id="modulo-estrategia-grp" class="mb-1">
         <button onclick="toggleModulo('mod-estrategia')"
           class="w-full flex items-center justify-between px-3 py-2 text-[9px] font-black text-slate-500 uppercase tracking-widest hover:text-purple-300 transition-colors">
           <span><i class="fas fa-chess-king mr-2 text-slate-600"></i>Estratégia</span>
@@ -155,7 +155,7 @@
 
         <div id="mod-estrategia" class="space-y-0.5 pl-2">
 
-          <button data-aba="aba-dashboard" class="tab-btn nav-item w-full">
+          <button data-aba="aba-dashboard" data-requer-permissao="estrategia:visualizar" class="tab-btn nav-item w-full">
             <i class="fas fa-chart-bar w-5 text-center text-xs"></i>
             <span class="text-xs font-semibold">Dashboard Geral</span>
           </button>

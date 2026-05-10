@@ -414,6 +414,7 @@ function obterDadosIniciais(emailClienteFallback, sessaoId) {
       _indiceAdmins: indiceAdmins,
       _indiceSalas: indiceSalas,
       _indiceItens: indiceItens,
+      sistemaConfig: getSistemaConfig(),
       timestamp: new Date().getTime(),
     };
 
@@ -1827,4 +1828,20 @@ function obterPreferencia(chave) {
     }
   }
   return null;
+}
+/**
+ * Controller para salvar configurações globais do sistema via painel admin.
+ * Requer nível superadmin.
+ */
+function salvarSistemaConfigAdmin(cfg, emailFallback) {
+  const email = obterEmailUsuario(emailFallback || '');
+  verificarPermissao('superadmin', email);
+  return salvarSistemaConfig(cfg);
+}
+
+/**
+ * Retorna as configurações globais do sistema (leitura pública autenticada).
+ */
+function obterSistemaConfigAdmin() {
+  return { ok: true, config: getSistemaConfig() };
 }
