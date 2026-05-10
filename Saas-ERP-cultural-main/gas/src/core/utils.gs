@@ -109,6 +109,7 @@ const ABA_PARA_MODULO = {
   // ACTION ENGINE
   'Acoes':                'ACOES',
   'AcoesRecursos':        'ACOES',
+  'Habilitacoes':         'ACOES',
 
   // OBSERVABILIDADE (EventLog na MASTER)
   'EventLog':             'MASTER',

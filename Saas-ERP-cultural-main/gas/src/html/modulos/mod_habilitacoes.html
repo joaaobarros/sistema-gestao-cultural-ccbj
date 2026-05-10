@@ -1,0 +1,188 @@
+<!--
+@file mod_habilitacoes.html
+@type module
+@description Relatório de Habilitações — acompanhamento do processo de qualificação/credenciamento
+             de proponentes (grupos, artistas, coletivos, organizações) para programas do CCBJ.
+@responsibility Estrutura HTML da aba de habilitações (#aba-habilitacoes).
+@dependencies mod_habilitacoes_js.html (_habCarregar, _habAbrirForm, _habSubmit, etc.)
+-->
+<section id="aba-habilitacoes" class="tab-content animate-fadeIn hidden pb-20">
+
+  <!-- Cabeçalho -->
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+    <div>
+      <h2 class="text-xl font-black text-slate-800 flex items-center gap-2">
+        <i class="fas fa-id-card-alt text-purple-600"></i>
+        Habilitações
+      </h2>
+      <p class="text-xs text-slate-500 mt-0.5">Acompanhe o processo de credenciamento de proponentes para programas do CCBJ</p>
+    </div>
+    <div class="flex items-center gap-2">
+      <button onclick="_habCarregar()" class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 active:scale-95 transition-all">
+        <i class="fas fa-sync-alt text-[10px]"></i> Atualizar
+      </button>
+      <button onclick="_habAbrirForm(null)" class="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-purple-600 rounded-xl hover:bg-purple-700 active:scale-95 transition-all">
+        <i class="fas fa-plus text-[10px]"></i> Nova Habilitação
+      </button>
+    </div>
+  </div>
+
+  <!-- Cards de métricas -->
+  <div id="hab-metricas" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-5">
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 text-center">
+      <p class="text-[10px] font-black text-slate-500 uppercase tracking-wide">Total</p>
+      <p id="hab-m-total" class="text-2xl font-black text-slate-800 mt-1">—</p>
+    </div>
+    <div class="bg-amber-50 rounded-2xl border border-amber-100 shadow-sm p-4 text-center">
+      <p class="text-[10px] font-black text-amber-600 uppercase tracking-wide">Pendentes</p>
+      <p id="hab-m-pendente" class="text-2xl font-black text-amber-700 mt-1">—</p>
+    </div>
+    <div class="bg-indigo-50 rounded-2xl border border-indigo-100 shadow-sm p-4 text-center">
+      <p class="text-[10px] font-black text-indigo-600 uppercase tracking-wide">Em Análise</p>
+      <p id="hab-m-em_analise" class="text-2xl font-black text-indigo-700 mt-1">—</p>
+    </div>
+    <div class="bg-emerald-50 rounded-2xl border border-emerald-100 shadow-sm p-4 text-center">
+      <p class="text-[10px] font-black text-emerald-600 uppercase tracking-wide">Habilitados</p>
+      <p id="hab-m-habilitado" class="text-2xl font-black text-emerald-700 mt-1">—</p>
+    </div>
+    <div class="bg-red-50 rounded-2xl border border-red-100 shadow-sm p-4 text-center">
+      <p class="text-[10px] font-black text-red-600 uppercase tracking-wide">Rejeitados</p>
+      <p id="hab-m-rejeitado" class="text-2xl font-black text-red-700 mt-1">—</p>
+    </div>
+    <div class="bg-purple-50 rounded-2xl border border-purple-100 shadow-sm p-4 text-center">
+      <p class="text-[10px] font-black text-purple-600 uppercase tracking-wide">Taxa Aprov.</p>
+      <p id="hab-m-taxa" class="text-2xl font-black text-purple-700 mt-1">—</p>
+    </div>
+  </div>
+
+  <!-- Filtros de status -->
+  <div class="flex flex-wrap gap-2 mb-4" id="hab-filtros">
+    <button onclick="_habFiltrar('')"            id="hab-f-todos"       class="hab-filtro hab-filtro-ativo px-3 py-1 text-[10px] font-black rounded-full uppercase tracking-wide transition-all bg-slate-900 text-white">Todos</button>
+    <button onclick="_habFiltrar('pendente')"    id="hab-f-pendente"    class="hab-filtro px-3 py-1 text-[10px] font-black rounded-full uppercase tracking-wide transition-all bg-slate-100 text-slate-500 hover:bg-slate-200">Pendente</button>
+    <button onclick="_habFiltrar('em_analise')"  id="hab-f-em_analise"  class="hab-filtro px-3 py-1 text-[10px] font-black rounded-full uppercase tracking-wide transition-all bg-slate-100 text-slate-500 hover:bg-slate-200">Em Análise</button>
+    <button onclick="_habFiltrar('habilitado')"  id="hab-f-habilitado"  class="hab-filtro px-3 py-1 text-[10px] font-black rounded-full uppercase tracking-wide transition-all bg-slate-100 text-slate-500 hover:bg-slate-200">Habilitado</button>
+    <button onclick="_habFiltrar('rejeitado')"   id="hab-f-rejeitado"   class="hab-filtro px-3 py-1 text-[10px] font-black rounded-full uppercase tracking-wide transition-all bg-slate-100 text-slate-500 hover:bg-slate-200">Rejeitado</button>
+    <button onclick="_habFiltrar('suspenso')"    id="hab-f-suspenso"    class="hab-filtro px-3 py-1 text-[10px] font-black rounded-full uppercase tracking-wide transition-all bg-slate-100 text-slate-500 hover:bg-slate-200">Suspenso</button>
+
+    <!-- Busca por texto -->
+    <div class="ml-auto">
+      <input type="text" id="hab-busca" oninput="_habBuscar(this.value)"
+        placeholder="Buscar proponente..."
+        class="px-3 py-1 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-400 w-48">
+    </div>
+  </div>
+
+  <!-- Container principal -->
+  <div class="flex flex-col lg:flex-row gap-4">
+
+    <!-- Lista de habilitações -->
+    <div class="flex-1 min-w-0">
+      <div id="hab-lista-loading" class="hidden text-center py-10 text-slate-400 text-sm">
+        <i class="fas fa-spinner fa-spin mr-2"></i>Carregando habilitações...
+      </div>
+      <div id="hab-lista-vazia" class="hidden text-center py-12">
+        <i class="fas fa-id-card-alt text-4xl text-slate-200 mb-3 block"></i>
+        <p class="text-slate-400 text-sm font-semibold">Nenhuma habilitação encontrada.</p>
+        <button onclick="_habAbrirForm(null)" class="mt-3 text-xs text-purple-600 font-bold hover:underline">Registrar primeira habilitação</button>
+      </div>
+      <div id="hab-lista" class="space-y-2"></div>
+    </div>
+
+    <!-- Painel lateral: formulário / detalhe -->
+    <div id="hab-painel" class="hidden w-full lg:w-96 shrink-0">
+
+      <!-- Formulário -->
+      <div id="hab-form-container" class="hidden bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+        <div class="flex items-center justify-between mb-4">
+          <h3 id="hab-form-titulo" class="text-sm font-black text-slate-800">Nova Habilitação</h3>
+          <button onclick="_habPainelFechar()" class="text-slate-400 hover:text-slate-600 text-xs">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        <form id="hab-form" onsubmit="event.preventDefault(); _habSubmit()">
+          <input type="hidden" id="hab-form-id">
+
+          <div class="space-y-3">
+            <div>
+              <label class="text-[10px] font-black text-slate-500 uppercase tracking-wide">Nome do Proponente *</label>
+              <input id="hab-f-nome" required type="text" maxlength="150"
+                class="mt-1 w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-400"
+                placeholder="Nome do grupo, artista ou organização">
+            </div>
+            <div>
+              <label class="text-[10px] font-black text-slate-500 uppercase tracking-wide">E-mail *</label>
+              <input id="hab-f-email" required type="email"
+                class="mt-1 w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-400"
+                placeholder="contato@exemplo.com">
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <label class="text-[10px] font-black text-slate-500 uppercase tracking-wide">Tipo *</label>
+                <select id="hab-f-tipo" required class="mt-1 w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-400">
+                  <option value="">Selecione...</option>
+                  <option value="grupo">Grupo</option>
+                  <option value="pessoa_fisica">Pessoa Física</option>
+                  <option value="pessoa_juridica">Pessoa Jurídica</option>
+                  <option value="coletivo">Coletivo</option>
+                  <option value="instituicao">Instituição</option>
+                </select>
+              </div>
+              <div>
+                <label class="text-[10px] font-black text-slate-500 uppercase tracking-wide">Área Cultural *</label>
+                <select id="hab-f-area" required class="mt-1 w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-400">
+                  <option value="">Selecione...</option>
+                  <option value="teatro">Teatro</option>
+                  <option value="danca">Dança</option>
+                  <option value="musica">Música</option>
+                  <option value="artes_visuais">Artes Visuais</option>
+                  <option value="literatura">Literatura</option>
+                  <option value="circo">Circo</option>
+                  <option value="audiovisual">Audiovisual</option>
+                  <option value="patrimonio">Patrimônio</option>
+                  <option value="cultura_popular">Cultura Popular</option>
+                  <option value="outro">Outro</option>
+                </select>
+              </div>
+            </div>
+            <div>
+              <label class="text-[10px] font-black text-slate-500 uppercase tracking-wide">Descrição da Proposta</label>
+              <textarea id="hab-f-descricao" rows="3"
+                class="mt-1 w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-400 resize-none"
+                placeholder="Descreva brevemente a proposta ou perfil do proponente..."></textarea>
+            </div>
+            <div>
+              <label class="text-[10px] font-black text-slate-500 uppercase tracking-wide">Documentos</label>
+              <input id="hab-f-documentos" type="text"
+                class="mt-1 w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-400"
+                placeholder="Links ou lista de documentos enviados">
+            </div>
+            <div>
+              <label class="text-[10px] font-black text-slate-500 uppercase tracking-wide">Observações</label>
+              <textarea id="hab-f-obs" rows="2"
+                class="mt-1 w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-400 resize-none"
+                placeholder="Observações internas..."></textarea>
+            </div>
+          </div>
+
+          <div class="flex gap-2 mt-4">
+            <button type="button" onclick="_habPainelFechar()" class="flex-1 py-2 text-xs font-bold text-slate-600 bg-slate-100 rounded-xl hover:bg-slate-200 transition-all">Cancelar</button>
+            <button type="submit" id="hab-form-btn" class="flex-1 py-2 text-xs font-bold text-white bg-purple-600 rounded-xl hover:bg-purple-700 transition-all">Salvar</button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Detalhe da habilitação selecionada -->
+      <div id="hab-detalhe-container" class="hidden bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-sm font-black text-slate-800">Detalhe</h3>
+          <button onclick="_habPainelFechar()" class="text-slate-400 hover:text-slate-600 text-xs">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        <div id="hab-detalhe-corpo"></div>
+      </div>
+
+    </div>
+  </div>
+
+</section>

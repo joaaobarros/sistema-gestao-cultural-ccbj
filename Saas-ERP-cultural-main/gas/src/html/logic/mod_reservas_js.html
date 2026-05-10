@@ -338,6 +338,14 @@ function configurarCalendario(modoLote) {
  */
 function resetarFormulario() {
   document.getElementById('formReserva').reset();
+
+  // Restaura o setor do usuário — form.reset() limpa o select mas o setor
+  // do solicitante deve vir sempre do perfil cadastrado, não de escolha manual.
+  var _selSetor = document.getElementById('selectSetor');
+  if (_selSetor && AppState.usuario && AppState.usuario.setor) {
+    _selSetor.value = AppState.usuario.setor;
+  }
+
   document.getElementById('inputReservaId').value = "";
   document.getElementById('carrinhoVolantes').innerHTML = "";
   document.getElementById('checkLote').checked = false;

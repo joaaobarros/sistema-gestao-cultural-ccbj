@@ -673,6 +673,33 @@ const GAS = {
     obterRecursos: function(acaoId, cb, err) {
       GAS._call('obterRecursosDaAcao', [acaoId], cb, err);
     }
+  },
+
+  /**
+   * BLOCO: Habilitações
+   * @context Credenciamento de proponentes para programas e espaços do CCBJ.
+   */
+  habilitacoes: {
+    listar: function(cb, err) {
+      var em = GAS._sessao();
+      GAS._call('listarHabilitacoes', [em], cb, err);
+    },
+    criar: function(dados, cb, err) {
+      var em = GAS._sessao();
+      GAS._call('criarHabilitacao', [dados, em], cb, err);
+    },
+    atualizar: function(id, dados, cb, err) {
+      var em = GAS._sessao();
+      GAS._call('atualizarHabilitacao', [id, dados, em], cb, err);
+    },
+    mudarStatus: function(id, novoStatus, observacao, cb, err) {
+      var em = GAS._sessao();
+      GAS._call('mudarStatusHabilitacao', [id, novoStatus, observacao || '', em], cb, err);
+    },
+    metricas: function(cb, err) {
+      var em = GAS._sessao();
+      GAS._call('obterMetricasHabilitacoes', [em], cb, err);
+    }
   }
 
 };

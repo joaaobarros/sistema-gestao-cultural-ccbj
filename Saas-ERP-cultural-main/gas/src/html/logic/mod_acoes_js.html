@@ -281,9 +281,9 @@ function _acoesSubmit() {
     descricao:   document.getElementById('acoes-f-descricao').value.trim()
   };
 
-  if (!dados.nome)        { alert('Nome é obrigatório.'); return; }
-  if (!dados.tipo)        { alert('Tipo é obrigatório.'); return; }
-  if (!dados.responsavel) { alert('Responsável é obrigatório.'); return; }
+  if (!dados.nome)        { Swal.fire({ icon: 'warning', title: 'Campo obrigatório', text: 'Informe o nome da ação.', timer: 2000, showConfirmButton: false }); return; }
+  if (!dados.tipo)        { Swal.fire({ icon: 'warning', title: 'Campo obrigatório', text: 'Selecione o tipo da ação.', timer: 2000, showConfirmButton: false }); return; }
+  if (!dados.responsavel) { Swal.fire({ icon: 'warning', title: 'Campo obrigatório', text: 'Informe o responsável.', timer: 2000, showConfirmButton: false }); return; }
 
   var btn = document.getElementById('acoes-form-btn');
   btn.disabled    = true;
@@ -294,9 +294,10 @@ function _acoesSubmit() {
     btn.textContent = editando ? 'Salvar alterações' : 'Criar ação';
 
     if (!res || !res.ok) {
-      alert('Erro: ' + (res && res.erro ? res.erro : 'Falha desconhecida'));
+      Swal.fire({ icon: 'error', title: 'Erro', text: res && res.erro ? res.erro : 'Falha desconhecida' });
       return;
     }
+    Swal.fire({ icon: 'success', title: editando ? 'Ação atualizada!' : 'Ação criada!', timer: 1500, showConfirmButton: false });
     _acoesPainelFechar();
     _acoesCarregar();
   };
@@ -304,7 +305,7 @@ function _acoesSubmit() {
   var onError = function(e) {
     btn.disabled    = false;
     btn.textContent = editando ? 'Salvar alterações' : 'Criar ação';
-    alert('Erro ao salvar: ' + (e.message || e));
+    Swal.fire({ icon: 'error', title: 'Erro ao salvar', text: e.message || String(e) });
   };
 
   if (editando) {
@@ -320,17 +321,30 @@ function _acoesSubmit() {
 
 function _acoesMudarStatus(id, novoStatus) {
   var labelNovo = _ACOES_STATUS_LABEL[novoStatus] || novoStatus;
-  if (!confirm('Confirmar transição para "' + labelNovo + '"?')) return;
-
-  GAS.acoes.mudarStatus(id, novoStatus, '', function(res) {
-    if (!res || !res.ok) {
-      alert('Erro: ' + (res && res.erro ? res.erro : 'Falha desconhecida'));
-      return;
-    }
-    _acoesPainelFechar();
-    _acoesCarregar();
-  }, function(e) {
-    alert('Erro: ' + (e.message || e));
+  Swal.fire({
+    title: 'Confirmar transição?',
+    html: 'O status será alterado para <b>' + labelNovo + '</b>.',
+    icon: 'question',
+    showCancelButton: true,
+    confirmButtonColor: '#7c3aed',
+    confirmButtonText: 'Confirmar',
+    cancelButtonText: 'Cancelar'
+  }).then(function(result) {
+    if (!result.isConfirmed) return;
+    showLoader(true);
+    GAS.acoes.mudarStatus(id, novoStatus, '', function(res) {
+      showLoader(false);
+      if (!res || !res.ok) {
+        Swal.fire({ icon: 'error', title: 'Erro', text: res && res.erro ? res.erro : 'Falha desconhecida' });
+        return;
+      }
+      Swal.fire({ icon: 'success', title: 'Status atualizado!', text: 'Ação movida para ' + labelNovo + '.', timer: 1500, showConfirmButton: false });
+      _acoesPainelFechar();
+      _acoesCarregar();
+    }, function(e) {
+      showLoader(false);
+      Swal.fire({ icon: 'error', title: 'Erro', text: e.message || String(e) });
+    });
   });
 }
 

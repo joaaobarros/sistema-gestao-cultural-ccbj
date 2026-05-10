@@ -576,6 +576,11 @@ const MODULOS = {
       'AcoesRecursos': [
         'acao_id', 'tipo_recurso', 'recurso_id', 'associado_em', 'email'
       ],
+      'Habilitacoes': [
+        'id', 'proponente_nome', 'proponente_email', 'proponente_tipo', 'area_cultural',
+        'descricao', 'status', 'data_envio', 'data_analise', 'responsavel_analise',
+        'observacoes', 'documentos', 'criado_por', 'criado_em', 'atualizado_em'
+      ],
     }
   },
 
