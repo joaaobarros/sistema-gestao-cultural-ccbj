@@ -257,8 +257,12 @@ function obterSalasDisponiveisPorData(data, horaInicio, horaTermino) {
   const dataKey = normalizarDataKey(data);
   if (!dataKey) return [];
 
+  const flags = AppState.mapaFlagsEspacos || {};
   return salas.filter(s => {
     const idSala = String(s[0]).trim();
+    if (!idSala) return false;
+    const f = flags[idSala];
+    if (f && f.aceitaReserva === false) return false;
     const reservasSala = AppState.cacheReservasIndex?.[dataKey]?.[idSala] || [];
     const conflito = reservasSala.some(r => {
       if ((r[13] || '').toUpperCase() === 'CANCELADO') return false;

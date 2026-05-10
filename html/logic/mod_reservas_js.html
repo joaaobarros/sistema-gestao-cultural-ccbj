@@ -32,6 +32,8 @@ function sincronizarAbaAtual() {
       AppState.colecoes.itens          = dados.listaItens || [];
       AppState.colecoes.setores        = dados.setores || [];
       AppState.colecoes.administradores = dados.administradores || [];
+      AppState.mapaSalas               = dados.mapaSalas || AppState.mapaSalas || {};
+      AppState.mapaFlagsEspacos        = dados.mapaFlagsEspacos || AppState.mapaFlagsEspacos || {};
 
       if (typeof renderizarEspacosAdmin === "function") renderizarEspacosAdmin();
       if (typeof renderizarItensAdmin   === "function") renderizarItensAdmin();
