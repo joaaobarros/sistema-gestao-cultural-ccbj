@@ -600,6 +600,31 @@ const GAS = {
   },
 
   /**
+   * BLOCO: Registro de Módulos (mod_modulos_registry.gs)
+   * @context Ativação/desativação de módulos via SUPERADMIN.
+   */
+  modulos: {
+    obterStatus: function(cb, err) {
+      GAS._call('modulos_obterStatus', [], cb, err);
+    },
+    obterRegistro: function(cb, err) {
+      var em = (typeof AppState !== 'undefined' && AppState.usuario && AppState.usuario.email)
+        ? AppState.usuario.email : (window.__EMAIL_INICIAL__ || '');
+      GAS._call('modulos_obterRegistro', [em], cb, err);
+    },
+    alterarStatus: function(moduleId, ativo, cb, err) {
+      var em = (typeof AppState !== 'undefined' && AppState.usuario && AppState.usuario.email)
+        ? AppState.usuario.email : (window.__EMAIL_INICIAL__ || '');
+      GAS._call('modulos_alterarStatus', [moduleId, ativo, em], cb, err);
+    },
+    resetar: function(cb, err) {
+      var em = (typeof AppState !== 'undefined' && AppState.usuario && AppState.usuario.email)
+        ? AppState.usuario.email : (window.__EMAIL_INICIAL__ || '');
+      GAS._call('modulos_resetar', [em], cb, err);
+    }
+  },
+
+  /**
    * BLOCO: Permissões modulares (mod_permissoes.gs)
    */
   permissoes: {

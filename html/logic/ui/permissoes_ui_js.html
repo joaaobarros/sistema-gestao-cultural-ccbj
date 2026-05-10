@@ -22,6 +22,7 @@ function configurarInterfacePorPermissao() {
   const btnGestao      = document.getElementById('btn-aba-gestao');
   const btnPermissoes  = document.getElementById('btn-aba-permissoes');
   const btnAuditoria   = document.getElementById('btn-aba-auditoria');
+  const btnModulos     = document.getElementById('btn-aba-gestao-modulos');
   const modSistema     = document.getElementById('modulo-sistema');
 
   if (isAdmin || isSuperadmin) {
@@ -31,6 +32,15 @@ function configurarInterfacePorPermissao() {
     if (modSistema)    modSistema.classList.remove('hidden');
   } else {
     if (modSistema)   modSistema.classList.add('hidden');
+  }
+
+  // Módulos: visível apenas para SUPERADMIN
+  if (btnModulos) {
+    if (isSuperadmin) {
+      btnModulos.classList.remove('hidden');
+    } else {
+      btnModulos.classList.add('hidden');
+    }
   }
 
   document.querySelectorAll('.em-breve-badge').forEach(function(badge) {
@@ -62,6 +72,14 @@ document.addEventListener('DOMContentLoaded', function() {
       if (typeof carregarPermissoes === 'function') {
         carregarPermissoes(function() {
           configurarInterfacePorPermissao();
+
+          // Carrega status dos módulos após permissões — fail-open
+          if (typeof carregarStatusModulos === 'function') {
+            carregarStatusModulos(function() {
+              aplicarEstadoModulos && aplicarEstadoModulos();
+            });
+          }
+
           if (AppState.colecoes.reservas && AppState.colecoes.reservas.length) {
             if (typeof renderizarReservas === 'function') renderizarReservas();
           }

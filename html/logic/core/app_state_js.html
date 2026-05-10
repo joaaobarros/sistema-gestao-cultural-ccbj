@@ -103,6 +103,18 @@ AppState.pesquisas = {
   sinais: []
 };
 
+/**
+ * ========================================
+ * BLOCO: AppState.modulos — mapa de ativação de módulos
+ * ========================================
+ * @description Mapa moduleId→boolean carregado do backend durante o boot.
+ *              Consultado por mostrarAba() e aplicarEstadoModulos() para decidir
+ *              quais rotas e itens de sidebar são acessíveis.
+ *              {} significa "não carregado ainda" — fail-open: rota não bloqueada
+ *              enquanto o backend não responde.
+ */
+AppState.modulos = {};
+
 AppState.escuta = {
   dashboard:      null,
   alertas:        [],

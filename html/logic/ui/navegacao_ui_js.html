@@ -41,16 +41,36 @@ function toggleSidebar() {
  */
 function mostrarAba(idAba) {
 
-  // BLOQUEIO ESTRUTURAL — abas fora do escopo de operação autorizado
-  var _abasBloqueadas = [
-    'aba-tarefas','aba-processos','aba-almoxarifado','aba-balcao',
-    'aba-rh','aba-eficiencia','aba-contratos-fin','aba-contratacoes',
-    'aba-codip','aba-rel-financeiros','aba-escuta'
-  ];
-  // aba-protocolo-chaves é operacional autorizada — não bloquear
-  if (_abasBloqueadas.indexOf(idAba) !== -1) {
-    if (idAba !== 'aba-lista-reservas') mostrarAba('aba-lista-reservas');
-    return;
+  // BLOQUEIO DINÂMICO — baseado no registro de módulos (AppState.modulos)
+  // Mapa rota → moduleId conforme _MOD_DEFAULTS em mod_modulos_registry.gs
+  var _rotaParaModulo = {
+    'aba-lista-reservas':   'agenda_geral',
+    'aba-nova-reserva':     'nova_reserva',
+    'aba-aprovacoes':       'aprovacoes',
+    'aba-agenda-rece':      'agenda_rece',
+    'aba-dashboard':        'dashboard',
+    'aba-protocolo-chaves': 'chaves',
+    'aba-tarefas':          'tarefas',
+    'aba-processos':        'processos',
+    'aba-almoxarifado':     'almoxarifado',
+    'aba-balcao':           'balcao',
+    'aba-rh':               'rh',
+    'aba-eficiencia':       'eficiencia',
+    'aba-contratos-fin':    'financeiro',
+    'aba-contratacoes':     'contratacoes',
+    'aba-rel-financeiros':  'relatorios_fin',
+    'aba-escuta':           'escuta',
+    'aba-codip':            'codip'
+  };
+
+  var moduleId = _rotaParaModulo[idAba];
+  if (moduleId && typeof AppState !== 'undefined' && AppState.modulos) {
+    // Se o mapa já foi carregado e o módulo está explicitamente inativo → bloquear
+    var mapaCarregado = Object.keys(AppState.modulos).length > 0;
+    if (mapaCarregado && AppState.modulos[moduleId] === false) {
+      if (idAba !== 'aba-lista-reservas') mostrarAba('aba-lista-reservas');
+      return;
+    }
   }
 
   // BLOQUEIO POR PERMISSÃO (SEM LOOP)
@@ -67,6 +87,15 @@ function mostrarAba(idAba) {
       'aba-auditoria':          'sistema',
       'aba-permissoes-v2':      'sistema'
     };
+
+    // Gestão de Módulos: exclusivo SUPERADMIN
+    if (idAba === 'aba-gestao-modulos') {
+      var _isSA = typeof AppState !== 'undefined' && AppState.usuario && AppState.usuario.isSuperadmin;
+      if (!_isSA) {
+        if (idAba !== 'aba-lista-reservas') mostrarAba('aba-lista-reservas');
+        return;
+      }
+    }
 
     var mod = mapa[idAba];
 
@@ -102,7 +131,8 @@ function mostrarAba(idAba) {
       'aba-dashboard':         'Dashboard',
       'aba-aprovacoes':        'Operacional — Aprovações',
       'aba-permissoes-v2':     'Gestão de Permissões',
-      'aba-protocolo-chaves':  'Protocolo de Chaves'
+      'aba-protocolo-chaves':  'Protocolo de Chaves',
+      'aba-gestao-modulos':    'Gestão de Módulos'
     };
 
     const titulo = document.getElementById('tituloAba');
@@ -223,6 +253,108 @@ function toggleModulo(id) {
       ? 'fas fa-chevron-down text-[8px] text-slate-600'
       : 'fas fa-chevron-up text-[8px] text-slate-600';
   }
+}
+
+/**
+ * ========================================
+ * BLOCO: Sistema de Módulos — estado de ativação
+ * ========================================
+ * @description aplicarEstadoModulos: lê AppState.modulos e aplica visibilidade
+ *              nos itens de sidebar e na proteção de rotas.
+ *              carregarStatusModulos: chama o backend para popular AppState.modulos.
+ * @context Chamado após boot (inicializarApp) e após cada alteração pelo SUPERADMIN.
+ * @inputs AppState.modulos (mapa moduleId→boolean)
+ * @outputs DOM: botões de nav visíveis/ocultos; AppState.modulos atualizado.
+ * @sideEffects Redireciona aba ativa se o módulo dela for desativado.
+ */
+
+// Mapa moduleId → botões de nav correspondentes na sidebar
+var _MOD_SIDEBAR_MAP = {
+  aprovacoes:    ['button[data-aba="aba-aprovacoes"]'],
+  agenda_rece:   ['button[data-aba="aba-agenda-rece"]', '#btn-aba-rece'],
+  dashboard:     ['button[data-aba="aba-dashboard"]'],
+  chaves:        ['button[data-aba="aba-protocolo-chaves"]'],
+  tarefas:       ['button[data-aba="aba-tarefas"]'],
+  processos:     ['button[data-aba="aba-processos"]'],
+  almoxarifado:  ['button[data-aba="aba-almoxarifado"]'],
+  balcao:        ['button[data-aba="aba-balcao"]'],
+  rh:            ['button[data-aba="aba-rh"]'],
+  eficiencia:    ['button[data-aba="aba-eficiencia"]'],
+  contratacoes:  ['button[data-aba="aba-contratacoes"]'],
+  relatorios_fin:['button[data-aba="aba-rel-financeiros"]'],
+  escuta:        ['button[data-aba="aba-escuta"]'],
+  codip:         ['button[data-aba="aba-codip"]'],
+  financeiro:    ['button[data-aba="aba-contratos-fin"]']
+};
+
+function aplicarEstadoModulos() {
+  if (typeof AppState === 'undefined' || !AppState.modulos) return;
+  var mapa = AppState.modulos;
+
+  Object.keys(_MOD_SIDEBAR_MAP).forEach(function(moduleId) {
+    var ativo = mapa[moduleId] !== false; // fail-open: undefined → visível
+    var seletores = _MOD_SIDEBAR_MAP[moduleId];
+    seletores.forEach(function(sel) {
+      try {
+        document.querySelectorAll(sel).forEach(function(el) {
+          if (ativo) {
+            el.classList.remove('hidden');
+          } else {
+            el.classList.add('hidden');
+          }
+        });
+      } catch(e) {}
+    });
+  });
+
+  // Se aba ativa foi desativada, redireciona para agenda geral
+  var abaAtiva = document.querySelector('.tab-content:not(.hidden)');
+  if (abaAtiva) {
+    var rotaParaModulo = {
+      'aba-aprovacoes':      'aprovacoes',
+      'aba-agenda-rece':     'agenda_rece',
+      'aba-dashboard':       'dashboard',
+      'aba-protocolo-chaves':'chaves',
+      'aba-tarefas':         'tarefas',
+      'aba-processos':       'processos',
+      'aba-almoxarifado':    'almoxarifado',
+      'aba-balcao':          'balcao',
+      'aba-rh':              'rh',
+      'aba-eficiencia':      'eficiencia',
+      'aba-contratos-fin':   'financeiro',
+      'aba-contratacoes':    'contratacoes',
+      'aba-rel-financeiros': 'relatorios_fin',
+      'aba-escuta':          'escuta',
+      'aba-codip':           'codip'
+    };
+    var mid = rotaParaModulo[abaAtiva.id];
+    if (mid && mapa[mid] === false) {
+      mostrarAba('aba-lista-reservas');
+    }
+  }
+}
+
+/**
+ * Carrega o status dos módulos do backend e aplica na UI.
+ * Chamado durante inicializarApp() — fail-open (não bloqueia o boot).
+ */
+function carregarStatusModulos(callback) {
+  if (typeof GAS === 'undefined' || !GAS.modulos) {
+    if (typeof callback === 'function') callback();
+    return;
+  }
+  GAS.modulos.obterStatus(function(res) {
+    if (res && res.ok && res.mapa) {
+      if (typeof AppState !== 'undefined') {
+        AppState.modulos = res.mapa;
+      }
+      aplicarEstadoModulos();
+    }
+    if (typeof callback === 'function') callback();
+  }, function() {
+    // Fail-open — não bloqueia o boot em caso de erro
+    if (typeof callback === 'function') callback();
+  });
 }
 
 function _mostrarPlaceholderEmBreve(aba) {
