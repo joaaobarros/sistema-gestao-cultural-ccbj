@@ -1116,31 +1116,70 @@ function renderizarReservas() {
  * @sideEffects google.script.run.habilitarEspaco / verificarPermissaoCancelamento / cancelarReserva.
  */
 async function habilitarReserva(id) {
+  const agora     = new Date();
+  const horaAtual = String(agora.getHours()).padStart(2,'0') + ':' + String(agora.getMinutes()).padStart(2,'0');
+
   const result = await Swal.fire({
     title: 'Habilitar espaço para uso?',
-    input: 'textarea',
-    inputPlaceholder: 'Observação (opcional — ex: som testado, cadeiras dispostas...)',
+    html:
+      '<div class="text-left space-y-3 pt-1">' +
+      '<div>' +
+      '<label class="text-xs font-black text-slate-500 uppercase tracking-wide block mb-1">Hora de habilitação</label>' +
+      '<input id="swalHoraHab" type="time" value="' + horaAtual + '" ' +
+        'class="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm outline-none focus:border-emerald-500">' +
+      '</div>' +
+      '<div>' +
+      '<label class="text-xs font-black text-slate-500 uppercase tracking-wide block mb-1">' +
+        'Observação <span class="font-normal normal-case">(opcional)</span></label>' +
+      '<textarea id="swalObsHab" rows="2" placeholder="Ex: som testado, cadeiras dispostas, limpeza concluída..." ' +
+        'class="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm outline-none focus:border-emerald-500 resize-none"></textarea>' +
+      '</div>' +
+      '</div>',
     showCancelButton: true,
     confirmButtonText: '<i class="fas fa-check mr-1"></i>Confirmar habilitação',
     confirmButtonColor: '#059669',
-    cancelButtonText: 'Cancelar'
+    cancelButtonText: 'Cancelar',
+    focusConfirm: false,
+    preConfirm: function() {
+      const horaHab = document.getElementById('swalHoraHab')?.value;
+      if (!horaHab) { Swal.showValidationMessage('Informe a hora de habilitação.'); return false; }
+      return { horaHab: horaHab, obs: document.getElementById('swalObsHab')?.value || '' };
+    }
   });
   if (!result.isConfirmed) return;
+
+  const horaHab = result.value.horaHab;
+  const obs     = result.value.obs;
+
   showLoader(true);
-  GAS.reservas.habilitar(id, AppState.usuario.email, result.value || '', function() {
+  GAS.reservas.habilitar(id, AppState.usuario.email, obs, function() {
       showLoader(false);
-      // Atualiza status localmente para refletir imediatamente
       const r = AppState.colecoes.reservas.find(x => x[0] === id);
       if (r) r[13] = 'HABILITADO';
       indexarReservas();
       Swal.mixin({ toast:true, position:'top-end', showConfirmButton:false, timer:2500, timerProgressBar:true })
         .fire({ icon:'success', title:'Espaço habilitado com sucesso!' });
+
+      // Registra check-in no relatório diário (secundário, fire-and-forget)
+      if (r) {
+        GAS.habDiaria.registrar({
+          reservaId:       id,
+          salaId:          String(r[4] || ''),
+          data:            String(r[1] || ''),
+          horaEvento:      String(r[2] || ''),
+          horaHabilitacao: horaHab,
+          observacao:      obs
+        }, function() {}, function() {});
+      }
+
       // Recarrega o modo ativo
-      const diagVis  = document.getElementById('viewDiagrama')  && !document.getElementById('viewDiagrama').classList.contains('hidden');
+      const diagVis   = document.getElementById('viewDiagrama')     && !document.getElementById('viewDiagrama').classList.contains('hidden');
       const agendaVis = document.getElementById('viewAgendaGoogle') && !document.getElementById('viewAgendaGoogle').classList.contains('hidden');
-      if (diagVis)   renderizarModoDiagrama();
+      const habVis    = document.getElementById('viewHabilitacoes') && !document.getElementById('viewHabilitacoes').classList.contains('hidden');
+      if (diagVis)        renderizarModoDiagrama();
       else if (agendaVis) renderizarModoAgendaGoogle();
-      else renderizarReservas();
+      else if (habVis)    { if (typeof habDiariaAtualizar === 'function') habDiariaAtualizar(); }
+      else                renderizarReservas();
     }, function(err) {
       showLoader(false);
       Swal.fire('Erro', err.message, 'error');

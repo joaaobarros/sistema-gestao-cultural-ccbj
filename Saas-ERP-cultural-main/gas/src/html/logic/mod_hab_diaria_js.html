@@ -51,87 +51,12 @@ function habDiariaAtualizar() {
 
 // ─── Registro de habilitação ─────────────────────────────────────────────────
 
-// Aceita o índice do item em _habDState.itens para evitar problemas de
-// aspas ao passar strings via onclick inline.
+// Usa índice numérico no onclick para evitar problemas de aspas em atributos HTML.
+// Delega para habilitarReserva (mod_reservas_js) — método canônico unificado.
 function habDiariaHabilitar(idx) {
   var item = _habDState.itens[idx];
   if (!item) return;
-
-  var salaNome  = (AppState.mapaSalas && AppState.mapaSalas[item.salaId]) || item.salaId;
-  var horaAtual = _habDiariaFmtHora(new Date());
-
-  Swal.fire({
-    title: 'Habilitar Espaço',
-    html:
-      '<div class="text-left space-y-3">' +
-      '<p class="text-sm text-slate-500"><i class="fas fa-map-marker-alt mr-1 text-purple-500"></i><strong>' + _escHTML(salaNome) + '</strong> — ' + _escHTML(item.evento) + '</p>' +
-      '<p class="text-xs text-slate-400">Início agendado: <strong>' + _escHTML(item.horaInicio) + '</strong></p>' +
-      '<div>' +
-      '<label class="text-xs font-black text-slate-500 uppercase tracking-wide block mb-1">Hora de habilitação</label>' +
-      '<input id="swalHoraHab" type="time" value="' + horaAtual + '" ' +
-        'class="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm outline-none focus:border-purple-500">' +
-      '</div>' +
-      '<div>' +
-      '<label class="text-xs font-black text-slate-500 uppercase tracking-wide block mb-1">Observação (opcional)</label>' +
-      '<textarea id="swalObsHab" rows="2" placeholder="Ex: limpeza atrasada, equipamento pendente..." ' +
-        'class="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm outline-none focus:border-purple-500 resize-none"></textarea>' +
-      '</div>' +
-      '</div>',
-    showCancelButton: true,
-    confirmButtonText: '<i class="fas fa-check-circle mr-1"></i>Confirmar',
-    cancelButtonText:  'Cancelar',
-    confirmButtonColor: '#7c3aed',
-    focusConfirm: false,
-    preConfirm: function () {
-      var horaHab = document.getElementById('swalHoraHab').value;
-      var obs     = document.getElementById('swalObsHab').value;
-      if (!horaHab) { Swal.showValidationMessage('Informe a hora de habilitação.'); return false; }
-      return { horaHab: horaHab, obs: obs };
-    }
-  }).then(function (result) {
-    if (!result.isConfirmed) return;
-    var dados = {
-      reservaId:        item.reservaId,
-      salaId:           item.salaId,
-      data:             _habDiariaFmtBR(new Date(_habDState.data + 'T00:00:00')),
-      horaEvento:       item.horaInicio,
-      horaHabilitacao:  result.value.horaHab,
-      observacao:       result.value.obs
-    };
-    showLoader(true);
-    GAS.habDiaria.registrar(dados,
-      function (res) {
-        if (!res || !res.ok) {
-          showLoader(false);
-          Swal.fire('Erro', (res && res.erro) || 'Falha ao registrar.', 'error');
-          return;
-        }
-        // Conecta ao sistema de habilitação: atualiza status da reserva para HABILITADO
-        GAS.reservas.habilitar(item.reservaId, AppState.usuario.email, result.value.obs || '',
-          function () {
-            showLoader(false);
-            var r = AppState.colecoes && AppState.colecoes.reservas &&
-                    AppState.colecoes.reservas.find(function (x) { return x[0] === item.reservaId; });
-            if (r) r[13] = 'HABILITADO';
-            if (typeof indexarReservas === 'function') indexarReservas();
-            Swal.mixin({ toast: true, position: 'top-end', showConfirmButton: false, timer: 2500, timerProgressBar: true })
-              .fire({ icon: 'success', title: 'Espaço habilitado!' });
-            _habDiariaCarregar();
-          },
-          function (err) {
-            showLoader(false);
-            // Check-in registrado; apenas o status não foi atualizado
-            Swal.fire('Aviso', 'Check-in registrado, mas não foi possível atualizar o status da reserva: ' + String(err), 'warning');
-            _habDiariaCarregar();
-          }
-        );
-      },
-      function (err) {
-        showLoader(false);
-        Swal.fire('Erro', String(err), 'error');
-      }
-    );
-  });
+  habilitarReserva(item.reservaId);
 }
 
 // ─── Carregamento e renderização ─────────────────────────────────────────────
