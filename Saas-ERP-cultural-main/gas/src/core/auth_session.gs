@@ -344,10 +344,10 @@ function _emailDonoScript() {
 function _resolverNivelAcesso(email) {
   // verificarPermissao() throws quando o nível não é satisfeito — cada chamada
   // precisa do seu próprio try/catch para não interromper as verificações seguintes.
-  if (typeof verificarPermissao === 'function') {
-    try { if (verificarPermissao('superadmin', email)) return 'superadmin'; } catch(_) {}
-    try { if (verificarPermissao('admin', email)) return 'admin'; } catch(_) {}
-  }
+  try {
+    if (PermissoesService.isSuperAdmin(email)) return 'superadmin';
+    if (PermissoesService.isAdmin(email)) return 'admin';
+  } catch(_) {}
   try {
     if (typeof obterPermissoesUsuario === 'function') {
       var perms = obterPermissoesUsuario(email);
@@ -391,7 +391,7 @@ function obterClienteIdGoogle() {
 function configurarAutenticacao(params) {
   try {
     var email = Session.getActiveUser().getEmail() || Session.getEffectiveUser().getEmail();
-    if (typeof verificarPermissao === 'function' && !verificarPermissao('superadmin', email)) {
+    if (!PermissoesService.isSuperAdmin(email)) {
       return { ok: false, msg: 'Apenas superadmin pode configurar autenticação.' };
     }
     var props = PropertiesService.getScriptProperties();
@@ -519,7 +519,7 @@ function salvarCredencialUsuario(emailAdmin, emailAlvo, senhaPlain, nome, ativo)
     var emailAdminLimpo = String(emailAdmin).trim().toLowerCase();
 
     try {
-      if (typeof verificarPermissao === 'function' && !verificarPermissao('admin', emailAdminLimpo)) {
+      if (!PermissoesService.isAdmin(emailAdminLimpo)) {
         return { ok: false, msg: 'Apenas administradores podem gerenciar usuários.' };
       }
     } catch(_) {}

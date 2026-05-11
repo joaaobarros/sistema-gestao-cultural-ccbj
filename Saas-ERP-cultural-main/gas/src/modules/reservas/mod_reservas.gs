@@ -140,7 +140,7 @@ function possuiConflitoReserva({ data, espacoId, inicio, fim, reservaIgnoradaId,
 
   if (resultado.conflito) {
     try {
-      SystemEvents.emit('CONFLICT_ATTEMPT', {
+      SystemEvents.emit(SystemEventTypes.RESERVATION_CONFLICT_DETECTED, {
         entidade:    'reserva',
         usuario:     usuarioSolicitante || 'desconhecido',
         origem:      'possuiConflitoReserva',

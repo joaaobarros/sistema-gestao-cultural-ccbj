@@ -218,10 +218,8 @@ var ReservaEngine = (function () {
    * @param {string} [observacao]
    */
   function aprovar(idReserva, emailAdmin, observacao) {
-    if (typeof verificarPermissao === 'function') {
-      try { verificarPermissao('admin', emailAdmin); } catch(e) {
-        throw new Error('Permissão insuficiente para aprovar reservas.');
-      }
+    if (!PermissoesService.isAdmin(emailAdmin)) {
+      throw new Error('Permissão insuficiente para aprovar reservas.');
     }
     var statusAtual = _obterStatusAtual(idReserva);
     aplicarTransicao(idReserva, statusAtual, STATUS_RESERVA.APROVADA, emailAdmin, observacao);
@@ -235,10 +233,8 @@ var ReservaEngine = (function () {
    * @param {string} motivo
    */
   function rejeitar(idReserva, emailAdmin, motivo) {
-    if (typeof verificarPermissao === 'function') {
-      try { verificarPermissao('admin', emailAdmin); } catch(e) {
-        throw new Error('Permissão insuficiente para rejeitar reservas.');
-      }
+    if (!PermissoesService.isAdmin(emailAdmin)) {
+      throw new Error('Permissão insuficiente para rejeitar reservas.');
     }
     var statusAtual = _obterStatusAtual(idReserva);
     aplicarTransicao(idReserva, statusAtual, STATUS_RESERVA.RECUSADA, emailAdmin, motivo);
