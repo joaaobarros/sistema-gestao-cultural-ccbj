@@ -723,27 +723,16 @@ const GAS = {
    * BLOCO: Habilitações
    * @context Credenciamento de proponentes para programas e espaços do CCBJ.
    */
+  /**
+   * BLOCO: Habilitações — núcleo oficial (habilitacoes_controller.gs → HabilitacoesEngine)
+   */
   habilitacoes: {
-    listar: function(cb, err) {
-      var em = GAS._sessao();
-      GAS._call('listarHabilitacoes', [em], cb, err);
-    },
-    criar: function(dados, cb, err) {
-      var em = GAS._sessao();
-      GAS._call('criarHabilitacao', [dados, em], cb, err);
-    },
-    atualizar: function(id, dados, cb, err) {
-      var em = GAS._sessao();
-      GAS._call('atualizarHabilitacao', [id, dados, em], cb, err);
-    },
-    mudarStatus: function(id, novoStatus, observacao, cb, err) {
-      var em = GAS._sessao();
-      GAS._call('mudarStatusHabilitacao', [id, novoStatus, observacao || '', em], cb, err);
-    },
-    metricas: function(cb, err) {
-      var em = GAS._sessao();
-      GAS._call('obterMetricasHabilitacoes', [em], cb, err);
-    }
+    listar:     function(cb, err)                          { GAS._callCtrl('ctrl_hab_listar',    [GAS._sessao()],                          cb, err); },
+    obter:      function(id, cb, err)                      { GAS._callCtrl('ctrl_hab_obter',     [id, GAS._sessao()],                      cb, err); },
+    criar:      function(dados, cb, err)                   { GAS._callCtrl('ctrl_hab_criar',     [dados, GAS._sessao()],                   cb, err); },
+    atualizar:  function(id, dados, cb, err)               { GAS._callCtrl('ctrl_hab_atualizar', [id, dados, GAS._sessao()],               cb, err); },
+    mudarStatus:function(id, novoStatus, observacao, cb, err) { GAS._callCtrl('ctrl_hab_transicao',[id, novoStatus, observacao||'', GAS._sessao()], cb, err); },
+    metricas:   function(cb, err)                          { GAS._callCtrl('ctrl_hab_metricas',  [GAS._sessao()],                          cb, err); }
   },
 
   /**
