@@ -33,10 +33,11 @@ var _TRANSICOES_CHAVE = {
   'SOLICITADA':                    ['AGUARDANDO_CONFIRMACAO_USUARIO', 'NEGADA', 'CANCELADA'],
   'AGUARDANDO_CONFIRMACAO_USUARIO': ['RETIRADA', 'NEGADA', 'CANCELADA'],
   'AGUARDANDO_CONFIRMACAO_INFRA':   ['DEVOLVIDA', 'CANCELADA'],
-  'RETIRADA':                      ['AGUARDANDO_CONFIRMACAO_INFRA', 'TRANSFERENCIA_PENDENTE', 'ATRASADA'],
-  'ATRASADA':                      ['AGUARDANDO_CONFIRMACAO_INFRA', 'TRANSFERENCIA_PENDENTE'],
+  // DEVOLVIDA e TRANSFERIDA diretas: caminhos operacionais (infra, sem etapa intermediária)
+  'RETIRADA':                      ['AGUARDANDO_CONFIRMACAO_INFRA', 'TRANSFERENCIA_PENDENTE', 'ATRASADA', 'DEVOLVIDA', 'TRANSFERIDA'],
+  'ATRASADA':                      ['AGUARDANDO_CONFIRMACAO_INFRA', 'TRANSFERENCIA_PENDENTE', 'DEVOLVIDA', 'TRANSFERIDA'],
   'TRANSFERENCIA_PENDENTE':        ['TRANSFERIDA', 'RETIRADA'],
-  'TRANSFERIDA':                   ['AGUARDANDO_CONFIRMACAO_INFRA', 'ATRASADA'],
+  'TRANSFERIDA':                   ['AGUARDANDO_CONFIRMACAO_INFRA', 'ATRASADA', 'DEVOLVIDA', 'TRANSFERIDA'],
   'DEVOLVIDA':                     [],
   'NEGADA':                        [],
   'CANCELADA':                     []
@@ -70,9 +71,12 @@ var KeyEngine = (function () {
    * @param {string} novoStatus
    * @param {string} emailOperador
    * @param {string} [observacao]
+   * @param {Object} [camposExtras] - campos adicionais a persistir na linha (ex: dtRetirada, responsavelId)
+   * @param {string} [acao] - identificador da ação para o histórico (ex: 'ENTREGA_APROVADA_INFRA')
+   * @param {string} [chaveId] - ID da chave associada ao protocolo
    * @throws Error se transição não permitida
    */
-  function aplicarTransicao(protocoloId, statusAtual, novoStatus, emailOperador, observacao) {
+  function aplicarTransicao(protocoloId, statusAtual, novoStatus, emailOperador, observacao, camposExtras, acao, chaveId) {
     var atual = String(statusAtual || '').toUpperCase();
     var novo  = String(novoStatus  || '').toUpperCase();
 
@@ -82,11 +86,12 @@ var KeyEngine = (function () {
       );
     }
 
-    // Persiste o novo status na linha do protocolo
-    _atualizarStatusProtocolo(protocoloId, novo);
+    // Persiste o novo status + campos extras na linha do protocolo
+    _atualizarStatusProtocolo(protocoloId, novo, camposExtras);
 
     // Registra histórico imutável
-    _registrarHistorico(protocoloId, null, novo === 'DEVOLVIDA' ? 'DEVOLUCAO' : novo,
+    var acaoHistorico = acao || (novo === 'DEVOLVIDA' ? 'DEVOLUCAO' : novo);
+    _registrarHistorico(protocoloId, chaveId || null, acaoHistorico,
       emailOperador, atual, novo, observacao || '');
 
     // Emite evento de domínio
@@ -195,15 +200,23 @@ var KeyEngine = (function () {
   }
 
   /**
-   * Atualiza o campo STATUS na aba ProtocolosChaves para o protocolo dado.
+   * Atualiza o STATUS e campos extras na linha do protocolo em ProtocolosChaves.
+   * @param {string} protocoloId
+   * @param {string} novoStatus
+   * @param {Object} [camposExtras] - mapa { indiceColuna: valor } para campos adicionais
    */
-  function _atualizarStatusProtocolo(protocoloId, novoStatus) {
+  function _atualizarStatusProtocolo(protocoloId, novoStatus, camposExtras) {
     var aba = _getSheet('ProtocolosChaves');
     if (!aba) throw new Error('[KeyEngine] Aba ProtocolosChaves não encontrada.');
     var dados = aba.getDataRange().getValues();
     for (var i = 1; i < dados.length; i++) {
       if (String(dados[i][PROT_COL.ID]) === String(protocoloId)) {
         aba.getRange(i + 1, PROT_COL.STATUS + 1).setValue(novoStatus);
+        if (camposExtras) {
+          Object.keys(camposExtras).forEach(function(col) {
+            aba.getRange(i + 1, Number(col) + 1).setValue(camposExtras[col]);
+          });
+        }
         return;
       }
     }

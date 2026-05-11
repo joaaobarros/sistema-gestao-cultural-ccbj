@@ -318,6 +318,7 @@ function _chvAtualizarStatusChaveNaPlanilha(chaveId, novoStatus) {
   aba.getRange(r.linha, CHV_COL.ATUALIZADA_EM + 1).setValue(new Date().toISOString());
 }
 
+// @deprecated — sem callers ativos. Substituído por KeyEngine.aplicarTransicao. Remover na FASE 7.
 function _chvAtualizarProtocoloStatus(linha, novoStatus, camposExtras) {
   const aba = _chvGetProtocolos();
   aba.getRange(linha, PROT_COL.STATUS + 1).setValue(novoStatus);
@@ -758,19 +759,16 @@ function chaves_aprovarEntrega(protocoloId, obs, emailAtual) {
         throw new Error('Apenas protocolos SOLICITADA podem ser aprovados. Status atual: ' + p.status);
 
       const nomeInfra = _chvResolverNome(email);
-      const agora = new Date().toISOString();
       const extras = {};
-      extras[PROT_COL.STATUS]              = CHV_STATUS_PROTOCOLO.AGUARDANDO_CONFIRMACAO_USUARIO;
       extras[PROT_COL.RESPONSAVEL_ATUAL_ID]   = email;
       extras[PROT_COL.RESPONSAVEL_ATUAL_NOME] = nomeInfra;
       extras[PROT_COL.ENTREGUE_POR_ID]     = email;
       extras[PROT_COL.ENTREGUE_POR_NOME]   = nomeInfra;
       if (obs) extras[PROT_COL.OBSERVACOES] = String(obs);
-      _chvAtualizarProtocoloStatus(r.linha, CHV_STATUS_PROTOCOLO.AGUARDANDO_CONFIRMACAO_USUARIO, extras);
+      KeyEngine.aplicarTransicao(protocoloId, CHV_STATUS_PROTOCOLO.SOLICITADA,
+        CHV_STATUS_PROTOCOLO.AGUARDANDO_CONFIRMACAO_USUARIO, email, obs || '', extras,
+        'ENTREGA_APROVADA_INFRA', p.chaveId);
       _chvAtualizarStatusChaveNaPlanilha(p.chaveId, CHV_STATUS_CHAVE.EM_USO);
-
-      _chvRegistrarHistorico(protocoloId, p.chaveId, 'ENTREGA_APROVADA_INFRA', email, nomeInfra,
-        CHV_STATUS_PROTOCOLO.SOLICITADA, CHV_STATUS_PROTOCOLO.AGUARDANDO_CONFIRMACAO_USUARIO, obs, 'INFRA');
 
       return { ok: true };
     } finally {
@@ -804,22 +802,15 @@ function chaves_confirmarRecebimento(protocoloId, obs, emailAtual) {
       const nome = _chvResolverNome(email);
       const agora = new Date().toISOString();
       const extras = {};
-      extras[PROT_COL.STATUS]              = CHV_STATUS_PROTOCOLO.RETIRADA;
       extras[PROT_COL.RESPONSAVEL_ATUAL_ID]   = destino;
       extras[PROT_COL.RESPONSAVEL_ATUAL_NOME] = _chvResolverNome(destino);
       extras[PROT_COL.RECEBIDO_POR_ID]     = email;
       extras[PROT_COL.RECEBIDO_POR_NOME]   = nome;
       extras[PROT_COL.DT_RETIRADA]         = agora;
       if (obs) extras[PROT_COL.OBSERVACOES] = String(obs);
-
-      _chvAtualizarProtocoloStatus(r.linha, CHV_STATUS_PROTOCOLO.RETIRADA, extras);
-      _chvRegistrarHistorico(protocoloId, p.chaveId, 'RECEBIMENTO_CONFIRMADO', email, nome,
-        CHV_STATUS_PROTOCOLO.AGUARDANDO_CONFIRMACAO_USUARIO, CHV_STATUS_PROTOCOLO.RETIRADA, obs, 'USUARIO');
-      SystemEvents.emit(SystemEventTypes.KEY_PROTOCOL_RETRIEVED, {
-        entidade: 'protocolo_chave', entidadeId: protocoloId,
-        usuario: email, origem: 'mod_chaves',
-        contexto: { chaveId: p.chaveId, espacoId: p.espacoId }
-      });
+      KeyEngine.aplicarTransicao(protocoloId, CHV_STATUS_PROTOCOLO.AGUARDANDO_CONFIRMACAO_USUARIO,
+        CHV_STATUS_PROTOCOLO.RETIRADA, email, obs || '', extras,
+        'RECEBIMENTO_CONFIRMADO', p.chaveId);
 
       return { ok: true };
     } finally {
@@ -850,16 +841,13 @@ function chaves_registrarDevolucao(protocoloId, obs, emailAtual) {
       if (email !== p.responsavelId && !_chvEhInfraOuAdmin(email))
         throw new Error('Apenas o responsável pela chave pode registrar devolução.');
 
-      const nome = _chvResolverNome(email);
       const agora = new Date().toISOString();
       const extras = {};
-      extras[PROT_COL.STATUS]     = CHV_STATUS_PROTOCOLO.AGUARDANDO_CONFIRMACAO_INFRA;
       extras[PROT_COL.DT_DEVOLUCAO] = agora;
       if (obs) extras[PROT_COL.OBSERVACOES] = String(obs);
-
-      _chvAtualizarProtocoloStatus(r.linha, CHV_STATUS_PROTOCOLO.AGUARDANDO_CONFIRMACAO_INFRA, extras);
-      _chvRegistrarHistorico(protocoloId, p.chaveId, 'DEVOLUCAO_REGISTRADA', email, nome,
-        p.status, CHV_STATUS_PROTOCOLO.AGUARDANDO_CONFIRMACAO_INFRA, obs, 'USUARIO');
+      KeyEngine.aplicarTransicao(protocoloId, p.status,
+        CHV_STATUS_PROTOCOLO.AGUARDANDO_CONFIRMACAO_INFRA, email, obs || '', extras,
+        'DEVOLUCAO_REGISTRADA', p.chaveId);
 
       return { ok: true };
     } finally {
@@ -888,23 +876,14 @@ function chaves_confirmarDevolucao(protocoloId, obs, emailAtual) {
         throw new Error('Protocolo não aguarda confirmação da infra. Status: ' + p.status);
 
       const nome = _chvResolverNome(email);
-      const agora = new Date().toISOString();
       const extras = {};
-      extras[PROT_COL.STATUS]                    = CHV_STATUS_PROTOCOLO.DEVOLVIDA;
       extras[PROT_COL.DEVOLUCAO_RECEBIDA_POR_ID]   = email;
       extras[PROT_COL.DEVOLUCAO_RECEBIDA_POR_NOME] = nome;
       if (obs) extras[PROT_COL.OBSERVACOES] = String(obs);
-
-      _chvAtualizarProtocoloStatus(r.linha, CHV_STATUS_PROTOCOLO.DEVOLVIDA, extras);
+      KeyEngine.aplicarTransicao(protocoloId, CHV_STATUS_PROTOCOLO.AGUARDANDO_CONFIRMACAO_INFRA,
+        CHV_STATUS_PROTOCOLO.DEVOLVIDA, email, obs || '', extras,
+        'DEVOLUCAO_CONFIRMADA_INFRA', p.chaveId);
       _chvAtualizarStatusChaveNaPlanilha(p.chaveId, CHV_STATUS_CHAVE.DISPONIVEL);
-
-      _chvRegistrarHistorico(protocoloId, p.chaveId, 'DEVOLUCAO_CONFIRMADA_INFRA', email, nome,
-        CHV_STATUS_PROTOCOLO.AGUARDANDO_CONFIRMACAO_INFRA, CHV_STATUS_PROTOCOLO.DEVOLVIDA, obs, 'INFRA');
-      SystemEvents.emit(SystemEventTypes.KEY_PROTOCOL_RETURNED, {
-        entidade: 'protocolo_chave', entidadeId: protocoloId,
-        usuario: email, origem: 'mod_chaves',
-        contexto: { chaveId: p.chaveId, espacoId: p.espacoId }
-      });
 
       return { ok: true };
     } finally {
@@ -955,17 +934,13 @@ function chaves_solicitarTransferencia(protocoloId, destinoEmail, obs, emailAtua
 
       const nomeDestino = _chvResolverNome(destinoEmail);
       const extras = {};
-      extras[PROT_COL.STATUS]                    = CHV_STATUS_PROTOCOLO.TRANSFERENCIA_PENDENTE;
       extras[PROT_COL.TRANSFERENCIA_DESTINO_ID]   = destinoEmail;
       extras[PROT_COL.TRANSFERENCIA_DESTINO_NOME] = nomeDestino;
       if (obs) extras[PROT_COL.OBSERVACOES] = String(obs);
-
-      _chvAtualizarProtocoloStatus(r.linha, CHV_STATUS_PROTOCOLO.TRANSFERENCIA_PENDENTE, extras);
-
-      const nome = _chvResolverNome(email);
-      _chvRegistrarHistorico(protocoloId, p.chaveId, 'TRANSFERENCIA_SOLICITADA', email, nome,
-        CHV_STATUS_PROTOCOLO.RETIRADA, CHV_STATUS_PROTOCOLO.TRANSFERENCIA_PENDENTE,
-        'Para: ' + destinoEmail + '. ' + (obs || ''), 'USUARIO');
+      KeyEngine.aplicarTransicao(protocoloId, CHV_STATUS_PROTOCOLO.RETIRADA,
+        CHV_STATUS_PROTOCOLO.TRANSFERENCIA_PENDENTE, email,
+        'Para: ' + destinoEmail + '. ' + (obs || ''), extras,
+        'TRANSFERENCIA_SOLICITADA', p.chaveId);
 
       return { ok: true };
     } finally {
@@ -997,7 +972,6 @@ function chaves_confirmarTransferencia(protocoloId, obs, emailAtual) {
 
       const nomeNovo = _chvResolverNome(email);
       const extras = {};
-      extras[PROT_COL.STATUS]                      = CHV_STATUS_PROTOCOLO.TRANSFERIDA;
       extras[PROT_COL.RESPONSAVEL_ATUAL_ID]         = email;
       extras[PROT_COL.RESPONSAVEL_ATUAL_NOME]       = nomeNovo;
       extras[PROT_COL.RECEBIDO_POR_ID]             = email;
@@ -1006,17 +980,10 @@ function chaves_confirmarTransferencia(protocoloId, obs, emailAtual) {
       extras[PROT_COL.TRANSFERENCIA_DESTINO_ID]     = '';
       extras[PROT_COL.TRANSFERENCIA_DESTINO_NOME]   = '';
       if (obs) extras[PROT_COL.OBSERVACOES] = String(obs);
-
-      _chvAtualizarProtocoloStatus(r.linha, CHV_STATUS_PROTOCOLO.TRANSFERIDA, extras);
+      KeyEngine.aplicarTransicao(protocoloId, CHV_STATUS_PROTOCOLO.TRANSFERENCIA_PENDENTE,
+        CHV_STATUS_PROTOCOLO.TRANSFERIDA, email, obs || '', extras,
+        'TRANSFERENCIA_CONFIRMADA', p.chaveId);
       _chvAtualizarStatusChaveNaPlanilha(p.chaveId, CHV_STATUS_CHAVE.EM_USO);
-
-      _chvRegistrarHistorico(protocoloId, p.chaveId, 'TRANSFERENCIA_CONFIRMADA', email, nomeNovo,
-        CHV_STATUS_PROTOCOLO.TRANSFERENCIA_PENDENTE, CHV_STATUS_PROTOCOLO.TRANSFERIDA, obs, 'USUARIO');
-      SystemEvents.emit(SystemEventTypes.KEY_PROTOCOL_TRANSFERRED, {
-        entidade: 'protocolo_chave', entidadeId: protocoloId,
-        usuario: email, origem: 'mod_chaves',
-        contexto: { chaveId: p.chaveId, novoResponsavel: email }
-      });
 
       return { ok: true };
     } finally {
@@ -1044,15 +1011,12 @@ function chaves_cancelarTransferencia(protocoloId, obs, emailAtual) {
       throw new Error('Sem permissão para cancelar a transferência.');
 
     const extras = {};
-    extras[PROT_COL.STATUS]                    = CHV_STATUS_PROTOCOLO.RETIRADA;
     extras[PROT_COL.TRANSFERENCIA_DESTINO_ID]   = '';
     extras[PROT_COL.TRANSFERENCIA_DESTINO_NOME] = '';
     if (obs) extras[PROT_COL.OBSERVACOES] = String(obs);
-
-    _chvAtualizarProtocoloStatus(r.linha, CHV_STATUS_PROTOCOLO.RETIRADA, extras);
-    const nome = _chvResolverNome(email);
-    _chvRegistrarHistorico(protocoloId, p.chaveId, 'TRANSFERENCIA_CANCELADA', email, nome,
-      CHV_STATUS_PROTOCOLO.TRANSFERENCIA_PENDENTE, CHV_STATUS_PROTOCOLO.RETIRADA, obs, 'USUARIO');
+    KeyEngine.aplicarTransicao(protocoloId, CHV_STATUS_PROTOCOLO.TRANSFERENCIA_PENDENTE,
+      CHV_STATUS_PROTOCOLO.RETIRADA, email, obs || '', extras,
+      'TRANSFERENCIA_CANCELADA', p.chaveId);
 
     return { ok: true };
   } catch(e) {
@@ -1078,13 +1042,10 @@ function chaves_cancelar(protocoloId, motivo, emailAtual) {
       throw new Error('Apenas protocolos SOLICITADA podem ser cancelados. Status: ' + p.status);
 
     const extras = {};
-    extras[PROT_COL.STATUS] = CHV_STATUS_PROTOCOLO.CANCELADA;
     if (motivo) extras[PROT_COL.OBSERVACOES] = String(motivo);
-    _chvAtualizarProtocoloStatus(r.linha, CHV_STATUS_PROTOCOLO.CANCELADA, extras);
-
-    const nome = _chvResolverNome(email);
-    _chvRegistrarHistorico(protocoloId, p.chaveId, 'CANCELADO', email, nome,
-      p.status, CHV_STATUS_PROTOCOLO.CANCELADA, motivo, 'USUARIO');
+    KeyEngine.aplicarTransicao(protocoloId, p.status,
+      CHV_STATUS_PROTOCOLO.CANCELADA, email, motivo || '', extras,
+      'CANCELADO', p.chaveId);
 
     return { ok: true };
   } catch(e) {
@@ -1105,13 +1066,10 @@ function chaves_negar(protocoloId, motivo, emailAtual) {
       throw new Error('Apenas solicitações podem ser negadas. Status: ' + p.status);
 
     const extras = {};
-    extras[PROT_COL.STATUS] = CHV_STATUS_PROTOCOLO.NEGADA;
     if (motivo) extras[PROT_COL.OBSERVACOES] = String(motivo);
-    _chvAtualizarProtocoloStatus(r.linha, CHV_STATUS_PROTOCOLO.NEGADA, extras);
-
-    const nome = _chvResolverNome(email);
-    _chvRegistrarHistorico(protocoloId, p.chaveId, 'NEGADO', email, nome,
-      p.status, CHV_STATUS_PROTOCOLO.NEGADA, motivo, 'INFRA');
+    KeyEngine.aplicarTransicao(protocoloId, CHV_STATUS_PROTOCOLO.SOLICITADA,
+      CHV_STATUS_PROTOCOLO.NEGADA, email, motivo || '', extras,
+      'NEGADO', p.chaveId);
 
     return { ok: true };
   } catch(e) {
@@ -1379,17 +1337,14 @@ function chaves_devolucaoOperacional(protocoloId, obs, emailAtual) {
       const nome  = _chvResolverNome(email);
       const agora = new Date().toISOString();
       const extras = {};
-      extras[PROT_COL.STATUS]                      = CHV_STATUS_PROTOCOLO.DEVOLVIDA;
       extras[PROT_COL.DT_DEVOLUCAO]                = agora;
       extras[PROT_COL.DEVOLUCAO_RECEBIDA_POR_ID]   = email;
       extras[PROT_COL.DEVOLUCAO_RECEBIDA_POR_NOME] = nome;
       if (obs) extras[PROT_COL.OBSERVACOES] = String(obs);
-
-      _chvAtualizarProtocoloStatus(r.linha, CHV_STATUS_PROTOCOLO.DEVOLVIDA, extras);
+      KeyEngine.aplicarTransicao(protocoloId, p.status,
+        CHV_STATUS_PROTOCOLO.DEVOLVIDA, email, obs || '', extras,
+        'DEVOLUCAO_OPERACIONAL', p.chaveId);
       _chvAtualizarStatusChaveNaPlanilha(p.chaveId, CHV_STATUS_CHAVE.DISPONIVEL);
-
-      _chvRegistrarHistorico(protocoloId, p.chaveId, 'DEVOLUCAO_OPERACIONAL', email, nome,
-        p.status, CHV_STATUS_PROTOCOLO.DEVOLVIDA, obs, 'INFRA');
 
       return { ok: true };
     } finally {
@@ -1429,9 +1384,7 @@ function chaves_transferenciaOperacional(protocoloId, destinoNome, destinoSetor,
 
       const nomeNovo  = String(destinoNome).trim();
       const setor     = String(destinoSetor || '');
-      const nomeInfra = _chvResolverNome(email);
       const extras = {};
-      extras[PROT_COL.STATUS]                     = CHV_STATUS_PROTOCOLO.TRANSFERIDA;
       extras[PROT_COL.RESPONSAVEL_ATUAL_ID]        = '';
       extras[PROT_COL.RESPONSAVEL_ATUAL_NOME]      = nomeNovo;
       extras[PROT_COL.RECEBIDO_POR_ID]            = '';
@@ -1442,13 +1395,11 @@ function chaves_transferenciaOperacional(protocoloId, destinoNome, destinoSetor,
       extras[PROT_COL.TRANSFERENCIA_DESTINO_ID]   = '';
       extras[PROT_COL.TRANSFERENCIA_DESTINO_NOME] = '';
       if (obs) extras[PROT_COL.OBSERVACOES] = String(obs);
-
-      _chvAtualizarProtocoloStatus(r.linha, CHV_STATUS_PROTOCOLO.TRANSFERIDA, extras);
+      KeyEngine.aplicarTransicao(protocoloId, p.status,
+        CHV_STATUS_PROTOCOLO.TRANSFERIDA, email,
+        'Para: ' + nomeNovo + (setor ? ' (' + setor + ')' : '') + '. ' + (obs || ''), extras,
+        'TRANSFERENCIA_OPERACIONAL', p.chaveId);
       _chvAtualizarStatusChaveNaPlanilha(p.chaveId, CHV_STATUS_CHAVE.EM_USO);
-
-      _chvRegistrarHistorico(protocoloId, p.chaveId, 'TRANSFERENCIA_OPERACIONAL', email, nomeInfra,
-        p.status, CHV_STATUS_PROTOCOLO.TRANSFERIDA,
-        'Para: ' + nomeNovo + (setor ? ' (' + setor + ')' : '') + '. ' + (obs || ''), 'INFRA');
 
       return { ok: true };
     } finally {
