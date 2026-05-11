@@ -20,12 +20,49 @@
  * @context Botão de refresh no header (sincronizarAbaAtual)
  * @sideEffects Atualiza AppState.colecoes, re-renderiza tabelas de admin e agenda
  */
+// Mapa de funções de atualização por aba — usado por sincronizarAbaAtual
+var _syncPorAba = {
+  'aba-habilitacoes':     function() { if (typeof _habCarregar           === 'function') _habCarregar(); },
+  'aba-gestao-modulos':   function() { if (typeof _modAtualizarLista     === 'function') _modAtualizarLista(); },
+  'aba-auditoria':        function() { if (typeof carregarAuditoria      === 'function') carregarAuditoria(); },
+  'aba-dashboard':        function() { if (typeof carregarDashboard      === 'function') carregarDashboard(); },
+  'aba-aprovacoes':       function() {
+    if (typeof carregarSolicitacoes      === 'function') carregarSolicitacoes();
+    if (typeof carregarCadastrosExternos === 'function') carregarCadastrosExternos();
+    if (typeof carregarChavesPendentes   === 'function') carregarChavesPendentes();
+  },
+  'aba-agenda-rece':      function() { if (typeof carregarReservasRece   === 'function') carregarReservasRece(); },
+  'aba-protocolo-chaves': function() { if (typeof _chvAtualizarDados     === 'function') _chvAtualizarDados(); },
+  'aba-acoes':            function() { if (typeof _acoesCarregar         === 'function') _acoesCarregar(); },
+  'aba-eficiencia':       function() { if (typeof carregarEficiencia     === 'function') carregarEficiencia(); },
+  'aba-escuta':           function() { if (typeof _escutaRecarregar      === 'function') _escutaRecarregar(); },
+  'aba-rel-financeiros':  function() { if (typeof carregarRelFinanceiros === 'function') carregarRelFinanceiros(); },
+  'aba-gestao-admin':     function() {
+    if (typeof renderizarEspacosAdmin === 'function') renderizarEspacosAdmin();
+    if (typeof renderizarItensAdmin   === 'function') renderizarItensAdmin();
+    if (typeof renderizarSetoresAdmin === 'function') renderizarSetoresAdmin();
+    if (typeof renderizarAdmins       === 'function') renderizarAdmins();
+  }
+};
+
 function sincronizarAbaAtual() {
-  if (typeof showLoader === "function") showLoader(true);
-  // Anima todos os botões de sync visíveis na aba atual
-  const icones = document.querySelectorAll('.fa-sync-alt');
+  var icones = document.querySelectorAll('.fa-sync-alt');
   icones.forEach(function(ic) { ic.classList.add('animate-spin'); });
-  const btnSync = icones[0]?.parentElement;
+
+  // Detecta aba ativa e despacha para o sync específico
+  var abaAtiva = document.querySelector('.tab-content:not(.hidden)');
+  var idAba = abaAtiva ? abaAtiva.id : '';
+
+  if (idAba && _syncPorAba[idAba]) {
+    _syncPorAba[idAba]();
+    setTimeout(function() {
+      document.querySelectorAll('.fa-sync-alt').forEach(function(ic) { ic.classList.remove('animate-spin'); });
+    }, 800);
+    return;
+  }
+
+  // Fallback: agenda geral — recarrega dados admin completos
+  if (typeof showLoader === "function") showLoader(true);
 
   GAS.admin.obterDados(function(dados) {
       AppState.colecoes.salas          = dados.salas || [];

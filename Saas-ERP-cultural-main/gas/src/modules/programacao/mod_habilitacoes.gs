@@ -107,7 +107,7 @@ function _habGetSheet() {
  */
 function listarHabilitacoes(emailFallback) {
   try {
-    verificarPermissao('visualizar', emailFallback);
+    verificarPermissao('admin', emailFallback);
     var sheet = _habGetSheet();
     var ultima = sheet.getLastRow();
     if (ultima < 2) return { ok: true, dados: [], metricas: _habMetricasVazias() };
@@ -189,7 +189,7 @@ function atualizarHabilitacao(id, dados, emailFallback) {
 
   try {
     var email = obterEmailUsuario(emailFallback);
-    verificarPermissao('editar', email);
+    verificarPermissao('admin', email);
 
     var sheet = _habGetSheet();
     var ultima = sheet.getLastRow();
@@ -244,7 +244,7 @@ function mudarStatusHabilitacao(id, novoStatus, observacao, emailFallback) {
 
   try {
     var email = obterEmailUsuario(emailFallback);
-    verificarPermissao('editar', email);
+    verificarPermissao('admin', email);
 
     var sheet = _habGetSheet();
     var ultima = sheet.getLastRow();
@@ -314,7 +314,7 @@ function _habCalcularMetricas(dados) {
  */
 function obterMetricasHabilitacoes(emailFallback) {
   try {
-    verificarPermissao('visualizar', emailFallback);
+    verificarPermissao('admin', emailFallback);
     var sheet = _habGetSheet();
     var ultima = sheet.getLastRow();
     if (ultima < 2) return { ok: true, metricas: _habMetricasVazias() };

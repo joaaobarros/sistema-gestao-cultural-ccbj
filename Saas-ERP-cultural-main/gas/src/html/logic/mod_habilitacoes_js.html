@@ -20,6 +20,12 @@ var _habState = {
   carregado:      false
 };
 
+window._onShow_aba_habilitacoes = function() {
+  if (!_habState.carregado) _habCarregar();
+};
+
+window._onSync_aba_habilitacoes = function() { _habCarregar(); };
+
 /**
  * ========================================
  * BLOCO: Labels e cores

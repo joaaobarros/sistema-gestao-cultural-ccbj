@@ -16,8 +16,11 @@
 var _modState = {
   modulos: [],
   categoriaAtiva: '',
-  carregado: false
+  carregado: false,
+  modoTecnico: false
 };
+
+window._onSync_aba_gestao_modulos = function() { _modAtualizarLista(); };
 
 // ══════════════════════════════════════════════════════════════════
 // BLOCO: Lazy-load — disparado por mostrarAba('aba-gestao-modulos')
@@ -48,6 +51,28 @@ function _modAtualizarLista() {
     _modSetLoader(false);
     Swal.fire({ icon:'error', title:'Erro de conexão', text: String(e), confirmButtonColor:'#7c3aed' });
   });
+}
+
+// ══════════════════════════════════════════════════════════════════
+// BLOCO: Modo técnico (superadmin)
+// ══════════════════════════════════════════════════════════════════
+
+function _modToggleSuperadminView() {
+  _modState.modoTecnico = !_modState.modoTecnico;
+
+  var btn   = document.getElementById('mod-btn-superadmin');
+  var label = document.getElementById('mod-btn-superadmin-label');
+  if (btn) {
+    btn.classList.toggle('bg-violet-100',  _modState.modoTecnico);
+    btn.classList.toggle('text-violet-700', _modState.modoTecnico);
+    btn.classList.toggle('border-violet-300', _modState.modoTecnico);
+    btn.classList.toggle('bg-slate-100',   !_modState.modoTecnico);
+    btn.classList.toggle('text-slate-700', !_modState.modoTecnico);
+    btn.classList.toggle('border-slate-200', !_modState.modoTecnico);
+  }
+  if (label) label.textContent = _modState.modoTecnico ? 'Ocultar Técnico' : 'Modo Técnico';
+
+  if (_modState.carregado) _modRenderizarGrid(_modState.categoriaAtiva);
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -100,6 +125,24 @@ function _modCardHTML(m) {
   var toggleDisabled = m.nucleo ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer';
   var toggleTitle    = m.nucleo ? 'Módulo de núcleo — não pode ser desativado' : (m.ativo ? 'Desativar módulo' : 'Ativar módulo');
 
+  var secaoTecnica = _modState.modoTecnico ? [
+    '<div class="mt-3 bg-violet-50 border border-violet-100 rounded-xl p-3 space-y-1 text-[10px]">',
+      '<div class="text-[9px] font-black text-violet-400 uppercase tracking-widest mb-1.5">Superadmin</div>',
+      '<div class="flex justify-between">',
+        '<span class="text-violet-400 font-semibold">moduleId</span>',
+        '<span class="text-violet-700 font-mono">' + _escHTML(m.moduleId) + '</span>',
+      '</div>',
+      '<div class="flex justify-between">',
+        '<span class="text-violet-400 font-semibold">Núcleo</span>',
+        '<span class="text-violet-700 font-mono">' + (m.nucleo ? 'sim' : 'não') + '</span>',
+      '</div>',
+      '<div class="flex justify-between">',
+        '<span class="text-violet-400 font-semibold">Versão</span>',
+        '<span class="text-violet-700 font-mono">v' + _escHTML(m.versao || '?') + '</span>',
+      '</div>',
+    '</div>'
+  ].join('') : '';
+
   return [
     '<div class="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden mod-card" data-categoria="' + m.categoria + '">',
 
@@ -130,8 +173,8 @@ function _modCardHTML(m) {
             '<button',
               ' onclick="' + (m.nucleo ? '' : '_modAlterarStatus(\'' + m.moduleId + '\',' + (!m.ativo) + ')') + '"',
               ' title="' + toggleTitle + '"',
-              ' class="relative w-11 h-6 rounded-full transition-colors duration-200 focus:outline-none ' + toggleDisabled + ' ' + (m.ativo ? 'bg-emerald-500' : 'bg-slate-300') + '">',
-              '<span class="absolute top-0.5 transition-transform duration-200 w-5 h-5 bg-white rounded-full shadow-sm ' + (m.ativo ? 'translate-x-5' : 'translate-x-0.5') + '"></span>',
+              ' class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 focus:outline-none ' + toggleDisabled + ' ' + (m.ativo ? 'bg-emerald-500' : 'bg-slate-300') + '">',
+              '<span class="inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform duration-200 ' + (m.ativo ? 'translate-x-6' : 'translate-x-1') + '"></span>',
             '</button>',
           '</div>',
 
@@ -140,7 +183,7 @@ function _modCardHTML(m) {
         // Descrição
         '<p class="text-xs text-slate-500 leading-relaxed mb-3">' + _escHTML(m.descricao || '') + '</p>',
 
-        // Detalhes técnicos
+        // Detalhes de rotas/dependências
         '<div class="bg-slate-50 rounded-xl p-3 space-y-1.5 text-[10px]">',
           '<div class="flex justify-between">',
             '<span class="text-slate-400 font-semibold">Rotas</span>',
@@ -151,6 +194,9 @@ function _modCardHTML(m) {
             '<span class="text-slate-600">' + _escHTML(deps) + '</span>',
           '</div>',
         '</div>',
+
+        // Seção superadmin (visível apenas no modo técnico)
+        secaoTecnica,
 
         // Status visual
         '<div class="mt-3 flex items-center gap-2">',
