@@ -1638,7 +1638,7 @@ function listarSolicitacoesCadastroExterno(emailAdmin) {
 
     return { ok: true, solicitacoes: result };
   } catch(e) {
-    Logger.log('[listarSolicitacoesCadastroExterno] ' + e.message);
+    console.warn('[listarSolicitacoesCadastroExterno] ' + e.message);
     return { ok: false, msg: e.message };
   }
 }
@@ -1704,7 +1704,7 @@ function aprovarCadastroExterno(id, emailAdmin) {
 
     return { ok: true, msg: 'Usuário aprovado com sucesso.', emailAlvo: emailAlvo };
   } catch(e) {
-    Logger.log('[aprovarCadastroExterno] ' + e.message);
+    console.warn('[aprovarCadastroExterno] ' + e.message);
     return { ok: false, msg: e.message };
   }
 }
@@ -1748,7 +1748,7 @@ function recusarCadastroExterno(id, emailAdmin, motivo) {
 
     return { ok: true, msg: 'Solicitação recusada.' };
   } catch(e) {
-    Logger.log('[recusarCadastroExterno] ' + e.message);
+    console.warn('[recusarCadastroExterno] ' + e.message);
     return { ok: false, msg: e.message };
   }
 }
@@ -1774,7 +1774,7 @@ function _enviarEmailAprovacaoCadastro(emailAlvo, nome) {
     ].join('\n');
     GmailApp.sendEmail(emailAlvo, assunto, corpo);
   } catch(e) {
-    Logger.log('[_enviarEmailAprovacaoCadastro] ' + e.message);
+    console.warn('[_enviarEmailAprovacaoCadastro] ' + e.message);
   }
 }
 
@@ -1796,7 +1796,7 @@ function _enviarEmailRecusaCadastro(emailAlvo, nome, motivo) {
     ].join('\n');
     GmailApp.sendEmail(emailAlvo, assunto, corpo);
   } catch(e) {
-    Logger.log('[_enviarEmailRecusaCadastro] ' + e.message);
+    console.warn('[_enviarEmailRecusaCadastro] ' + e.message);
   }
 }
 

@@ -1130,7 +1130,7 @@ function repararAbaCredenciais() {
 
 function debugItens() {
   var aba = _abrirAba('ESPACOS', 'Itens');
-  Logger.log(aba.getName());
+  console.log(aba.getName());
 }
 
 /**

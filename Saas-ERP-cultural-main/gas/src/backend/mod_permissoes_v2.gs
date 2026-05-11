@@ -67,6 +67,32 @@ var _P2_BASE = {
   })
 };
 
+// ── Helpers privados ─────────────────────────────────────────
+
+/**
+ * Lê a aba Administradores e retorna mapa { email: perfilNormalizado }.
+ * Usado por obterPermissoesUsuarioV2, salvarPermissoesUsuarioV2 e sincronizarUsuariosSistema
+ * para evitar triplicação do mesmo bloco de leitura + normalização de nível.
+ */
+function _p2obterMapaAdmins() {
+  var mapa = {};
+  try {
+    var aba = _getSheet('Administradores');
+    if (!aba || aba.getLastRow() < 2) return mapa;
+    var nivelParaPerfilMap = {
+      superadmin:'superadmin', admin:'admin', gestor:'gestor',
+      tecnico:'tecnico', 'técnico':'tecnico', rh:'rh',
+      comunicacao:'comunicacao', 'comunicação':'comunicacao'
+    };
+    aba.getRange(2, 1, aba.getLastRow() - 1, 2).getValues().forEach(function(r) {
+      var em = String(r[0] || '').toLowerCase().trim();
+      var nv = String(r[1] || '').toLowerCase().trim();
+      if (em && nivelParaPerfilMap[nv]) mapa[em] = nivelParaPerfilMap[nv];
+    });
+  } catch(e) {}
+  return mapa;
+}
+
 // ── Usuários do sistema ──────────────────────────────────────
 
 function obterUsuariosSistema() {
@@ -93,15 +119,8 @@ function sincronizarUsuariosSistema() {
       });
     }
 
-    var abaAdmins = _getSheet('Administradores');
-    var adminsData = [];
-    if (abaAdmins && abaAdmins.getLastRow() > 1) {
-      adminsData = abaAdmins.getRange(2, 1, abaAdmins.getLastRow() - 1, 2).getValues();
-      adminsData.forEach(function(r) {
-        var em = String(r[0] || '').trim().toLowerCase();
-        if (em && em.indexOf('@') > -1) emailSet[em] = true;
-      });
-    }
+    var nivelMap = _p2obterMapaAdmins(); // { email: perfilNormalizado }
+    Object.keys(nivelMap).forEach(function(em) { emailSet[em] = true; });
 
     var abaRes = _getSheet('Reservas');
     if (abaRes && abaRes.getLastRow() > 1) {
@@ -110,11 +129,6 @@ function sincronizarUsuariosSistema() {
         if (em && em.indexOf('@') > -1) emailSet[em] = true;
       });
     }
-
-    var nivelMap = {};
-    adminsData.forEach(function(r) {
-      nivelMap[String(r[0] || '').trim().toLowerCase()] = String(r[1] || '').trim().toLowerCase();
-    });
 
     var usuarios = [];
     Object.keys(emailSet).forEach(function(email) {
@@ -176,23 +190,7 @@ function obterPermissoesUsuarioV2(email) {
     if (String(lista[i].email || '').toLowerCase() === email) return lista[i];
   }
 
-  var perfil_base = 'visitante_controlado';
-  try {
-    var abaAdmins = _getSheet('Administradores');
-    if (abaAdmins && abaAdmins.getLastRow() > 1) {
-      var rows = abaAdmins.getRange(2, 1, abaAdmins.getLastRow() - 1, 2).getValues();
-      for (var k = 0; k < rows.length; k++) {
-        if (String(rows[k][0]||'').toLowerCase().trim() === email) {
-          var n = String(rows[k][1]||'').toLowerCase().trim();
-          var map = {superadmin:'superadmin',admin:'admin',gestor:'gestor',
-                     tecnico:'tecnico','técnico':'tecnico',rh:'rh',
-                     comunicacao:'comunicacao','comunicação':'comunicacao'};
-          if (map[n]) perfil_base = map[n];
-          break;
-        }
-      }
-    }
-  } catch(e) {}
+  var perfil_base = _p2obterMapaAdmins()[email] || 'visitante_controlado';
 
   var origem = { cargo: '', funcoes: [], setores: [], donos_espaco: [] };
   var auto   = calcularPermissoesAutomaticas(origem, perfil_base);
@@ -220,26 +218,13 @@ function salvarPermissoesUsuarioV2(dados) {
   // Leitura única de permissoes_v2.json — evita 3 readJSON separados na mesma função
   var listaPerms = readJSON('permissoes_v2.json');
 
+  var _mapaAdminsCache = null;
   function _buscarOuDefault(email) {
     for (var i = 0; i < listaPerms.length; i++) {
       if (String(listaPerms[i].email||'').toLowerCase() === email) return listaPerms[i];
     }
-    var perfil_base = 'visitante_controlado';
-    try {
-      var abaAdmins = _getSheet('Administradores');
-      if (abaAdmins && abaAdmins.getLastRow() > 1) {
-        var rows = abaAdmins.getRange(2, 1, abaAdmins.getLastRow() - 1, 2).getValues();
-        var map  = {superadmin:'superadmin',admin:'admin',gestor:'gestor',
-                    tecnico:'tecnico','técnico':'tecnico',rh:'rh',
-                    comunicacao:'comunicacao','comunicação':'comunicacao'};
-        for (var k = 0; k < rows.length; k++) {
-          if (String(rows[k][0]||'').toLowerCase().trim() === email) {
-            var n = String(rows[k][1]||'').toLowerCase().trim();
-            if (map[n]) { perfil_base = map[n]; break; }
-          }
-        }
-      }
-    } catch(e) {}
+    if (!_mapaAdminsCache) _mapaAdminsCache = _p2obterMapaAdmins();
+    var perfil_base = _mapaAdminsCache[email] || 'visitante_controlado';
     return { email: email, perfil_base: perfil_base, origem: {cargo:'',funcoes:[],setores:[],donos_espaco:[]},
              permissoes_automaticas: {}, permissoes_manuais: {}, permissoes_finais: {}, atualizadoEm: null };
   }
@@ -471,18 +456,10 @@ function listarPermissoesV2(emailFallback) {
   }
   // fallback: verifica na aba Administradores se não estiver na lista v2
   if (!p) {
-    try {
-      var abaAdmins = _getSheet('Administradores');
-      if (abaAdmins && abaAdmins.getLastRow() > 1) {
-        var rows = abaAdmins.getRange(2, 1, abaAdmins.getLastRow() - 1, 2).getValues();
-        for (var k = 0; k < rows.length; k++) {
-          if (String(rows[k][0]||'').toLowerCase().trim() === em) {
-            var n = String(rows[k][1]||'').toLowerCase().trim();
-            if (n === 'superadmin' || n === 'admin') { p = { perfil_base: n }; break; }
-          }
-        }
-      }
-    } catch(e) {}
+    var perfAdm = _p2obterMapaAdmins()[em];
+    if (perfAdm === 'superadmin' || perfAdm === 'admin') {
+      p = { perfil_base: perfAdm };
+    }
   }
   if (!p || (p.perfil_base !== 'superadmin' && p.perfil_base !== 'admin')) {
     throw new Error('Acesso negado');

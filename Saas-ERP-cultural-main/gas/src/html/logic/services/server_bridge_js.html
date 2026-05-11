@@ -466,16 +466,6 @@ const GAS = {
     fluxoCaixa:       function(cb, err)        { GAS._call('obterFluxoCaixa',    [], cb, err); }
   },
 
-  // legado — mantido para retrocompatibilidade
-  financeiro: {
-    obterContratacoes:  function(cb, err)        { GAS._call('obterContratacoes',  [], cb, err); },
-    salvarContratacao:  function(dados, cb, err) { GAS._call('salvarContratacao',  [dados], cb, err); },
-    excluirContratacao: function(id, email, cb, err) { GAS._call('excluirContratacao', [id], cb, err); },
-    obterPagamentos:    function(cb, err)        { GAS._call('obterPagamentos',    [], cb, err); },
-    registrarPagamento: function(dados, cb, err) { GAS._call('registrarPagamento', [dados], cb, err); },
-    obterFluxoCaixa:    function(cb, err)        { GAS._call('obterFluxoCaixa',    [], cb, err); }
-  },
-
   /**
    * BLOCO: RH expandido (mod_rh.gs)
    */

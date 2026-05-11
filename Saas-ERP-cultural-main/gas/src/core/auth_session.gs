@@ -224,7 +224,7 @@ function _verificarJWTGoogle(idToken) {
     );
 
     if (resp.getResponseCode() !== 200) {
-      Logger.log('[Auth] tokeninfo retornou ' + resp.getResponseCode() + ': ' + resp.getContentText());
+      console.warn('[Auth] tokeninfo retornou ' + resp.getResponseCode() + ': ' + resp.getContentText());
       return '';
     }
 
@@ -233,30 +233,30 @@ function _verificarJWTGoogle(idToken) {
     // Validações de segurança
     var agora = Math.floor(Date.now() / 1000);
     if (!payload.exp || parseInt(payload.exp) < agora) {
-      Logger.log('[Auth] JWT expirado');
+      console.warn('[Auth] JWT expirado');
       return '';
     }
 
     if (!payload.email) {
-      Logger.log('[Auth] JWT sem email');
+      console.warn('[Auth] JWT sem email');
       return '';
     }
 
     if (payload.email_verified === 'false' || payload.email_verified === false) {
-      Logger.log('[Auth] Email do JWT não verificado');
+      console.warn('[Auth] Email do JWT não verificado');
       return '';
     }
 
     // Validar audience se GOOGLE_CLIENT_ID estiver configurado
     var clientId = PropertiesService.getScriptProperties().getProperty('GOOGLE_CLIENT_ID') || '';
     if (clientId && payload.aud !== clientId && payload.azp !== clientId) {
-      Logger.log('[Auth] JWT de audience desconhecida: ' + payload.aud);
+      console.warn('[Auth] JWT de audience desconhecida: ' + payload.aud);
       return '';
     }
 
     return payload.email.toLowerCase().trim();
   } catch(e) {
-    Logger.log('[Auth] Erro ao verificar JWT: ' + e.message);
+    console.warn('[Auth] Erro ao verificar JWT: ' + e.message);
     return '';
   }
 }
@@ -287,7 +287,7 @@ function _validarEmailAutorizado(email) {
     var dominios = dominiosConf.split(',').map(function(d) { return d.trim().toLowerCase(); });
     var dominioEmail = emailLimpo.split('@')[1];
     if (dominios.length > 0 && dominios.indexOf(dominioEmail) < 0) {
-      Logger.log('[Auth] Domínio não permitido: ' + dominioEmail);
+      console.warn('[Auth] Domínio não permitido: ' + dominioEmail);
       return '';
     }
   }
@@ -360,16 +360,10 @@ function _resolverNivelAcesso(email) {
 function _registrarLogSessao(email, acao) {
   try {
     var sh = typeof _getSheet === 'function' ? _getSheet('LogAcessos') : null;
-    if (!sh) {
-      // Tentar diretamente
-      var ss = SpreadsheetApp.getActiveSpreadsheet();
-      sh = ss ? ss.getSheetByName('LogAcessos') : null;
-    }
-    if (sh) {
-      sh.appendRow([new Date().toISOString(), email, acao, '', 'sessao', '']);
-    }
+    if (!sh) return; // log de sessão não crítico — skip silencioso
+    sh.appendRow([new Date().toISOString(), email, acao, '', 'sessao', '']);
   } catch(e) {
-    Logger.log('[AuthLog] ' + e.message);
+    console.warn('[AuthLog] ' + e.message);
   }
 }
 
@@ -510,7 +504,7 @@ function validarCredenciais(email, senha) {
 
     return { ok: false, msg: 'Usuário não encontrado.' };
   } catch(e) {
-    Logger.log('[validarCredenciais] ' + e.message);
+    console.warn('[validarCredenciais] ' + e.message);
     return { ok: false, msg: 'Erro interno. Tente novamente.' };
   }
 }
@@ -558,7 +552,7 @@ function salvarCredencialUsuario(emailAdmin, emailAlvo, senhaPlain, nome, ativo)
     sh.appendRow([emailAlvoLimpo, hash, nomeAlvo, ativoVal, new Date().toISOString(), '']);
     return { ok: true, msg: 'Usuário criado com sucesso.' };
   } catch(e) {
-    Logger.log('[salvarCredencialUsuario] ' + e.message);
+    console.warn('[salvarCredencialUsuario] ' + e.message);
     return { ok: false, msg: e.message };
   }
 }
@@ -601,16 +595,16 @@ function garantirAbaCredenciais() {
 
     if (typeof _abrirModulo !== 'function' || typeof _configurarAbas !== 'function' ||
         typeof MODULOS === 'undefined' || !MODULOS.MASTER) {
-      Logger.log('[Auth] Funções de setup não disponíveis. Execute recriarEstrutura() no editor GAS.');
+      console.warn('[Auth] Funções de setup não disponíveis. Execute recriarEstrutura() no editor GAS.');
       return false;
     }
 
     var master = _abrirModulo('MASTER');
     _configurarAbas(master, { 'CredenciaisUsuarios': MODULOS.MASTER.abas['CredenciaisUsuarios'] }, '#1F2937');
-    Logger.log('[Auth] Aba CredenciaisUsuarios criada via setup.');
+    console.log('[Auth] Aba CredenciaisUsuarios criada via setup.');
     return true;
   } catch(e) {
-    Logger.log('[garantirAbaCredenciais] ' + e.message);
+    console.warn('[garantirAbaCredenciais] ' + e.message);
     return false;
   }
 }
@@ -695,7 +689,7 @@ function solicitarCadastroExterno(nome, email, senha) {
 
     return { ok: true, msg: 'Solicitação enviada. Você receberá um e-mail quando for aprovado.' };
   } catch(e) {
-    Logger.log('[solicitarCadastroExterno] ' + e.message);
+    console.warn('[solicitarCadastroExterno] ' + e.message);
     return { ok: false, msg: 'Erro ao registrar solicitação. Tente novamente.' };
   }
 }
@@ -722,6 +716,6 @@ function _notificarAdminsCadastroExterno(id, nome, email) {
       try { GmailApp.sendEmail(a, assunto, corpo); } catch(e) {}
     });
   } catch(e) {
-    Logger.log('[_notificarAdminsCadastroExterno] ' + e.message);
+    console.warn('[_notificarAdminsCadastroExterno] ' + e.message);
   }
 }

@@ -204,7 +204,7 @@ function _escutaSheetToArray(sh) {
       return obj;
     });
   } catch(e) {
-    Logger.log('[Escuta] _escutaSheetToArray: ' + e.message);
+    console.warn('[Escuta] _escutaSheetToArray: ' + e.message);
     return [];
   }
 }
@@ -342,7 +342,7 @@ function verificarPermissaoEscuta(email, acao) {
     }
     return false;
   } catch(e) {
-    Logger.log('[EscutaPermissao] ' + e.message);
+    console.warn('[EscutaPermissao] ' + e.message);
     return false;
   }
 }
@@ -1264,9 +1264,9 @@ function obterAlertasEscuta() {
 function processarAlertasEscuta() {
   try {
     _escutaVerificarEGerarAlertas();
-    Logger.log('[Escuta] processarAlertasEscuta executado em ' + new Date().toISOString());
+    console.log('[Escuta] processarAlertasEscuta executado em ' + new Date().toISOString());
   } catch(e) {
-    Logger.log('[Escuta] Erro em processarAlertasEscuta: ' + e.message);
+    console.warn('[Escuta] Erro em processarAlertasEscuta: ' + e.message);
   }
 }
 
@@ -1290,7 +1290,7 @@ function _escutaVerificarEGerarAlertas() {
     var alertas = _escutaDetectarAlertas(ind, esponts, resp);
     alertas.forEach(function(a) { _escutaRegistrarAlerta(a); });
   } catch(e) {
-    Logger.log('[Escuta] Erro em _escutaVerificarEGerarAlertas: ' + e.message);
+    console.warn('[Escuta] Erro em _escutaVerificarEGerarAlertas: ' + e.message);
   }
 }
 
@@ -1571,7 +1571,7 @@ function obterDadosEscuta() {
           _escutaExecCache[nome] = _escutaSheetToArray(_escutaSheet(nome));
         } catch(e_) {
           _escutaExecCache[nome] = [];
-          Logger.log('[Escuta] preload falhou para "' + nome + '": ' + e_.message);
+          console.warn('[Escuta] preload falhou para "' + nome + '": ' + e_.message);
         }
       }
     });
@@ -2224,6 +2224,6 @@ function _escutaLog(acao, email, dados) {
     var sh = _escutaSheet(_ESCUTA_SHEETS.LOGS);
     sh.appendRow([new Date().toISOString(), email, acao, JSON.stringify(dados || {})]);
   } catch(e) {
-    Logger.log('[EscutaLog] ' + e.message);
+    console.warn('[EscutaLog] ' + e.message);
   }
 }

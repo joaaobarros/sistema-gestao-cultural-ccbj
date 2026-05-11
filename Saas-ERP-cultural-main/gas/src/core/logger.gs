@@ -7,6 +7,11 @@
  * Delega para registrarLog() (utils.gs) e opcionalmente para SystemEvents.
  * Módulos devem usar Logger em vez de chamar registrarLog diretamente.
  *
+ * ATENÇÃO: Este objeto substitui o Logger nativo do GAS no escopo global.
+ * Para preservar compatibilidade, o método .log() é mantido como alias de
+ * console.log — arquivos de teste que usam Logger.log() continuam funcionando.
+ * Novos módulos devem usar Logger.info / Logger.warn / Logger.error.
+ *
  * USO:
  *   Logger.info('reservas', 'Reserva criada', { id, email });
  *   Logger.warn('permissoes', 'Acesso negado', { email, modulo });
@@ -32,7 +37,7 @@ var Logger = (function () {
       console.warn('[Logger] registrarLog indisponível:', e.message);
     }
 
-    // Espelha no console do GAS para Stackdriver
+    // Espelha no console do GAS para Stackdriver / Execution Log
     if (nivel === NIVEIS.ERROR) {
       console.error(texto);
     } else if (nivel === NIVEIS.WARN) {
@@ -45,7 +50,11 @@ var Logger = (function () {
   return {
     info:  function (modulo, mensagem, dados) { _log(NIVEIS.INFO,  modulo, mensagem, dados); },
     warn:  function (modulo, mensagem, dados) { _log(NIVEIS.WARN,  modulo, mensagem, dados); },
-    error: function (modulo, mensagem, dados) { _log(NIVEIS.ERROR, modulo, mensagem, dados); }
+    error: function (modulo, mensagem, dados) { _log(NIVEIS.ERROR, modulo, mensagem, dados); },
+
+    // Alias de compatibilidade com o Logger nativo do GAS (Logger.log).
+    // Usado por arquivos de teste e chamadas legadas. Não persiste na planilha.
+    log: function (msg) { console.log(String(msg)); }
   };
 
 })();

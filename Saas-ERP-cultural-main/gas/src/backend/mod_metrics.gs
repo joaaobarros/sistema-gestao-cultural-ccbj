@@ -1032,7 +1032,7 @@ function parsearJsonIA(resposta) {
     if (inicio === -1 || fim === -1) return null;
     return JSON.parse(resposta.substring(inicio, fim + 1));
   } catch (e) {
-    Logger.log("Erro ao parsear JSON da IA: " + resposta);
+    console.warn("Erro ao parsear JSON da IA: " + resposta);
     return null;
   }
 }
