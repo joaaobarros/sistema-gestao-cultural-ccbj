@@ -18,13 +18,14 @@ var _MOD_FILE = 'modulos_registry.json';
 // ativo:false  → bloqueado até ativação explícita
 // ══════════════════════════════════════════════════════════════════
 
+// apenasSuperadmin:true  → visível e acessível apenas para perfil superadmin
 var _MOD_DEFAULTS = [
 
   // NÚCLEO — sempre ativos
   {
     moduleId: 'agenda_geral', nome: 'Agenda Geral', categoria: 'espacos',
     descricao: 'Calendário principal de reservas de espaços', versao: '1.0',
-    ativo: true, nucleo: true,
+    ativo: true, nucleo: true, apenasSuperadmin: false,
     rotas: ['aba-lista-reservas'],
     menus: [{ grupo: 'mod-espacos', btn: 'aba-lista-reservas' }],
     dependencias: [], status_operacional: 'stable'
@@ -32,7 +33,7 @@ var _MOD_DEFAULTS = [
   {
     moduleId: 'nova_reserva', nome: 'Novo Agendamento', categoria: 'espacos',
     descricao: 'Formulário de criação e edição de reservas', versao: '1.0',
-    ativo: true, nucleo: true,
+    ativo: true, nucleo: true, apenasSuperadmin: false,
     rotas: ['aba-nova-reserva'],
     menus: [{ grupo: 'mod-espacos', btn: 'aba-nova-reserva' }],
     dependencias: ['agenda_geral'], status_operacional: 'stable'
@@ -40,7 +41,7 @@ var _MOD_DEFAULTS = [
   {
     moduleId: 'configuracoes', nome: 'Configurações', categoria: 'sistema',
     descricao: 'Painel de administração do sistema', versao: '1.0',
-    ativo: true, nucleo: true,
+    ativo: true, nucleo: true, apenasSuperadmin: false,
     rotas: ['aba-gestao-admin'],
     menus: [{ grupo: 'mod-sistema', btn: 'aba-gestao-admin' }],
     dependencias: [], status_operacional: 'stable'
@@ -48,7 +49,7 @@ var _MOD_DEFAULTS = [
   {
     moduleId: 'auditoria', nome: 'Auditoria', categoria: 'sistema',
     descricao: 'Log de auditoria e rastreabilidade operacional', versao: '1.0',
-    ativo: true, nucleo: true,
+    ativo: true, nucleo: true, apenasSuperadmin: false,
     rotas: ['aba-auditoria'],
     menus: [{ grupo: 'mod-sistema', btn: 'aba-auditoria' }],
     dependencias: [], status_operacional: 'stable'
@@ -56,9 +57,35 @@ var _MOD_DEFAULTS = [
   {
     moduleId: 'permissoes', nome: 'Permissões', categoria: 'sistema',
     descricao: 'Gestão de permissões por perfil e usuário', versao: '2.0',
-    ativo: true, nucleo: true,
+    ativo: true, nucleo: true, apenasSuperadmin: false,
     rotas: ['aba-permissoes-v2'],
     menus: [{ grupo: 'mod-sistema', btn: 'aba-permissoes-v2' }],
+    dependencias: [], status_operacional: 'stable'
+  },
+  {
+    moduleId: 'gestao_modulos', nome: 'Gestão de Módulos', categoria: 'sistema',
+    descricao: 'Painel SUPERADMIN de ativação e configuração de módulos', versao: '1.0',
+    ativo: true, nucleo: true, apenasSuperadmin: true,
+    rotas: ['aba-gestao-modulos'],
+    menus: [{ grupo: 'mod-sistema', btn: 'aba-gestao-modulos' }],
+    dependencias: [], status_operacional: 'stable'
+  },
+
+  // PROGRAMAÇÃO — ativáveis
+  {
+    moduleId: 'acoes', nome: 'Ações Institucionais', categoria: 'programacao',
+    descricao: 'Gestão de iniciativas, eventos e projetos — núcleo integrador da plataforma', versao: '1.0',
+    ativo: true, nucleo: false, apenasSuperadmin: false,
+    rotas: ['aba-acoes'],
+    menus: [{ grupo: 'mod-programacao', btn: 'aba-acoes' }],
+    dependencias: [], status_operacional: 'beta'
+  },
+  {
+    moduleId: 'habilitacoes', nome: 'Credenciamento', categoria: 'programacao',
+    descricao: 'Processo de credenciamento de proponentes para programas do CCBJ', versao: '1.0',
+    ativo: true, nucleo: false, apenasSuperadmin: false,
+    rotas: ['aba-habilitacoes'],
+    menus: [{ grupo: 'mod-programacao', btn: 'aba-habilitacoes' }],
     dependencias: [], status_operacional: 'stable'
   },
 
@@ -66,89 +93,95 @@ var _MOD_DEFAULTS = [
   {
     moduleId: 'aprovacoes', nome: 'Aprovações', categoria: 'operacional',
     descricao: 'Fluxo de aprovação de reservas e cadastros externos', versao: '1.0',
-    ativo: true, nucleo: false,
+    ativo: true, nucleo: false, apenasSuperadmin: false,
     rotas: ['aba-aprovacoes'],
     menus: [{ grupo: 'mod-operacional', btn: 'aba-aprovacoes' }],
     dependencias: ['agenda_geral'], status_operacional: 'stable'
   },
+
+  // COMUNICAÇÃO — ativáveis
   {
     moduleId: 'agenda_rece', nome: 'Agenda RECE', categoria: 'comunicacao',
     descricao: 'Agenda da Rede de Espaços Culturais Espontâneos', versao: '1.0',
-    ativo: true, nucleo: false,
+    ativo: true, nucleo: false, apenasSuperadmin: false,
     rotas: ['aba-agenda-rece'],
     menus: [{ grupo: 'mod-comunicacao', btn: 'aba-agenda-rece' }],
     dependencias: ['agenda_geral'], status_operacional: 'stable'
   },
   {
-    moduleId: 'dashboard', nome: 'Dashboard Geral', categoria: 'estrategia',
-    descricao: 'Painel de indicadores e métricas operacionais', versao: '1.0',
-    ativo: true, nucleo: false,
-    rotas: ['aba-dashboard'],
-    menus: [{ grupo: 'mod-estrategia', btn: 'aba-dashboard' }],
-    dependencias: [], status_operacional: 'stable'
-  },
-  {
-    moduleId: 'chaves', nome: 'Protocolo de Chaves', categoria: 'infraestrutura',
-    descricao: 'Gestão do protocolo de retirada e devolução de chaves', versao: '1.0',
-    ativo: true, nucleo: false,
-    rotas: ['aba-protocolo-chaves'],
-    menus: [{ grupo: 'mod-infraestrutura', btn: 'aba-protocolo-chaves' }],
-    dependencias: [], status_operacional: 'stable'
-  },
-
-  // DISPONÍVEIS — aguardando ativação
-  {
-    moduleId: 'tarefas', nome: 'Tarefas', categoria: 'operacional',
-    descricao: 'Gestão de tarefas pessoais e por equipe', versao: '0.8',
-    ativo: false, nucleo: false,
-    rotas: ['aba-tarefas'],
-    menus: [],
+    moduleId: 'balcao', nome: 'Balcão da Comunicação', categoria: 'comunicacao',
+    descricao: 'Solicitações e processos de comunicação institucional', versao: '0.7',
+    ativo: false, nucleo: false, apenasSuperadmin: false,
+    rotas: ['aba-balcao'],
+    menus: [{ grupo: 'mod-comunicacao', btn: 'aba-balcao' }],
     dependencias: [], status_operacional: 'beta'
   },
   {
     moduleId: 'processos', nome: 'Processos', categoria: 'comunicacao',
     descricao: 'Gestão de processos de comunicação institucional', versao: '0.8',
-    ativo: false, nucleo: false,
+    ativo: false, nucleo: false, apenasSuperadmin: false,
     rotas: ['aba-processos'],
     menus: [],
     dependencias: [], status_operacional: 'beta'
   },
+
+  // ESTRATÉGIA — ativáveis
   {
-    moduleId: 'almoxarifado', nome: 'Almoxarifado', categoria: 'operacional',
-    descricao: 'Controle de estoque e movimentações de materiais', versao: '0.7',
-    ativo: false, nucleo: false,
-    rotas: ['aba-almoxarifado'],
-    menus: [],
-    dependencias: [], status_operacional: 'beta'
+    moduleId: 'dashboard', nome: 'Dashboard Geral', categoria: 'estrategia',
+    descricao: 'Painel de indicadores e métricas operacionais', versao: '1.0',
+    ativo: true, nucleo: false, apenasSuperadmin: false,
+    rotas: ['aba-dashboard'],
+    menus: [{ grupo: 'mod-estrategia', btn: 'aba-dashboard' }],
+    dependencias: [], status_operacional: 'stable'
   },
   {
-    moduleId: 'balcao', nome: 'Balcão de Atendimento', categoria: 'operacional',
-    descricao: 'Registro e acompanhamento de atendimentos ao público', versao: '0.7',
-    ativo: false, nucleo: false,
-    rotas: ['aba-balcao'],
+    moduleId: 'eficiencia', nome: 'Eficiência', categoria: 'estrategia',
+    descricao: 'Métricas derivadas de uso de espaços', versao: '0.5',
+    ativo: false, nucleo: false, apenasSuperadmin: false,
+    rotas: ['aba-eficiencia'],
+    menus: [],
+    dependencias: ['agenda_geral'], status_operacional: 'alpha'
+  },
+
+  // INFRAESTRUTURA — ativáveis
+  {
+    moduleId: 'chaves', nome: 'Protocolo de Chaves', categoria: 'infraestrutura',
+    descricao: 'Gestão do protocolo de retirada e devolução de chaves', versao: '1.0',
+    ativo: true, nucleo: false, apenasSuperadmin: false,
+    rotas: ['aba-protocolo-chaves'],
+    menus: [{ grupo: 'mod-infraestrutura', btn: 'aba-protocolo-chaves' }],
+    dependencias: [], status_operacional: 'stable'
+  },
+  {
+    moduleId: 'almoxarifado', nome: 'Almoxarifado', categoria: 'infraestrutura',
+    descricao: 'Controle de estoque e movimentações de materiais', versao: '0.7',
+    ativo: false, nucleo: false, apenasSuperadmin: false,
+    rotas: ['aba-almoxarifado'],
+    menus: [{ grupo: 'mod-infraestrutura', btn: 'aba-almoxarifado' }],
+    dependencias: [], status_operacional: 'beta'
+  },
+
+  // PESSOAL — ativáveis
+  {
+    moduleId: 'tarefas', nome: 'Tarefas', categoria: 'operacional',
+    descricao: 'Gestão de tarefas pessoais e por equipe', versao: '0.8',
+    ativo: false, nucleo: false, apenasSuperadmin: false,
+    rotas: ['aba-tarefas'],
     menus: [],
     dependencias: [], status_operacional: 'beta'
   },
   {
     moduleId: 'rh', nome: 'RH / Depto Pessoal', categoria: 'pessoal',
     descricao: 'Gestão de colaboradores, ponto e folha de pagamento', versao: '0.6',
-    ativo: false, nucleo: false,
+    ativo: false, nucleo: false, apenasSuperadmin: false,
     rotas: ['aba-rh'],
     menus: [],
     dependencias: [], status_operacional: 'alpha'
   },
   {
-    moduleId: 'eficiencia', nome: 'Eficiência', categoria: 'estrategia',
-    descricao: 'Métricas derivadas de uso de espaços', versao: '0.5',
-    ativo: false, nucleo: false,
-    rotas: ['aba-eficiencia'],
-    menus: [],
-    dependencias: ['agenda_geral'], status_operacional: 'alpha'
-  },
-  {
     moduleId: 'contratacoes', nome: 'Contratações', categoria: 'financeiro',
     descricao: 'CRUD de contratações PF/PJ', versao: '0.6',
-    ativo: false, nucleo: false,
+    ativo: false, nucleo: false, apenasSuperadmin: false,
     rotas: ['aba-contratacoes'],
     menus: [],
     dependencias: [], status_operacional: 'alpha'
@@ -156,15 +189,23 @@ var _MOD_DEFAULTS = [
   {
     moduleId: 'relatorios_fin', nome: 'Relatórios Financeiros', categoria: 'financeiro',
     descricao: 'Consolidação financeira cruzada de contratos e contratações', versao: '0.5',
-    ativo: false, nucleo: false,
+    ativo: false, nucleo: false, apenasSuperadmin: false,
     rotas: ['aba-rel-financeiros'],
     menus: [],
     dependencias: ['contratacoes'], status_operacional: 'alpha'
   },
   {
+    moduleId: 'financeiro', nome: 'Financeiro', categoria: 'financeiro',
+    descricao: 'Gestão de contratos e rubricas financeiras', versao: '0.7',
+    ativo: false, nucleo: false, apenasSuperadmin: false,
+    rotas: ['aba-contratos-fin'],
+    menus: [],
+    dependencias: [], status_operacional: 'beta'
+  },
+  {
     moduleId: 'escuta', nome: 'Escuta Institucional', categoria: 'institucional',
     descricao: 'Pesquisas pulse, escuta espontânea e alertas NR-1', versao: '0.9',
-    ativo: false, nucleo: false,
+    ativo: false, nucleo: false, apenasSuperadmin: false,
     rotas: ['aba-escuta'],
     menus: [],
     dependencias: [], status_operacional: 'beta'
@@ -172,26 +213,10 @@ var _MOD_DEFAULTS = [
   {
     moduleId: 'codip', nome: 'CODIP', categoria: 'relatorios',
     descricao: 'Relatórios para o CODIP', versao: '0.5',
-    ativo: false, nucleo: false,
+    ativo: false, nucleo: false, apenasSuperadmin: false,
     rotas: ['aba-codip'],
     menus: [],
     dependencias: [], status_operacional: 'alpha'
-  },
-  {
-    moduleId: 'financeiro', nome: 'Financeiro', categoria: 'financeiro',
-    descricao: 'Gestão de contratos e rubricas financeiras', versao: '0.7',
-    ativo: false, nucleo: false,
-    rotas: ['aba-contratos-fin'],
-    menus: [],
-    dependencias: [], status_operacional: 'beta'
-  },
-  {
-    moduleId: 'acoes', nome: 'Ações Institucionais', categoria: 'programacao',
-    descricao: 'Gestão de iniciativas, eventos e projetos — núcleo integrador da plataforma', versao: '1.0',
-    ativo: true, nucleo: false,
-    rotas: ['aba-acoes'],
-    menus: [{ grupo: 'mod-programacao', btn: 'aba-acoes' }],
-    dependencias: [], status_operacional: 'beta'
   }
 ];
 
@@ -247,18 +272,41 @@ function _modIsSuperadmin(emailFallback) {
 // ══════════════════════════════════════════════════════════════════
 
 /**
- * Retorna mapa moduleId→ativo para uso no boot do frontend.
+ * Retorna mapa moduleId→ativo e mapaSuper (superadmin-only) para o boot do frontend.
  * Não requer autenticação — fail-open: retorna {} em caso de erro.
  */
 function modulos_obterStatus() {
   try {
     var modulos = _modLerRegistro();
     var mapa = {};
-    modulos.forEach(function(m) { mapa[m.moduleId] = !!m.ativo; });
-    return { ok: true, mapa: mapa };
+    var mapaSuper = {};
+    modulos.forEach(function(m) {
+      mapa[m.moduleId] = !!m.ativo;
+      if (m.apenasSuperadmin) mapaSuper[m.moduleId] = true;
+    });
+    return { ok: true, mapa: mapa, mapaSuper: mapaSuper };
   } catch(e) {
     Logger.error('modulos_registry', 'modulos_obterStatus', e.message);
-    return { ok: true, mapa: {} };
+    return { ok: true, mapa: {}, mapaSuper: {} };
+  }
+}
+
+/**
+ * Alterna o flag apenasSuperadmin de um módulo. Acesso: SUPERADMIN only.
+ */
+function modulos_toggleSuperadmin(moduleId, valor, emailFallback) {
+  if (!_modIsSuperadmin(emailFallback)) return { ok: false, msg: 'Acesso restrito a SUPERADMIN.' };
+  try {
+    var modulos = _modLerRegistro();
+    var encontrado = false;
+    modulos.forEach(function(m) {
+      if (m.moduleId === moduleId) { m.apenasSuperadmin = !!valor; encontrado = true; }
+    });
+    if (!encontrado) return { ok: false, msg: 'Módulo não encontrado: ' + moduleId };
+    _modSalvarRegistro(modulos);
+    return { ok: true };
+  } catch(e) {
+    return { ok: false, msg: e.message };
   }
 }
 

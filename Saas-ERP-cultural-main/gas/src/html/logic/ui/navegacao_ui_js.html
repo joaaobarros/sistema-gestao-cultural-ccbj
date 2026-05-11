@@ -67,10 +67,20 @@ function mostrarAba(idAba) {
       'aba-permissoes-v2':      'sistema'
     };
 
-    // Gestão de Módulos: exclusivo SUPERADMIN
+    // Gestão de Módulos: exclusivo SUPERADMIN (hardcoded)
     if (idAba === 'aba-gestao-modulos') {
       var _isSA = typeof AppState !== 'undefined' && AppState.usuario && AppState.usuario.isSuperadmin;
       if (!_isSA) {
+        if (idAba !== 'aba-lista-reservas') mostrarAba('aba-lista-reservas');
+        return;
+      }
+    }
+
+    // Bloqueio por apenasSuperadmin (flag no registry)
+    var _modIdCheck = (typeof _abaParaModuloId !== 'undefined') ? _abaParaModuloId[idAba] : undefined;
+    if (_modIdCheck && typeof AppState !== 'undefined' && AppState.modulosSuper && AppState.modulosSuper[_modIdCheck]) {
+      var _isSACheck = AppState.usuario && AppState.usuario.isSuperadmin;
+      if (!_isSACheck) {
         if (idAba !== 'aba-lista-reservas') mostrarAba('aba-lista-reservas');
         return;
       }
@@ -262,7 +272,7 @@ var _abaParaModuloId = {
   'aba-dashboard':        'dashboard',
   'aba-protocolo-chaves': 'chaves',
   'aba-acoes':            'acoes',
-  'aba-habilitacoes':     'agenda_geral',
+  'aba-habilitacoes':     'habilitacoes',
   'aba-tarefas':          'tarefas',
   'aba-processos':        'processos',
   'aba-almoxarifado':     'almoxarifado',
@@ -284,7 +294,7 @@ function _autoHideGruposVazios() {
   var GRUPOS = [
     'modulo-espacos-grp', 'modulo-programacao', 'modulo-operacional',
     'modulo-comunicacao-grp', 'modulo-infraestrutura-grp', 'modulo-estrategia-grp',
-    'modulo-trabalho', 'modulo-atendimento', 'modulo-pessoas',
+    'modulo-trabalho', 'modulo-pessoas',
     'modulo-financeiro', 'modulo-institucional'
   ];
   GRUPOS.forEach(function(grupoId) {
@@ -310,10 +320,14 @@ function aplicarEstadoModulos() {
   if (typeof AppState === 'undefined' || !AppState.modulos) return;
   var mapa = AppState.modulos;
 
+  var _isSuperadmin = typeof AppState !== 'undefined' && AppState.usuario && AppState.usuario.isSuperadmin;
+  var _mapaSuper    = (typeof AppState !== 'undefined' && AppState.modulosSuper) ? AppState.modulosSuper : {};
+
   document.querySelectorAll('button[data-aba]').forEach(function(btn) {
     var aba      = btn.getAttribute('data-aba');
     var moduleId = _abaParaModuloId[aba];
-    var moduloAtivo = !moduleId || mapa[moduleId] !== false; // fail-open
+    var moduloAtivo    = !moduleId || mapa[moduleId] !== false; // fail-open
+    var apenasSuperadm = moduleId && !!_mapaSuper[moduleId];
 
     var permReq = btn.getAttribute('data-requer-permissao');
     var temPerm = true;
@@ -322,7 +336,8 @@ function aplicarEstadoModulos() {
       try { temPerm = temPermissao(partes[0], partes[1] || 'visualizar'); } catch(e) { temPerm = true; }
     }
 
-    btn.classList.toggle('hidden', !moduloAtivo || !temPerm);
+    var ocultar = !moduloAtivo || !temPerm || (apenasSuperadm && !_isSuperadmin);
+    btn.classList.toggle('hidden', ocultar);
   });
 
   _autoHideGruposVazios();
@@ -349,7 +364,8 @@ function carregarStatusModulos(callback) {
   GAS.modulos.obterStatus(function(res) {
     if (res && res.ok && res.mapa) {
       if (typeof AppState !== 'undefined') {
-        AppState.modulos = res.mapa;
+        AppState.modulos      = res.mapa;
+        AppState.modulosSuper = res.mapaSuper || {};
       }
       aplicarEstadoModulos();
     }

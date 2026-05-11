@@ -636,6 +636,11 @@ const GAS = {
       var em = (typeof AppState !== 'undefined' && AppState.usuario && AppState.usuario.email)
         ? AppState.usuario.email : (window.__EMAIL_INICIAL__ || '');
       GAS._call('modulos_resetar', [em], cb, err);
+    },
+    toggleSuperadmin: function(moduleId, valor, cb, err) {
+      var em = (typeof AppState !== 'undefined' && AppState.usuario && AppState.usuario.email)
+        ? AppState.usuario.email : (window.__EMAIL_INICIAL__ || '');
+      GAS._call('modulos_toggleSuperadmin', [moduleId, valor, em], cb, err);
     }
   },
 

@@ -123,6 +123,11 @@
             <span class="text-xs font-semibold">Agenda RECE</span>
           </button>
 
+          <button data-aba="aba-balcao" class="tab-btn nav-item w-full hidden">
+            <i class="fas fa-concierge-bell w-5 text-center text-xs"></i>
+            <span class="text-xs font-semibold">Balcão da Comunicação</span>
+          </button>
+
         </div>
       </div>
 
@@ -140,6 +145,11 @@
             <i class="fas fa-key w-5 text-center text-xs"></i>
             <span class="text-xs font-semibold flex-1 text-left">Protocolo de Chaves</span>
             <span id="badgeChavesPendentes" class="hidden min-w-[18px] h-[18px] bg-amber-500 text-white text-[9px] font-black rounded-full flex items-center justify-center px-1">0</span>
+          </button>
+
+          <button data-aba="aba-almoxarifado" class="tab-btn nav-item w-full hidden">
+            <i class="fas fa-boxes w-5 text-center text-xs"></i>
+            <span class="text-xs font-semibold">Almoxarifado</span>
           </button>
 
         </div>
@@ -193,24 +203,6 @@
         </div>
       </div>
 
-      <!-- ── ATENDIMENTO (hidden — controlado por módulos) ── -->
-      <div class="mb-1 hidden" id="modulo-atendimento">
-        <button onclick="toggleModulo('mod-atendimento')"
-          class="w-full flex items-center justify-between px-3 py-2 text-[9px] font-black text-slate-500 uppercase tracking-widest hover:text-purple-300 transition-colors">
-          <span><i class="fas fa-hands-helping mr-2 text-slate-600"></i>Atendimento</span>
-          <i id="icon-mod-atendimento" class="fas fa-chevron-up text-[8px] text-slate-600"></i>
-        </button>
-        <div id="mod-atendimento" class="space-y-0.5 pl-2">
-          <button data-aba="aba-balcao" class="tab-btn nav-item w-full hidden">
-            <i class="fas fa-concierge-bell w-5 text-center text-xs"></i>
-            <span class="text-xs font-semibold">Balcão de Atendimento</span>
-          </button>
-          <button data-aba="aba-almoxarifado" class="tab-btn nav-item w-full hidden">
-            <i class="fas fa-boxes w-5 text-center text-xs"></i>
-            <span class="text-xs font-semibold">Almoxarifado</span>
-          </button>
-        </div>
-      </div>
 
       <!-- ── PESSOAS (hidden — controlado por módulos) ──────── -->
       <div class="mb-1 hidden" id="modulo-pessoas">
@@ -374,7 +366,7 @@
 (function() {
   var STORE_KEY = 'sidebar_modules_v3';
   var GRUPOS = ['mod-espacos','mod-programacao','mod-operacional','mod-infraestrutura','mod-comunicacao','mod-estrategia',
-                'mod-trabalho','mod-atendimento','mod-pessoas','mod-financeiro','mod-institucional'];
+                'mod-trabalho','mod-pessoas','mod-financeiro','mod-institucional'];
   var FAV_BLOQUEADOS = ['aba-tarefas','aba-processos','aba-almoxarifado','aba-balcao',
     'aba-rh','aba-eficiencia','aba-contratos-fin','aba-contratacoes',
     'aba-codip','aba-rel-financeiros','aba-escuta','aba-permissoes-v2','aba-gestao-modulos'];

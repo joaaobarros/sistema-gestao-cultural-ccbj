@@ -23,11 +23,11 @@
         Ative ou desative módulos do sistema. Alterações têm efeito imediato.
       </p>
     </div>
-    <div class="flex gap-2 shrink-0">
-      <button id="mod-btn-superadmin" onclick="_modToggleSuperadminView()"
-        class="flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-all border border-slate-200">
-        <i class="fas fa-eye text-xs"></i> <span id="mod-btn-superadmin-label">Modo Técnico</span>
-      </button>
+    <div class="flex items-center gap-3 shrink-0">
+      <span class="text-[10px] text-slate-400 hidden sm:flex items-center gap-1.5">
+        <i class="fas fa-shield-alt text-violet-400 text-[11px]"></i>
+        <span>= restrito ao superadmin</span>
+      </span>
       <button onclick="_modConfirmarReset()"
         class="flex items-center gap-2 px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 font-bold text-xs rounded-xl transition-all border border-red-200">
         <i class="fas fa-undo text-xs"></i> Resetar Padrões
@@ -42,14 +42,15 @@
       class="mod-filtro-btn px-3 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-full border transition-all bg-purple-600 text-white border-purple-600">
       Todos
     </button>
-    <button onclick="_modFiltrarCategoria('espacos')"      id="mod-filtro-espacos"      class="mod-filtro-btn px-3 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-full border transition-all bg-white text-slate-500 border-slate-200 hover:border-purple-300 hover:text-purple-600">Espaços</button>
-    <button onclick="_modFiltrarCategoria('operacional')"  id="mod-filtro-operacional"  class="mod-filtro-btn px-3 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-full border transition-all bg-white text-slate-500 border-slate-200 hover:border-purple-300 hover:text-purple-600">Operacional</button>
-    <button onclick="_modFiltrarCategoria('comunicacao')"  id="mod-filtro-comunicacao"  class="mod-filtro-btn px-3 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-full border transition-all bg-white text-slate-500 border-slate-200 hover:border-purple-300 hover:text-purple-600">Comunicação</button>
-    <button onclick="_modFiltrarCategoria('estrategia')"   id="mod-filtro-estrategia"   class="mod-filtro-btn px-3 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-full border transition-all bg-white text-slate-500 border-slate-200 hover:border-purple-300 hover:text-purple-600">Estratégia</button>
+    <button onclick="_modFiltrarCategoria('espacos')"        id="mod-filtro-espacos"        class="mod-filtro-btn px-3 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-full border transition-all bg-white text-slate-500 border-slate-200 hover:border-purple-300 hover:text-purple-600">Espaços</button>
+    <button onclick="_modFiltrarCategoria('programacao')"   id="mod-filtro-programacao"    class="mod-filtro-btn px-3 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-full border transition-all bg-white text-slate-500 border-slate-200 hover:border-purple-300 hover:text-purple-600">Programação</button>
+    <button onclick="_modFiltrarCategoria('operacional')"   id="mod-filtro-operacional"    class="mod-filtro-btn px-3 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-full border transition-all bg-white text-slate-500 border-slate-200 hover:border-purple-300 hover:text-purple-600">Operacional</button>
+    <button onclick="_modFiltrarCategoria('comunicacao')"   id="mod-filtro-comunicacao"    class="mod-filtro-btn px-3 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-full border transition-all bg-white text-slate-500 border-slate-200 hover:border-purple-300 hover:text-purple-600">Comunicação</button>
+    <button onclick="_modFiltrarCategoria('estrategia')"    id="mod-filtro-estrategia"     class="mod-filtro-btn px-3 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-full border transition-all bg-white text-slate-500 border-slate-200 hover:border-purple-300 hover:text-purple-600">Estratégia</button>
     <button onclick="_modFiltrarCategoria('infraestrutura')" id="mod-filtro-infraestrutura" class="mod-filtro-btn px-3 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-full border transition-all bg-white text-slate-500 border-slate-200 hover:border-purple-300 hover:text-purple-600">Infraestrutura</button>
-    <button onclick="_modFiltrarCategoria('financeiro')"   id="mod-filtro-financeiro"   class="mod-filtro-btn px-3 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-full border transition-all bg-white text-slate-500 border-slate-200 hover:border-purple-300 hover:text-purple-600">Financeiro</button>
-    <button onclick="_modFiltrarCategoria('pessoal')"      id="mod-filtro-pessoal"      class="mod-filtro-btn px-3 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-full border transition-all bg-white text-slate-500 border-slate-200 hover:border-purple-300 hover:text-purple-600">Pessoal</button>
-    <button onclick="_modFiltrarCategoria('sistema')"      id="mod-filtro-sistema"      class="mod-filtro-btn px-3 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-full border transition-all bg-white text-slate-500 border-slate-200 hover:border-purple-300 hover:text-purple-600">Sistema</button>
+    <button onclick="_modFiltrarCategoria('financeiro')"    id="mod-filtro-financeiro"     class="mod-filtro-btn px-3 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-full border transition-all bg-white text-slate-500 border-slate-200 hover:border-purple-300 hover:text-purple-600">Financeiro</button>
+    <button onclick="_modFiltrarCategoria('pessoal')"       id="mod-filtro-pessoal"        class="mod-filtro-btn px-3 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-full border transition-all bg-white text-slate-500 border-slate-200 hover:border-purple-300 hover:text-purple-600">Pessoal</button>
+    <button onclick="_modFiltrarCategoria('sistema')"       id="mod-filtro-sistema"        class="mod-filtro-btn px-3 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-full border transition-all bg-white text-slate-500 border-slate-200 hover:border-purple-300 hover:text-purple-600">Sistema</button>
   </div>
 
   <!-- ── Stats ─────────────────────────────────────────────── -->

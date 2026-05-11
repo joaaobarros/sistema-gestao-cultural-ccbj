@@ -3,14 +3,21 @@
  * @description Módulo central de reservas: criação, edição, cancelamento, conflitos,
  *              disponibilidade de itens e integração com a Agenda RECE.
  * @layer backend
- * @responsibility CRUD de reservas na planilha "Reservas"; verificação de conflitos de horário;
- *                 cálculo de disponibilidade de itens por horário; processamento em lote;
- *                 repositories e services do domínio de reservas.
+ * @responsibility CRUD de reservas na planilha "Reservas"; motor central de conflito de horário
+ *                 (possuiConflitoReserva → verificarConflitoEspaco); cálculo de disponibilidade
+ *                 de itens por horário; processamento em lote; repositories e services.
+ *
+ * @conflito-regra  inicioA < fimB E fimA > inicioB  (detecta toda intersecção; encoste exato permitido)
+ * @conflito-motor  possuiConflitoReserva → verificarConflitoEspaco (único caminho obrigatório)
+ * @bloqueio-ccbj   tipoAcao=BLOQUEIO → _cancelarReservasConflitantes (prioridade máxima)
+ *
  * @dependencies utils.js (_getSheet, normalizarData, normalizarHora, horariosSobrepostos,
- *               validarEmail, normalizarEmail, sanitizarNumero, logarErroSeguro),
+ *               formatarHora, formatarData, validarEmail, normalizarEmail, sanitizarNumero,
+ *               logarErroSeguro, obterLockComRetry — usa getScriptLock() para atomicidade),
  *               mod_admin.gs (registrarLog, verificarDonoOuAdmin, verificarPermissao,
  *               limitarRequisicoes, detectarComportamentoSuspeito, limparCacheUsuario),
- *               Codigo.gs (gerarId, isMesmoDia, _notificarCancelamentoMesmoDia)
+ *               Codigo.gs (gerarId, isMesmoDia, _notificarCancelamentoMesmoDia),
+ *               event_bus_backend.gs (SystemEvents.emit, SystemEventTypes)
  */
 
 /**
@@ -38,49 +45,44 @@ function obterReservas() {
  * ========================================
  * BLOCO: Verificação de conflito de horário
  * ========================================
- * @description Verifica se um horário solicitado conflita com reservas existentes na planilha.
- *              Inclui buffer de 5 minutos entre reservas (limpeza do espaço).
- *              É a fonte de verdade para conflitos — o frontend tem sua própria verificação
- *              otimista (verificarConflitoFrontend) baseada no cache local.
- * @inputs sala, data, inicio, termino (strings/Date), idReservaIgnorar (para edição)
+ * @description Motor central de conflito — fonte de verdade para TODA operação de reserva.
+ *              Regra matemática obrigatória: conflito existe quando inicioA < fimB E fimA > inicioB.
+ *              Isso detecta sobreposição parcial, contenção, encaixe interno e externo.
+ *              Encoste exato (fimA === inicioB) NÃO é conflito (operador estrito >).
+ *              Usa getValues() com normalizarHora() robusta que trata Date (UTC), Number (fração)
+ *              e String (HH:MM), eliminando qualquer desvio de fuso horário.
+ * @inputs sala (ID), data (string/Date), inicio (string/Date/Number), termino (idem), idReservaIgnorar
  * @outputs { conflito: boolean, tipo?, solicitado?, existente?, contexto? }
- * @sideEffects 1 leitura na planilha Reservas
+ * @sideEffects 1 leitura na planilha Reservas; Logger.warn em detecção
  */
-function verificarConflitoEspaco(
-  sala,
-  data,
-  inicio,
-  termino,
-  idReservaIgnorar,
-) {
-  const BUFFER = 5;
+function verificarConflitoEspaco(sala, data, inicio, termino, idReservaIgnorar) {
   const aba = _getSheet("Reservas");
   if (!aba || aba.getLastRow() < 2) return { conflito: false };
 
   const dados = aba.getDataRange().getValues();
-  const dataBusca = normalizarData(data);
-  const inicioBusca = normalizarHora(inicio);
+  const dataBusca    = normalizarData(data);
+  const inicioBusca  = normalizarHora(inicio);
   const terminoBusca = normalizarHora(termino);
 
   if (dataBusca === null)
     throw new Error("Data inválida ao verificar conflito.");
   if (inicioBusca === null || terminoBusca === null)
-    throw new Error("Horário inválido.");
+    throw new Error("Horário inválido ao verificar conflito.");
   if (terminoBusca <= inicioBusca)
-    throw new Error("Horário final deve ser maior que o inicial.");
+    throw new Error("Horário de término deve ser maior que o de início.");
 
-  const salaNormalizada = String(sala).trim();
+  const salaNorm          = String(sala).trim();
+  const idIgnorarNorm     = idReservaIgnorar ? String(idReservaIgnorar).trim() : null;
 
   for (let i = 1; i < dados.length; i++) {
     const idReserva = String(dados[i][0] || "").trim();
-    if (idReservaIgnorar && idReserva === String(idReservaIgnorar).trim())
-      continue;
+    if (idIgnorarNorm && idReserva === idIgnorarNorm) continue;
 
     const status = String(dados[i][13] || "").toUpperCase();
     if (status === "CANCELADO") continue;
 
     const salaPlanilha = String(dados[i][4] || "").trim();
-    if (salaPlanilha !== salaNormalizada) continue;
+    if (salaPlanilha !== salaNorm) continue;
 
     const dataPlanilha = normalizarData(dados[i][1]);
     if (dataPlanilha === null || dataPlanilha !== dataBusca) continue;
@@ -89,30 +91,32 @@ function verificarConflitoEspaco(
     const terPlanilha = normalizarHora(dados[i][3]);
     if (iniPlanilha === null || terPlanilha === null) continue;
 
-    const temConflito = horariosSobrepostos(
-      inicioBusca,
-      terminoBusca,
-      iniPlanilha,
-      terPlanilha,
-    );
-    if (temConflito) {
-      return {
+    // Regra central: inicioA < fimB E fimA > inicioB
+    // Detecta toda intersecção; encoste exato (=) é permitido (operador estrito >)
+    if (inicioBusca < terPlanilha && terminoBusca > iniPlanilha) {
+      const resultado = {
         conflito: true,
         tipo: "REAL",
         solicitado: {
           inicio: formatarHora(inicioBusca),
-          fim: formatarHora(terminoBusca),
+          fim:    formatarHora(terminoBusca),
         },
         existente: {
-          inicio: formatarHora(iniPlanilha),
-          fim: formatarHora(terPlanilha),
-          nome: dados[i][6],
+          inicio:      formatarHora(iniPlanilha),
+          fim:         formatarHora(terPlanilha),
+          nome:        String(dados[i][6] || ""),
+          responsavel: String(dados[i][8] || ""),
+          id:          idReserva,
         },
         contexto: {
-          sala: sala,
+          sala: salaNorm,
           data: formatarData(dataBusca),
         },
       };
+
+      Logger.warn('conflito', `Conflito detectado: sala=${salaNorm} data=${formatarData(dataBusca)} solicitado=${formatarHora(inicioBusca)}-${formatarHora(terminoBusca)} existente=${formatarHora(iniPlanilha)}-${formatarHora(terPlanilha)} (${resultado.existente.nome})`);
+
+      return resultado;
     }
   }
 
@@ -124,14 +128,57 @@ function verificarConflitoEspaco(
  * BLOCO: possuiConflitoReserva — interface canônica centralizada
  * ========================================
  * @description Ponto único obrigatório para qualquer verificação de conflito no sistema.
- *              Toda criação/edição de reserva DEVE passar por aqui.
+ *              Toda criação/edição/aprovação/duplicação de reserva DEVE passar por aqui.
  *              Internamente delega para verificarConflitoEspaco.
  *              BLOQUEIO (CCBJ_FECHADO) não passa por esta função — cancela conflitos diretamente.
- * @inputs { data, espacoId, inicio, fim, reservaIgnoradaId }
+ *              Registra tentativas de conflito via SystemEvents para auditoria.
+ * @inputs { data, espacoId, inicio, fim, reservaIgnoradaId, usuarioSolicitante? }
  * @outputs { conflito: boolean, tipo?, solicitado?, existente?, contexto? }
  */
-function possuiConflitoReserva({ data, espacoId, inicio, fim, reservaIgnoradaId }) {
-  return verificarConflitoEspaco(espacoId, data, inicio, fim, reservaIgnoradaId || null);
+function possuiConflitoReserva({ data, espacoId, inicio, fim, reservaIgnoradaId, usuarioSolicitante }) {
+  const resultado = verificarConflitoEspaco(espacoId, data, inicio, fim, reservaIgnoradaId || null);
+
+  if (resultado.conflito) {
+    try {
+      SystemEvents.emit('CONFLICT_ATTEMPT', {
+        entidade:    'reserva',
+        usuario:     usuarioSolicitante || 'desconhecido',
+        origem:      'possuiConflitoReserva',
+        contexto: {
+          sala:             espacoId,
+          data:             String(data),
+          solicitado:       resultado.solicitado,
+          conflitanteId:    resultado.existente?.id,
+          conflitanteNome:  resultado.existente?.nome,
+          conflitanteHorario: `${resultado.existente?.inicio}–${resultado.existente?.fim}`,
+        },
+      });
+    } catch (_) {}
+  }
+
+  return resultado;
+}
+
+/**
+ * ========================================
+ * BLOCO: Formatação de mensagem de conflito
+ * ========================================
+ * @description Gera mensagem de erro padronizada a partir do resultado de possuiConflitoReserva.
+ *              Exposta para uso por qualquer camada que precise lançar erro de conflito.
+ * @inputs resultado — objeto retornado por possuiConflitoReserva/verificarConflitoEspaco
+ * @outputs string com mensagem clara ao usuário
+ */
+function _mensagemConflito(resultado) {
+  if (!resultado || !resultado.conflito) return 'Conflito de agendamento detectado.';
+  const ex  = resultado.existente  || {};
+  const ctx = resultado.contexto   || {};
+  const sol = resultado.solicitado || {};
+  const sala = ctx.sala  ? ` no espaço "${ctx.sala}"` : '';
+  const data = ctx.data  ? ` em ${ctx.data}` : '';
+  const periodo = (ex.inicio && ex.fim) ? ` entre ${ex.inicio} e ${ex.fim}` : '';
+  const acao    = ex.nome        ? ` ("${ex.nome}")`   : '';
+  const resp    = ex.responsavel ? ` — responsável: ${ex.responsavel}` : '';
+  return `Conflito detectado: já existe reserva ativa${sala}${data}${periodo}${acao}${resp}. Período solicitado (${sol.inicio}–${sol.fim}) se intersecta com essa reserva.`;
 }
 
 /**
@@ -141,23 +188,25 @@ function possuiConflitoReserva({ data, espacoId, inicio, fim, reservaIgnoradaId 
  * @description Cancela todas as reservas ativas que conflitam com o bloqueio CCBJ FECHADO.
  *              Exclui outras reservas do tipo BLOQUEIO (não cancela bloqueios com bloqueios).
  *              Envia notificação por email ao dono de cada reserva cancelada.
- *              Registra log de auditoria para cada cancelamento.
+ *              Registra log de auditoria e SystemEvent para cada cancelamento.
+ *              Usa a regra matemática central: inicioA < fimB E fimA > inicioB.
  * @inputs sala, data, inicio, fim (strings), motivo (string), emailAdmin (string)
  * @outputs Array de { id, nome, email } das reservas canceladas
- * @sideEffects Escreve na planilha Reservas, envia emails, registra logs
+ * @sideEffects Escreve na planilha Reservas, envia emails, registra logs, emite eventos
  */
 function _cancelarReservasConflitantes(sala, data, inicio, fim, motivo, emailAdmin) {
   const aba = _getSheet("Reservas");
   if (!aba || aba.getLastRow() < 2) return [];
 
-  const dados = aba.getDataRange().getValues();
+  const dados   = aba.getDataRange().getValues();
   const dataBusca = normalizarData(data);
   const inicioMin = normalizarHora(inicio);
-  const fimMin = normalizarHora(fim);
+  const fimMin    = normalizarHora(fim);
 
   if (dataBusca === null || inicioMin === null || fimMin === null) return [];
 
-  const salaNorm = String(sala).trim();
+  const salaNorm   = String(sala).trim();
+  const dataFmt    = formatarData(dataBusca) || String(data);
   const cancelados = [];
 
   for (let i = 1; i < dados.length; i++) {
@@ -176,29 +225,46 @@ function _cancelarReservasConflitantes(sala, data, inicio, fim, motivo, emailAdm
     const terP = normalizarHora(dados[i][3]);
     if (iniP === null || terP === null) continue;
 
-    if (!horariosSobrepostos(inicioMin, fimMin, iniP, terP)) continue;
+    // Regra central de conflito: inicioA < fimB E fimA > inicioB
+    if (!(inicioMin < terP && fimMin > iniP)) continue;
 
     aba.getRange(i + 1, 14).setValue("CANCELADO");
 
-    const emailDono = String(dados[i][8] || "");
+    const emailDono   = String(dados[i][8] || "");
     const nomeReserva = String(dados[i][6] || "");
-    const idReserva = String(dados[i][0] || "");
+    const idReserva   = String(dados[i][0] || "");
 
     cancelados.push({ id: idReserva, nome: nomeReserva, email: emailDono });
 
     registrarLog(
-      "CANCELAMENTO_AUTO",
+      "CANCELAMENTO_AUTO_CCBJ_FECHADO",
       "RESERVA",
       nomeReserva,
-      `ID: ${idReserva} | Motivo: CCBJ Fechado — ${motivo}`,
+      `ID: ${idReserva} | CCBJ Fechado — ${motivo} | Admin: ${emailAdmin}`,
       `Status: ${statusAtual}`,
       "Status: CANCELADO",
       emailAdmin
     );
 
     try {
+      SystemEvents.emit(SystemEventTypes.RESERVATION_CANCELLED, {
+        entidade:   'reserva',
+        entidadeId: idReserva,
+        usuario:    emailAdmin,
+        origem:     '_cancelarReservasConflitantes',
+        contexto: {
+          sala:          salaNorm,
+          data:          dataFmt,
+          motivo:        `CCBJ Fechado — ${motivo}`,
+          donoReserva:   emailDono,
+          nomeReserva:   nomeReserva,
+          automatico:    true,
+        },
+      });
+    } catch (_) {}
+
+    try {
       if (emailDono && emailDono.includes("@") && emailDono !== emailAdmin) {
-        const dataFmt = formatarData ? formatarData(dataBusca) : String(data);
         GmailApp.sendEmail(
           emailDono,
           "❌ Sua reserva foi cancelada — CCBJ Fechado",
@@ -206,7 +272,7 @@ function _cancelarReservasConflitantes(sala, data, inicio, fim, motivo, emailAdm
         );
       }
     } catch (e) {
-      Logger.warn('reservas', 'Notificação de cancelamento falhou', e.message);
+      Logger.warn('reservas', `Notificação de cancelamento CCBJ Fechado falhou para ${emailDono}`, e.message);
     }
   }
 
@@ -466,18 +532,15 @@ function salvarEdicaoReserva(dados) {
         verificarDonoOuAdmin(emailDono, responsavelNormalizado);
 
         const resultadoConflito = possuiConflitoReserva({
-          data: dados.data,
-          espacoId: dados.sala,
-          inicio: dados.horaInicio,
-          fim: dados.horaTermino,
+          data:              dados.data,
+          espacoId:          dados.sala,
+          inicio:            dados.horaInicio,
+          fim:               dados.horaTermino,
           reservaIgnoradaId: dados.id,
+          usuarioSolicitante: responsavelNormalizado,
         });
         if (resultadoConflito && resultadoConflito.conflito) {
-          const ex = resultadoConflito.existente || {};
-          throw new Error(
-            `Conflito detectado: Sala ocupada` +
-              (ex.inicio ? ` (${ex.inicio}–${ex.fim}: ${ex.nome || ""})` : ""),
-          );
+          throw new Error(_mensagemConflito(resultadoConflito));
         }
 
         verificarDisponibilidadeItensPorHorario(
@@ -1004,18 +1067,15 @@ function processarAgendamentoLote(dados, datas) {
         throw new Error("Data inválida: " + dataStr);
 
       const resultadoConflito = possuiConflitoReserva({
-        data: dataFinal,
-        espacoId: dados.sala,
-        inicio: dados.horaInicio,
-        fim: dados.horaTermino,
+        data:              dataFinal,
+        espacoId:          dados.sala,
+        inicio:            dados.horaInicio,
+        fim:               dados.horaTermino,
         reservaIgnoradaId: null,
+        usuarioSolicitante: responsavelNorm,
       });
       if (resultadoConflito && resultadoConflito.conflito) {
-        const ex = resultadoConflito.existente || {};
-        throw new Error(
-          `Conflito detectado: Sala ocupada em ${dataKey}` +
-            (ex.inicio ? ` (${ex.inicio}–${ex.fim}: ${ex.nome || ""})` : ""),
-        );
+        throw new Error(_mensagemConflito(resultadoConflito));
       }
 
       verificarDisponibilidadeItensPorHorario(
@@ -1153,17 +1213,14 @@ function criarReservaController(dados, datas) {
       } else {
         const resultadoConflito = possuiConflitoReserva({
           data,
-          espacoId: dados.sala,
-          inicio: dados.horaInicio,
-          fim: dados.horaTermino,
+          espacoId:          dados.sala,
+          inicio:            dados.horaInicio,
+          fim:               dados.horaTermino,
           reservaIgnoradaId: null,
+          usuarioSolicitante: responsavelNorm,
         });
         if (resultadoConflito && resultadoConflito.conflito) {
-          const ex = resultadoConflito.existente || {};
-          throw new Error(
-            `Conflito detectado em ${dataKey}: espaço já reservado` +
-              (ex.inicio ? ` (${ex.inicio}–${ex.fim}: ${ex.nome || ""})` : ""),
-          );
+          throw new Error(_mensagemConflito(resultadoConflito));
         }
       }
 
@@ -1386,18 +1443,15 @@ const ReservaService = {
     verificarDonoOuAdmin(reservaExistente[8], responsavelNorm);
 
     const resultadoConflito = possuiConflitoReserva({
-      data: dados.data,
-      espacoId: dados.sala,
-      inicio: dados.horaInicio,
-      fim: dados.horaTermino,
+      data:              dados.data,
+      espacoId:          dados.sala,
+      inicio:            dados.horaInicio,
+      fim:               dados.horaTermino,
       reservaIgnoradaId: dados.id,
+      usuarioSolicitante: responsavelNorm,
     });
     if (resultadoConflito && resultadoConflito.conflito) {
-      const ex = resultadoConflito.existente || {};
-      throw new Error(
-        `Conflito detectado: espaço já reservado` +
-          (ex.inicio ? ` (${ex.inicio}–${ex.fim}: ${ex.nome || ""})` : ""),
-      );
+      throw new Error(_mensagemConflito(resultadoConflito));
     }
 
     verificarDisponibilidadeItensPorHorario(

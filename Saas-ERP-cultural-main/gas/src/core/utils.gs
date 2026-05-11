@@ -293,22 +293,40 @@ function formatarData(data) {
 }
 
 /**
- * Normaliza horário para minutos desde 00:00
- * Aceita: Date object, string HH:MM, string HH:MM:SS
- * 
- * @param {Date|string} hora - Hora em qualquer formato
+ * Normaliza horário para minutos desde 00:00.
+ * Aceita: Date object (GAS getValues), Number (fração decimal de dia 0..1), string HH:MM ou HH:MM:SS.
+ *
+ * Caso Number: GAS pode retornar células de tempo como fração decimal do dia quando
+ * o formato da célula não é reconhecido como Time. Ex: 0.52083333 = 12:30 (12.5/24).
+ *
+ * Caso Date: GAS converte células Time para Date usando o epoch de Planilhas (30/12/1899).
+ * getUTCHours/getUTCMinutes retornam o horário correto independente do fuso do script.
+ *
+ * @param {Date|number|string} hora - Hora em qualquer formato aceito pelo GAS
  * @returns {number|null} Minutos desde 00:00 ou null se inválido
  */
 function normalizarHora(hora) {
   try {
-    if (!hora) return null;
+    if (hora === null || hora === undefined || hora === '') return null;
 
-    // Caso 1: Date object
-    if (hora instanceof Date) {
-      return hora.getHours() * 60 + hora.getMinutes();
+    // Caso 1: Number — fração decimal de dia (GAS retorna isso em alguns contextos)
+    // 0.52083333 × 24 × 60 = 750 min = 12:30
+    if (typeof hora === 'number') {
+      if (hora < 0 || hora >= 1) return null;
+      const totalMin = Math.round(hora * 24 * 60);
+      return totalMin < 1440 ? totalMin : null;
     }
 
-    // Caso 2: String HH:MM ou HH:MM:SS
+    // Caso 2: Date object — GAS converte células Time usando o epoch 30/12/1899 UTC.
+    // getUTCHours() retorna o horário armazenado na planilha sem desvio de fuso.
+    if (hora instanceof Date) {
+      const hh = hora.getUTCHours();
+      const mm = hora.getUTCMinutes();
+      if (hh < 0 || hh > 23 || mm < 0 || mm > 59) return null;
+      return hh * 60 + mm;
+    }
+
+    // Caso 3: String HH:MM ou HH:MM:SS
     const str = String(hora).trim();
     if (!str) return null;
 
@@ -612,23 +630,27 @@ function sanitizarNumero(valor, min = -Infinity, max = Infinity) {
  * ========================================
  * BLOCO: Controle de concorrência — Lock com retry
  * ========================================
- * @description Obtém um LockService.getUserLock() com backoff exponencial.
- *              Necessário porque múltiplos usuários podem salvar reservas simultaneamente
- *              e o GAS não tem transações — o lock garante consistência na planilha.
- * @context Usado em processarAgendamentoLote e excluirRegistroPorID
+ * @description Obtém LockService.getScriptLock() com backoff exponencial.
+ *              Nível de script garante exclusão mútua entre TODOS os usuários simultâneos
+ *              (getScriptLock, não getUserLock). Necessário porque GAS não tem transações.
+ * @context Usado em criação/edição/exclusão de reservas e outros recursos compartilhados
  * @sideEffects Bloqueia execução por até timeoutMs ms por tentativa
  */
 
 /**
- * Obtém lock com retry automático
- * 
- * @param {string} nome - Nome identificador do lock
- * @param {number} timeoutMs - Timeout em ms (default: 10000)
+ * Obtém lock com retry automático.
+ *
+ * Usa getScriptLock() (nível de script) para garantir exclusão mútua entre TODOS os
+ * usuários simultâneos. getUserLock() seria por usuário e permitiria que dois usuários
+ * diferentes criassem reservas ao mesmo tempo, gerando conflito não detectado (race condition).
+ *
+ * @param {string} nome - Nome identificador do lock (usado em mensagens de erro)
+ * @param {number} timeoutMs - Timeout em ms por tentativa (default: 10000)
  * @param {number} maxTentativas - Máximo de tentativas (default: 3)
  * @returns {GoogleAppsScript.Lock.Lock} Lock obtido ou lança erro
  */
 function obterLockComRetry(nome, timeoutMs = 10000, maxTentativas = 3) {
-  const lock = LockService.getUserLock();
+  const lock = LockService.getScriptLock();
 
   for (let tentativa = 1; tentativa <= maxTentativas; tentativa++) {
     try {
@@ -636,9 +658,8 @@ function obterLockComRetry(nome, timeoutMs = 10000, maxTentativas = 3) {
       return lock;
     } catch (e) {
       if (tentativa === maxTentativas) {
-        throw new Error(`Não foi possível obter lock "${nome}" após ${maxTentativas} tentativas.`);
+        throw new Error(`Sistema ocupado — não foi possível obter lock "${nome}" após ${maxTentativas} tentativas. Tente novamente em instantes.`);
       }
-      // Aguarda progressivamente mais entre tentativas (backoff exponencial)
       Utilities.sleep(Math.pow(2, tentativa - 1) * 1000);
     }
   }
