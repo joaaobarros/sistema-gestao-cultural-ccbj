@@ -62,9 +62,8 @@ var PermissoesService = (function () {
     try { return obterPermissoesUsuarioV2(email); } catch(e) { return null; }
   }
 
-  // Delega para a API v2 existente (wrapper de compatibilidade v1)
   function validarAcesso(email, modulo) {
-    return typeof podeAcessarModulo === 'function' ? podeAcessarModulo(email, modulo) : false;
+    return pode(email, modulo, 'visualizar');
   }
 
   return {

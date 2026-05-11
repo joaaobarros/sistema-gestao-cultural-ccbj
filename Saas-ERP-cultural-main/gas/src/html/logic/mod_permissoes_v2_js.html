@@ -14,14 +14,15 @@ function _p2emailAtual() {
   return (AppState && AppState.usuario && AppState.usuario.email) || '';
 }
 
+// GAS.permissoesV2 — shim de compatibilidade; delega para GAS.permissoes (canal oficial).
 GAS.permissoesV2 = {
-  listar:        function(cb, err)        { GAS._call('listarPermissoesV2',           [_p2emailAtual()], cb, err); },
-  obter:         function(email, cb, err) { GAS._call('obterPermissoesUsuarioV2',     [email],           cb, err); },
-  salvar:        function(dados, cb, err) { GAS._call('salvarPermissoesUsuarioV2',    [dados],           cb, err); },
-  usuarios:      function(cb, err)        { GAS._call('obterUsuariosSistema',          [],                cb, err); },
-  sincronizar:   function(cb, err)        { GAS._call('sincronizarUsuariosSistema',    [],                cb, err); },
-  calcularAuto:  function(origem, perfil, cb, err) { GAS._call('calcularPermissoesAutomaticas', [origem, perfil], cb, err); },
-  auditoria:     function(cb, err)        { GAS._call('obterAuditoriaPermissoes',      [],                cb, err); }
+  listar:       function(cb, err)                  { GAS.permissoes.listar(_p2emailAtual(), cb, err); },
+  obter:        function(email, cb, err)            { GAS.permissoes.obter(email, cb, err); },
+  salvar:       function(dados, cb, err)            { GAS.permissoes.salvar(dados, cb, err); },
+  usuarios:     function(cb, err)                  { GAS.permissoes.usuarios(cb, err); },
+  sincronizar:  function(cb, err)                  { GAS.permissoes.sincronizar(cb, err); },
+  calcularAuto: function(origem, perfil, cb, err)  { GAS.permissoes.calcularAuto(origem, perfil, cb, err); },
+  auditoria:    function(cb, err)                  { GAS.permissoes.auditoria(cb, err); }
 };
 
 // ── Estado do módulo ─────────────────────────────────────────

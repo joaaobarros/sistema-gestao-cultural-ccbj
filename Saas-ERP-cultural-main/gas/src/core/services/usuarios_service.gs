@@ -64,12 +64,7 @@ var UsuariosService = (function () {
    * Retorna dados completos do usuário (perfil v2).
    */
   function obterDados(email) {
-    try {
-      if (typeof obterPermissoesUsuarioV2 === 'function') return obterPermissoesUsuarioV2(email);
-      return null;
-    } catch(e) {
-      return null;
-    }
+    return PermissoesService.obter(email);
   }
 
   return {

@@ -301,46 +301,13 @@ function definirTotalColaboradoresEscuta(total) {
 // ═══════════════════════════════════════════════════════════════
 
 /**
- * Verifica permissão de escuta para ação crítica.
- * Integra com mod_permissoes_v2.gs; fallback via aba Administradores.
+ * Verifica permissão de escuta para ação crítica via PermissoesService (núcleo oficial).
  * Ações: 'visualizar', 'editar', 'excluir'
  */
 function verificarPermissaoEscuta(email, acao) {
   if (!email) return false;
   try {
-    if (typeof podeExcluir === 'function' && acao === 'excluir') {
-      return podeExcluir(email, 'escuta');
-    }
-    if (typeof podeEditar === 'function' && acao === 'editar') {
-      return podeEditar(email, 'escuta');
-    }
-    if (typeof podeAcessarModulo === 'function' && acao === 'visualizar') {
-      return podeAcessarModulo(email, 'escuta');
-    }
-    // Fallback: verificar se é admin/superadmin via obterPermissoesUsuario
-    if (typeof obterPermissoesUsuario === 'function') {
-      var perms = obterPermissoesUsuario(email);
-      var perfil = perms.perfil || 'visitante';
-      if (acao === 'excluir') return perfil === 'superadmin' || perfil === 'admin';
-      if (acao === 'editar')  return perfil === 'superadmin' || perfil === 'admin' || perfil === 'gestor';
-      return true; // visualizar: todos
-    }
-    // Último fallback: Administradores no MASTER
-    var shAdm = null;
-    try { shAdm = _getSheet ? _getSheet('Administradores') : null; } catch(e) {}
-    if (shAdm) {
-      var admins = _escutaSheetToArray(shAdm);
-      var entry  = admins.find(function(r) {
-        return String(r.Email || '').toLowerCase() === email.toLowerCase();
-      });
-      if (entry) {
-        var nivel = String(entry.NivelAcesso || '').toLowerCase();
-        if (acao === 'excluir') return nivel === 'superadmin' || nivel === 'admin';
-        if (acao === 'editar')  return nivel === 'superadmin' || nivel === 'admin' || nivel === 'gestor';
-        return true;
-      }
-    }
-    return false;
+    return PermissoesService.pode(email, 'escuta', acao || 'visualizar');
   } catch(e) {
     console.warn('[EscutaPermissao] ' + e.message);
     return false;
