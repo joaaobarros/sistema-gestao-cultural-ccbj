@@ -300,6 +300,12 @@ function _modAtualizarStats() {
   if (elTotal)  elTotal.textContent  = todos;
   if (elAtivos) elAtivos.textContent = ativos;
   if (elInativ) elInativ.textContent = inativ;
+
+  var banner = document.getElementById('mod-superadmin-banner');
+  if (banner) {
+    var isSA = typeof AppState !== 'undefined' && AppState.usuario && AppState.usuario.isSuperadmin;
+    banner.classList.toggle('hidden', !isSA);
+  }
 }
 
 </script>

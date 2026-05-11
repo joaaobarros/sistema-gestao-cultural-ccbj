@@ -51,17 +51,21 @@ function habDiariaAtualizar() {
 
 // ─── Registro de habilitação ─────────────────────────────────────────────────
 
-function habDiariaHabilitar(reservaId, salaId, evento, horaInicio) {
-  var salaNome = (AppState.mapaSalas && AppState.mapaSalas[salaId]) || salaId;
-  var agora    = new Date();
-  var horaAtual = _habDiariaFmtHora(agora);
+// Aceita o índice do item em _habDState.itens para evitar problemas de
+// aspas ao passar strings via onclick inline.
+function habDiariaHabilitar(idx) {
+  var item = _habDState.itens[idx];
+  if (!item) return;
+
+  var salaNome  = (AppState.mapaSalas && AppState.mapaSalas[item.salaId]) || item.salaId;
+  var horaAtual = _habDiariaFmtHora(new Date());
 
   Swal.fire({
     title: 'Habilitar Espaço',
     html:
       '<div class="text-left space-y-3">' +
-      '<p class="text-sm text-slate-500"><i class="fas fa-map-marker-alt mr-1 text-purple-500"></i><strong>' + _escHTML(salaNome) + '</strong> — ' + _escHTML(evento) + '</p>' +
-      '<p class="text-xs text-slate-400">Início agendado: <strong>' + _escHTML(horaInicio) + '</strong></p>' +
+      '<p class="text-sm text-slate-500"><i class="fas fa-map-marker-alt mr-1 text-purple-500"></i><strong>' + _escHTML(salaNome) + '</strong> — ' + _escHTML(item.evento) + '</p>' +
+      '<p class="text-xs text-slate-400">Início agendado: <strong>' + _escHTML(item.horaInicio) + '</strong></p>' +
       '<div>' +
       '<label class="text-xs font-black text-slate-500 uppercase tracking-wide block mb-1">Hora de habilitação</label>' +
       '<input id="swalHoraHab" type="time" value="' + horaAtual + '" ' +
@@ -87,22 +91,40 @@ function habDiariaHabilitar(reservaId, salaId, evento, horaInicio) {
   }).then(function (result) {
     if (!result.isConfirmed) return;
     var dados = {
-      reservaId:        reservaId,
-      salaId:           salaId,
+      reservaId:        item.reservaId,
+      salaId:           item.salaId,
       data:             _habDiariaFmtBR(new Date(_habDState.data + 'T00:00:00')),
-      horaEvento:       horaInicio,
+      horaEvento:       item.horaInicio,
       horaHabilitacao:  result.value.horaHab,
       observacao:       result.value.obs
     };
     showLoader('Registrando habilitação...');
     GAS.habDiaria.registrar(dados,
       function (res) {
-        hideLoader();
-        if (res && res.ok) {
-          _habDiariaCarregar();
-        } else {
+        if (!res || !res.ok) {
+          hideLoader();
           Swal.fire('Erro', (res && res.erro) || 'Falha ao registrar.', 'error');
+          return;
         }
+        // Conecta ao sistema de habilitação: atualiza status da reserva para HABILITADO
+        GAS.reservas.habilitar(item.reservaId, AppState.usuario.email, result.value.obs || '',
+          function () {
+            hideLoader();
+            var r = AppState.colecoes && AppState.colecoes.reservas &&
+                    AppState.colecoes.reservas.find(function (x) { return x[0] === item.reservaId; });
+            if (r) r[13] = 'HABILITADO';
+            if (typeof indexarReservas === 'function') indexarReservas();
+            Swal.mixin({ toast: true, position: 'top-end', showConfirmButton: false, timer: 2500, timerProgressBar: true })
+              .fire({ icon: 'success', title: 'Espaço habilitado!' });
+            _habDiariaCarregar();
+          },
+          function (err) {
+            hideLoader();
+            // Check-in registrado; apenas o status não foi atualizado
+            Swal.fire('Aviso', 'Check-in registrado, mas não foi possível atualizar o status da reserva: ' + String(err), 'warning');
+            _habDiariaCarregar();
+          }
+        );
       },
       function (err) {
         hideLoader();
@@ -210,8 +232,8 @@ function _habDiariaRenderizar() {
       '</thead>' +
       '<tbody class="divide-y divide-slate-50">';
 
-    itens.forEach(function (item) {
-      html += _habDiariaLinha(item);
+    itens.forEach(function (item, idx) {
+      html += _habDiariaLinha(item, idx);
     });
 
     html += '</tbody></table></div></div>';
@@ -239,9 +261,13 @@ function _habDCard(status, label, valor, icon, cor) {
   );
 }
 
-function _habDiariaLinha(item) {
+function _habDiariaLinha(item, idx) {
   var salaNome = (AppState.mapaSalas && AppState.mapaSalas[item.salaId]) || item.salaId;
   var hab      = item.habilitacao;
+
+  var podeHabilitar = typeof temPermissao === 'function'
+    ? (temPermissao('reservas', 'editar') || !!(AppState.usuario && AppState.usuario.isHabilitador))
+    : !!(AppState.usuario && AppState.usuario.isHabilitador);
 
   // Status pill
   var pillHtml = _habDiariaPill(item.status, item.atrasoMin);
@@ -264,24 +290,20 @@ function _habDiariaLinha(item) {
     respHtml = '<span class="text-slate-300 text-sm">—</span>';
   }
 
-  // Botão de ação
-  var btnHtml = item.status === 'pendente'
-    ? '<button onclick="habDiariaHabilitar(' +
-        JSON.stringify(item.reservaId) + ',' +
-        JSON.stringify(item.salaId) + ',' +
-        JSON.stringify(item.evento) + ',' +
-        JSON.stringify(item.horaInicio) +
-      ')" class="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-black rounded-xl uppercase transition-all">' +
-      '<i class="fas fa-check mr-1"></i>Habilitar' +
-      '</button>'
-    : '<button onclick="habDiariaHabilitar(' +
-        JSON.stringify(item.reservaId) + ',' +
-        JSON.stringify(item.salaId) + ',' +
-        JSON.stringify(item.evento) + ',' +
-        JSON.stringify(item.horaInicio) +
-      ')" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-500 text-xs font-bold rounded-xl uppercase transition-all">' +
-      '<i class="fas fa-redo mr-1"></i>Re-habilitar' +
-      '</button>';
+  // Botão de ação — só visível para habilitadores/admins; usa índice numérico no onclick
+  // para evitar problemas de aspas ao passar strings em atributos HTML
+  var btnHtml = '';
+  if (podeHabilitar) {
+    btnHtml = item.status === 'pendente'
+      ? '<button onclick="habDiariaHabilitar(' + idx + ')" ' +
+          'class="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-black rounded-xl uppercase transition-all">' +
+          '<i class="fas fa-check mr-1"></i>Habilitar' +
+          '</button>'
+      : '<button onclick="habDiariaHabilitar(' + idx + ')" ' +
+          'class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-500 text-xs font-bold rounded-xl uppercase transition-all">' +
+          '<i class="fas fa-redo mr-1"></i>Re-habilitar' +
+          '</button>';
+  }
 
   return (
     '<tr class="hover:bg-slate-50/50 transition-colors">' +

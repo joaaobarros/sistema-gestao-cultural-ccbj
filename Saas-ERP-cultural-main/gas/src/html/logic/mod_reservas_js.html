@@ -3397,9 +3397,11 @@ function _concluirBloqueiosCCBJ(processados, total, erros, datas, motivo) {
     // Atualiza o modo ativo — não força mudança de view
     var _agendaVis = document.getElementById('viewAgendaGoogle') && !document.getElementById('viewAgendaGoogle').classList.contains('hidden');
     var _diagVis   = document.getElementById('viewDiagrama')     && !document.getElementById('viewDiagrama').classList.contains('hidden');
-    if (_agendaVis) renderizarModoAgendaGoogle();
-    else if (_diagVis) renderizarModoDiagrama();
-    else renderizarReservas();
+    var _habVis    = document.getElementById('viewHabilitacoes') && !document.getElementById('viewHabilitacoes').classList.contains('hidden');
+    if (_agendaVis)      renderizarModoAgendaGoogle();
+    else if (_diagVis)   renderizarModoDiagrama();
+    else if (_habVis)    habDiariaAtualizar();
+    else                 renderizarReservas();
 
     var totalSalas = (AppState.colecoes.salas || []).length;
     var msg = erros > 0
