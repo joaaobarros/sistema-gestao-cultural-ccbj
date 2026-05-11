@@ -79,7 +79,7 @@ function verificarConflitoEspaco(sala, data, inicio, termino, idReservaIgnorar) 
     if (idIgnorarNorm && idReserva === idIgnorarNorm) continue;
 
     const status = String(dados[i][13] || "").toUpperCase();
-    if (status === "CANCELADO") continue;
+    if (status === STATUS_RESERVA.CANCELADA) continue;
 
     const salaPlanilha = String(dados[i][4] || "").trim();
     if (salaPlanilha !== salaNorm) continue;
@@ -211,7 +211,7 @@ function _cancelarReservasConflitantes(sala, data, inicio, fim, motivo, emailAdm
 
   for (let i = 1; i < dados.length; i++) {
     const statusAtual = String(dados[i][13] || "").toUpperCase();
-    if (statusAtual === "CANCELADO") continue;
+    if (statusAtual === STATUS_RESERVA.CANCELADA) continue;
 
     const tipoReserva = String(dados[i][7] || "").toUpperCase();
     if (tipoReserva === "BLOQUEIO") continue;
@@ -228,7 +228,7 @@ function _cancelarReservasConflitantes(sala, data, inicio, fim, motivo, emailAdm
     // Regra central de conflito: inicioA < fimB E fimA > inicioB
     if (!(inicioMin < terP && fimMin > iniP)) continue;
 
-    aba.getRange(i + 1, 14).setValue("CANCELADO");
+    aba.getRange(i + 1, 14).setValue(STATUS_RESERVA.CANCELADA);
 
     const emailDono   = String(dados[i][8] || "");
     const nomeReserva = String(dados[i][6] || "");
@@ -314,11 +314,11 @@ function cancelarReserva(id, emailAtual) {
       const sala = dados[i][4];
       const statusAntes = dados[i][13];
 
-      if (String(statusAntes).toUpperCase() === "CANCELADO") {
+      if (String(statusAntes).toUpperCase() === STATUS_RESERVA.CANCELADA) {
         throw new Error("Reserva já cancelada.");
       }
 
-      aba.getRange(linha, 14).setValue("CANCELADO");
+      aba.getRange(linha, 14).setValue(STATUS_RESERVA.CANCELADA);
 
       if (isMesmoDia(data)) {
         _notificarCancelamentoMesmoDia({ sala, nome, inicio, fim, emailAtual });
@@ -330,7 +330,7 @@ function cancelarReserva(id, emailAtual) {
         nome,
         "ID: " + id,
         "Status: " + statusAntes,
-        "Status: CANCELADO",
+        "Status: " + STATUS_RESERVA.CANCELADA,
         emailAtual,
       );
 
@@ -339,6 +339,13 @@ function cancelarReserva(id, emailAtual) {
         usuario: emailAtual, origem: 'mod_reservas',
         contexto: { sala: sala, data: data, mesmoDia: isMesmoDia(data) }
       });
+
+      try {
+        AuditoriaService.registrar('RESERVATION_CANCELLED', 'reservas', {
+          reservaId: id, nome: nome, sala: sala, data: data,
+          statusAnterior: String(statusAntes), operador: emailAtual
+        });
+      } catch(_) {}
 
       return true;
     }
@@ -360,13 +367,13 @@ function cancelarReservaComJustificativa(id, emailAtual, justificativa) {
     if (String(dados[i][0]).trim() !== String(id).trim()) continue;
 
     const status = String(dados[i][13]).toUpperCase();
-    if (status === "CANCELADO") throw new Error("Reserva já cancelada.");
+    if (status === STATUS_RESERVA.CANCELADA) throw new Error("Reserva já cancelada.");
 
     const linha = i + 1;
     const nome = dados[i][6];
     const emailDono = dados[i][8];
 
-    aba.getRange(linha, 14).setValue("CANCELADO");
+    aba.getRange(linha, 14).setValue(STATUS_RESERVA.CANCELADA);
 
     try {
       if (emailDono && emailDono.includes("@")) {
@@ -435,10 +442,10 @@ function habilitarReservaStatus(id, emailAtual, observacao) {
 
   for (let i = 1; i < dados.length; i++) {
     if (String(dados[i][0]).trim() !== String(id).trim()) continue;
-    if (String(dados[i][13]).toUpperCase() === "CANCELADO")
+    if (String(dados[i][13]).toUpperCase() === STATUS_RESERVA.CANCELADA)
       throw new Error("Não é possível habilitar reserva cancelada.");
 
-    aba.getRange(i + 1, 14).setValue("HABILITADO");
+    aba.getRange(i + 1, 14).setValue(STATUS_RESERVA.HABILITADA);
     const obs = String(observacao || "").trim();
     if (obs) {
       const rel = String(dados[i][11] || "");
@@ -446,15 +453,22 @@ function habilitarReservaStatus(id, emailAtual, observacao) {
         .getRange(i + 1, 12)
         .setValue(rel + (rel ? "\n" : "") + "[HAB] " + obs);
     }
+    const statusAntes = dados[i][13];
     registrarLog(
       "HABILITAÇÃO",
       "RESERVA",
       dados[i][6],
       "ID:" + id + (obs ? " | Obs:" + obs : ""),
-      "Status:" + dados[i][13],
-      "Status:HABILITADO",
+      "Status:" + statusAntes,
+      "Status:" + STATUS_RESERVA.HABILITADA,
       emailAtual,
     );
+    try {
+      AuditoriaService.registrar('RESERVATION_APPROVED', 'reservas', {
+        reservaId: id, nome: dados[i][6], statusAnterior: String(statusAntes),
+        novoStatus: STATUS_RESERVA.HABILITADA, operador: emailAtual, observacao: obs
+      });
+    } catch(_) {}
     limparCacheUsuario(emailAtual);
     return true;
   }
@@ -531,17 +545,14 @@ function salvarEdicaoReserva(dados) {
         const emailDono = valores[i][8];
         verificarDonoOuAdmin(emailDono, responsavelNormalizado);
 
-        const resultadoConflito = possuiConflitoReserva({
-          data:              dados.data,
-          espacoId:          dados.sala,
-          inicio:            dados.horaInicio,
-          fim:               dados.horaTermino,
-          reservaIgnoradaId: dados.id,
+        ReservaEngine.assertSemConflito({
+          data:               dados.data,
+          espacoId:           dados.sala,
+          inicio:             dados.horaInicio,
+          fim:                dados.horaTermino,
+          reservaIgnoradaId:  dados.id,
           usuarioSolicitante: responsavelNormalizado,
         });
-        if (resultadoConflito && resultadoConflito.conflito) {
-          throw new Error(_mensagemConflito(resultadoConflito));
-        }
 
         verificarDisponibilidadeItensPorHorario(
           dados.itensVolantes,
@@ -821,7 +832,7 @@ function obterDisponibilidadeItensPorHorario(
     });
 
     reservas.slice(1).forEach((r) => {
-      if (compararStrings(r[13], "CANCELADO")) return;
+      if (compararStrings(r[13], STATUS_RESERVA.CANCELADA)) return;
       if (idReservaIgnorar && String(r[0]).trim() === String(idReservaIgnorar).trim()) return;
       const dataReserva = normalizarData(r[1]);
       if (dataReserva === null || dataReserva !== dataBusca) return;
@@ -944,7 +955,7 @@ function analisarDisponibilidadeReal(payload) {
     const dataBusca = normData(dataStr);
     dados.forEach((r) => {
       const status = String(r[13] || "").toUpperCase();
-      if (status === "CANCELADO") return;
+      if (status === STATUS_RESERVA.CANCELADA) return;
       const salaPlanilha = String(r[4] || "").trim();
       if (salaPlanilha !== sala) return;
       const dataPlanilha = normData(r[1]);
@@ -968,7 +979,7 @@ function analisarDisponibilidadeReal(payload) {
     const dataBusca = normData(dataStr);
     let ocupados = [];
     dados.forEach((r) => {
-      if (String(r[13] || "").toUpperCase() === "CANCELADO") return;
+      if (String(r[13] || "").toUpperCase() === STATUS_RESERVA.CANCELADA) return;
       if (String(r[4]).trim() !== sala) return;
       if (normData(r[1]) !== dataBusca) return;
       ocupados.push({ ini: normHora(r[2]), fim: normHora(r[3]) });
@@ -1066,17 +1077,14 @@ function processarAgendamentoLote(dados, datas) {
       if (isNaN(dataFinal.getTime()))
         throw new Error("Data inválida: " + dataStr);
 
-      const resultadoConflito = possuiConflitoReserva({
-        data:              dataFinal,
-        espacoId:          dados.sala,
-        inicio:            dados.horaInicio,
-        fim:               dados.horaTermino,
-        reservaIgnoradaId: null,
+      ReservaEngine.assertSemConflito({
+        data:               dataFinal,
+        espacoId:           dados.sala,
+        inicio:             dados.horaInicio,
+        fim:                dados.horaTermino,
+        reservaIgnoradaId:  null,
         usuarioSolicitante: responsavelNorm,
       });
-      if (resultadoConflito && resultadoConflito.conflito) {
-        throw new Error(_mensagemConflito(resultadoConflito));
-      }
 
       verificarDisponibilidadeItensPorHorario(
         dados.itensVolantes,
@@ -1101,7 +1109,7 @@ function processarAgendamentoLote(dados, datas) {
         dados.coResponsavel,
         dados.release,
         dados.itensVolantes,
-        "CONFIRMADO",
+        STATUS_RESERVA.CONFIRMADA,
         dataSolicitacao,
         idGrupoLote,
       ];
@@ -1211,17 +1219,14 @@ function criarReservaController(dados, datas) {
           responsavelNorm
         );
       } else {
-        const resultadoConflito = possuiConflitoReserva({
+        ReservaEngine.assertSemConflito({
           data,
-          espacoId:          dados.sala,
-          inicio:            dados.horaInicio,
-          fim:               dados.horaTermino,
-          reservaIgnoradaId: null,
+          espacoId:           dados.sala,
+          inicio:             dados.horaInicio,
+          fim:                dados.horaTermino,
+          reservaIgnoradaId:  null,
           usuarioSolicitante: responsavelNorm,
         });
-        if (resultadoConflito && resultadoConflito.conflito) {
-          throw new Error(_mensagemConflito(resultadoConflito));
-        }
       }
 
       verificarDisponibilidadeItensPorHorario(
@@ -1249,7 +1254,7 @@ function criarReservaController(dados, datas) {
         dados.coResponsavel,
         dados.release,
         dados.itensVolantes,
-        "CONFIRMADO",
+        STATUS_RESERVA.CONFIRMADA,
         dataSolicitacao,
         idLote,
       ];
@@ -1332,6 +1337,19 @@ const ReservaRepository = {
     for (let i = 1; i < dados.length; i++) {
       if (String(dados[i][0]) === String(id)) {
         aba.getRange(i + 1, 1, 1, novosDados.length).setValues([novosDados]);
+        return true;
+      }
+    }
+    return false;
+  },
+  // Atualiza somente a coluna de status (col 14, índice 13).
+  // Ponto único para mutação de status — usado por ReservaEngine.aplicarTransicao().
+  atualizarStatus(id, novoStatus) {
+    const aba = _getSheet("Reservas");
+    const dados = aba.getDataRange().getValues();
+    for (let i = 1; i < dados.length; i++) {
+      if (String(dados[i][0]) === String(id)) {
+        aba.getRange(i + 1, 14).setValue(novoStatus);
         return true;
       }
     }
@@ -1442,17 +1460,14 @@ const ReservaService = {
     const responsavelNorm = normalizarEmail(dados.responsavel);
     verificarDonoOuAdmin(reservaExistente[8], responsavelNorm);
 
-    const resultadoConflito = possuiConflitoReserva({
-      data:              dados.data,
-      espacoId:          dados.sala,
-      inicio:            dados.horaInicio,
-      fim:               dados.horaTermino,
-      reservaIgnoradaId: dados.id,
+    ReservaEngine.assertSemConflito({
+      data:               dados.data,
+      espacoId:           dados.sala,
+      inicio:             dados.horaInicio,
+      fim:                dados.horaTermino,
+      reservaIgnoradaId:  dados.id,
       usuarioSolicitante: responsavelNorm,
     });
-    if (resultadoConflito && resultadoConflito.conflito) {
-      throw new Error(_mensagemConflito(resultadoConflito));
-    }
 
     verificarDisponibilidadeItensPorHorario(
       dados.itensVolantes,

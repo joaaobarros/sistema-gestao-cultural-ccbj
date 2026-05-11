@@ -26,26 +26,26 @@
 // ══════════════════════════════════════════════════════════════
 
 var STATUS_RESERVA = {
-  PENDENTE:     'pendente',
-  CONFIRMADA:   'confirmada',
-  CANCELADA:    'cancelada',
-  RECUSADA:     'recusada',
-  HABILITADA:   'habilitada',
-  APROVADA:     'aprovada',
-  EM_ANALISE:   'em_analise',
-  ENCERRADA:    'encerrada'
+  PENDENTE:     'PENDENTE',
+  CONFIRMADA:   'CONFIRMADO',
+  CANCELADA:    'CANCELADO',
+  RECUSADA:     'RECUSADO',
+  HABILITADA:   'HABILITADO',
+  APROVADA:     'APROVADO',
+  EM_ANALISE:   'EM_ANALISE',
+  ENCERRADA:    'ENCERRADO'
 };
 
 // Transições de estado permitidas pelo motor
 var _TRANSICOES_RESERVA = {
-  pendente:   ['confirmada', 'cancelada', 'recusada', 'em_analise'],
-  em_analise: ['aprovada', 'recusada', 'cancelada'],
-  confirmada: ['cancelada', 'habilitada', 'encerrada'],
-  aprovada:   ['cancelada', 'habilitada', 'encerrada'],
-  habilitada: ['encerrada', 'cancelada'],
-  cancelada:  [],
-  recusada:   [],
-  encerrada:  []
+  'PENDENTE':   ['CONFIRMADO', 'CANCELADO', 'RECUSADO', 'EM_ANALISE'],
+  'EM_ANALISE': ['APROVADO', 'RECUSADO', 'CANCELADO'],
+  'CONFIRMADO': ['CANCELADO', 'HABILITADO', 'ENCERRADO'],
+  'APROVADO':   ['CANCELADO', 'HABILITADO', 'ENCERRADO'],
+  'HABILITADO': ['ENCERRADO', 'CANCELADO'],
+  'CANCELADO':  [],
+  'RECUSADO':   [],
+  'ENCERRADO':  []
 };
 
 // ══════════════════════════════════════════════════════════════
@@ -127,7 +127,7 @@ var ReservaEngine = (function () {
   }
 
   /**
-   * Aplica transição de status e emite evento correspondente.
+   * Aplica transição de status: valida FSM, persiste e emite evento.
    * @param {string} id - ID da reserva
    * @param {string} statusAtual
    * @param {string} novoStatus
@@ -136,40 +136,83 @@ var ReservaEngine = (function () {
    * @throws Error se transição não permitida
    */
   function aplicarTransicao(id, statusAtual, novoStatus, emailOperador, motivo) {
-    if (!transicaoPermitida(statusAtual, novoStatus)) {
+    var atual = String(statusAtual || '').toUpperCase();
+    var novo  = String(novoStatus  || '').toUpperCase();
+
+    if (!transicaoPermitida(atual, novo)) {
       throw new Error(
-        'Transição de "' + statusAtual + '" para "' + novoStatus + '" não é permitida.'
+        'Transição de "' + atual + '" para "' + novo + '" não é permitida.'
       );
     }
 
+    // Persiste via repositório (disponível no escopo global GAS)
+    if (typeof ReservaRepository !== 'undefined' &&
+        typeof ReservaRepository.atualizarStatus === 'function') {
+      ReservaRepository.atualizarStatus(id, novo);
+    } else {
+      Logger.warn('reserva_engine', 'ReservaRepository.atualizarStatus não disponível — status não persistido', { id: id });
+    }
+
     var eventoMap = {
-      confirmada: 'RESERVATION_APPROVED',
-      cancelada:  'RESERVATION_CANCELLED',
-      recusada:   'RESERVATION_REJECTED',
-      habilitada: 'RESERVATION_APPROVED',
-      encerrada:  'RESERVATION_CANCELLED'
+      'CONFIRMADO': 'RESERVATION_APPROVED',
+      'APROVADO':   'RESERVATION_APPROVED',
+      'CANCELADO':  'RESERVATION_CANCELLED',
+      'RECUSADO':   'RESERVATION_REJECTED',
+      'HABILITADO': 'RESERVATION_APPROVED',
+      'ENCERRADO':  'RESERVATION_CANCELLED'
     };
-    var tipoEvento = eventoMap[novoStatus] || 'RESERVATION_UPDATED';
+    var tipoEvento = eventoMap[novo] || 'RESERVATION_UPDATED';
 
     try {
       SystemEvents.emit(tipoEvento, {
-        reservaId:     id,
-        statusAnterior: statusAtual,
-        novoStatus:    novoStatus,
-        operador:      emailOperador,
-        motivo:        motivo || '',
-        timestamp:     new Date().toISOString()
+        reservaId:      id,
+        statusAnterior: atual,
+        novoStatus:     novo,
+        operador:       emailOperador,
+        motivo:         motivo || '',
+        timestamp:      new Date().toISOString()
       });
     } catch(e) {
       Logger.warn('reserva_engine', 'emit falhou em aplicarTransicao: ' + tipoEvento, e.message);
     }
+
+    // Registra transição no serviço de auditoria centralizado
+    try {
+      if (typeof AuditoriaService !== 'undefined') {
+        AuditoriaService.registrar(tipoEvento, 'reserva_engine', {
+          reservaId:      id,
+          statusAnterior: atual,
+          novoStatus:     novo,
+          operador:       emailOperador,
+          motivo:         motivo || ''
+        });
+      }
+    } catch(e) {}
   }
 
   // ── Aprovação / Rejeição ──────────────────────────────────
 
   /**
-   * Aprova uma reserva pendente ou em análise.
-   * Verifica permissão de admin antes de prosseguir.
+   * Busca o status atual de uma reserva pelo ID (usa ReservaRepository se disponível).
+   * @param {string} idReserva
+   * @returns {string} status atual uppercase, ou STATUS_RESERVA.PENDENTE como fallback
+   */
+  function _obterStatusAtual(idReserva) {
+    try {
+      if (typeof ReservaRepository !== 'undefined' &&
+          typeof ReservaRepository.buscarPorId === 'function') {
+        var linha = ReservaRepository.buscarPorId(idReserva);
+        if (linha) return String(linha[13] || STATUS_RESERVA.PENDENTE).toUpperCase();
+      }
+    } catch(e) {
+      Logger.warn('reserva_engine', '_obterStatusAtual falhou, usando fallback', e.message);
+    }
+    return STATUS_RESERVA.PENDENTE;
+  }
+
+  /**
+   * Aprova uma reserva pendente, em análise ou confirmada.
+   * Busca o status atual no repositório antes de aplicar a transição.
    * @param {string} idReserva
    * @param {string} emailAdmin
    * @param {string} [observacao]
@@ -180,12 +223,13 @@ var ReservaEngine = (function () {
         throw new Error('Permissão insuficiente para aprovar reservas.');
       }
     }
-    aplicarTransicao(idReserva, STATUS_RESERVA.PENDENTE, STATUS_RESERVA.APROVADA, emailAdmin, observacao);
+    var statusAtual = _obterStatusAtual(idReserva);
+    aplicarTransicao(idReserva, statusAtual, STATUS_RESERVA.APROVADA, emailAdmin, observacao);
     Logger.info('reserva_engine', 'Reserva aprovada', { id: idReserva, admin: emailAdmin });
   }
 
   /**
-   * Rejeita uma reserva pendente ou em análise.
+   * Rejeita/recusa uma reserva pendente ou em análise.
    * @param {string} idReserva
    * @param {string} emailAdmin
    * @param {string} motivo
@@ -196,7 +240,8 @@ var ReservaEngine = (function () {
         throw new Error('Permissão insuficiente para rejeitar reservas.');
       }
     }
-    aplicarTransicao(idReserva, STATUS_RESERVA.PENDENTE, STATUS_RESERVA.RECUSADA, emailAdmin, motivo);
+    var statusAtual = _obterStatusAtual(idReserva);
+    aplicarTransicao(idReserva, statusAtual, STATUS_RESERVA.RECUSADA, emailAdmin, motivo);
     Logger.info('reserva_engine', 'Reserva rejeitada', { id: idReserva, admin: emailAdmin, motivo: motivo });
   }
 
