@@ -1145,14 +1145,14 @@ function chaves_verificarAtrasos() {
       const prevista = new Date(p.dtPrevistaDev);
       if (isNaN(prevista.getTime())) continue;
       if (agora > prevista) {
-        aba.getRange(i + 2, PROT_COL.STATUS + 1).setValue(CHV_STATUS_PROTOCOLO.ATRASADA);
-        _chvRegistrarHistorico(p.id, p.chaveId, 'MARCADO_ATRASADO', 'sistema', 'Sistema',
-          CHV_STATUS_PROTOCOLO.RETIRADA, CHV_STATUS_PROTOCOLO.ATRASADA, 'Devolução prevista: ' + p.dtPrevistaDev, 'SISTEMA');
-        SystemEvents.emit(SystemEventTypes.KEY_PROTOCOL_DELAYED, {
-          entidade: 'protocolo_chave', entidadeId: p.id,
-          usuario: 'sistema', origem: 'mod_chaves',
-          contexto: { chaveId: p.chaveId, dtPrevista: p.dtPrevistaDev, responsavel: p.responsavelId }
-        });
+        try {
+          KeyEngine.aplicarTransicao(
+            p.id, p.status, CHV_STATUS_PROTOCOLO.ATRASADA,
+            'sistema', 'Devolução prevista: ' + p.dtPrevistaDev
+          );
+        } catch(eItem) {
+          Logger.warn('chaves', 'chaves_verificarAtrasos: falha ao marcar protocolo ' + p.id, eItem.message);
+        }
       }
     }
     Logger.info('chaves', 'chaves_verificarAtrasos: concluído.');

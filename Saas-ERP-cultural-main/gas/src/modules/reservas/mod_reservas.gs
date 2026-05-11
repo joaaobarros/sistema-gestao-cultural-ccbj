@@ -228,11 +228,11 @@ function _cancelarReservasConflitantes(sala, data, inicio, fim, motivo, emailAdm
     // Regra central de conflito: inicioA < fimB E fimA > inicioB
     if (!(inicioMin < terP && fimMin > iniP)) continue;
 
-    aba.getRange(i + 1, 14).setValue(STATUS_RESERVA.CANCELADA);
-
     const emailDono   = String(dados[i][8] || "");
     const nomeReserva = String(dados[i][6] || "");
     const idReserva   = String(dados[i][0] || "");
+
+    ReservaRepository.atualizarStatus(idReserva, STATUS_RESERVA.CANCELADA);
 
     cancelados.push({ id: idReserva, nome: nomeReserva, email: emailDono });
 
@@ -318,7 +318,7 @@ function cancelarReserva(id, emailAtual) {
         throw new Error("Reserva já cancelada.");
       }
 
-      aba.getRange(linha, 14).setValue(STATUS_RESERVA.CANCELADA);
+      ReservaRepository.atualizarStatus(id, STATUS_RESERVA.CANCELADA);
 
       if (isMesmoDia(data)) {
         _notificarCancelamentoMesmoDia({ sala, nome, inicio, fim, emailAtual });
@@ -369,11 +369,10 @@ function cancelarReservaComJustificativa(id, emailAtual, justificativa) {
     const status = String(dados[i][13]).toUpperCase();
     if (status === STATUS_RESERVA.CANCELADA) throw new Error("Reserva já cancelada.");
 
-    const linha = i + 1;
     const nome = dados[i][6];
     const emailDono = dados[i][8];
 
-    aba.getRange(linha, 14).setValue(STATUS_RESERVA.CANCELADA);
+    ReservaRepository.atualizarStatus(id, STATUS_RESERVA.CANCELADA);
 
     try {
       if (emailDono && emailDono.includes("@")) {
@@ -445,7 +444,7 @@ function habilitarReservaStatus(id, emailAtual, observacao) {
     if (String(dados[i][13]).toUpperCase() === STATUS_RESERVA.CANCELADA)
       throw new Error("Não é possível habilitar reserva cancelada.");
 
-    aba.getRange(i + 1, 14).setValue(STATUS_RESERVA.HABILITADA);
+    ReservaRepository.atualizarStatus(id, STATUS_RESERVA.HABILITADA);
     const obs = String(observacao || "").trim();
     if (obs) {
       const rel = String(dados[i][11] || "");
@@ -1047,7 +1046,6 @@ function processarAgendamentoLote(dados, datas) {
   try {
     lock = obterLockComRetry("processarAgendamentoLote", 10000, 3);
 
-    const abaReservas = _getSheet("Reservas");
     if (!dados || !Array.isArray(datas) || datas.length === 0)
       throw new Error("Dados inválidos para agendamento.");
     if (
@@ -1136,14 +1134,7 @@ function processarAgendamentoLote(dados, datas) {
     });
 
     if (linhasReservas.length > 0) {
-      abaReservas
-        .getRange(
-          abaReservas.getLastRow() + 1,
-          1,
-          linhasReservas.length,
-          linhasReservas[0].length,
-        )
-        .setValues(linhasReservas);
+      ReservaRepository.salvar(linhasReservas);
     }
 
     limparCacheUsuario(responsavelNorm);

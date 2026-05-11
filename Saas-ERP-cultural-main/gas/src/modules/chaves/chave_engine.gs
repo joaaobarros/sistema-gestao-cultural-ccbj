@@ -36,7 +36,7 @@ var _TRANSICOES_CHAVE = {
   'RETIRADA':                      ['AGUARDANDO_CONFIRMACAO_INFRA', 'TRANSFERENCIA_PENDENTE', 'ATRASADA'],
   'ATRASADA':                      ['AGUARDANDO_CONFIRMACAO_INFRA', 'TRANSFERENCIA_PENDENTE'],
   'TRANSFERENCIA_PENDENTE':        ['TRANSFERIDA', 'RETIRADA'],
-  'TRANSFERIDA':                   ['AGUARDANDO_CONFIRMACAO_INFRA'],
+  'TRANSFERIDA':                   ['AGUARDANDO_CONFIRMACAO_INFRA', 'ATRASADA'],
   'DEVOLVIDA':                     [],
   'NEGADA':                        [],
   'CANCELADA':                     []
