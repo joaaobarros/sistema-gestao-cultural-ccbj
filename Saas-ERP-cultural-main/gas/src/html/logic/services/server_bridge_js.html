@@ -263,46 +263,22 @@ const GAS = {
   },
 
   /**
-   * BLOCO: Serviços de contratos
-   * @context CRUD de contratos, metas, rubricas e indicadores.
+   * BLOCO: Contratos — núcleo oficial (contratos_controller.gs → ContratosEngine)
    */
   contratos: {
-    obter: function(cb, err) {
-      GAS._call('obterContratos', [], cb, err);
-    },
-    obterDados: function(cb, err) {
-      GAS._call('obterDadosContratos', [], cb, err);
-    },
-    salvar: function(dados, email, cb, err) {
-      GAS._call('salvarContrato', [dados, email], cb, err);
-    },
-    excluir: function(id, email, cb, err) {
-      GAS._call('excluirContrato', [id, email], cb, err);
-    },
-    obterMemorias: function(idRubrica, cb, err) {
-      GAS._call('obterMemoriaRubrica', [idRubrica], cb, err);
-    },
-    comparativo: function(idCtr, v1, v2, cb, err) {
-      GAS._call('obterDashboardComparativoContrato', [idCtr, v1, v2], cb, err);
-    },
-    salvarMeta: function(dados, email, cb, err) {
-      GAS._call('salvarMeta', [dados, email], cb, err);
-    },
-    excluirMeta: function(id, email, cb, err) {
-      GAS._call('excluirMeta', [id, email], cb, err);
-    },
-    salvarRubrica: function(dados, email, cb, err) {
-      GAS._call('salvarRubrica', [dados, email], cb, err);
-    },
-    excluirRubrica: function(id, email, cb, err) {
-      GAS._call('excluirRubrica', [id, email], cb, err);
-    },
-    salvarIndicador: function(dados, email, cb, err) {
-      GAS._call('salvarIndicador', [dados, email], cb, err);
-    },
-    excluirIndicador: function(id, email, cb, err) {
-      GAS._call('excluirIndicador', [id, email], cb, err);
-    }
+    obter:            function(cb, err)                     { GAS._callCtrl('ctrl_contratos_listar',           [],                              cb, err); },
+    obterDados:       function(cb, err)                     { GAS._callCtrl('ctrl_contratos_dados',            [],                              cb, err); },
+    salvar:           function(dados, email, cb, err)       { GAS._callCtrl('ctrl_contratos_salvar',           [dados, email||GAS._sessao()],   cb, err); },
+    excluir:          function(id, email, cb, err)          { GAS._callCtrl('ctrl_contratos_excluir',          [id, email||GAS._sessao()],      cb, err); },
+    mudarStatus:      function(id, status, cb, err)         { GAS._callCtrl('ctrl_contratos_status',           [id, status, GAS._sessao()],     cb, err); },
+    obterMemorias:    function(idRubrica, cb, err)          { GAS._callCtrl('ctrl_contratos_memorias_rubrica', [idRubrica],                     cb, err); },
+    comparativo:      function(idCtr, v1, v2, cb, err)     { GAS._callCtrl('ctrl_contratos_comparativo',      [idCtr, v1, v2],                 cb, err); },
+    salvarMeta:       function(dados, email, cb, err)       { GAS._callCtrl('ctrl_contratos_salvar_meta',      [dados, email||GAS._sessao()],   cb, err); },
+    excluirMeta:      function(id, email, cb, err)          { GAS._callCtrl('ctrl_contratos_excluir_meta',     [id, email||GAS._sessao()],      cb, err); },
+    salvarRubrica:    function(dados, email, cb, err)       { GAS._callCtrl('ctrl_contratos_salvar_rubrica',   [dados, email||GAS._sessao()],   cb, err); },
+    excluirRubrica:   function(id, email, cb, err)          { GAS._callCtrl('ctrl_contratos_excluir_rubrica',  [id, email||GAS._sessao()],      cb, err); },
+    salvarIndicador:  function(dados, email, cb, err)       { GAS._callCtrl('ctrl_contratos_salvar_indicador', [dados, email||GAS._sessao()],   cb, err); },
+    excluirIndicador: function(id, email, cb, err)          { GAS._callCtrl('ctrl_contratos_excluir_indicador',[id, email||GAS._sessao()],      cb, err); }
   },
 
   /**
