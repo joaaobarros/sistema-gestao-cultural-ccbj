@@ -36,6 +36,43 @@ const GAS = {
     runner[fnName].apply(runner, Array.isArray(args) ? args : (args !== undefined ? [args] : []));
   },
 
+  /**
+   * Chama um controller (funções ctrl_*) e desembrulha o GasResponse automaticamente.
+   * O frontend recebe response.data diretamente (transparente para código existente).
+   * Erros retornados como { ok: false } são roteados para o errorHandler.
+   *
+   * @param {string}   fnName    — nome da função ctrl_* no backend
+   * @param {Array}    args      — argumentos
+   * @param {Function} onSuccess — recebe response.data
+   * @param {Function} onError   — recebe { message } se ok:false ou falha de rede
+   */
+  _callCtrl: function(fnName, args, onSuccess, onError) {
+    const fallbackError = typeof _handleServerError === 'function'
+      ? _handleServerError
+      : function(e) { console.error('[GAS:ctrl]', fnName, e); };
+    const errHandler = onError || fallbackError;
+
+    const successAdapter = function(response) {
+      if (response && typeof response === 'object' && 'ok' in response) {
+        if (response.ok) {
+          (onSuccess || function() {})(response.data);
+        } else {
+          const msg = (response.error && response.error.message) ? response.error.message : 'Erro desconhecido';
+          errHandler({ message: msg, code: response.error && response.error.code });
+        }
+      } else {
+        // resposta raw (compatibilidade com funções não-migradas)
+        (onSuccess || function() {})(response);
+      }
+    };
+
+    const runner = google.script.run
+      .withSuccessHandler(successAdapter)
+      .withFailureHandler(errHandler);
+
+    runner[fnName].apply(runner, Array.isArray(args) ? args : (args !== undefined ? [args] : []));
+  },
+
   _stub: function(cb) {
     if (typeof cb === 'function') cb({ ok: false, stub: true, msg: 'Funcionalidade em desenvolvimento' });
   },
@@ -53,99 +90,100 @@ const GAS = {
   /**
    * BLOCO: Serviços de reserva
    * @context CRUD e disponibilidade de reservas.
+   * @via reservas_controller.gs (ctrl_reservas_*)
    */
   reservas: {
     obter: function(cb, err) {
-      GAS._call('obterReservas', [], cb, err);
+      GAS._callCtrl('ctrl_reservas_listar', [], cb, err);
     },
     criar: function(dados, datas, cb, err) {
-      GAS._call('criarReservaController', [dados, datas], cb, err);
+      GAS._callCtrl('ctrl_reservas_criar', [dados, datas], cb, err);
     },
     atualizar: function(dados, cb, err) {
-      GAS._call('atualizarReservaController', [dados], cb, err);
+      GAS._callCtrl('ctrl_reservas_atualizar', [dados], cb, err);
     },
     cancelar: function(id, email, cb, err) {
-      GAS._call('cancelarReserva', [id, email], cb, err);
+      GAS._callCtrl('ctrl_reservas_cancelar', [id, email], cb, err);
     },
     cancelarComJustificativa: function(id, email, justificativa, cb, err) {
-      GAS._call('cancelarReservaComJustificativa', [id, email, justificativa], cb, err);
+      GAS._callCtrl('ctrl_reservas_cancelar_justificado', [id, email, justificativa], cb, err);
     },
     habilitar: function(id, email, obs, cb, err) {
-      GAS._call('habilitarReservaStatus', [id, email, obs], cb, err);
+      GAS._callCtrl('ctrl_reservas_habilitar', [id, email, obs], cb, err);
     },
     verificarConflito: function(sala, data, inicio, termino, idIgnorar, cb, err) {
-      GAS._call('verificarConflitoEspaco', [sala, data, inicio, termino, idIgnorar], cb, err);
+      GAS._callCtrl('ctrl_reservas_verificar_conflito', [sala, data, inicio, termino, idIgnorar], cb, err);
     },
     analisarDisponibilidade: function(payload, cb, err) {
-      GAS._call('analisarDisponibilidadeReal', [payload], cb, err);
+      GAS._callCtrl('ctrl_reservas_disponibilidade', [payload], cb, err);
     },
     obterDisponibilidadeItens: function(data, inicio, termino, idSala, cb, err) {
-      GAS._call('obterDisponibilidadeItensPorHorario', [data, inicio, termino, idSala], cb, err);
+      GAS._callCtrl('ctrl_reservas_itens_disponibilidade', [data, inicio, termino, idSala], cb, err);
     },
     verificarPermissaoCancelamento: function(id, email, cb, err) {
-      GAS._call('verificarPermissaoCancelamento', [id, email], cb, err);
+      GAS._callCtrl('ctrl_reservas_verificar_permissao_cancelamento', [id, email], cb, err);
     }
   },
 
   /**
    * BLOCO: Serviços de administração
    * @context Configurações, auditoria, dashboard, estoque.
+   * @via admin_controller.gs (ctrl_admin_* / ctrl_rece_*)
    */
   admin: {
     obterDados: function(cb, err) {
       var emailFallback = (window.__EMAIL_INICIAL__ && window.__EMAIL_INICIAL__.indexOf('@') >= 0)
         ? window.__EMAIL_INICIAL__ : '';
-      // Inclui token de sessão gerado no login (senha ou GSI) para identificação do usuário
-      // quando Session.getActiveUser() retorna vazio no deployment "Execute as: Me".
       var sessaoId = (typeof AppState !== 'undefined' && AppState.usuario && AppState.usuario._sessao)
         ? AppState.usuario._sessao : '';
-      GAS._call('obterDadosIniciais', [emailFallback, sessaoId], cb, err);
+      GAS._callCtrl('ctrl_admin_dados_iniciais', [emailFallback, sessaoId], cb, err);
     },
     salvarConfig: function(dados, cb, err) {
-      GAS._call('processarSalvarConfig', [dados], cb, err);
+      GAS._callCtrl('ctrl_admin_salvar_config', [dados], cb, err);
     },
     excluirPorId: function(tipo, id, email, cb, err) {
-      GAS._call('excluirRegistroPorID', [tipo, id, email], cb, err);
+      GAS._callCtrl('ctrl_admin_excluir_por_id', [tipo, id, email], cb, err);
     },
     removerRegistro: function(id, tipo, email, cb, err) {
-      GAS._call('removerRegistroGenerico', [id, tipo, email], cb, err);
+      GAS._callCtrl('ctrl_admin_remover_registro', [id, tipo, email], cb, err);
     },
     obterItensFixosPorSala: function(id, cb, err) {
+      // Não migrado ainda para controller — função internal mod_admin
       GAS._call('obterItensFixosPorSala', [id], cb, err);
     },
     obterDadosParaConfig: function(nomeAba, cb, err) {
-      GAS._call('obterDadosParaConfig', nomeAba ? [nomeAba] : [], cb, err);
+      GAS._callCtrl('ctrl_admin_dados_config', nomeAba ? [nomeAba] : [], cb, err);
     },
     obterPerfil: function(cb, err) {
       var em = (AppState && AppState.usuario && AppState.usuario.email) || window.__EMAIL_INICIAL__ || '';
-      GAS._call('obterPerfilUsuario', [em], cb, err);
+      GAS._callCtrl('ctrl_admin_perfil', [em], cb, err);
     },
     sugerirReservaIA: function(descricao, cb, err) {
       GAS._call('sugerirReservaIAComDados', [descricao], cb, err);
     },
     obterLogs: function(email, cb, err) {
-      GAS._call('obterLogs', [email], cb, err);
+      GAS._callCtrl('ctrl_admin_logs', [email], cb, err);
     },
     obterLogAcessos: function(email, cb, err) {
-      GAS._call('obterLogAcessos', [email], cb, err);
+      GAS._callCtrl('ctrl_admin_log_acessos', [email], cb, err);
     },
     rollback: function(email, ts, cb, err) {
-      GAS._call('rollbackAcaoPorTimestamp', [email, ts], cb, err);
+      GAS._callCtrl('ctrl_admin_rollback', [email, ts], cb, err);
     },
     rollbackPorIndice: function(email, idx, cb, err) {
-      GAS._call('rollbackAcaoPorIndice', [email, idx], cb, err);
+      GAS._callCtrl('ctrl_admin_rollback_indice', [email, idx], cb, err);
     },
     obterMetricas: function(ini, fim, sala, setor, cb, err) {
-      GAS._call('obterMetricasDashboard', [ini, fim, sala, setor], cb, err);
+      GAS._callCtrl('ctrl_admin_metricas_dashboard', [ini, fim, sala, setor], cb, err);
     },
     alternarItemQtd: function(idItem, idSala, qtd, acao, email, cb, err) {
-      GAS._call('alternarQuantidadeItem', [idItem, idSala, qtd, acao, email], cb, err);
+      GAS._callCtrl('ctrl_admin_alternar_item', [idItem, idSala, qtd, acao, email], cb, err);
     },
     obterEmailsSistema: function(cb, err) {
-      GAS._call('obterEmailsSistema', [], cb, err);
+      GAS._callCtrl('ctrl_admin_emails_sistema', [], cb, err);
     },
     obterDadosGrafico: function(cb, err) {
-      GAS._call('obterDadosGraficoReservas', [], cb, err);
+      GAS._callCtrl('ctrl_admin_grafico_reservas', [], cb, err);
     },
     obterUrlLogout: function(cb, err) {
       GAS._call('obterUrlLogout', [], cb, err);
@@ -160,50 +198,51 @@ const GAS = {
       GAS._call('analisarDashboardIA', [metricas], cb, err);
     },
     obterMetricasCODIP: function(cb, err) {
-      GAS._call('obterMetricasCODIP', [], cb, err);
+      GAS._callCtrl('ctrl_admin_metricas_codip', [], cb, err);
     },
     obterRelatoriosCODIP: function(cb, err) {
-      GAS._call('obterRelatoriosCODIP', [], cb, err);
+      GAS._callCtrl('ctrl_admin_relatorios_codip', [], cb, err);
     },
     obterSetor: function(emailAlvo, cb, err) {
-      GAS._call('obterSetorUsuario', [emailAlvo], cb, err);
+      GAS._callCtrl('ctrl_admin_obter_setor', [emailAlvo], cb, err);
     },
     salvarSetor: function(emailAlvo, setor, cb, err) {
       var emailSolicitante = (typeof AppState !== 'undefined' && AppState.usuario && AppState.usuario.email) || '';
-      GAS._call('salvarSetorUsuario', [emailAlvo, setor, emailSolicitante], cb, err);
+      GAS._callCtrl('ctrl_admin_salvar_setor', [emailAlvo, setor, emailSolicitante], cb, err);
     },
     obterSistemaConfig: function(cb, err) {
-      GAS._call('obterSistemaConfigAdmin', [], cb, err);
+      GAS._callCtrl('ctrl_admin_sistema_config', [], cb, err);
     },
     salvarSistemaConfig: function(cfg, cb, err) {
       var emailFallback = (window.__EMAIL_INICIAL__ && window.__EMAIL_INICIAL__.indexOf('@') >= 0)
         ? window.__EMAIL_INICIAL__ : '';
-      GAS._call('salvarSistemaConfigAdmin', [cfg, emailFallback], cb, err);
+      GAS._callCtrl('ctrl_admin_salvar_sistema_config', [cfg, emailFallback], cb, err);
     }
   },
 
   /**
    * BLOCO: Serviços RECE
    * @context Agenda RECE, exportações e upload de imagem.
+   * @via admin_controller.gs (ctrl_rece_*)
    */
   rece: {
     obter: function(cb, err) {
-      GAS._call('obterReservasRece', [], cb, err);
+      GAS._callCtrl('ctrl_rece_listar', [], cb, err);
     },
     salvar: function(dados, cb, err) {
-      GAS._call('salvarReservaRece', [dados], cb, err);
+      GAS._callCtrl('ctrl_rece_salvar', [dados], cb, err);
     },
     cancelar: function(id, email, cb, err) {
-      GAS._call('cancelarReservaRece', [id, email], cb, err);
+      GAS._callCtrl('ctrl_rece_cancelar', [id, email], cb, err);
     },
     excluir: function(id, email, cb, err) {
-      GAS._call('excluirReservaRece', [id, email], cb, err);
+      GAS._callCtrl('ctrl_rece_excluir', [id, email], cb, err);
     },
     exportarPlanilha: function(dados, cb, err) {
       GAS._call('exportarAgendaRecePlanilha', [dados], cb, err);
     },
     uploadImagem: function(b64, mimeType, nome, cb, err) {
-      GAS._call('uploadImagemRece', [b64, mimeType, nome], cb, err);
+      GAS._callCtrl('ctrl_rece_upload_imagem', [b64, mimeType, nome], cb, err);
     }
   },
 
@@ -569,39 +608,40 @@ const GAS = {
   },
 
   /**
-   * BLOCO: Protocolo de Chaves (mod_chaves.gs)
+   * BLOCO: Protocolo de Chaves
    * @context Retirada, devolução, transferência e rastreabilidade de chaves físicas.
+   * @via chaves_controller.gs (ctrl_chaves_*)
    */
   chaves: {
-    obterDados:            function(email, cb, err)                    { GAS._call('chaves_obterDados',            [email],                     cb, err); },
-    listarProtocolos:      function(filtros, email, cb, err)           { GAS._call('chaves_listarProtocolos',      [filtros, email],             cb, err); },
-    obterHistorico:        function(filtros, email, cb, err)           { GAS._call('chaves_obterHistorico',        [filtros, email],             cb, err); },
-    obterIndicadores:      function(email, cb, err)                    { GAS._call('chaves_obterIndicadores',      [email],                     cb, err); },
+    obterDados:            function(email, cb, err)                    { GAS._callCtrl('ctrl_chaves_dados',                    [email],                      cb, err); },
+    listarProtocolos:      function(filtros, email, cb, err)           { GAS._callCtrl('ctrl_chaves_listar_protocolos',         [filtros, email],             cb, err); },
+    obterHistorico:        function(filtros, email, cb, err)           { GAS._callCtrl('ctrl_chaves_historico',                 [filtros, email],             cb, err); },
+    obterIndicadores:      function(email, cb, err)                    { GAS._callCtrl('ctrl_chaves_indicadores',               [email],                      cb, err); },
 
-    salvarChave:           function(dados, email, cb, err)             { GAS._call('chaves_salvarChave',           [dados, email],               cb, err); },
-    alterarStatusChave:    function(id, status, obs, email, cb, err)   { GAS._call('chaves_alterarStatusChave',    [id, status, obs, email],    cb, err); },
-    desativarChave:        function(id, obs, email, cb, err)           { GAS._call('chaves_desativarChave',        [id, obs, email],            cb, err); },
+    salvarChave:           function(dados, email, cb, err)             { GAS._callCtrl('ctrl_chaves_salvar',                    [dados, email],               cb, err); },
+    alterarStatusChave:    function(id, status, obs, email, cb, err)   { GAS._callCtrl('ctrl_chaves_alterar_status',            [id, status, obs, email],     cb, err); },
+    desativarChave:        function(id, obs, email, cb, err)           { GAS._callCtrl('ctrl_chaves_desativar',                 [id, obs, email],             cb, err); },
 
-    solicitar:             function(dados, email, cb, err)             { GAS._call('chaves_solicitar',             [dados, email],               cb, err); },
-    iniciarEntregaDireta:  function(dados, email, cb, err)             { GAS._call('chaves_iniciarEntregaDireta',  [dados, email],               cb, err); },
-    aprovarEntrega:        function(id, obs, email, cb, err)           { GAS._call('chaves_aprovarEntrega',        [id, obs, email],             cb, err); },
-    confirmarRecebimento:  function(id, obs, email, cb, err)           { GAS._call('chaves_confirmarRecebimento',  [id, obs, email],             cb, err); },
-    registrarDevolucao:    function(id, obs, email, cb, err)           { GAS._call('chaves_registrarDevolucao',    [id, obs, email],             cb, err); },
-    confirmarDevolucao:    function(id, obs, email, cb, err)           { GAS._call('chaves_confirmarDevolucao',    [id, obs, email],             cb, err); },
+    solicitar:             function(dados, email, cb, err)             { GAS._callCtrl('ctrl_chaves_solicitar',                 [dados, email],               cb, err); },
+    iniciarEntregaDireta:  function(dados, email, cb, err)             { GAS._callCtrl('ctrl_chaves_entrega_direta',            [dados, email],               cb, err); },
+    aprovarEntrega:        function(id, obs, email, cb, err)           { GAS._callCtrl('ctrl_chaves_aprovar_entrega',           [id, obs, email],             cb, err); },
+    confirmarRecebimento:  function(id, obs, email, cb, err)           { GAS._callCtrl('ctrl_chaves_confirmar_recebimento',     [id, obs, email],             cb, err); },
+    registrarDevolucao:    function(id, obs, email, cb, err)           { GAS._callCtrl('ctrl_chaves_registrar_devolucao',       [id, obs, email],             cb, err); },
+    confirmarDevolucao:    function(id, obs, email, cb, err)           { GAS._callCtrl('ctrl_chaves_confirmar_devolucao',       [id, obs, email],             cb, err); },
 
-    solicitarTransferencia:  function(id, dest, obs, email, cb, err)   { GAS._call('chaves_solicitarTransferencia',  [id, dest, obs, email],    cb, err); },
-    confirmarTransferencia:  function(id, obs, email, cb, err)         { GAS._call('chaves_confirmarTransferencia',  [id, obs, email],          cb, err); },
-    cancelarTransferencia:   function(id, obs, email, cb, err)         { GAS._call('chaves_cancelarTransferencia',   [id, obs, email],          cb, err); },
+    solicitarTransferencia:  function(id, dest, obs, email, cb, err)   { GAS._callCtrl('ctrl_chaves_solicitar_transferencia',   [id, dest, obs, email],       cb, err); },
+    confirmarTransferencia:  function(id, obs, email, cb, err)         { GAS._callCtrl('ctrl_chaves_confirmar_transferencia',   [id, obs, email],             cb, err); },
+    cancelarTransferencia:   function(id, obs, email, cb, err)         { GAS._callCtrl('ctrl_chaves_cancelar_transferencia',    [id, obs, email],             cb, err); },
 
-    cancelar:              function(id, motivo, email, cb, err)        { GAS._call('chaves_cancelar',              [id, motivo, email],          cb, err); },
-    negar:                 function(id, motivo, email, cb, err)        { GAS._call('chaves_negar',                 [id, motivo, email],          cb, err); },
+    cancelar:              function(id, motivo, email, cb, err)        { GAS._callCtrl('ctrl_chaves_cancelar',                  [id, motivo, email],          cb, err); },
+    negar:                 function(id, motivo, email, cb, err)        { GAS._callCtrl('ctrl_chaves_negar',                     [id, motivo, email],          cb, err); },
 
-    salvarCamposEspaco:    function(id, dados, email, cb, err)         { GAS._call('chaves_salvarCamposEspaco',    [id, dados, email],           cb, err); },
-    listarEspacosCompletos: function(email, cb, err)                   { GAS._call('chaves_listarEspacosCompletos', [email],                     cb, err); },
+    salvarCamposEspaco:    function(id, dados, email, cb, err)         { GAS._callCtrl('ctrl_chaves_salvar_espaco',             [id, dados, email],           cb, err); },
+    listarEspacosCompletos: function(email, cb, err)                   { GAS._callCtrl('ctrl_chaves_listar_espacos',            [email],                      cb, err); },
 
-    retiradaOperacional:      function(dados, email, cb, err)                    { GAS._call('chaves_retiradaOperacional',      [dados, email],               cb, err); },
-    devolucaoOperacional:     function(id, obs, email, cb, err)                  { GAS._call('chaves_devolucaoOperacional',     [id, obs, email],             cb, err); },
-    transferenciaOperacional: function(id, nome, setor, obs, email, cb, err)     { GAS._call('chaves_transferenciaOperacional', [id, nome, setor, obs, email], cb, err); }
+    retiradaOperacional:      function(dados, email, cb, err)                    { GAS._callCtrl('ctrl_chaves_retirada_operacional',      [dados, email],                cb, err); },
+    devolucaoOperacional:     function(id, obs, email, cb, err)                  { GAS._callCtrl('ctrl_chaves_devolucao_operacional',     [id, obs, email],              cb, err); },
+    transferenciaOperacional: function(id, nome, setor, obs, email, cb, err)     { GAS._callCtrl('ctrl_chaves_transferencia_operacional', [id, nome, setor, obs, email], cb, err); }
   },
 
   /**

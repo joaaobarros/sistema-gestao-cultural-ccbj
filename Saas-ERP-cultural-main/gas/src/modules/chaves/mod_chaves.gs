@@ -318,17 +318,6 @@ function _chvAtualizarStatusChaveNaPlanilha(chaveId, novoStatus) {
   aba.getRange(r.linha, CHV_COL.ATUALIZADA_EM + 1).setValue(new Date().toISOString());
 }
 
-// @deprecated — sem callers ativos. Substituído por KeyEngine.aplicarTransicao. Remover na FASE 7.
-function _chvAtualizarProtocoloStatus(linha, novoStatus, camposExtras) {
-  const aba = _chvGetProtocolos();
-  aba.getRange(linha, PROT_COL.STATUS + 1).setValue(novoStatus);
-  if (camposExtras) {
-    Object.keys(camposExtras).forEach(function(col) {
-      aba.getRange(linha, Number(col) + 1).setValue(camposExtras[col]);
-    });
-  }
-}
-
 // ══════════════════════════════════════════════════════════════════
 // BLOCO: API pública — Espaços
 // ══════════════════════════════════════════════════════════════════
