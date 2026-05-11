@@ -98,18 +98,18 @@ function habDiariaHabilitar(idx) {
       horaHabilitacao:  result.value.horaHab,
       observacao:       result.value.obs
     };
-    showLoader('Registrando habilitação...');
+    showLoader(true);
     GAS.habDiaria.registrar(dados,
       function (res) {
         if (!res || !res.ok) {
-          hideLoader();
+          showLoader(false);
           Swal.fire('Erro', (res && res.erro) || 'Falha ao registrar.', 'error');
           return;
         }
         // Conecta ao sistema de habilitação: atualiza status da reserva para HABILITADO
         GAS.reservas.habilitar(item.reservaId, AppState.usuario.email, result.value.obs || '',
           function () {
-            hideLoader();
+            showLoader(false);
             var r = AppState.colecoes && AppState.colecoes.reservas &&
                     AppState.colecoes.reservas.find(function (x) { return x[0] === item.reservaId; });
             if (r) r[13] = 'HABILITADO';
@@ -119,7 +119,7 @@ function habDiariaHabilitar(idx) {
             _habDiariaCarregar();
           },
           function (err) {
-            hideLoader();
+            showLoader(false);
             // Check-in registrado; apenas o status não foi atualizado
             Swal.fire('Aviso', 'Check-in registrado, mas não foi possível atualizar o status da reserva: ' + String(err), 'warning');
             _habDiariaCarregar();
@@ -127,7 +127,7 @@ function habDiariaHabilitar(idx) {
         );
       },
       function (err) {
-        hideLoader();
+        showLoader(false);
         Swal.fire('Erro', String(err), 'error');
       }
     );
