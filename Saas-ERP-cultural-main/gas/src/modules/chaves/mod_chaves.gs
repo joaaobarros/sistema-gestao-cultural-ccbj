@@ -452,36 +452,8 @@ function chaves_listarProtocolos(filtros, emailAtual) {
 function chaves_obterHistorico(filtros, emailAtual) {
   try {
     obterEmailUsuario(emailAtual || '');
-    filtros = filtros || {};
-    const aba = _chvGetHistorico();
-    if (!aba || aba.getLastRow() < 2) return { ok: true, historico: [] };
-
-    const dados = aba.getRange(2, 1, aba.getLastRow() - 1, 11).getValues();
-    let lista = dados.map(function(r) {
-      return {
-        id:              String(r[HIST_COL.ID] || ''),
-        protocoloId:     String(r[HIST_COL.PROTOCOLO_ID] || ''),
-        chaveId:         String(r[HIST_COL.CHAVE_ID] || ''),
-        dtHora:          r[HIST_COL.DT_HORA] ? String(r[HIST_COL.DT_HORA]) : '',
-        acao:            String(r[HIST_COL.ACAO] || ''),
-        usuarioId:       String(r[HIST_COL.USUARIO_ID] || ''),
-        usuarioNome:     String(r[HIST_COL.USUARIO_NOME] || ''),
-        statusAnterior:  String(r[HIST_COL.STATUS_ANTERIOR] || ''),
-        statusNovo:      String(r[HIST_COL.STATUS_NOVO] || ''),
-        observacoes:     String(r[HIST_COL.OBSERVACOES] || ''),
-        agente:          String(r[HIST_COL.AGENTE] || '')
-      };
-    }).filter(function(h) { return h.id; });
-
-    if (filtros.protocoloId) lista = lista.filter(function(h) { return h.protocoloId === filtros.protocoloId; });
-    if (filtros.chaveId)     lista = lista.filter(function(h) { return h.chaveId === filtros.chaveId; });
-    if (filtros.usuarioId)   lista = lista.filter(function(h) { return h.usuarioId === filtros.usuarioId; });
-
-    lista.sort(function(a, b) {
-      return new Date(b.dtHora) - new Date(a.dtHora);
-    });
-
-    return { ok: true, historico: lista };
+    const historico = ChavesRepository.listarHistorico(filtros || {});
+    return { ok: true, historico: historico };
   } catch(e) {
     throw new Error('Erro ao obter histórico: ' + e.message);
   }
@@ -501,39 +473,28 @@ function chaves_salvarChave(dados, emailAtual) {
 
     if (!dados || !dados.espacoId) throw new Error('Espaço obrigatório.');
     if (!dados.codigoPatrimonial) {
-      const seq = String(((_chvGetChaves()?.getLastRow() || 1))).padStart(3, '0');
+      const seq = String(ChavesRepository.listarChaves().length + 1).padStart(3, '0');
       dados.codigoPatrimonial = 'CHV-' + Utilities.formatDate(new Date(), 'America/Recife', 'yyyyMMdd') + '-' + seq;
     }
     if (!Object.values(CHV_TIPO_CHAVE).includes(dados.tipo))
       throw new Error('Tipo de chave inválido: ' + dados.tipo);
 
-    const aba = _chvGetChaves();
-    if (!aba) throw new Error('Aba Chaves não encontrada.');
-    const agora = new Date().toISOString();
-
     if (dados.id) {
-      const r = _chvEncontrarChaveLinha(dados.id);
-      if (!r) throw new Error('Chave não encontrada: ' + dados.id);
-      aba.getRange(r.linha, CHV_COL.ESPACO_ID + 1).setValue(dados.espacoId);
-      aba.getRange(r.linha, CHV_COL.CODIGO_PATRIMONIAL + 1).setValue(String(dados.codigoPatrimonial).trim());
-      aba.getRange(r.linha, CHV_COL.TIPO + 1).setValue(dados.tipo);
-      aba.getRange(r.linha, CHV_COL.OBSERVACOES + 1).setValue(String(dados.observacoes || ''));
-      aba.getRange(r.linha, CHV_COL.ATIVA + 1).setValue(dados.ativa !== false);
-      aba.getRange(r.linha, CHV_COL.ATUALIZADA_EM + 1).setValue(agora);
-      registrarLog('EDIÇÃO', 'CHAVE', dados.id, 'Chave editada.', r.dados, dados, email);
+      ChavesRepository.atualizarChave(dados.id, {
+        codigoPatrimonial: String(dados.codigoPatrimonial).trim(),
+        tipo:              dados.tipo,
+        observacoes:       String(dados.observacoes || ''),
+        ativa:             dados.ativa !== false
+      });
+      registrarLog('EDIÇÃO', 'CHAVE', dados.id, 'Chave editada.', null, dados, email);
     } else {
-      const novoId = gerarId('CHV');
-      aba.appendRow([
-        novoId,
-        dados.espacoId,
-        String(dados.codigoPatrimonial).trim(),
-        dados.tipo,
-        CHV_STATUS_CHAVE.DISPONIVEL,
-        true,
-        String(dados.observacoes || ''),
-        agora,
-        agora
-      ]);
+      const novoId = ChavesRepository.criarChave({
+        espacoId:          dados.espacoId,
+        codigoPatrimonial: String(dados.codigoPatrimonial).trim(),
+        tipo:              dados.tipo,
+        status:            CHV_STATUS_CHAVE.DISPONIVEL,
+        observacoes:       String(dados.observacoes || '')
+      });
       registrarLog('CRIAÇÃO', 'CHAVE', novoId, 'Chave criada.', null, dados, email);
     }
     return { ok: true };
@@ -553,12 +514,22 @@ function chaves_alterarStatusChave(chaveId, novoStatus, obs, emailAtual) {
     if (!Object.values(CHV_STATUS_CHAVE).includes(novoStatus))
       throw new Error('Status inválido: ' + novoStatus);
 
-    const r = _chvEncontrarChaveLinha(chaveId);
-    if (!r) throw new Error('Chave não encontrada: ' + chaveId);
+    const chave = ChavesRepository.obterChavePorId(chaveId);
+    if (!chave) throw new Error('Chave não encontrada: ' + chaveId);
 
-    const statusAnterior = String(r.dados[CHV_COL.STATUS]);
-    _chvAtualizarStatusChaveNaPlanilha(chaveId, novoStatus);
-    _chvRegistrarHistorico('', chaveId, 'STATUS_CHAVE_ALTERADO', email, _chvResolverNome(email), statusAnterior, novoStatus, obs, 'INFRA');
+    const statusAnterior = chave.status;
+    ChavesRepository.atualizarStatusChave(chaveId, novoStatus);
+    ChavesRepository.appendHistorico({
+      protocoloId: '',
+      chaveId: chaveId,
+      acao: 'STATUS_CHAVE_ALTERADO',
+      usuarioId: email,
+      usuarioNome: _chvResolverNome(email),
+      statusAnterior: statusAnterior,
+      statusNovo: novoStatus,
+      observacoes: obs || '',
+      agente: 'INFRA'
+    });
     registrarLog('STATUS_CHAVE', 'CHAVE', chaveId, 'Status: ' + statusAnterior + ' → ' + novoStatus, statusAnterior, novoStatus, email);
 
     return { ok: true };
@@ -575,14 +546,21 @@ function chaves_desativarChave(chaveId, obs, emailAtual) {
     const email = obterEmailUsuario(emailAtual || '');
     _chvExigeInfraOuAdmin(email);
 
-    const r = _chvEncontrarChaveLinha(chaveId);
-    if (!r) throw new Error('Chave não encontrada.');
+    const chave = ChavesRepository.obterChavePorId(chaveId);
+    if (!chave) throw new Error('Chave não encontrada.');
 
-    const aba = _chvGetChaves();
-    aba.getRange(r.linha, CHV_COL.ATIVA + 1).setValue(false);
-    aba.getRange(r.linha, CHV_COL.OBSERVACOES + 1).setValue(String(obs || ''));
-    aba.getRange(r.linha, CHV_COL.ATUALIZADA_EM + 1).setValue(new Date().toISOString());
-    _chvRegistrarHistorico('', chaveId, 'CHAVE_DESATIVADA', email, _chvResolverNome(email), '', '', obs, 'INFRA');
+    ChavesRepository.atualizarChave(chaveId, { ativa: false, observacoes: String(obs || '') });
+    ChavesRepository.appendHistorico({
+      protocoloId: '',
+      chaveId: chaveId,
+      acao: 'CHAVE_DESATIVADA',
+      usuarioId: email,
+      usuarioNome: _chvResolverNome(email),
+      statusAnterior: '',
+      statusNovo: '',
+      observacoes: obs || '',
+      agente: 'INFRA'
+    });
 
     return { ok: true };
   } catch(e) {
@@ -608,35 +586,29 @@ function chaves_solicitar(dados, emailAtual) {
       _chvValidarChaveDisponivel(dados.chaveId);
       _chvVerificarChaveJaEmUso(dados.chaveId);
 
-      const nome = _chvResolverNome(email);
+      const nome  = _chvResolverNome(email);
       const setor = String(dados.setorNome || obterSetorUsuario(email) || '');
-      const agora = new Date().toISOString();
-      const novoId = gerarId('PCH');
 
-      const aba = _chvGetProtocolos();
-      if (!aba) throw new Error('Aba ProtocolosChaves não encontrada.');
+      const novoId = ChavesRepository.criarProtocolo({
+        chaveId:             dados.chaveId,
+        espacoId:            dados.espacoId,
+        solicitanteId:       email,
+        solicitanteNome:     nome,
+        setorId:             setor,
+        setorNome:           setor,
+        dtPrevistaDevolucao: String(dados.dtPrevistaDevolucao || ''),
+        status:              CHV_STATUS_PROTOCOLO.SOLICITADA,
+        observacoes:         String(dados.observacoes || ''),
+        reservaVinculadaId:  String(dados.reservaId || ''),
+        origem:              'SOLICITACAO'
+      });
 
-      const row = new Array(25).fill('');
-      row[PROT_COL.ID]                  = novoId;
-      row[PROT_COL.CHAVE_ID]            = dados.chaveId;
-      row[PROT_COL.ESPACO_ID]           = dados.espacoId;
-      row[PROT_COL.RESPONSAVEL_ATUAL_ID]   = '';
-      row[PROT_COL.RESPONSAVEL_ATUAL_NOME] = '';
-      row[PROT_COL.SOLICITANTE_ID]      = email;
-      row[PROT_COL.SOLICITANTE_NOME]    = nome;
-      row[PROT_COL.SETOR_ID]            = setor;
-      row[PROT_COL.SETOR_NOME]          = setor;
-      row[PROT_COL.DT_SOLICITACAO]      = agora;
-      row[PROT_COL.DT_PREVISTA_DEVOLUCAO] = String(dados.dtPrevistaDevolucao || '');
-      row[PROT_COL.STATUS]              = CHV_STATUS_PROTOCOLO.SOLICITADA;
-      row[PROT_COL.OBSERVACOES]         = String(dados.observacoes || '');
-      row[PROT_COL.RESERVA_VINCULADA_ID] = String(dados.reservaId || '');
-      row[PROT_COL.ORIGEM]              = 'SOLICITACAO';
-
-      aba.appendRow(row);
-
-      _chvRegistrarHistorico(novoId, dados.chaveId, 'SOLICITACAO', email, nome,
-        '', CHV_STATUS_PROTOCOLO.SOLICITADA, dados.observacoes, 'USUARIO');
+      ChavesRepository.appendHistorico({
+        protocoloId: novoId, chaveId: dados.chaveId,
+        acao: 'SOLICITACAO', usuarioId: email, usuarioNome: nome,
+        statusAnterior: '', statusNovo: CHV_STATUS_PROTOCOLO.SOLICITADA,
+        observacoes: dados.observacoes || '', agente: 'USUARIO'
+      });
       registrarLog('PROTOCOLO_CHAVE', 'CHAVE', novoId, 'Solicitação de chave.', null, dados, email);
       SystemEvents.emit(SystemEventTypes.KEY_PROTOCOL_CREATED, {
         entidade: 'protocolo_chave', entidadeId: novoId,

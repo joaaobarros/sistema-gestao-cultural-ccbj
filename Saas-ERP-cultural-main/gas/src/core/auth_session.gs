@@ -492,6 +492,10 @@ function validarCredenciais(email, senha) {
       var token = _gerarTokenSessao(emailLimpo);
       var nivel = _resolverNivelAcesso(emailLimpo);
       _registrarLogSessao(emailLimpo, 'login_senha');
+      try {
+        if (typeof AuditoriaService !== 'undefined')
+          AuditoriaService.registrarAcesso(emailLimpo, 'LOGIN_SENHA', 'auth');
+      } catch(_) {}
 
       return {
         ok:    true,
@@ -502,6 +506,10 @@ function validarCredenciais(email, senha) {
       };
     }
 
+    try {
+      if (typeof AuditoriaService !== 'undefined')
+        AuditoriaService.warn('AUTH_FAILED', 'auth', 'Login falhou: usuário não encontrado', { email: emailLimpo });
+    } catch(_) {}
     return { ok: false, msg: 'Usuário não encontrado.' };
   } catch(e) {
     console.warn('[validarCredenciais] ' + e.message);
@@ -543,6 +551,10 @@ function salvarCredencialUsuario(emailAdmin, emailAlvo, senhaPlain, nome, ativo)
           sh.getRange(i + 2, 3).setValue(nomeAlvo);
           sh.getRange(i + 2, 4).setValue(ativoVal);
           if (hash) sh.getRange(i + 2, 2).setValue(hash);
+          try {
+            if (typeof AuditoriaService !== 'undefined')
+              AuditoriaService.registrar('AUTH_USER_UPDATED', 'auth', { admin: emailAdminLimpo, alvo: emailAlvoLimpo, ativo: ativoVal });
+          } catch(_) {}
           return { ok: true, msg: 'Usuário atualizado com sucesso.' };
         }
       }
@@ -550,6 +562,10 @@ function salvarCredencialUsuario(emailAdmin, emailAlvo, senhaPlain, nome, ativo)
 
     if (!hash) return { ok: false, msg: 'Senha é obrigatória para novo usuário.' };
     sh.appendRow([emailAlvoLimpo, hash, nomeAlvo, ativoVal, new Date().toISOString(), '']);
+    try {
+      if (typeof AuditoriaService !== 'undefined')
+        AuditoriaService.registrar('AUTH_USER_CREATED', 'auth', { admin: emailAdminLimpo, alvo: emailAlvoLimpo });
+    } catch(_) {}
     return { ok: true, msg: 'Usuário criado com sucesso.' };
   } catch(e) {
     console.warn('[salvarCredencialUsuario] ' + e.message);

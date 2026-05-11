@@ -19,7 +19,8 @@
  * NOTA: Os enums CHV_STATUS_CHAVE, CHV_STATUS_PROTOCOLO, CHV_COL, PROT_COL e HIST_COL
  *       são definidos em mod_chaves.gs e compartilhados via escopo global GAS.
  *
- * @depends mod_chaves.gs (CHV_STATUS_PROTOCOLO, CHV_STATUS_CHAVE, PROT_COL, HIST_COL, CHV_COL),
+ * @depends modules/chaves/chaves_repository.gs (ChavesRepository),
+ *          mod_chaves.gs (CHV_STATUS_PROTOCOLO, CHV_STATUS_CHAVE, PROT_COL, HIST_COL, CHV_COL),
  *          core/logger.gs, core/event_bus_backend.gs, core/services/auditoria_service.gs,
  *          core/utils.gs (_getSheet, gerarId, obterLockComRetry)
  */
@@ -131,33 +132,23 @@ var KeyEngine = (function () {
 
   /**
    * Verifica se uma chave está disponível para retirada.
-   * Considera status da chave e protocolos ativos no período.
+   * Delega leitura ao ChavesRepository.
    *
    * @param {string} chaveId
    * @returns {{ disponivel: boolean, motivo?: string, protocolo?: Object }}
    */
   function verificarDisponibilidade(chaveId) {
     try {
-      var abaChaves = _getSheet('Chaves');
-      if (!abaChaves) return { disponivel: false, motivo: 'Aba Chaves não encontrada.' };
-
-      var dadosChaves = abaChaves.getDataRange().getValues();
-      var chave = null;
-      for (var i = 1; i < dadosChaves.length; i++) {
-        if (String(dadosChaves[i][CHV_COL.ID]) === String(chaveId)) {
-          chave = dadosChaves[i];
-          break;
-        }
-      }
+      var chave = ChavesRepository.obterChavePorId(chaveId);
       if (!chave) return { disponivel: false, motivo: 'Chave não encontrada.' };
 
-      var statusChave = String(chave[CHV_COL.STATUS] || '').toUpperCase();
-      if (statusChave !== CHV_STATUS_CHAVE.DISPONIVEL) {
-        return { disponivel: false, motivo: 'Chave com status: ' + statusChave };
+      if (chave.status !== CHV_STATUS_CHAVE.DISPONIVEL) {
+        return { disponivel: false, motivo: 'Chave com status: ' + chave.status };
       }
 
-      // Verifica protocolo ativo (RETIRADA ou ATRASADA)
-      var protocoloAtivo = _buscarProtocoloAtivoPorChave(chaveId);
+      var protocoloAtivo = ChavesRepository.buscarProtocoloAtivoPorChave(chaveId,
+        [CHV_STATUS_PROTOCOLO.RETIRADA, CHV_STATUS_PROTOCOLO.ATRASADA,
+         CHV_STATUS_PROTOCOLO.TRANSFERENCIA_PENDENTE]);
       if (protocoloAtivo) {
         return {
           disponivel: false,
@@ -200,84 +191,46 @@ var KeyEngine = (function () {
   }
 
   /**
-   * Atualiza o STATUS e campos extras na linha do protocolo em ProtocolosChaves.
+   * Atualiza o STATUS e campos extras na linha do protocolo — delega ao ChavesRepository.
    * @param {string} protocoloId
    * @param {string} novoStatus
-   * @param {Object} [camposExtras] - mapa { indiceColuna: valor } para campos adicionais
+   * @param {Object} [camposExtras] - mapa { indiceColuna: valor }
    */
   function _atualizarStatusProtocolo(protocoloId, novoStatus, camposExtras) {
-    var aba = _getSheet('ProtocolosChaves');
-    if (!aba) throw new Error('[KeyEngine] Aba ProtocolosChaves não encontrada.');
-    var dados = aba.getDataRange().getValues();
-    for (var i = 1; i < dados.length; i++) {
-      if (String(dados[i][PROT_COL.ID]) === String(protocoloId)) {
-        aba.getRange(i + 1, PROT_COL.STATUS + 1).setValue(novoStatus);
-        if (camposExtras) {
-          Object.keys(camposExtras).forEach(function(col) {
-            aba.getRange(i + 1, Number(col) + 1).setValue(camposExtras[col]);
-          });
-        }
-        return;
-      }
-    }
-    throw new Error('[KeyEngine] Protocolo "' + protocoloId + '" não encontrado.');
+    ChavesRepository.atualizarStatusProtocolo(protocoloId, novoStatus, camposExtras);
   }
 
   /**
-   * Registra uma linha na aba HistoricoChaves (imutável).
+   * Registra uma linha no histórico imutável — delega ao ChavesRepository.
    */
   function _registrarHistorico(protocoloId, chaveId, acao, emailOperador,
                                 statusAnterior, statusNovo, observacoes) {
     try {
-      var aba = _getSheet('HistoricoChaves');
-      if (!aba) return;
-      var id = typeof gerarId === 'function' ? gerarId('HIST') : 'HIST-' + Date.now();
-      aba.appendRow([
-        id, protocoloId, chaveId || '', new Date(),
-        acao, emailOperador, '',
-        statusAnterior, statusNovo,
-        observacoes || '', 'chave_engine'
-      ]);
+      ChavesRepository.appendHistorico({
+        protocoloId:    protocoloId,
+        chaveId:        chaveId || '',
+        acao:           acao,
+        usuarioId:      emailOperador,
+        usuarioNome:    '',
+        statusAnterior: statusAnterior,
+        statusNovo:     statusNovo,
+        observacoes:    observacoes || '',
+        agente:         'chave_engine'
+      });
     } catch(e) {
       Logger.warn('chave_engine', '_registrarHistorico falhou', e.message);
-    }
-  }
-
-  /**
-   * Busca o protocolo ativo (RETIRADA ou ATRASADA) de uma chave.
-   * @param {string} chaveId
-   * @returns {Object|null}
-   */
-  function _buscarProtocoloAtivoPorChave(chaveId) {
-    try {
-      var aba = _getSheet('ProtocolosChaves');
-      if (!aba || aba.getLastRow() < 2) return null;
-      var dados = aba.getDataRange().getValues();
-      var ativos = [CHV_STATUS_PROTOCOLO.RETIRADA, CHV_STATUS_PROTOCOLO.ATRASADA,
-                    CHV_STATUS_PROTOCOLO.TRANSFERENCIA_PENDENTE];
-      for (var i = 1; i < dados.length; i++) {
-        if (String(dados[i][PROT_COL.CHAVE_ID]) !== String(chaveId)) continue;
-        var status = String(dados[i][PROT_COL.STATUS] || '').toUpperCase();
-        if (ativos.indexOf(status) !== -1) {
-          return { id: String(dados[i][PROT_COL.ID]), status: status };
-        }
-      }
-      return null;
-    } catch(e) {
-      return null;
     }
   }
 
   // ── API pública ───────────────────────────────────────────────
 
   return {
-    transicaoPermitida:      transicaoPermitida,
-    aplicarTransicao:        aplicarTransicao,
+    transicaoPermitida:       transicaoPermitida,
+    aplicarTransicao:         aplicarTransicao,
     verificarDisponibilidade: verificarDisponibilidade,
     assertDisponivel:         assertDisponivel,
-    // Expõe constantes de status para uso externo sem acoplamento a mod_chaves
-    STATUS_PROTOCOLO: CHV_STATUS_PROTOCOLO,
-    STATUS_CHAVE:     CHV_STATUS_CHAVE
+    STATUS_PROTOCOLO:         CHV_STATUS_PROTOCOLO,
+    STATUS_CHAVE:             CHV_STATUS_CHAVE
   };
 
 })();

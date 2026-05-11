@@ -19,10 +19,10 @@ function obterFuncionarios() {
 }
 
 function salvarFuncionario(dados) {
-
   var lista = readJSON('funcionarios.json') || [];
+  var isNovo = !dados.id;
 
-  if (!dados.id) {
+  if (isNovo) {
     dados.id = 'fun_' + Date.now();
     dados.criadoEm = new Date().toISOString();
     dados.ativo = dados.ativo !== false;
@@ -34,14 +34,21 @@ function salvarFuncionario(dados) {
   }
 
   writeJSON('funcionarios.json', lista);
+  try {
+    if (typeof AuditoriaService !== 'undefined')
+      AuditoriaService.registrar(isNovo ? 'EQUIPE_FUNCIONARIO_CRIADO' : 'EQUIPE_FUNCIONARIO_ATUALIZADO',
+        'equipes', { id: dados.id, nome: dados.nome || '', email: dados.email_institucional || '' });
+  } catch(_) {}
   return { ok: true, id: dados.id };
 }
 
 function excluirFuncionario(id) {
   var lista = readJSON('funcionarios.json') || [];
-  writeJSON('funcionarios.json', lista.filter(function(f) {
-    return f.id !== id;
-  }));
+  writeJSON('funcionarios.json', lista.filter(function(f) { return f.id !== id; }));
+  try {
+    if (typeof AuditoriaService !== 'undefined')
+      AuditoriaService.registrar('EQUIPE_FUNCIONARIO_EXCLUIDO', 'equipes', { id: id });
+  } catch(_) {}
   return { ok: true };
 }
 

@@ -59,3 +59,29 @@ function ctrl_ia_sugerir_reserva(descricao) {
     return sugerirReservaIAComDados(descricao);
   });
 }
+
+/**
+ * Chamada genérica de IA com prompt e contexto.
+ * Migra GAS.ia.chamar → ctrl_ia_chamar.
+ * @param {string} prompt
+ * @param {Object} ctx
+ */
+function ctrl_ia_chamar(prompt, ctx) {
+  return GasResponse.wrap(function() {
+    if (!prompt) throw new Error('Prompt é obrigatório.');
+    return chamarIA(prompt, ctx || {});
+  }, 'ctrl_ia_chamar');
+}
+
+/**
+ * Reescreve descrição de ação via IA.
+ * Migra GAS.ia.reescreverDescricao → ctrl_ia_reescrever.
+ * @param {string} texto
+ * @param {string} setor
+ */
+function ctrl_ia_reescrever(texto, setor) {
+  return GasResponse.wrap(function() {
+    if (!texto) throw new Error('Texto é obrigatório.');
+    return reescreverDescricaoAcaoIA(texto, setor || '');
+  }, 'ctrl_ia_reescrever');
+}

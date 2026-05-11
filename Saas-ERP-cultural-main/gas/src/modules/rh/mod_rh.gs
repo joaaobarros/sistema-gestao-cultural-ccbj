@@ -13,8 +13,9 @@ function obterCargosRH() {
 }
 
 function salvarCargoRH(dados) {
-  var lista = readJSON('rh_cargos.json') || [];
-  if (!dados.id) {
+  var lista  = readJSON('rh_cargos.json') || [];
+  var isNovo = !dados.id;
+  if (isNovo) {
     dados.id = 'car_' + Date.now();
     dados.criadoEm = new Date().toISOString();
     lista.push(dados);
@@ -24,12 +25,21 @@ function salvarCargoRH(dados) {
     else lista.push(dados);
   }
   writeJSON('rh_cargos.json', lista);
+  try {
+    if (typeof AuditoriaService !== 'undefined')
+      AuditoriaService.registrar(isNovo ? 'RH_CARGO_CRIADO' : 'RH_CARGO_ATUALIZADO',
+        'rh', { id: dados.id, nome: dados.nome || '' });
+  } catch(_) {}
   return { ok: true, id: dados.id };
 }
 
 function excluirCargoRH(id) {
   var lista = readJSON('rh_cargos.json') || [];
   writeJSON('rh_cargos.json', lista.filter(function(c) { return c.id !== id; }));
+  try {
+    if (typeof AuditoriaService !== 'undefined')
+      AuditoriaService.registrar('RH_CARGO_EXCLUIDO', 'rh', { id: id });
+  } catch(_) {}
   return { ok: true };
 }
 
@@ -48,12 +58,21 @@ function registrarEventoRH(dados) {
   if (!dados.registradoPor) dados.registradoPor = Session.getActiveUser().getEmail();
   lista.push(dados);
   writeJSON('rh_historico.json', lista);
+  try {
+    if (typeof AuditoriaService !== 'undefined')
+      AuditoriaService.registrar('RH_EVENTO_REGISTRADO', 'rh',
+        { id: dados.id, tipo: dados.tipo || '', colaborador: dados.idColaborador || '', registrador: dados.registradoPor });
+  } catch(_) {}
   return { ok: true, id: dados.id };
 }
 
 function excluirEventoRH(id) {
   var lista = readJSON('rh_historico.json') || [];
   writeJSON('rh_historico.json', lista.filter(function(h) { return h.id !== id; }));
+  try {
+    if (typeof AuditoriaService !== 'undefined')
+      AuditoriaService.registrar('RH_EVENTO_EXCLUIDO', 'rh', { id: id });
+  } catch(_) {}
   return { ok: true };
 }
 
