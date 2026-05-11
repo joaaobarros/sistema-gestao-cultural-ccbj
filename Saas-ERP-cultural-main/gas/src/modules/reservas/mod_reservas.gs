@@ -1351,6 +1351,41 @@ const ReservaRepository = {
     const dados = aba.getDataRange().getValues();
     return dados.find((l, i) => i > 0 && String(l[0]) === String(id));
   },
+  // Retorna todas as linhas de reservas (sem cabeçalho).
+  listarTodos() {
+    const aba = _getSheet("Reservas");
+    if (!aba || aba.getLastRow() < 2) return [];
+    return aba.getRange(2, 1, aba.getLastRow() - 1, 16).getValues();
+  },
+  // Filtra por critérios: { status, sala, responsavel, dataInicio, dataFim }.
+  // Retorna array de linhas (mesmo formato que listarTodos).
+  buscarComFiltro(filtros) {
+    filtros = filtros || {};
+    const rows = this.listarTodos();
+    return rows.filter(function(r) {
+      if (filtros.status) {
+        const st = String(r[13] || '').toUpperCase();
+        if (Array.isArray(filtros.status)) {
+          if (!filtros.status.includes(st)) return false;
+        } else {
+          if (st !== String(filtros.status).toUpperCase()) return false;
+        }
+      }
+      if (filtros.sala && String(r[4] || '').trim() !== String(filtros.sala).trim()) return false;
+      if (filtros.responsavel && String(r[8] || '').toLowerCase() !== String(filtros.responsavel).toLowerCase()) return false;
+      if (filtros.dataInicio || filtros.dataFim) {
+        const dt = r[1] instanceof Date ? r[1] : new Date(r[1]);
+        if (isNaN(dt.getTime())) return true;
+        if (filtros.dataInicio && dt < new Date(filtros.dataInicio)) return false;
+        if (filtros.dataFim) {
+          const ff = new Date(filtros.dataFim);
+          ff.setHours(23, 59, 59, 999);
+          if (dt > ff) return false;
+        }
+      }
+      return true;
+    });
+  },
 };
 
 const ReceRepository = {

@@ -109,8 +109,8 @@ function obterMetricasDashboard(dataInicio, dataFim, filtroSala, filtroSetor) {
       porSetor[setor] = (porSetor[setor] || 0) + 1;
       porTurno[turno] = (porTurno[turno] || 0) + 1;
 
-      if (status === "CONFIRMADO") confirmadas++;
-      if (status === "CANCELADO") {
+      if (status === STATUS_RESERVA.CONFIRMADA) confirmadas++;
+      if (status === STATUS_RESERVA.CANCELADA) {
         canceladas++;
         cancelPorSala[sala] = (cancelPorSala[sala] || 0) + 1;
         cancelPorSetor[setor] = (cancelPorSetor[setor] || 0) + 1;
@@ -305,7 +305,7 @@ function obterMetricasDashboard(dataInicio, dataFim, filtroSala, filtroSetor) {
 
     let habilitadas = 0;
     reservas.forEach((r) => {
-      if (String(r[13] || "").toUpperCase() === "HABILITADO") habilitadas++;
+      if (String(r[13] || "").toUpperCase() === STATUS_RESERVA.HABILITADA) habilitadas++;
     });
 
     let solPendentes = 0,
@@ -434,7 +434,7 @@ function obterDadosGraficoReservas() {
     const dados = aba.getRange(2, 1, aba.getLastRow() - 1, 16).getValues();
     const contagem = {};
     dados.forEach((r) => {
-      if (String(r[13] || "").toUpperCase() === "CANCELADO") return;
+      if (String(r[13] || "").toUpperCase() === STATUS_RESERVA.CANCELADA) return;
       const sala = String(r[4] || "").trim();
       if (sala) contagem[sala] = (contagem[sala] || 0) + 1;
     });
@@ -757,7 +757,7 @@ function sugerirReservaIA(descricao) {
         : [];
     const reservasBruto = obterReservas();
     const ocupacoes = (reservasBruto || [])
-      .filter((r) => r[13] !== "CANCELADO")
+      .filter((r) => r[13] !== STATUS_RESERVA.CANCELADA)
       .map((r) => ({
         data: r[1],
         inicio: r[2],
@@ -860,7 +860,7 @@ function sugerirReservaIAComDados(descricao) {
     const limite = new Date(hoje);
     limite.setDate(hoje.getDate() + 14);
     const ocupacoes = (reservasBruto || [])
-      .filter((r) => r[13] !== "CANCELADO")
+      .filter((r) => r[13] !== STATUS_RESERVA.CANCELADA)
       .map((r) => ({ data: r[1], inicio: r[2], termino: r[3], sala: r[4] }))
       .filter((r) => {
         try {
