@@ -688,35 +688,16 @@ const GAS = {
   },
 
   /**
-   * BLOCO: Ações Institucionais (action_engine.gs)
-   * Gerencia a entidade Ação — núcleo integrador da plataforma.
+   * BLOCO: Ações Institucionais — núcleo oficial (acoes_controller.gs → action_engine.gs)
    */
   acoes: {
-    listar: function(filtros, cb, err) {
-      GAS._call('listarAcoes', [filtros || {}], cb, err);
-    },
-    obter: function(id, cb, err) {
-      GAS._call('obterAcao', [id], cb, err);
-    },
-    criar: function(dados, cb, err) {
-      var em = GAS._sessao();
-      GAS._call('criarAcao', [dados, em], cb, err);
-    },
-    atualizar: function(id, dados, cb, err) {
-      var em = GAS._sessao();
-      GAS._call('atualizarAcao', [id, dados, em], cb, err);
-    },
-    mudarStatus: function(id, novoStatus, motivo, cb, err) {
-      var em = GAS._sessao();
-      GAS._call('mudarStatusAcao', [id, novoStatus, em, motivo || ''], cb, err);
-    },
-    associarRecurso: function(acaoId, tipo, recursoId, cb, err) {
-      var em = GAS._sessao();
-      GAS._call('associarRecurso', [acaoId, tipo, recursoId, em], cb, err);
-    },
-    obterRecursos: function(acaoId, cb, err) {
-      GAS._call('obterRecursosDaAcao', [acaoId], cb, err);
-    }
+    listar:          function(filtros, cb, err)              { GAS._callCtrl('ctrl_acoes_listar',           [filtros||{}],                           cb, err); },
+    obter:           function(id, cb, err)                   { GAS._callCtrl('ctrl_acoes_obter',            [id],                                    cb, err); },
+    criar:           function(dados, cb, err)                { GAS._callCtrl('ctrl_acoes_criar',            [dados, GAS._sessao()],                  cb, err); },
+    atualizar:       function(id, dados, cb, err)            { GAS._callCtrl('ctrl_acoes_atualizar',        [id, dados, GAS._sessao()],              cb, err); },
+    mudarStatus:     function(id, novoStatus, motivo, cb, err) { GAS._callCtrl('ctrl_acoes_mudar_status',  [id, novoStatus, GAS._sessao(), motivo||''], cb, err); },
+    associarRecurso: function(acaoId, tipo, recursoId, cb, err) { GAS._callCtrl('ctrl_acoes_associar_recurso', [acaoId, tipo, recursoId, GAS._sessao()], cb, err); },
+    obterRecursos:   function(acaoId, cb, err)               { GAS._callCtrl('ctrl_acoes_obter_recursos',  [acaoId],                                cb, err); }
   },
 
   /**

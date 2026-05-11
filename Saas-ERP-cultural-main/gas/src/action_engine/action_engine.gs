@@ -106,6 +106,8 @@ var TOTAL_COLUNAS_ACOES = 13;
  * @returns {{ ok: boolean, id: string, erro?: string }}
  */
 function criarAcao(dados, emailCriador) {
+  var lock = obterLockComRetry();
+  if (!lock) return { ok: false, erro: 'Sistema ocupado. Tente novamente.' };
   try {
     _validarDadosAcao(dados);
 
@@ -140,6 +142,12 @@ function criarAcao(dados, emailCriador) {
       contexto:   { nome: dados.nome, tipo: dados.tipo }
     });
 
+    try {
+      if (typeof AuditoriaService !== 'undefined' && AuditoriaService.registrar) {
+        AuditoriaService.registrar({ acao: 'ACAO_CRIADA', entidade: 'acao', entidadeId: id, usuario: emailCriador, detalhes: { nome: dados.nome, tipo: dados.tipo } });
+      }
+    } catch(_) {}
+
     Logger.info('action_engine', 'Ação criada', { id: id, nome: dados.nome });
 
     return { ok: true, id: id };
@@ -147,6 +155,8 @@ function criarAcao(dados, emailCriador) {
   } catch (e) {
     Logger.error('action_engine', 'Erro ao criar ação', e.message);
     return { ok: false, erro: e.message };
+  } finally {
+    lock.releaseLock();
   }
 }
 
@@ -250,6 +260,8 @@ function atualizarAcao(id, dados, emailEditor) {
  * @returns {{ ok: boolean, erro?: string }}
  */
 function mudarStatusAcao(id, novoStatus, emailResponsavel, motivo) {
+  var lock = obterLockComRetry();
+  if (!lock) return { ok: false, erro: 'Sistema ocupado. Tente novamente.' };
   try {
     var sheet  = _getSheet(ABA_ACOES);
     var rowIdx = _encontrarIndiceAcao(id, sheet);
@@ -278,6 +290,13 @@ function mudarStatusAcao(id, novoStatus, emailResponsavel, motivo) {
       contexto: { statusAnterior: statusAtual, novoStatus: novoStatus, motivo: motivo || '' }
     });
 
+    try {
+      if (typeof AuditoriaService !== 'undefined' && AuditoriaService.registrar) {
+        AuditoriaService.registrar({ acao: 'ACAO_STATUS_' + novoStatus.toUpperCase(), entidade: 'acao', entidadeId: id,
+          usuario: emailResponsavel, detalhes: { de: statusAtual, para: novoStatus, motivo: motivo || '' } });
+      }
+    } catch(_) {}
+
     Logger.info('action_engine', 'Status alterado', { id: id, de: statusAtual, para: novoStatus });
 
     return { ok: true };
@@ -285,6 +304,8 @@ function mudarStatusAcao(id, novoStatus, emailResponsavel, motivo) {
   } catch (e) {
     Logger.error('action_engine', 'mudarStatusAcao', e.message);
     return { ok: false, erro: e.message };
+  } finally {
+    lock.releaseLock();
   }
 }
 
