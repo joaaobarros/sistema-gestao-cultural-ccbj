@@ -429,6 +429,9 @@ function resetarFormulario() {
   var rcPrio = document.getElementById('rcComPrioridade');
   if (rcPrio) rcPrio.value = 'Média';
 
+  // Reset painel de vínculo com Ação Institucional
+  if (typeof _novaReservaResetarPainelAcao === 'function') _novaReservaResetarPainelAcao();
+
 }
 
 

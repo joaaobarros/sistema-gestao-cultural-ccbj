@@ -542,6 +542,7 @@ async function salvarAgendamento() {
     tipoAcao:      'EVENTO/ATIVIDADE',
     imagem:        imagemInput?.value?.trim() || '',
     modoRece:      typeof modoRece !== 'undefined' ? modoRece : false,
+    acaoId:        document.getElementById('inputAcaoVinculadaId')?.value || null,
 
     ...codipData
   };
@@ -1996,6 +1997,142 @@ function indexarReservas() {
     totalHoje > 0 ? badge.classList.remove('hidden') : badge.classList.add('hidden');
   }
 
+}
+
+// ════════════════════════════════════════════════════════════════
+// BLOCO: Vínculo com Ação Institucional no formulário de reserva
+// ════════════════════════════════════════════════════════════════
+
+/**
+ * Inicializa o painel de vínculo de ação se o usuário tiver permissão.
+ * Chamado ao abrir a aba nova-reserva.
+ */
+function _novaReservaInicializarPainelAcao() {
+  var painel = document.getElementById('painelVinculoAcao');
+  if (!painel) return;
+
+  var temAcesso = (typeof temPermissao === 'function') && temPermissao('acoes', 'visualizar');
+  if (!temAcesso) {
+    painel.classList.add('hidden');
+    return;
+  }
+
+  painel.classList.remove('hidden');
+
+  // Carrega lista de ações para popular o select (apenas quando necessário)
+  if (!window._novaReservaAcoesCached) {
+    GAS.acoes.listar({}, function(lista) {
+      window._novaReservaAcoesCached = lista || [];
+      _novaReservaPopularSelectAcoes(lista || []);
+    }, function() {
+      window._novaReservaAcoesCached = [];
+    });
+  } else {
+    _novaReservaPopularSelectAcoes(window._novaReservaAcoesCached);
+  }
+}
+
+function _novaReservaPopularSelectAcoes(lista) {
+  var sel = document.getElementById('selectAcaoVinculada');
+  if (!sel) return;
+
+  var STATUS_VISIVEIS = ['planejamento', 'aprovado', 'em_execucao'];
+  var visiveis = lista.filter(function(a) {
+    return STATUS_VISIVEIS.indexOf(a.status) !== -1;
+  });
+
+  if (!visiveis.length) {
+    sel.innerHTML = '<option value="">Nenhuma ação disponível</option>';
+    return;
+  }
+
+  var TIPO_LABEL = {
+    curso:'Curso', oficina:'Oficina', espetaculo:'Espetáculo', evento:'Evento',
+    campanha:'Campanha', laboratorio:'Laboratório', projeto_formativo:'Projeto Formativo',
+    difusao:'Difusão', atividade_territorial:'Ativ. Territorial', outro:'Outro'
+  };
+
+  sel.innerHTML = '<option value="">Selecione uma ação...</option>' +
+    visiveis.map(function(a) {
+      var tipo = TIPO_LABEL[a.tipo] || a.tipo;
+      return '<option value="' + escaparHTML(a.id) + '" data-nome="' + escaparHTML(a.nome) +
+             '" data-desc="' + escaparHTML(a.descricao || '') + '">' +
+             escaparHTML(a.nome) + ' (' + tipo + ')</option>';
+    }).join('');
+}
+
+function _novaReservaToggleVinculo(ativo) {
+  var painelSel = document.getElementById('painelSelectAcao');
+  var inputId   = document.getElementById('inputAcaoVinculadaId');
+  var inputNome = document.getElementById('inputNomeAcao');
+  var desc      = document.getElementById('painelAcaoDescricao');
+
+  if (!ativo) {
+    if (painelSel) painelSel.classList.add('hidden');
+    if (inputId)   inputId.value = '';
+    if (desc)      desc.classList.add('hidden');
+    if (inputNome) inputNome.removeAttribute('readonly');
+    return;
+  }
+
+  if (painelSel) painelSel.classList.remove('hidden');
+  if (inputNome) inputNome.setAttribute('readonly', 'readonly');
+
+  // Limpa seleção prévia
+  var sel = document.getElementById('selectAcaoVinculada');
+  if (sel) sel.value = '';
+  if (inputId) inputId.value = '';
+  if (inputNome) inputNome.value = '';
+  if (desc) desc.classList.add('hidden');
+}
+
+function _novaReservaAcaoSelecionada(acaoId) {
+  var inputId   = document.getElementById('inputAcaoVinculadaId');
+  var inputNome = document.getElementById('inputNomeAcao');
+  var desc      = document.getElementById('painelAcaoDescricao');
+  var sel       = document.getElementById('selectAcaoVinculada');
+
+  if (!acaoId) {
+    if (inputId)   inputId.value = '';
+    if (inputNome) inputNome.value = '';
+    if (desc)      desc.classList.add('hidden');
+    return;
+  }
+
+  var opt = sel ? sel.querySelector('option[value="' + acaoId + '"]') : null;
+  var nome = opt ? (opt.dataset.nome || opt.text) : '';
+  var descTxt = opt ? (opt.dataset.desc || '') : '';
+
+  if (inputId)   inputId.value   = acaoId;
+  if (inputNome) inputNome.value = nome.toUpperCase();
+
+  if (desc) {
+    if (descTxt) {
+      desc.textContent = descTxt;
+      desc.classList.remove('hidden');
+    } else {
+      desc.classList.add('hidden');
+    }
+  }
+}
+
+/**
+ * Limpa o estado do painel de ação ao resetar o formulário.
+ * Chamado por resetarFormulario() ou ao abrir nova reserva limpa.
+ */
+function _novaReservaResetarPainelAcao() {
+  var check   = document.getElementById('checkVincularAcao');
+  var inputId = document.getElementById('inputAcaoVinculadaId');
+  var desc    = document.getElementById('painelAcaoDescricao');
+  var nome    = document.getElementById('inputNomeAcao');
+  var sel     = document.getElementById('selectAcaoVinculada');
+
+  if (check)   check.checked = false;
+  if (inputId) inputId.value = '';
+  if (desc)    desc.classList.add('hidden');
+  if (nome)    nome.removeAttribute('readonly');
+  if (sel)     sel.value = '';
+  _novaReservaToggleVinculo(false);
 }
 
 

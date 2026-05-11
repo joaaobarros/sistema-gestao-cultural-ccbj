@@ -60,7 +60,8 @@ function mostrarAba(idAba) {
     'aba-contratacoes':     'contratacoes',
     'aba-rel-financeiros':  'relatorios_fin',
     'aba-escuta':           'escuta',
-    'aba-codip':            'codip'
+    'aba-codip':            'codip',
+    'aba-acoes':            'acoes'
   };
 
   var moduleId = _rotaParaModulo[idAba];
@@ -85,7 +86,8 @@ function mostrarAba(idAba) {
       'aba-dashboard':          'estrategia',
       'aba-gestao-admin':       'sistema',
       'aba-auditoria':          'sistema',
-      'aba-permissoes-v2':      'sistema'
+      'aba-permissoes-v2':      'sistema',
+      'aba-acoes':              'acoes'
     };
 
     // Gestão de Módulos: exclusivo SUPERADMIN
@@ -132,7 +134,8 @@ function mostrarAba(idAba) {
       'aba-aprovacoes':        'Operacional — Aprovações',
       'aba-permissoes-v2':     'Gestão de Permissões',
       'aba-protocolo-chaves':  'Protocolo de Chaves',
-      'aba-gestao-modulos':    'Gestão de Módulos'
+      'aba-gestao-modulos':    'Gestão de Módulos',
+      'aba-acoes':             'Ações Institucionais'
     };
 
     const titulo = document.getElementById('tituloAba');
@@ -215,6 +218,14 @@ function mostrarAba(idAba) {
     if (typeof carregarChavesPendentes === 'function') carregarChavesPendentes();
   }
 
+  if (idAba === 'aba-nova-reserva') {
+    if (typeof _novaReservaInicializarPainelAcao === 'function') _novaReservaInicializarPainelAcao();
+  }
+
+  if (idAba === 'aba-acoes') {
+    if (typeof _acoesCarregar === 'function') _acoesCarregar();
+  }
+
   if (typeof EventBus !== 'undefined') {
     EventBus.emit('aba:' + idAba + ':show', { id: idAba });
   }
@@ -288,20 +299,25 @@ var _MOD_SIDEBAR_MAP = {
   relatorios_fin:['button[data-aba="aba-rel-financeiros"]'],
   escuta:        ['button[data-aba="aba-escuta"]'],
   codip:         ['button[data-aba="aba-codip"]'],
-  financeiro:    ['button[data-aba="aba-contratos-fin"]']
+  financeiro:    ['button[data-aba="aba-contratos-fin"]'],
+  acoes:         ['button[data-aba="aba-acoes"]']
 };
 
 function aplicarEstadoModulos() {
   if (typeof AppState === 'undefined' || !AppState.modulos) return;
   var mapa = AppState.modulos;
+  var saMap = (AppState.modulosSuperadmin) || {};
+  var isSA = AppState.usuario && AppState.usuario.isSuperadmin;
 
   Object.keys(_MOD_SIDEBAR_MAP).forEach(function(moduleId) {
     var ativo = mapa[moduleId] !== false; // fail-open: undefined → visível
+    var somenteAdmin = !!saMap[moduleId] && !isSA;
+    var visivel = ativo && !somenteAdmin;
     var seletores = _MOD_SIDEBAR_MAP[moduleId];
     seletores.forEach(function(sel) {
       try {
         document.querySelectorAll(sel).forEach(function(el) {
-          if (ativo) {
+          if (visivel) {
             el.classList.remove('hidden');
           } else {
             el.classList.add('hidden');
@@ -341,7 +357,7 @@ function aplicarEstadoModulos() {
       'aba-codip':           'codip'
     };
     var mid = rotaParaModulo[abaAtiva.id];
-    if (mid && mapa[mid] === false) {
+    if (mid && (mapa[mid] === false || (saMap[mid] && !isSA))) {
       mostrarAba('aba-lista-reservas');
     }
   }
@@ -360,6 +376,7 @@ function carregarStatusModulos(callback) {
     if (res && res.ok && res.mapa) {
       if (typeof AppState !== 'undefined') {
         AppState.modulos = res.mapa;
+        AppState.modulosSuperadmin = res.superadmin_only || {};
       }
       aplicarEstadoModulos();
     }

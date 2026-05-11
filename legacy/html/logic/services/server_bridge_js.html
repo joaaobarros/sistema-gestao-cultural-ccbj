@@ -617,10 +617,48 @@ const GAS = {
         ? AppState.usuario.email : (window.__EMAIL_INICIAL__ || '');
       GAS._call('modulos_alterarStatus', [moduleId, ativo, em], cb, err);
     },
+    salvarLote: function(alteracoes, cb, err) {
+      var em = (typeof AppState !== 'undefined' && AppState.usuario && AppState.usuario.email)
+        ? AppState.usuario.email : (window.__EMAIL_INICIAL__ || '');
+      GAS._call('modulos_salvarLote', [alteracoes, em], cb, err);
+    },
     resetar: function(cb, err) {
       var em = (typeof AppState !== 'undefined' && AppState.usuario && AppState.usuario.email)
         ? AppState.usuario.email : (window.__EMAIL_INICIAL__ || '');
       GAS._call('modulos_resetar', [em], cb, err);
+    }
+  },
+
+  /**
+   * BLOCO: Ações Institucionais (mod_acoes.gs)
+   * @context Gestão de iniciativas (cursos, eventos, oficinas, projetos) às quais
+   *          reservas e outros recursos são vinculados.
+   */
+  acoes: {
+    listar: function(filtros, cb, err) {
+      GAS._call('listarAcoes', [filtros || {}], cb, err);
+    },
+    obter: function(id, cb, err) {
+      GAS._call('obterAcao', [id], cb, err);
+    },
+    criar: function(dados, cb, err) {
+      var em = GAS._sessao();
+      GAS._call('criarAcao', [dados, em], cb, err);
+    },
+    atualizar: function(id, dados, cb, err) {
+      var em = GAS._sessao();
+      GAS._call('atualizarAcao', [id, dados, em], cb, err);
+    },
+    mudarStatus: function(id, novoStatus, motivo, cb, err) {
+      var em = GAS._sessao();
+      GAS._call('mudarStatusAcao', [id, novoStatus, em, motivo || ''], cb, err);
+    },
+    associarRecurso: function(acaoId, tipo, recursoId, cb, err) {
+      var em = GAS._sessao();
+      GAS._call('associarRecursoAcao', [acaoId, tipo, recursoId, em], cb, err);
+    },
+    obterRecursos: function(acaoId, cb, err) {
+      GAS._call('obterRecursosDaAcao', [acaoId], cb, err);
     }
   },
 

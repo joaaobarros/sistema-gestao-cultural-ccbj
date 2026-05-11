@@ -95,6 +95,14 @@ var _MOD_DEFAULTS = [
     menus: [{ grupo: 'mod-infraestrutura', btn: 'aba-protocolo-chaves' }],
     dependencias: [], status_operacional: 'stable'
   },
+  {
+    moduleId: 'acoes', nome: 'Ações Institucionais', categoria: 'espacos',
+    descricao: 'Gestão de iniciativas (cursos, eventos, oficinas, projetos) vinculadas a reservas e recursos', versao: '1.0',
+    ativo: true, nucleo: false,
+    rotas: ['aba-acoes'],
+    menus: [{ grupo: 'mod-espacos', btn: 'aba-acoes' }],
+    dependencias: [], status_operacional: 'stable'
+  },
 
   // DISPONÍVEIS — aguardando ativação
   {
@@ -239,18 +247,22 @@ function _modIsSuperadmin(emailFallback) {
 // ══════════════════════════════════════════════════════════════════
 
 /**
- * Retorna mapa moduleId→ativo para uso no boot do frontend.
+ * Retorna mapa moduleId→ativo + mapa superadmin_only para uso no boot do frontend.
  * Não requer autenticação — fail-open: retorna {} em caso de erro.
  */
 function modulos_obterStatus() {
   try {
     var modulos = _modLerRegistro();
     var mapa = {};
-    modulos.forEach(function(m) { mapa[m.moduleId] = !!m.ativo; });
-    return { ok: true, mapa: mapa };
+    var superadminOnly = {};
+    modulos.forEach(function(m) {
+      mapa[m.moduleId] = !!m.ativo;
+      if (m.superadmin_only) superadminOnly[m.moduleId] = true;
+    });
+    return { ok: true, mapa: mapa, superadmin_only: superadminOnly };
   } catch(e) {
     console.error('[modulos_registry] modulos_obterStatus:', e.message);
-    return { ok: true, mapa: {} };
+    return { ok: true, mapa: {}, superadmin_only: {} };
   }
 }
 
@@ -294,6 +306,45 @@ function modulos_alterarStatus(moduleId, ativo, emailFallback) {
     } catch(logErr) {}
 
     return { ok: true };
+  } catch(e) {
+    return { ok: false, msg: e.message };
+  }
+}
+
+/**
+ * Salva múltiplas alterações de módulos em uma única operação. Acesso: SUPERADMIN only.
+ * Cada item em alteracoes pode conter: { moduleId, ativo?, superadmin_only? }
+ */
+function modulos_salvarLote(alteracoes, emailFallback) {
+  if (!_modIsSuperadmin(emailFallback)) return { ok: false, msg: 'Acesso restrito a SUPERADMIN.' };
+  if (!Array.isArray(alteracoes)) return { ok: false, msg: 'alteracoes deve ser um array.' };
+  try {
+    var modulos = _modLerRegistro();
+    var erros = [];
+
+    alteracoes.forEach(function(alt) {
+      var mod = null;
+      for (var i = 0; i < modulos.length; i++) {
+        if (modulos[i].moduleId === alt.moduleId) { mod = modulos[i]; break; }
+      }
+      if (!mod) { erros.push('Não encontrado: ' + alt.moduleId); return; }
+
+      if (typeof alt.ativo !== 'undefined') {
+        if (mod.nucleo && !alt.ativo) { erros.push('Núcleo não desativável: ' + alt.moduleId); return; }
+        mod.ativo = !!alt.ativo;
+      }
+      if (typeof alt.superadmin_only !== 'undefined') {
+        mod.superadmin_only = !!alt.superadmin_only;
+      }
+    });
+
+    _modSalvarRegistro(modulos);
+    try {
+      var email = obterEmailUsuario(emailFallback || '');
+      registrarLog('MODULOS_LOTE_SALVO', alteracoes.length + ' alterações', email);
+    } catch(logErr) {}
+
+    return { ok: true, erros: erros };
   } catch(e) {
     return { ok: false, msg: e.message };
   }

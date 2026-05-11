@@ -6,7 +6,8 @@ var _P2_MODULOS = [
   'agenda','estrategia','comunicacao','espacos',
   'reservas','contratos','financeiro','tarefas',
   'processos','almoxarifado','balcao','rh',
-  'eficiencia','contratacoes','relatorios','escuta','pessoal'
+  'eficiencia','contratacoes','relatorios','escuta','pessoal',
+  'acoes'
 ];
 
 var _P2_SENSIVEIS     = ['rh','contratacoes','financeiro'];
@@ -28,35 +29,35 @@ var _P2_BASE = {
     reservas:_p2p(1,1,1),    contratos:_p2p(1,1,0),    financeiro:_p2p(1,0,0),   tarefas:_p2p(1,1,1),
     processos:_p2p(1,1,1),   almoxarifado:_p2p(1,1,0), balcao:_p2p(1,1,0),       rh:_p2p(0,0,0),
     eficiencia:_p2p(1,0,0),  contratacoes:_p2p(0,0,0), relatorios:_p2p(1,0,0),
-    escuta:_p2p(1,0,0),      pessoal:_p2p(1,1,0)
+    escuta:_p2p(1,0,0),      pessoal:_p2p(1,1,0),      acoes:_p2p(1,1,1)
   },
   gestor: {
     agenda:_p2p(1,1,0),      estrategia:_p2p(1,1,0),   comunicacao:_p2p(1,0,0),  espacos:_p2p(1,0,0),
     reservas:_p2p(1,1,0),    contratos:_p2p(1,1,0),    financeiro:_p2p(0,0,0),   tarefas:_p2p(1,1,0),
     processos:_p2p(1,1,0),   almoxarifado:_p2p(0,0,0), balcao:_p2p(1,0,0),       rh:_p2p(0,0,0),
     eficiencia:_p2p(1,0,0),  contratacoes:_p2p(0,0,0), relatorios:_p2p(1,0,0),
-    escuta:_p2p(1,0,0),      pessoal:_p2p(1,0,0)
+    escuta:_p2p(1,0,0),      pessoal:_p2p(1,0,0),      acoes:_p2p(1,1,0)
   },
   tecnico: {
     agenda:_p2p(1,1,0),      estrategia:_p2p(1,0,0),   comunicacao:_p2p(1,0,0),  espacos:_p2p(1,1,0),
     reservas:_p2p(1,1,0),    contratos:_p2p(0,0,0),    financeiro:_p2p(0,0,0),   tarefas:_p2p(1,1,0),
     processos:_p2p(0,0,0),   almoxarifado:_p2p(1,1,0), balcao:_p2p(1,1,0),       rh:_p2p(0,0,0),
     eficiencia:_p2p(0,0,0),  contratacoes:_p2p(0,0,0), relatorios:_p2p(0,0,0),
-    escuta:_p2p(0,0,0),      pessoal:_p2p(1,0,0)
+    escuta:_p2p(0,0,0),      pessoal:_p2p(1,0,0),      acoes:_p2p(1,0,0)
   },
   rh: {
     agenda:_p2p(1,0,0),      estrategia:_p2p(1,0,0),   comunicacao:_p2p(1,0,0),  espacos:_p2p(1,0,0),
     reservas:_p2p(0,0,0),    contratos:_p2p(0,0,0),    financeiro:_p2p(1,0,0),   tarefas:_p2p(1,1,0),
     processos:_p2p(0,0,0),   almoxarifado:_p2p(0,0,0), balcao:_p2p(0,0,0),       rh:_p2p(1,1,0),
     eficiencia:_p2p(1,0,0),  contratacoes:_p2p(1,1,0), relatorios:_p2p(1,0,0),
-    escuta:_p2p(1,0,0),      pessoal:_p2p(1,1,0)
+    escuta:_p2p(1,0,0),      pessoal:_p2p(1,1,0),      acoes:_p2p(1,0,0)
   },
   comunicacao: {
     agenda:_p2p(1,0,0),      estrategia:_p2p(1,1,0),   comunicacao:_p2p(1,1,0),  espacos:_p2p(1,0,0),
     reservas:_p2p(1,0,0),    contratos:_p2p(0,0,0),    financeiro:_p2p(0,0,0),   tarefas:_p2p(1,1,0),
     processos:_p2p(1,1,0),   almoxarifado:_p2p(0,0,0), balcao:_p2p(0,0,0),       rh:_p2p(0,0,0),
     eficiencia:_p2p(0,0,0),  contratacoes:_p2p(0,0,0), relatorios:_p2p(0,0,0),
-    escuta:_p2p(1,0,0),      pessoal:_p2p(0,0,0)
+    escuta:_p2p(1,0,0),      pessoal:_p2p(0,0,0),      acoes:_p2p(1,1,0)
   },
   visitante_controlado: _p2map(function(m) {
     return _P2_VC_MODS.indexOf(m) !== -1 ? _p2p(1,0,0) : _p2p(0,0,0);

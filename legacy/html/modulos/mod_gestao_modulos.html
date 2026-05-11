@@ -3,7 +3,8 @@
 @type module
 @description Painel SUPERADMIN de ativação e desativação de módulos do sistema.
              Acesso restrito: apenas perfil superadmin visualiza e opera esta tela.
-@responsibility Listagem de módulos; toggle ativo/inativo; visualização de dependências.
+@responsibility Listagem de módulos; toggle ativo/inativo; toggle superadmin_only;
+                salvamento em lote; visualização em grid ou lista simples.
 @dependencies mod_gestao_modulos_js.html (lógica), AppState.usuario.isSuperadmin
 -->
 
@@ -23,7 +24,20 @@
         Ative ou desative módulos do sistema. Alterações têm efeito imediato.
       </p>
     </div>
-    <div class="flex gap-2 shrink-0">
+    <div class="flex gap-2 shrink-0 items-center flex-wrap justify-end">
+      <!-- Toggle de modo de visualização -->
+      <div class="flex bg-slate-100 rounded-xl p-1 gap-0.5">
+        <button onclick="_modSetModo('grid')" id="mod-btn-modo-grid"
+          title="Visualização em cards"
+          class="px-3 py-1.5 rounded-lg bg-white text-purple-600 shadow-sm font-bold text-xs transition-all">
+          <i class="fas fa-th-large text-xs"></i>
+        </button>
+        <button onclick="_modSetModo('lista')" id="mod-btn-modo-lista"
+          title="Visualização em lista simples"
+          class="px-3 py-1.5 rounded-lg text-slate-500 hover:text-slate-700 font-bold text-xs transition-all">
+          <i class="fas fa-list text-xs"></i>
+        </button>
+      </div>
       <button onclick="_modAtualizarLista()"
         class="flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-all">
         <i class="fas fa-sync-alt text-xs"></i> Atualizar
@@ -59,6 +73,27 @@
     <i class="fas fa-shield-alt text-violet-500 text-xs"></i>
     <span class="text-[11px] font-black text-violet-700 uppercase tracking-widest">Modo Superadmin</span>
     <span class="text-[11px] text-violet-500">— visão completa do registro. Módulos de núcleo não podem ser desativados.</span>
+    <span class="ml-auto flex items-center gap-1 text-[10px] text-violet-500 font-semibold shrink-0">
+      <i class="fas fa-shield-alt text-violet-400 text-[9px]"></i> = restrito ao superadmin
+    </span>
+  </div>
+
+  <!-- ── Barra de salvamento pendente ─────────────────────── -->
+  <div id="mod-barra-salvar" class="hidden mb-4 flex items-center justify-between gap-4 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl">
+    <div class="flex items-center gap-2">
+      <i class="fas fa-exclamation-circle text-amber-500 text-sm"></i>
+      <span id="mod-barra-texto" class="text-[12px] font-bold text-amber-700">0 alterações pendentes</span>
+    </div>
+    <div class="flex gap-2 shrink-0">
+      <button onclick="_modDescartarPendentes()"
+        class="flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-600 font-bold text-xs rounded-lg transition-all border border-slate-200">
+        <i class="fas fa-times text-xs"></i> Descartar
+      </button>
+      <button onclick="_modSalvarLote()" id="mod-btn-salvar-lote"
+        class="flex items-center gap-1.5 px-4 py-1.5 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-lg transition-all shadow-sm">
+        <i class="fas fa-save text-xs"></i> Salvar alterações
+      </button>
+    </div>
   </div>
 
   <!-- ── Stats ─────────────────────────────────────────────── -->
@@ -89,8 +124,12 @@
       <p class="text-slate-400 text-sm font-semibold animate-pulse">Carregando módulos...</p>
     </div>
 
-    <!-- Grid de módulos (preenchido pelo JS) -->
+    <!-- Grid de cards (modo grid) -->
     <div id="mod-grid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 hidden">
+    </div>
+
+    <!-- Lista simples (modo lista) -->
+    <div id="mod-lista" class="hidden space-y-1">
     </div>
 
     <!-- Estado vazio -->

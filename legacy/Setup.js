@@ -302,6 +302,18 @@ const MODULOS = {
       'ID','ProtocoloId','ChaveId','DataHora',
       'Acao','UsuarioId','UsuarioNome',
       'StatusAnterior','StatusNovo','Observacoes','AgenteOrigem'
+    ],
+
+    // =========================
+    // AÇÕES INSTITUCIONAIS
+    // =========================
+    'Acoes': [
+      'id','nome','tipo','descricao','status','responsavel','equipe_json',
+      'data_inicio','data_fim','organizacao','criado_em','atualizado_em','criado_por'
+    ],
+
+    'AcoesRecursos': [
+      'acao_id','tipo_recurso','recurso_id','associado_em','email'
     ]
 
     }

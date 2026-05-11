@@ -1230,6 +1230,13 @@ function criarReservaController(dados, datas) {
       });
     }
 
+    // Vincula cada reserva criada a uma Ação Institucional (vínculo fraco)
+    if (dados.acaoId) {
+      idsGerados.forEach(function(id) {
+        try { associarRecursoAcao(dados.acaoId, 'reserva', id, responsavelNorm); } catch(_) {}
+      });
+    }
+
     limparCacheUsuario(responsavelNorm);
     return { sucesso: true, ids: idsGerados };
   } catch (e) {

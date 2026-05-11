@@ -90,6 +90,10 @@ const ABA_PARA_MODULO = {
   'Chaves':               'ESPACOS',
   'ProtocolosChaves':     'ESPACOS',
   'HistoricoChaves':      'ESPACOS',
+
+  // AÇÕES INSTITUCIONAIS (ESPACOS)
+  'Acoes':                'ESPACOS',
+  'AcoesRecursos':        'ESPACOS',
 };
 
 // ══════════════════════════════════════════════════════
