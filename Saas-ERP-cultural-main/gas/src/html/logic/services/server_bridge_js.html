@@ -159,7 +159,7 @@ const GAS = {
       GAS._callCtrl('ctrl_admin_perfil', [em], cb, err);
     },
     sugerirReservaIA: function(descricao, cb, err) {
-      GAS._call('sugerirReservaIAComDados', [descricao], cb, err);
+      GAS._callCtrl('ctrl_ia_sugerir_reserva', [descricao], cb, err);
     },
     obterLogs: function(email, cb, err) {
       GAS._callCtrl('ctrl_admin_logs', [email], cb, err);
@@ -189,13 +189,13 @@ const GAS = {
       GAS._call('obterUrlLogout', [], cb, err);
     },
     perguntarIA: function(pergunta, cb, err) {
-      GAS._call('perguntarIA', [pergunta], cb, err);
+      GAS._callCtrl('ctrl_ia_perguntar', [pergunta], cb, err);
     },
     gerarRelatorioIA: function(filtros, cb, err) {
-      GAS._call('gerarRelatorioIA', [filtros], cb, err);
+      GAS._callCtrl('ctrl_ia_gerar_relatorio', [filtros], cb, err);
     },
     analisarDashboardIA: function(metricas, cb, err) {
-      GAS._call('analisarDashboardIA', [metricas], cb, err);
+      GAS._callCtrl('ctrl_ia_analisar_dashboard', [metricas], cb, err);
     },
     obterMetricasCODIP: function(cb, err) {
       GAS._callCtrl('ctrl_admin_metricas_codip', [], cb, err);
@@ -517,53 +517,50 @@ const GAS = {
   },
 
   /**
-   * BLOCO: Escuta Institucional Contínua (mod_escuta.gs)
-   * @context Pesquisas pulse, escuta espontânea, indicadores, alertas e relatórios.
+   * BLOCO: Escuta Institucional — núcleo oficial (escuta_controller.gs → mod_escuta.gs)
    */
   escuta: {
-    obterDados:            function(cb, err)          { GAS._call('obterDadosEscuta',               [],                          cb, err); },
-    obterPergunta:         function(cb, err)          { GAS._call('obterPerguntaPulse',              [],                          cb, err); },
-    responderPulse:        function(dados, cb, err)   {
+    obterDados:         function(cb, err)           { GAS._callCtrl('ctrl_escuta_dados',               [],                      cb, err); },
+    obterPergunta:      function(cb, err)           { GAS._callCtrl('ctrl_escuta_pergunta_pulse',       [],                      cb, err); },
+    responderPulse:     function(dados, cb, err)    {
       if (dados && !dados.sessao) dados.sessao = GAS._sessao();
-      GAS._call('registrarRespostaPulse', [dados], cb, err);
+      GAS._callCtrl('ctrl_escuta_responder_pulse', [dados], cb, err);
     },
-    registrarEspontanea:   function(dados, cb, err)   {
+    registrarEspontanea:function(dados, cb, err)    {
       if (dados && !dados.sessao) dados.sessao = GAS._sessao();
-      GAS._call('registrarEscutaEspontanea', [dados], cb, err);
+      GAS._callCtrl('ctrl_escuta_registrar_espontanea', [dados], cb, err);
     },
-    obterDashboard:        function(filtros, cb, err) { GAS._call('obterDashboardEscuta',            [filtros],                   cb, err); },
-    obterAlertas:          function(cb, err)          { GAS._call('obterAlertasEscuta',              [],                          cb, err); },
-    resolverAlerta:        function(id, acao, cb, err){ GAS._call('resolverAlertaEscuta',            [id, acao, GAS._sessao()],   cb, err); },
-    obterPesquisas:        function(cb, err)          { GAS._call('obterPesquisasEscuta',            [],                          cb, err); },
-    salvarPesquisa:        function(dados, cb, err)   {
+    obterDashboard:     function(filtros, cb, err)  { GAS._callCtrl('ctrl_escuta_dashboard',            [filtros],               cb, err); },
+    obterAlertas:       function(cb, err)           { GAS._callCtrl('ctrl_escuta_alertas',              [],                      cb, err); },
+    resolverAlerta:     function(id, acao, cb, err) { GAS._callCtrl('ctrl_escuta_resolver_alerta',      [id, acao, GAS._sessao()], cb, err); },
+    obterPesquisas:     function(cb, err)           { GAS._callCtrl('ctrl_escuta_pesquisas',            [],                      cb, err); },
+    salvarPesquisa:     function(dados, cb, err)    {
       if (dados && !dados.sessao) dados.sessao = GAS._sessao();
-      GAS._call('salvarPesquisaEscuta', [dados], cb, err);
+      GAS._callCtrl('ctrl_escuta_salvar_pesquisa', [dados], cb, err);
     },
-    excluirPesquisa:       function(id, cb, err)      { GAS._call('excluirPesquisaEscuta',           [id, GAS._sessao()],         cb, err); },
-    obterBanco:            function(cb, err)          { GAS._call('obterBancoPesquisas',             [],                          cb, err); },
-    salvarTemplate:        function(dados, cb, err)   { GAS._call('salvarTemplateBancoPesquisas',    [dados],                     cb, err); },
-    obterConfig:           function(cb, err)          { GAS._call('obterConfiguracaoEscuta',         [],                          cb, err); },
-    salvarConfig:          function(cfg, cb, err)     { GAS._call('salvarConfiguracaoEscuta',        [cfg],                       cb, err); },
-    obterPerguntas:        function(cb, err)          { GAS._call('obterPerguntasEscuta',            [],                          cb, err); },
-    atualizarPergunta:     function(id, c, cb, err)   { GAS._call('atualizarPerguntaEscuta',         [id, c],                     cb, err); },
-    obterPerfil:           function(cb, err)          { GAS._call('obterPerfilAnaliticoEscuta',      [],                          cb, err); },
-    salvarPerfil:          function(dados, cb, err)   {
+    excluirPesquisa:    function(id, cb, err)       { GAS._callCtrl('ctrl_escuta_excluir_pesquisa',     [id, GAS._sessao()],     cb, err); },
+    obterBanco:         function(cb, err)           { GAS._callCtrl('ctrl_escuta_banco',                [],                      cb, err); },
+    salvarTemplate:     function(dados, cb, err)    { GAS._callCtrl('ctrl_escuta_salvar_template',      [dados],                 cb, err); },
+    obterConfig:        function(cb, err)           { GAS._callCtrl('ctrl_escuta_config',               [],                      cb, err); },
+    salvarConfig:       function(cfg, cb, err)      { GAS._callCtrl('ctrl_escuta_salvar_config',        [cfg],                   cb, err); },
+    obterPerguntas:     function(cb, err)           { GAS._callCtrl('ctrl_escuta_perguntas',            [],                      cb, err); },
+    atualizarPergunta:  function(id, c, cb, err)    { GAS._callCtrl('ctrl_escuta_atualizar_pergunta',   [id, c],                 cb, err); },
+    obterPerfil:        function(cb, err)           { GAS._callCtrl('ctrl_escuta_perfil',               [],                      cb, err); },
+    salvarPerfil:       function(dados, cb, err)    {
       if (dados && !dados.sessao) dados.sessao = GAS._sessao();
-      GAS._call('salvarPerfilAnaliticoEscuta', [dados], cb, err);
+      GAS._callCtrl('ctrl_escuta_salvar_perfil', [dados], cb, err);
     },
-    gerarRelatorio:        function(tipo, p, cb, err) { GAS._call('gerarRelatorioEscuta',            [tipo, p],                   cb, err); },
-    obterFeedback:         function(cb, err)          { GAS._call('obterFeedbackEscuta',             [],                          cb, err); },
-    obterSaturacao:        function(cb, err)          { GAS._call('obterSaturacaoEscuta',            [],                          cb, err); },
-
-    // ── Governança e Motor Metodológico ───────────────────────
-    obterGovernanca:       function(cb, err)          { GAS._call('obterGovernancaEscuta',           [],                          cb, err); },
-    simularImpacto:        function(pesquisa, cb, err){ GAS._call('simularImpactoPesquisa',          [pesquisa],                  cb, err); },
-    construirFluxo:        function(etapa, d, cb, err){ GAS._call('construirFluxoPesquisa',          [etapa, d],                  cb, err); },
-    obterMapa:             function(periodo, cb, err) { GAS._call('obterMapaDadosEscuta',            [periodo],                   cb, err); },
-    obterManual:           function(secao, cb, err)   { GAS._call('obterManualEscuta',               [secao],                     cb, err); },
-    normalizarPesquisa:    function(p, cb, err)       { GAS._call('normalizarPesquisaEscuta',        [p],                         cb, err); },
-    sugerirParametros:     function(obj, pub, cb, err){ GAS._call('sugerirParametrosPesquisa',       [obj, pub],                  cb, err); },
-    definirTotalColab:     function(total, cb, err)   { GAS._call('definirTotalColaboradoresEscuta', [total],                     cb, err); }
+    gerarRelatorio:     function(tipo, p, cb, err)  { GAS._callCtrl('ctrl_escuta_gerar_relatorio',      [tipo, p],               cb, err); },
+    obterFeedback:      function(cb, err)           { GAS._callCtrl('ctrl_escuta_feedback',             [],                      cb, err); },
+    obterSaturacao:     function(cb, err)           { GAS._callCtrl('ctrl_escuta_saturacao',            [],                      cb, err); },
+    obterGovernanca:    function(cb, err)           { GAS._callCtrl('ctrl_escuta_governanca',           [],                      cb, err); },
+    simularImpacto:     function(pesquisa, cb, err) { GAS._callCtrl('ctrl_escuta_simular_impacto',      [pesquisa],              cb, err); },
+    construirFluxo:     function(etapa, d, cb, err) { GAS._callCtrl('ctrl_escuta_construir_fluxo',      [etapa, d],              cb, err); },
+    obterMapa:          function(periodo, cb, err)  { GAS._callCtrl('ctrl_escuta_mapa',                 [periodo],               cb, err); },
+    obterManual:        function(secao, cb, err)    { GAS._callCtrl('ctrl_escuta_manual',               [secao],                 cb, err); },
+    normalizarPesquisa: function(p, cb, err)        { GAS._callCtrl('ctrl_escuta_normalizar_pesquisa',  [p],                     cb, err); },
+    sugerirParametros:  function(obj, pub, cb, err) { GAS._callCtrl('ctrl_escuta_sugerir_parametros',   [obj, pub],              cb, err); },
+    definirTotalColab:  function(total, cb, err)    { GAS._callCtrl('ctrl_escuta_definir_total_colab',  [total],                 cb, err); }
   },
 
   /**
