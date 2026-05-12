@@ -291,6 +291,7 @@
                   <div>
                     <label class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">Espaço / Sala</label>
                     <select id="selectSala" required
+                      onchange="validarConflitoTempoReal(); mostrarHorariosDisponiveisUI();"
                       class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:border-purple-500 outline-none font-bold">
                       <option value="">Selecione um local...</option>
                     </select>

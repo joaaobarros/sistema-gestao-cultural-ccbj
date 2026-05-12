@@ -485,6 +485,20 @@ async function salvarAgendamento() {
     return;
   }
 
+  // Gate de conflito antes de qualquer submissão — fonte: cache local (otimista)
+  if (typeof verificarConflitoFrontend === 'function') {
+    const _sala = document.getElementById('selectSala')?.value;
+    const _ini  = document.getElementById('horaInicio')?.value;
+    const _ter  = document.getElementById('horaTermino')?.value;
+    if (_sala && _ini && _ter) {
+      const _c = verificarConflitoFrontend({ sala: _sala, horaInicio: _ini, horaTermino: _ter }, datas, null);
+      if (_c.conflito) {
+        Swal.fire('Conflito de Horário', `Já existe reserva neste espaço no período solicitado (${_c.reserva?.[2] || ''}–${_c.reserva?.[3] || ''}). Ajuste o horário ou escolha outro espaço.`, 'warning');
+        return;
+      }
+    }
+  }
+
   const nomeAcaoEl = document.getElementById('inputNomeAcao');
   const selectSala = document.getElementById('selectSala');
   const horaIni    = document.getElementById('horaInicio');

@@ -65,20 +65,15 @@ var ReservaEngine = (function () {
    * @returns {{ conflito: boolean, existente?: Object, mensagem?: string }}
    */
   function verificarConflito(params) {
-    try {
-      var resultado = possuiConflitoReserva({
-        data:               params.data,
-        espacoId:           params.espacoId,
-        inicio:             params.inicio,
-        fim:                params.fim,
-        reservaIgnoradaId:  params.reservaIgnoradaId,
-        usuarioSolicitante: params.usuarioSolicitante
-      });
-      return resultado || { conflito: false };
-    } catch(e) {
-      Logger.error('reserva_engine', 'verificarConflito', e.message);
-      return { conflito: false };
-    }
+    var resultado = possuiConflitoReserva({
+      data:               params.data,
+      espacoId:           params.espacoId,
+      inicio:             params.inicio,
+      fim:                params.fim,
+      reservaIgnoradaId:  params.reservaIgnoradaId,
+      usuarioSolicitante: params.usuarioSolicitante
+    });
+    return resultado || { conflito: false };
   }
 
   /**
