@@ -3,7 +3,7 @@
  * @layer backend/modules
  * @description Geração e exportação de relatórios: contratos, metas, indicadores, rubricas financeiras,
  *              relatórios CODIP e documentos institucionais.
- * @responsibility Entrypoints: obterContratos, salvarContrato, exportarAgendaRecePlanilha,
+ * @responsibility Entrypoints: obterContratos, salvarContrato,
  *                obterComparativoContrato, gerarDocumentoContrato.
  * @dependencies utils.js (_getSheet, gerarId), planilhas RELATORIOS e FINANCEIRO.
  */

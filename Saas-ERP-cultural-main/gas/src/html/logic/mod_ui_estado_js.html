@@ -1192,16 +1192,6 @@ function gerarDocumentoDrive(conteudo) {
   });
 }
 
-function gerarDocumentoDownloadPDF(conteudo) {
-  GAS.documentos.gerarDownload(conteudo, function(res) {
-    const link = document.createElement('a');
-    link.href = 'data:application/pdf;base64,' + res.base64;
-    link.download = res.nome;
-    link.click();
-    Swal.fire({ icon: 'success', title: 'Download iniciado' });
-  }, _handleServerError);
-}
-
 function gerarDocumentoDownload(conteudo) {
   conteudo.formato = conteudo.formato || 'pdf';
   gerarDocumentoDrive(conteudo);

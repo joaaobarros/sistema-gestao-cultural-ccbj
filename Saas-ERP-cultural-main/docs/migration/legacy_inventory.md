@@ -1,7 +1,7 @@
 # Inventário do Legacy — CCBJ
 > FASE 6 — Redução Controlada do Legacy  
 > Data: 2026-05-11  
-> Status: em redução controlada (17 chamadas _call() restantes no bridge)
+> Status: em redução controlada (12 chamadas _call() restantes no bridge)
 
 ---
 
@@ -12,11 +12,31 @@ Toda chamada no bridge deve usar `_callCtrl(ctrl, args, cb, err)` — que passa 
 Chamadas via `_call(fn, args, cb, err)` são legado — acessam funções GAS diretamente, sem o contrato de resposta padronizado.
 
 **Meta:** zero chamadas `_call()` ao final da migração.  
-**Progresso atual:** 220 migradas (92%), 17 restantes (8%).
+**Progresso atual:** 225 migradas/removidas (95%), 12 restantes (5%).
 
 ---
 
-## Classificação dos 17 _call() Restantes
+## Histórico de Remoção DEAD (2026-05-11)
+
+5 entradas DEAD removidas do bridge. Análise de callers confirmada antes de cada remoção:
+
+| Função Removida              | Wrapper GAS Removido                   | Motivo                                                          |
+|------------------------------|----------------------------------------|-----------------------------------------------------------------|
+| `fazerLogout`                | `GAS.sessao.logout`                    | Zero callers — logout 100% client-side via `_loginLogout()`     |
+| `obterItensFixosPorSala`     | `GAS.admin.obterItensFixosPorSala`     | Zero callers via bridge — config usa `GAS.admin.obterDadosParaConfig` |
+| `exportarAgendaRecePlanilha` | `GAS.rece.exportarPlanilha`            | Zero callers — funcionalidade não implementada no frontend       |
+| `criarEventosCalendarConvidados` | `GAS.comunicacao.criarEventosCalendar` | Zero callers — substituído por `enviarConvitesCalendar`         |
+| `gerarDocumentoDownload`     | `GAS.documentos.gerarDownload`         | Apenas referenciado por `gerarDocumentoDownloadPDF` (também removida, zero callers) |
+
+Também removida: função frontend morta `gerarDocumentoDownloadPDF` em `mod_ui_estado_js.html`.
+
+**NOTA IMPORTANTE:** `enviarConvitesCalendar` foi reclassificado de `DEAD` → `CTRL`.  
+Análise mostrou que `GAS.comunicacao.criarConvitesCalendar` (linha 328 do bridge) é chamado ativamente  
+por `enviarConvitesCalendarInterno()` em `mod_reservas_js.html:3646`, que é chamado em `mod_reservas_js.html:567`.
+
+---
+
+## Classificação dos 12 _call() Restantes
 
 ### Classificações
 
@@ -31,57 +51,43 @@ Chamadas via `_call(fn, args, cb, err)` são legado — acessam funções GAS di
 
 ### Inventário Completo
 
-| Função                       | Linhas Bridge | Classificação | Ação Recomendada                                              |
-|------------------------------|---------------|---------------|---------------------------------------------------------------|
-| `obterUrlLogout`             | 189, 294      | `AUTH`        | Migrar para `auth_controller.gs` como `ctrl_auth_url_logout` |
-| `salvarPreferenciasUsuario`  | 298           | `CTRL`        | Criar `preferencias_controller.gs` → `ctrl_pref_salvar`      |
-| `carregarPreferenciasUsuario`| 302           | `CTRL`        | Criar `preferencias_controller.gs` → `ctrl_pref_carregar`    |
-| `listarTodasSolicitacoes`    | 312           | `CTRL`        | Estender `acoes_controller.gs` → `ctrl_acoes_listar_todas`   |
-| `listarSolicitacoesPendentes`| 315           | `CTRL`        | Estender `acoes_controller.gs` → `ctrl_acoes_listar_pendentes`|
-| `chat_criarSolicitacao`      | 318           | `WAIT`        | Depende do módulo "Chat" — não implementado no frontend atual |
-| `enviarConviteEmailInstitucional` | 331     | `CTRL`        | Criar `comunicacao_controller.gs` → `ctrl_com_enviar_convite` |
-| `gerarDocumentoDrive`        | 344           | `CTRL`        | Criar `documentos_controller.gs` → `ctrl_doc_gerar`          |
-| `obterRelatorioDiario`       | 664           | `CTRL`        | Estender `rh_controller.gs` → `ctrl_rh_relatorio_diario`     |
-| `registrarHabilitacaoDiaria` | 668           | `CTRL`        | Estender `habilitacoes_controller.gs` → `ctrl_hab_diaria`    |
-| `fazerLogout`                | 291           | `DEAD`        | Nunca chamado — logout é 100% client-side (`_loginLogout()`) |
-| `obterItensFixosPorSala`     | 152           | `DEAD`        | Apenas em JSDoc — código real usa `GAS.admin.obterDadosParaConfig` |
-| `exportarAgendaRecePlanilha` | 242           | `DEAD`        | Referenciado só em comentário — funcionalidade não implementada |
-| `enviarConvitesCalendar`     | 328           | `DEAD`        | Nunca chamado no frontend — helper de integração Google Calendar |
-| `criarEventosCalendarConvidados` | 334      | `DEAD`        | Apenas em JSDoc — nunca chamado                               |
-| `gerarDocumentoDownload`     | 347           | `DEAD`        | Referenciado apenas em comentário — download feito client-side|
+| Função                            | Namespace Bridge                     | Classificação | Ação Recomendada                                                |
+|-----------------------------------|--------------------------------------|---------------|-----------------------------------------------------------------|
+| `obterUrlLogout`                  | `GAS.admin.obterUrlLogout` (l.189)   | `AUTH`        | Migrar para `auth_controller.gs` → `ctrl_auth_url_logout`      |
+| `obterUrlLogout`                  | `GAS.sessao.obterUrlLogout` (l.294)  | `AUTH`        | Consolidar em um ponto único após migração AUTH                 |
+| `salvarPreferenciasUsuario`       | `GAS.sessao.salvarPreferencia` (l.298) | `CTRL`      | Criar `preferencias_controller.gs` → `ctrl_pref_salvar`        |
+| `carregarPreferenciasUsuario`     | `GAS.sessao.carregarPreferencias` (l.302) | `CTRL`   | Criar `preferencias_controller.gs` → `ctrl_pref_carregar`      |
+| `listarTodasSolicitacoes`         | `GAS.solicitacoes.listarTodas` (l.312) | `CTRL`      | Estender `acoes_controller.gs` → `ctrl_acoes_listar_todas`     |
+| `listarSolicitacoesPendentes`     | `GAS.solicitacoes.listarPendentes` (l.315) | `CTRL`  | Estender `acoes_controller.gs` → `ctrl_acoes_listar_pendentes` |
+| `chat_criarSolicitacao`           | `GAS.solicitacoes.criar` (l.318)     | `WAIT`        | Depende do módulo "Chat" — não implementado no frontend atual   |
+| `enviarConviteEmailInstitucional` | `GAS.comunicacao.enviarConviteEmail` (l.331) | `CTRL` | Criar `comunicacao_controller.gs` → `ctrl_com_enviar_convite`  |
+| `enviarConvitesCalendar`          | `GAS.comunicacao.criarConvitesCalendar` (l.328) | `CTRL` | Criar `comunicacao_controller.gs` → `ctrl_com_convites_calendar` |
+| `gerarDocumentoDrive`             | `GAS.documentos.gerarDrive` (l.344) | `CTRL`         | Criar `documentos_controller.gs` → `ctrl_doc_gerar_drive`      |
+| `obterRelatorioDiario`            | `GAS.habDiaria.relatorio` (l.664)   | `CTRL`         | Estender `habilitacoes_controller.gs` → `ctrl_hab_relatorio`   |
+| `registrarHabilitacaoDiaria`      | `GAS.habDiaria.registrar` (l.668)   | `CTRL`         | Estender `habilitacoes_controller.gs` → `ctrl_hab_diaria`      |
 
 ---
 
 ## Plano de Eliminação por Prioridade
 
-### Fase Imediata — Remover DEAD (6 funções)
-Estas funções nunca são chamadas no frontend real. Podem ser removidas do bridge sem risco.
+### Fase Imediata — ✅ CONCLUÍDA (DEAD removidos)
+5 entradas DEAD removidas em 2026-05-11. Bridge: 17 → 12.
 
-1. `fazerLogout` (linha 291)
-2. `obterItensFixosPorSala` (linha 152)
-3. `exportarAgendaRecePlanilha` (linha 242)
-4. `enviarConvitesCalendar` (linha 328)
-5. `criarEventosCalendarConvidados` (linha 334)
-6. `gerarDocumentoDownload` (linha 347)
-
-**Impacto:** bridge_legacy de 17 → 11 (migração de 92% → 95%)
-
-### Fase Curto Prazo — Migrar CTRL prioritários (5 funções)
+### Fase Curto Prazo — Migrar CTRL prioritários (8 funções)
 Criação de controllers simples, baixo risco:
 
 1. `preferencias_controller.gs` — cobre `salvarPreferenciasUsuario` + `carregarPreferenciasUsuario`
-2. Extensão de `rh_controller.gs` — cobre `obterRelatorioDiario`
-3. Extensão de `habilitacoes_controller.gs` — cobre `registrarHabilitacaoDiaria`
-4. `comunicacao_controller.gs` — cobre `enviarConviteEmailInstitucional`
-5. `documentos_controller.gs` — cobre `gerarDocumentoDrive`
+2. `comunicacao_controller.gs` — cobre `enviarConviteEmailInstitucional` + `enviarConvitesCalendar`
+3. `documentos_controller.gs` — cobre `gerarDocumentoDrive`
+4. Extensão de `habilitacoes_controller.gs` — cobre `obterRelatorioDiario` + `registrarHabilitacaoDiaria`
+5. Extensão de `acoes_controller.gs` — cobre `listarTodasSolicitacoes` + `listarSolicitacoesPendentes`
 
-**Impacto:** bridge_legacy de 11 → 4
+**Impacto:** bridge_legacy de 12 → 2 (obterUrlLogout×2 consolidados + chat_criarSolicitacao)
 
-### Fase Médio Prazo — Migrar AUTH e WAIT (3 funções)
+### Fase Médio Prazo — Migrar AUTH e WAIT (2-3 funções)
 Dependem de decisão arquitetural:
 
-- `obterUrlLogout` (AUTH) — depende de como o logout será padronizado
-- `listarTodasSolicitacoes` + `listarSolicitacoesPendentes` — revisão do módulo Ações
+- `obterUrlLogout` (AUTH×2) — consolidar + migrar para auth_controller
 - `chat_criarSolicitacao` — bloqueado pelo módulo Chat (não priorizado)
 
 ---
@@ -95,7 +101,7 @@ Dependem de decisão arquitetural:
 | `auditoria_service.gs`   | Auditoria: eventos + Logger + registrarLog | ✓ Estável |
 | `cache_service.gs`       | AppCache — wrapper do CacheService GAS    | ✓ Estável |
 | `data_gateway.gs`        | DataGateway — acesso central à planilha   | ✓ Estável |
-| `fsm_guardian.gs`        | FsmGuardian — enforcement centralizado FSM| ✓ Novo    |
+| `fsm_guardian.gs`        | FsmGuardian — enforcement centralizado FSM| ✓ Estável |
 | `metrics_engine.gs`      | MetricsEngine — agregador de métricas     | ✓ Estável |
 | `permissoes_service.gs`  | PermissoesService — ponto único de permissões | ✓ Estável |
 | `usuarios_service.gs`    | UsuariosService — lookup de usuários      | ✓ Estável |
@@ -125,4 +131,4 @@ Potenciais órfãos a investigar:
 
 ---
 
-*Próxima revisão: após remoção dos 6 DEAD do bridge*
+*Próxima revisão: após criação dos controllers CTRL prioritários*

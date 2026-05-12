@@ -147,10 +147,6 @@ const GAS = {
     removerRegistro: function(id, tipo, email, cb, err) {
       GAS._callCtrl('ctrl_admin_remover_registro', [id, tipo, email], cb, err);
     },
-    obterItensFixosPorSala: function(id, cb, err) {
-      // Não migrado ainda para controller — função internal mod_admin
-      GAS._call('obterItensFixosPorSala', [id], cb, err);
-    },
     obterDadosParaConfig: function(nomeAba, cb, err) {
       GAS._callCtrl('ctrl_admin_dados_config', nomeAba ? [nomeAba] : [], cb, err);
     },
@@ -238,9 +234,6 @@ const GAS = {
     excluir: function(id, email, cb, err) {
       GAS._callCtrl('ctrl_rece_excluir', [id, email], cb, err);
     },
-    exportarPlanilha: function(dados, cb, err) {
-      GAS._call('exportarAgendaRecePlanilha', [dados], cb, err);
-    },
     uploadImagem: function(b64, mimeType, nome, cb, err) {
       GAS._callCtrl('ctrl_rece_upload_imagem', [b64, mimeType, nome], cb, err);
     }
@@ -287,9 +280,6 @@ const GAS = {
    * @context Logout, preferências do usuário e sidebar.
    */
   sessao: {
-    logout: function(cb, err) {
-      GAS._call('fazerLogout', [], cb, err);
-    },
     obterUrlLogout: function(cb, err) {
       GAS._call('obterUrlLogout', [], cb, err);
     },
@@ -329,9 +319,6 @@ const GAS = {
     },
     enviarConviteEmail: function(dados, cb, err) {
       GAS._call('enviarConviteEmailInstitucional', [dados], cb, err);
-    },
-    criarEventosCalendar: function(dados, cb, err) {
-      GAS._call('criarEventosCalendarConvidados', [dados], cb, err);
     }
   },
 
@@ -342,9 +329,6 @@ const GAS = {
   documentos: {
     gerarDrive: function(conteudo, cb, err) {
       GAS._call('gerarDocumentoDrive', [conteudo], cb, err);
-    },
-    gerarDownload: function(conteudo, cb, err) {
-      GAS._call('gerarDocumentoDownload', [conteudo], cb, err);
     }
   },
 

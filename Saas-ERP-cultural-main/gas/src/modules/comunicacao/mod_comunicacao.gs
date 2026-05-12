@@ -3,7 +3,7 @@
  * @layer backend/modules
  * @description Serviços de comunicação: agenda RECE, envio de convites Google Calendar e upload de imagens para o Drive.
  * @responsibility Entrypoints: obterReservasRece, cancelarReservaRece, excluirReservaRece,
- *                criarEventosCalendarConvidados, uploadImagemRece.
+ *                enviarConvitesCalendar, uploadImagemRece.
  * @dependencies utils.js (_getSheet, gerarId), DataLayer.js (uploadDrive), Google Calendar API.
  */
 // ============================================================
