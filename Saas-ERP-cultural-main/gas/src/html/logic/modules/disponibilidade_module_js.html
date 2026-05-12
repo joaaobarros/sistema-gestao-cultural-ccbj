@@ -21,6 +21,38 @@
  * @outputs String 'YYYY-MM-DD' ou null se inválido.
  * @sideEffects Nenhum.
  */
+/**
+ * ========================================
+ * BLOCO: Normalização de horários (frontend)
+ * ========================================
+ * @description Converte qualquer representação de horário para minutos desde 00:00.
+ *              Suporta: string HH:MM, Date object (GAS serializa células Time como Date),
+ *              e fração decimal de dia (0..1).
+ *              Espelha normalizarHora() do backend (utils.gs) para garantir paridade.
+ * @context Usado por todas as funções de disponibilidade frontend no lugar de normHora inline.
+ * @inputs Date | number | string
+ * @outputs number (minutos 0-1439) ou NaN se inválido
+ */
+function _normHoraFrontend(h) {
+  if (h == null || h === '') return NaN;
+  // Date object: GAS serializa células Time como Date com epoch 1899-12-30 UTC
+  if (h instanceof Date) {
+    return h.getUTCHours() * 60 + h.getUTCMinutes();
+  }
+  // Número: fração decimal de dia (ex: 0.5 = 12:00)
+  if (typeof h === 'number') {
+    if (h < 0 || h >= 1) return NaN;
+    return Math.round(h * 24 * 60);
+  }
+  // String HH:MM ou HH:MM:SS
+  const p = String(h).split(':');
+  if (p.length < 2) return NaN;
+  const hh = parseInt(p[0], 10);
+  const mm = parseInt(p[1], 10);
+  if (isNaN(hh) || isNaN(mm) || hh < 0 || hh > 23 || mm < 0 || mm > 59) return NaN;
+  return hh * 60 + mm;
+}
+
 function normalizarDataKey(data) {
   if (!data) return null;
   try {
@@ -89,7 +121,6 @@ function obterHorariosOcupadosFrontend(sala, data, idIgnorar) {
       if (s.includes('-')) { const x=new Date(s); x.setHours(0,0,0,0); return x.getTime(); }
     } catch(e) {} return null;
   };
-  const normHora = h => { const p=String(h||'').split(':'); return parseInt(p[0])*60+parseInt(p[1]); };
   const dataBusca = normData(data);
   if (!dataBusca) return [];
   const salaKey = String(sala).trim();
@@ -102,7 +133,7 @@ function obterHorariosOcupadosFrontend(sala, data, idIgnorar) {
 
   lista.forEach(r => {
     if (idIgnorar && String(r[0]).trim() === String(idIgnorar).trim()) return;
-    ocupados.push({ inicio: normHora(r[2]), fim: normHora(r[3]) });
+    ocupados.push({ inicio: _normHoraFrontend(r[2]), fim: _normHoraFrontend(r[3]) });
   });
 
   return ocupados;
@@ -122,18 +153,14 @@ function obterHorariosOcupadosFrontend(sala, data, idIgnorar) {
  * @sideEffects Nenhum.
  */
 function verificarConflitoFrontend(dados, datas, idIgnorar) {
-  const normHora = h => {
-    const p = String(h || '').split(':');
-    return parseInt(p[0]) * 60 + parseInt(p[1]);
-  };
   const toHora = m => {
     const h = String(Math.floor(m / 60)).padStart(2,'0');
     const min = String(m % 60).padStart(2,'0');
     return `${h}:${min}`;
   };
 
-  const inicio  = normHora(dados.horaInicio);
-  const termino = normHora(dados.horaTermino);
+  const inicio  = _normHoraFrontend(dados.horaInicio);
+  const termino = _normHoraFrontend(dados.horaTermino);
   const salaKey = String(dados.sala || '').trim();
 
   for (const dataStr of datas) {
@@ -146,8 +173,8 @@ function verificarConflitoFrontend(dados, datas, idIgnorar) {
       if ((r[13] || '').toUpperCase() === 'CANCELADO') continue;
       if (idIgnorar && String(r[0]).trim() === String(idIgnorar).trim()) continue;
 
-      const ini = normHora(r[2]);
-      const ter = normHora(r[3]);
+      const ini = _normHoraFrontend(r[2]);
+      const ter = _normHoraFrontend(r[3]);
       const conflito = inicio < ter && termino > ini;
 
       if (conflito) {
@@ -187,10 +214,9 @@ function sugerirProximoHorarioLivre(sala, data, horarioAtual) {
     "20:00","20:30"
   ];
   const ocupados = obterHorariosOcupadosFrontend(sala, data);
-  const norm = h => { const p=h.split(':'); return parseInt(p[0])*60+parseInt(p[1]); };
-  const atual = norm(horarioAtual);
+  const atual = _normHoraFrontend(horarioAtual);
   const livres = horariosBase.filter(h => {
-    const i = norm(h);
+    const i = _normHoraFrontend(h);
     return !ocupados.some(o => i < o.fim && (i + 60) > o.inicio);
   });
   return livres.find(h => norm(h) > atual) || livres[0] || null;
@@ -214,10 +240,6 @@ function obterHorariosLivresComIntervalo(sala, data) {
   const salaKey = String(sala);
   const reservas = AppState.cacheReservasIndex?.[dataKey]?.[salaKey] || [];
 
-  const normHora = h => {
-    const [hh, mm] = String(h).split(':').map(Number);
-    return hh * 60 + mm;
-  };
   const toHora = m => {
     const h = String(Math.floor(m / 60)).padStart(2,'0');
     const min = String(m % 60).padStart(2,'0');
@@ -231,7 +253,7 @@ function obterHorariosLivresComIntervalo(sala, data) {
   reservas.forEach(r => {
     if (String(r[4]) !== String(sala)) return;
     if ((r[13] || '').toUpperCase() === 'CANCELADO') return;
-    ocupados.push({ inicio: normHora(r[2]), fim: normHora(r[3]) });
+    ocupados.push({ inicio: _normHoraFrontend(r[2]), fim: _normHoraFrontend(r[3]) });
   });
   ocupados.sort((a, b) => a.inicio - b.inicio);
 
@@ -248,12 +270,8 @@ function obterHorariosLivresComIntervalo(sala, data) {
 
 function obterSalasDisponiveisPorData(data, horaInicio, horaTermino) {
   const salas = AppState.colecoes.salas || [];
-  const normHora = h => {
-    const p = String(h || '').split(':');
-    return parseInt(p[0]) * 60 + parseInt(p[1]);
-  };
-  const inicio  = normHora(horaInicio);
-  const termino = normHora(horaTermino);
+  const inicio  = _normHoraFrontend(horaInicio);
+  const termino = _normHoraFrontend(horaTermino);
   const dataKey = normalizarDataKey(data);
   if (!dataKey) return [];
 
@@ -266,8 +284,8 @@ function obterSalasDisponiveisPorData(data, horaInicio, horaTermino) {
     const reservasSala = AppState.cacheReservasIndex?.[dataKey]?.[idSala] || [];
     const conflito = reservasSala.some(r => {
       if ((r[13] || '').toUpperCase() === 'CANCELADO') return false;
-      const ini = normHora(r[2]);
-      const ter = normHora(r[3]);
+      const ini = _normHoraFrontend(r[2]);
+      const ter = _normHoraFrontend(r[3]);
       return inicio < ter && termino > ini;
     });
     return !conflito;

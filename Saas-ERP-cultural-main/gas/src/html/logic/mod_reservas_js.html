@@ -4958,4 +4958,15 @@ function trocarSalaSugestao(idSala) {
   }
 }
 
+// Ao abrir o formulário de novo agendamento, atualiza o cache de reservas
+// para garantir que verificarConflitoFrontend e os indicadores de horários livres
+// reflitam os dados mais recentes (evita cache stale após outra reserva ser criada).
+window._onShow_aba_nova_reserva = function() {
+  GAS.reservas.obter(function(reservas) {
+    AppState.colecoes.reservas = Array.isArray(reservas) ? reservas : [];
+    if (typeof indexarReservas === 'function') indexarReservas();
+    if (typeof atualizarTudoTempoReal === 'function') atualizarTudoTempoReal();
+  });
+};
+
 </script>
