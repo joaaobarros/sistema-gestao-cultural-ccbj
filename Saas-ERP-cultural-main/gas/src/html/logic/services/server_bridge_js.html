@@ -182,7 +182,7 @@ const GAS = {
       GAS._callCtrl('ctrl_admin_grafico_reservas', [], cb, err);
     },
     obterUrlLogout: function(cb, err) {
-      GAS._call('obterUrlLogout', [], cb, err);
+      GAS._callCtrl('ctrl_auth_url_logout', [], cb, err);
     },
     perguntarIA: function(pergunta, cb, err) {
       GAS._callCtrl('ctrl_ia_perguntar', [pergunta], cb, err);
@@ -278,31 +278,33 @@ const GAS = {
   /**
    * BLOCO: Serviços de sessão e preferências
    * @context Logout, preferências do usuário e sidebar.
+   * @via preferencias_controller.gs (ctrl_pref_*), auth_controller.gs (ctrl_auth_url_logout)
    */
   sessao: {
     obterUrlLogout: function(cb, err) {
-      GAS._call('obterUrlLogout', [], cb, err);
+      GAS._callCtrl('ctrl_auth_url_logout', [], cb, err);
     },
     salvarPreferencia: function(chave, valor, cb, err) {
       var em = (AppState && AppState.usuario && AppState.usuario.email) || window.__EMAIL_INICIAL__ || '';
-      GAS._call('salvarPreferenciasUsuario', [chave, valor, em], cb, err);
+      GAS._callCtrl('ctrl_pref_salvar', [chave, valor, em], cb, err);
     },
     carregarPreferencias: function(cb, err) {
       var em = (AppState && AppState.usuario && AppState.usuario.email) || window.__EMAIL_INICIAL__ || '';
-      GAS._call('carregarPreferenciasUsuario', [em], cb, err);
+      GAS._callCtrl('ctrl_pref_carregar', [em], cb, err);
     }
   },
 
   /**
    * BLOCO: Serviços de solicitações externas
    * @context Polling e listagem de solicitações CODIP/aprovações.
+   * @via acoes_controller.gs (ctrl_acoes_listar_todas, ctrl_acoes_listar_pendentes)
    */
   solicitacoes: {
     listarTodas: function(email, cb, err) {
-      GAS._call('listarTodasSolicitacoes', [email], cb, err);
+      GAS._callCtrl('ctrl_acoes_listar_todas', [email || GAS._sessao()], cb, err);
     },
     listarPendentes: function(email, cb, err) {
-      GAS._call('listarSolicitacoesPendentes', [email], cb, err);
+      GAS._callCtrl('ctrl_acoes_listar_pendentes', [email || GAS._sessao()], cb, err);
     },
     criar: function(tipo, subtipo, dados, usuario, justificativa, cb, err) {
       GAS._call('chat_criarSolicitacao', [tipo, subtipo, dados, usuario, justificativa], cb, err);
@@ -312,23 +314,25 @@ const GAS = {
   /**
    * BLOCO: Serviços de calendário e comunicação
    * @context Google Calendar, convites e e-mails institucionais.
+   * @via comunicacao_controller.gs (ctrl_com_*)
    */
   comunicacao: {
     criarConvitesCalendar: function(dados, cb, err) {
-      GAS._call('enviarConvitesCalendar', [dados], cb, err);
+      GAS._callCtrl('ctrl_com_convites_calendar', [dados, GAS._sessao()], cb, err);
     },
     enviarConviteEmail: function(dados, cb, err) {
-      GAS._call('enviarConviteEmailInstitucional', [dados], cb, err);
+      GAS._callCtrl('ctrl_com_enviar_convite', [dados, GAS._sessao()], cb, err);
     }
   },
 
   /**
    * BLOCO: Serviços de documentos / relatórios
    * @context Geração de documentos no Google Drive ou download PDF.
+   * @via documentos_controller.gs (ctrl_doc_*)
    */
   documentos: {
     gerarDrive: function(conteudo, cb, err) {
-      GAS._call('gerarDocumentoDrive', [conteudo], cb, err);
+      GAS._callCtrl('ctrl_doc_gerar_drive', [conteudo, GAS._sessao()], cb, err);
     }
   },
 
@@ -641,15 +645,14 @@ const GAS = {
    * BLOCO: Habilitação Diária
    * @context Check-in operacional de espaços antes de cada evento agendado.
    *          Rastreia pontualidade e gera relatório de eficiência de entrega.
+   * @via habilitacoes_controller.gs (ctrl_hab_relatorio, ctrl_hab_diaria)
    */
   habDiaria: {
     relatorio: function(dataISO, cb, err) {
-      var em = GAS._sessao();
-      GAS._call('obterRelatorioDiario', [dataISO, em], cb, err);
+      GAS._callCtrl('ctrl_hab_relatorio', [dataISO, GAS._sessao()], cb, err);
     },
     registrar: function(dados, cb, err) {
-      var em = GAS._sessao();
-      GAS._call('registrarHabilitacaoDiaria', [dados, em], cb, err);
+      GAS._callCtrl('ctrl_hab_diaria', [dados, GAS._sessao()], cb, err);
     }
   }
 

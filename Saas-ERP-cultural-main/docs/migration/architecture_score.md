@@ -2,11 +2,11 @@
 > Gerado automaticamente por `scripts/architecture_metrics.sh --report`
 > Data: 2026-05-11
 
-## Score Global: 98/100  [EXCELENTE]
+## Score Global: 99/100  [EXCELENTE]
 
 | Dimensão                | Valor              | Meta  |
 |-------------------------|-------------------|-------|
-| Bridge (migrado)        | 92%            | 100%  |
+| Bridge (migrado)        | 99%            | 100%  |
 | Controllers (wrapped)   | 100%           | 100%  |
 | Eventos tipados         | 100%          | 100%  |
 | FSM Guardian            | 100%           | 100%  |
@@ -18,8 +18,8 @@
 ## Detalhes
 
 ### Bridge
-- _callCtrl (migrado): **220**
-- _call (legacy):      **17** (meta: 0)
+- _callCtrl (migrado): **231**
+- _call (legacy):      **1** (meta: 0)
 - _stub (pendente):    **1**
 
 ### Módulos
@@ -36,9 +36,9 @@
 - Registrados no Guardian: **5** (100%)
 
 ### Volume
-- Arquivos .gs: **66**
-- Linhas .gs: **25113**
-- Camada ctrl+services: **3896** (15%)
+- Arquivos .gs: **69**
+- Linhas .gs: **25380**
+- Camada ctrl+services: **4142** (16%)
 
 ---
 *Próxima execução: `./scripts/architecture_metrics.sh --report`*

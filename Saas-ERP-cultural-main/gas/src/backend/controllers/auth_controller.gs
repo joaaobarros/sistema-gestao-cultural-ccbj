@@ -169,3 +169,17 @@ function ctrl_auth_recusar_cadastro(id, emailAdmin, motivo) {
     return recusarCadastroExterno(id, emailAdmin, motivo || '');
   }, 'ctrl_auth_recusar_cadastro');
 }
+
+// ═══════════════════════════════════════════════════════════════
+// LOGOUT
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * Retorna URL de logout Google para o webapp atual.
+ * Ponto único — consolida GAS.admin.obterUrlLogout e GAS.sessao.obterUrlLogout.
+ */
+function ctrl_auth_url_logout() {
+  return GasResponse.wrap(function() {
+    return { url: obterUrlLogout() };
+  }, 'ctrl_auth_url_logout');
+}

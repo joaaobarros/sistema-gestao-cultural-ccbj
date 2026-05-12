@@ -114,3 +114,31 @@ function ctrl_acoes_associar_recurso(acaoId, tipo, recursoId, emailFallback) {
     return resultado;
   });
 }
+
+// ═══════════════════════════════════════════════════════════════
+// SOLICITAÇÕES (migrado de mod_admin.gs)
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * Lista todas as solicitações — admins veem tudo; donos de sala veem as suas.
+ * @param {string} emailFallback
+ */
+function ctrl_acoes_listar_todas(emailFallback) {
+  return GasResponse.wrap(function() {
+    var email = obterEmailUsuario(emailFallback || '');
+    if (!email) throw new Error('Usuário não identificado.');
+    return listarTodasSolicitacoes(email);
+  });
+}
+
+/**
+ * Lista solicitações pendentes — filtradas por perfil do usuário.
+ * @param {string} emailFallback
+ */
+function ctrl_acoes_listar_pendentes(emailFallback) {
+  return GasResponse.wrap(function() {
+    var email = obterEmailUsuario(emailFallback || '');
+    if (!email) throw new Error('Usuário não identificado.');
+    return listarSolicitacoesPendentes(email);
+  });
+}

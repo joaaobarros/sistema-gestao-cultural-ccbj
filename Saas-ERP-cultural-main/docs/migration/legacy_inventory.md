@@ -1,7 +1,7 @@
 # Inventário do Legacy — CCBJ
-> FASE 6 — Redução Controlada do Legacy  
+> FASE 7 — Consolidação Quase Total do Bridge  
 > Data: 2026-05-11  
-> Status: em redução controlada (12 chamadas _call() restantes no bridge)
+> Status: consolidação avançada (1 chamada _call() restante — WAIT bloqueada)
 
 ---
 
@@ -12,7 +12,7 @@ Toda chamada no bridge deve usar `_callCtrl(ctrl, args, cb, err)` — que passa 
 Chamadas via `_call(fn, args, cb, err)` são legado — acessam funções GAS diretamente, sem o contrato de resposta padronizado.
 
 **Meta:** zero chamadas `_call()` ao final da migração.  
-**Progresso atual:** 225 migradas/removidas (95%), 12 restantes (5%).
+**Progresso atual:** 231 migradas/removidas (99%), 1 restante (1%).
 
 ---
 
@@ -36,35 +36,38 @@ por `enviarConvitesCalendarInterno()` em `mod_reservas_js.html:3646`, que é cha
 
 ---
 
-## Classificação dos 12 _call() Restantes
+## Histórico de Remoção CTRL+AUTH (2026-05-11)
 
-### Classificações
+11 entradas CTRL+AUTH migradas para controllers em 2026-05-11. Bridge: 12 → 1.
 
-| Código | Significado                                  |
-|--------|----------------------------------------------|
-| `DEAD` | Nunca chamado no frontend real               |
-| `CTRL` | Precisa de um controller novo ou extensão    |
-| `AUTH` | Relacionado à infra de autenticação          |
-| `WAIT` | Aguardando decisão de produto/roadmap        |
+| Função Migrada                 | Namespace Bridge                          | Controller Destino                          |
+|--------------------------------|-------------------------------------------|---------------------------------------------|
+| `salvarPreferenciasUsuario`    | `GAS.sessao.salvarPreferencia`            | `ctrl_pref_salvar` (preferencias_controller)|
+| `carregarPreferenciasUsuario`  | `GAS.sessao.carregarPreferencias`         | `ctrl_pref_carregar` (preferencias_controller)|
+| `obterUrlLogout` (×2)          | `GAS.admin.obterUrlLogout` + `GAS.sessao.obterUrlLogout` | `ctrl_auth_url_logout` (auth_controller) — ponto único |
+| `listarTodasSolicitacoes`      | `GAS.solicitacoes.listarTodas`            | `ctrl_acoes_listar_todas` (acoes_controller)|
+| `listarSolicitacoesPendentes`  | `GAS.solicitacoes.listarPendentes`        | `ctrl_acoes_listar_pendentes` (acoes_controller)|
+| `enviarConvitesCalendar`       | `GAS.comunicacao.criarConvitesCalendar`   | `ctrl_com_convites_calendar` (comunicacao_controller)|
+| `enviarConviteEmailInstitucional`| `GAS.comunicacao.enviarConviteEmail`    | `ctrl_com_enviar_convite` (comunicacao_controller)|
+| `gerarDocumentoDrive`          | `GAS.documentos.gerarDrive`               | `ctrl_doc_gerar_drive` (documentos_controller)|
+| `obterRelatorioDiario`         | `GAS.habDiaria.relatorio`                 | `ctrl_hab_relatorio` (habilitacoes_controller)|
+| `registrarHabilitacaoDiaria`   | `GAS.habDiaria.registrar`                 | `ctrl_hab_diaria` (habilitacoes_controller) |
+
+**Novos controllers criados:** `preferencias_controller.gs`, `comunicacao_controller.gs`, `documentos_controller.gs`  
+**Controllers estendidos:** `auth_controller.gs`, `habilitacoes_controller.gs`, `acoes_controller.gs`  
+**Novos eventos em events_constants.gs:** `CALENDAR_INVITE_SENT`, `EMAIL_INVITE_SENT`, `DOCUMENT_GENERATED`, `USER_PREFERENCE_SAVED`, `QUALIFICATION_DAILY_REGISTERED`
 
 ---
 
-### Inventário Completo
+## Classificação do 1 _call() Restante
 
-| Função                            | Namespace Bridge                     | Classificação | Ação Recomendada                                                |
-|-----------------------------------|--------------------------------------|---------------|-----------------------------------------------------------------|
-| `obterUrlLogout`                  | `GAS.admin.obterUrlLogout` (l.189)   | `AUTH`        | Migrar para `auth_controller.gs` → `ctrl_auth_url_logout`      |
-| `obterUrlLogout`                  | `GAS.sessao.obterUrlLogout` (l.294)  | `AUTH`        | Consolidar em um ponto único após migração AUTH                 |
-| `salvarPreferenciasUsuario`       | `GAS.sessao.salvarPreferencia` (l.298) | `CTRL`      | Criar `preferencias_controller.gs` → `ctrl_pref_salvar`        |
-| `carregarPreferenciasUsuario`     | `GAS.sessao.carregarPreferencias` (l.302) | `CTRL`   | Criar `preferencias_controller.gs` → `ctrl_pref_carregar`      |
-| `listarTodasSolicitacoes`         | `GAS.solicitacoes.listarTodas` (l.312) | `CTRL`      | Estender `acoes_controller.gs` → `ctrl_acoes_listar_todas`     |
-| `listarSolicitacoesPendentes`     | `GAS.solicitacoes.listarPendentes` (l.315) | `CTRL`  | Estender `acoes_controller.gs` → `ctrl_acoes_listar_pendentes` |
-| `chat_criarSolicitacao`           | `GAS.solicitacoes.criar` (l.318)     | `WAIT`        | Depende do módulo "Chat" — não implementado no frontend atual   |
-| `enviarConviteEmailInstitucional` | `GAS.comunicacao.enviarConviteEmail` (l.331) | `CTRL` | Criar `comunicacao_controller.gs` → `ctrl_com_enviar_convite`  |
-| `enviarConvitesCalendar`          | `GAS.comunicacao.criarConvitesCalendar` (l.328) | `CTRL` | Criar `comunicacao_controller.gs` → `ctrl_com_convites_calendar` |
-| `gerarDocumentoDrive`             | `GAS.documentos.gerarDrive` (l.344) | `CTRL`         | Criar `documentos_controller.gs` → `ctrl_doc_gerar_drive`      |
-| `obterRelatorioDiario`            | `GAS.habDiaria.relatorio` (l.664)   | `CTRL`         | Estender `habilitacoes_controller.gs` → `ctrl_hab_relatorio`   |
-| `registrarHabilitacaoDiaria`      | `GAS.habDiaria.registrar` (l.668)   | `CTRL`         | Estender `habilitacoes_controller.gs` → `ctrl_hab_diaria`      |
+| Código | Significado                                  |
+|--------|----------------------------------------------|
+| `WAIT` | Aguardando decisão de produto/roadmap        |
+
+| Função                  | Namespace Bridge              | Classificação | Bloqueio                                         |
+|-------------------------|-------------------------------|---------------|--------------------------------------------------|
+| `chat_criarSolicitacao` | `GAS.solicitacoes.criar`      | `WAIT`        | Módulo "Chat" não implementado no frontend atual |
 
 ---
 
@@ -73,22 +76,13 @@ por `enviarConvitesCalendarInterno()` em `mod_reservas_js.html:3646`, que é cha
 ### Fase Imediata — ✅ CONCLUÍDA (DEAD removidos)
 5 entradas DEAD removidas em 2026-05-11. Bridge: 17 → 12.
 
-### Fase Curto Prazo — Migrar CTRL prioritários (8 funções)
-Criação de controllers simples, baixo risco:
+### Fase Curto Prazo — ✅ CONCLUÍDA (CTRL+AUTH migrados)
+11 entradas CTRL+AUTH migradas em 2026-05-11. Bridge: 12 → 1.
 
-1. `preferencias_controller.gs` — cobre `salvarPreferenciasUsuario` + `carregarPreferenciasUsuario`
-2. `comunicacao_controller.gs` — cobre `enviarConviteEmailInstitucional` + `enviarConvitesCalendar`
-3. `documentos_controller.gs` — cobre `gerarDocumentoDrive`
-4. Extensão de `habilitacoes_controller.gs` — cobre `obterRelatorioDiario` + `registrarHabilitacaoDiaria`
-5. Extensão de `acoes_controller.gs` — cobre `listarTodasSolicitacoes` + `listarSolicitacoesPendentes`
+### Fase Final — WAIT (1 função)
+Bloqueada por decisão de produto:
 
-**Impacto:** bridge_legacy de 12 → 2 (obterUrlLogout×2 consolidados + chat_criarSolicitacao)
-
-### Fase Médio Prazo — Migrar AUTH e WAIT (2-3 funções)
-Dependem de decisão arquitetural:
-
-- `obterUrlLogout` (AUTH×2) — consolidar + migrar para auth_controller
-- `chat_criarSolicitacao` — bloqueado pelo módulo Chat (não priorizado)
+- `chat_criarSolicitacao` — desbloqueia quando o módulo Chat for implementado
 
 ---
 

@@ -136,6 +136,27 @@ var SystemEventTypes = Object.freeze({
   // GOVERNANÇA ARQUITETURAL (FASE 1 — Lint Arquitetural)
   // ────────────────────────────────────────────
   GOVERNANCE_VIOLATION:       'GOVERNANCE_VIOLATION',
-  ARCHITECTURAL_REGRESSION:   'ARCHITECTURAL_REGRESSION'
+  ARCHITECTURAL_REGRESSION:   'ARCHITECTURAL_REGRESSION',
+
+  // ────────────────────────────────────────────
+  // COMUNICAÇÃO (FASE 2 — Controllers CTRL)
+  // ────────────────────────────────────────────
+  CALENDAR_INVITE_SENT:       'CALENDAR_INVITE_SENT',
+  EMAIL_INVITE_SENT:          'EMAIL_INVITE_SENT',
+
+  // ────────────────────────────────────────────
+  // DOCUMENTOS (FASE 2 — Controllers CTRL)
+  // ────────────────────────────────────────────
+  DOCUMENT_GENERATED:         'DOCUMENT_GENERATED',
+
+  // ────────────────────────────────────────────
+  // PREFERÊNCIAS (FASE 2 — Controllers CTRL)
+  // ────────────────────────────────────────────
+  USER_PREFERENCE_SAVED:      'USER_PREFERENCE_SAVED',
+
+  // ────────────────────────────────────────────
+  // HABILITAÇÃO DIÁRIA (FASE 2 — Controllers CTRL)
+  // ────────────────────────────────────────────
+  QUALIFICATION_DAILY_REGISTERED: 'QUALIFICATION_DAILY_REGISTERED'
 
 });

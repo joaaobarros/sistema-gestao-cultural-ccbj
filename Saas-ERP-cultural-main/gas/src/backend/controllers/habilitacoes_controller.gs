@@ -106,3 +106,42 @@ function ctrl_hab_transicao(id, novoStatus, observacao, emailFallback) {
     return HabilitacoesEngine.aplicarTransicao(id, novoStatus, email, observacao || '');
   });
 }
+
+// ═══════════════════════════════════════════════════════════════
+// HABILITAÇÃO DIÁRIA
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * Registra habilitação diária de um espaço antes de um evento.
+ * @param {Object} dados — { reservaId, salaId, data, horaEvento, horaHabilitacao?, observacao? }
+ * @param {string} emailFallback
+ */
+function ctrl_hab_diaria(dados, emailFallback) {
+  return GasResponse.wrap(function() {
+    var email = obterEmailUsuario(emailFallback || '');
+    if (!email) throw new Error('Usuário não identificado.');
+    if (!dados || !dados.reservaId) throw new Error('reservaId é obrigatório.');
+    var resultado = registrarHabilitacaoDiaria(dados, email);
+    if (resultado && resultado.ok === false) throw new Error(resultado.erro || 'Erro ao registrar habilitação diária.');
+    AuditoriaService.registrar(
+      SystemEventTypes.QUALIFICATION_DAILY_REGISTERED,
+      'hab_diaria',
+      { reservaId: dados.reservaId, salaId: dados.salaId || '', ator: email }
+    );
+    return resultado;
+  });
+}
+
+/**
+ * Retorna relatório de habilitações do dia — reservas cruzadas com check-ins.
+ * @param {string} dataISO — "YYYY-MM-DD"
+ * @param {string} emailFallback
+ */
+function ctrl_hab_relatorio(dataISO, emailFallback) {
+  return GasResponse.wrap(function() {
+    var email = obterEmailUsuario(emailFallback || '');
+    if (!email) throw new Error('Usuário não identificado.');
+    if (!dataISO) throw new Error('Data é obrigatória (YYYY-MM-DD).');
+    return obterRelatorioDiario(dataISO, email);
+  });
+}
