@@ -192,15 +192,15 @@ var ChavesRepository = (function () {
       dados.setorId                   || '',
       dados.setorNome                 || '',
       agora,                              // DT_SOLICITACAO
-      '',                                 // DT_RETIRADA
+      dados.dtRetirada                || '',  // opcional: retirada imediata (fluxo operacional)
       dados.dtPrevistaDevolucao       || '',
       '',                                 // DT_DEVOLUCAO
       dados.status                    || CHV_STATUS_PROTOCOLO.SOLICITADA,
       dados.observacoes               || '',
-      '',                                 // ENTREGUE_POR_ID
-      '',                                 // ENTREGUE_POR_NOME
-      '',                                 // RECEBIDO_POR_ID
-      '',                                 // RECEBIDO_POR_NOME
+      dados.entreguePorId             || '',  // opcional: entrega direta/operacional
+      dados.entreguePorNome           || '',  // opcional: entrega direta/operacional
+      dados.recebidoPorId             || '',  // opcional: retirada operacional
+      dados.recebidoPorNome           || '',  // opcional: retirada operacional
       '',                                 // DEV_RECEBIDA_POR_ID
       '',                                 // DEV_RECEBIDA_POR_NOME
       dados.reservaVinculadaId        || '',

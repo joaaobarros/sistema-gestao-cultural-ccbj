@@ -595,7 +595,8 @@ const GAS = {
     obterRegistro:    function(cb, err)                       { GAS._callCtrl('ctrl_modulos_registro',         [GAS._sessao()],                   cb, err); },
     alterarStatus:    function(moduleId, ativo, cb, err)      { GAS._callCtrl('ctrl_modulos_alterar_status',   [moduleId, ativo, GAS._sessao()],  cb, err); },
     resetar:          function(cb, err)                       { GAS._callCtrl('ctrl_modulos_resetar',          [GAS._sessao()],                   cb, err); },
-    toggleSuperadmin: function(moduleId, valor, cb, err)      { GAS._callCtrl('ctrl_modulos_toggle_superadmin',[moduleId, valor, GAS._sessao()],  cb, err); }
+    toggleSuperadmin: function(moduleId, valor, cb, err)      { GAS._callCtrl('ctrl_modulos_toggle_superadmin',[moduleId, valor, GAS._sessao()],  cb, err); },
+    salvarLote:       function(alteracoes, cb, err)            { GAS._callCtrl('ctrl_modulos_salvar_lote',      [alteracoes, GAS._sessao()],       cb, err); }
   },
 
   /**

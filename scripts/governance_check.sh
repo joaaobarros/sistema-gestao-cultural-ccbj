@@ -218,6 +218,26 @@ else
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────
+# CHECK 11 — SpreadsheetApp em core/ (camada de serviços centrais)
+#
+# A camada core/ (auth, logger, services/) não deve tocar a planilha diretamente.
+# Toda persistência de core deve passar por módulos específicos ou DataGateway.
+# utils.gs é excluído por ser utilitário de _getSheet (helper de acesso, não lógica).
+# ─────────────────────────────────────────────────────────────────────────────
+_header "CHECK 11 — SpreadsheetApp em core/ (camada de serviços centrais)"
+# utils.gs: helper _getSheet (acesso permitido por design)
+# setup.gs: script de inicialização de planilhas (acesso permitido por design)
+result=""
+for f in $(find "$SRC/core" -name "*.gs" 2>/dev/null \
+           | grep -v "utils\.gs" | grep -v "setup\.gs"); do
+  found=$(grep -n "SpreadsheetApp\." "$f" 2>/dev/null | grep -v "^\s*//" || true)
+  [ -n "$found" ] && result="$result
+$(basename "$f"): $found"
+done
+result=$(echo "$result" | grep . || true)
+_emit_violations "spreadsheet_in_core" "$result" "bloqueante"
+
+# ─────────────────────────────────────────────────────────────────────────────
 # TENDÊNCIA 1 — GAS._call() no bridge (namespaces legacy não migrados)
 # ─────────────────────────────────────────────────────────────────────────────
 _header "TENDÊNCIA 1 — GAS._call() no bridge (legacy, não migrado)"
@@ -272,6 +292,33 @@ for f in $fsm_engines; do
 done
 [ "$t4_count" -eq 0 ] && echo "    ✓ todos os engines com FSM usam FsmGuardian" || \
   echo "    → $t4_count engine(s) sem FsmGuardian (meta: 0)"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TENDÊNCIA 5 — getRange/appendRow/setValues em módulos com *_repository.gs
+#
+# Quando um módulo tem um repositório dedicado, toda I/O de planilha DEVE
+# passar pelo repositório. Acessos diretos em módulos "irmãos" do repository
+# indicam bypass não concluído — meta: 0.
+# (Exclui os próprios *_repository.gs e *_engine.gs — esses são permitidos.)
+# ─────────────────────────────────────────────────────────────────────────────
+_header "TENDÊNCIA 5 — getRange/appendRow/setValues em módulos com repository"
+t5_total=0
+for repo_file in $(find "$SRC" -name "*_repository.gs" 2>/dev/null); do
+  dir=$(dirname "$repo_file")
+  for f in $(find "$dir" -name "*.gs" 2>/dev/null \
+             | grep -v "_repository\.gs" \
+             | grep -v "_engine\.gs"); do
+    count=$(grep -c "\.getRange(\|\.appendRow(\|\.setValues(" "$f" 2>/dev/null \
+      | grep -v "^\s*//" || echo 0)
+    if [ "$count" -gt 0 ] 2>/dev/null; then
+      echo "    $(basename "$f") [$(basename "$dir")]: $count ocorrência(s)"
+      t5_total=$((t5_total + count))
+    fi
+  done
+done
+[ "$t5_total" -eq 0 ] \
+  && echo "    ✓ nenhum módulo com repository faz acesso procedural direto" \
+  || echo "    → $t5_total ocorrência(s) procedurais em módulos com repository (meta: 0)"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # SUMÁRIO

@@ -94,14 +94,15 @@
 Estes módulos têm código procedural ativo (getRange/getValues/setValues direto fora de Repository).  
 Não são DEAD — são o NEXT na fila de migração para Engine+Repository.
 
-| Módulo                           | Acesso Procedural | Status Controller | Prioridade de Migração |
-|----------------------------------|-------------------|-------------------|------------------------|
-| `mod_reservas.gs`               | ~35 ocorrências   | ✓ reservas_controller | 🔴 Alta (maior volume) |
-| `mod_comunicacao_processos.gs`  | ~8 ocorrências    | ✓ comunicacao_processos_controller | 🟡 Média |
-| `mod_hab_diaria.gs`             | ~10 ocorrências   | ✓ habilitacoes_controller | 🟡 Média |
-| `mod_comunicacao.gs`            | ~12 ocorrências   | ✓ comunicacao_controller | 🟡 Média |
-| `mod_chaves.gs`                 | ~20 ocorrências   | ✓ chaves_controller | 🟡 Média (tem chaves_repository) |
-| `mod_financeiro.gs`             | ~10 ocorrências   | ✓ financeiro_controller | 🟢 Baixa (módulo inativo) |
+| Módulo                           | Acesso Procedural | Repositório disponível? | Status Migração FASE 4 |
+|----------------------------------|-------------------|------------------------|------------------------|
+| `mod_reservas.gs`               | ~41 ocorrências   | Não                    | ACTIVE — criar reservas_repository.gs |
+| `mod_comunicacao_processos.gs`  | ~17 ocorrências   | Não                    | ACTIVE — criar repository |
+| `mod_hab_diaria.gs`             | ~13 ocorrências   | Não (HabDiaria ≠ habilitacoes_repository) | BLOCKED — criar hab_diaria_repository.gs |
+| `mod_comunicacao.gs`            | ~8 ocorrências    | Não                    | ACTIVE — criar repository |
+| `mod_escuta.gs`                 | ~6 ocorrências    | Não                    | ACTIVE — criar repository |
+| `mod_pessoal.gs`                | ~9 ocorrências    | Não (rh_repository é JSON, não Sheets) | ACTIVE — criar repository para Tarefas |
+| `mod_chaves.gs`                 | 9 ocorrências (Configuracoes only) | ✓ chaves_repository | **MIGRADO** — FASE 4 concluída. 11 helpers eliminados. Apenas Configuracoes (sem repo) permanece. |
 
 ---
 

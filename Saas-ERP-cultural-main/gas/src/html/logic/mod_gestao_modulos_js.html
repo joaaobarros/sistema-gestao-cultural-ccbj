@@ -3,9 +3,11 @@
 @layer frontend/domain
 @description Lógica do painel SUPERADMIN de gestão de módulos.
              Carregamento lazy via _onShow_aba_gestao_modulos.
-             Aplica estado de ativação na sidebar e nas rotas após cada alteração.
-@responsibility CRUD de ativação; renderização; filtros; aplicação de estado na UI.
-@dependencies GAS.modulos, AppState.modulos, navegacao_ui_js (mostrarAba)
+             Toggles operam apenas no estado local — salvar em lote via _modSalvarLote().
+             Campo: apenasSuperadmin (backend) / AppState.modulosSuper (AppState).
+@responsibility CRUD de ativação; toggle apenasSuperadmin; salvamento em lote;
+                renderização em grid e lista; filtros; aplicação de estado na UI.
+@dependencies GAS.modulos, AppState.modulos, AppState.modulosSuper, navegacao_ui_js
 -->
 <script>
 
@@ -16,15 +18,24 @@
 var _modState = {
   modulos: [],
   categoriaAtiva: '',
-  carregado: false
+  carregado: false,
+  modoVisualizacao: (function() {
+    try { return localStorage.getItem('modulos_modo_view') || 'grid'; } catch(e) { return 'grid'; }
+  })()
 };
+
+// Snapshot dos valores originais carregados do backend
+var _modOriginal = {};
+// Mudanças locais ainda não salvas: { moduleId: { ativo?, apenasSuperadmin? } }
+var _modPendentes = {};
 
 // ══════════════════════════════════════════════════════════════════
 // BLOCO: Lazy-load — disparado por mostrarAba('aba-gestao-modulos')
 // ══════════════════════════════════════════════════════════════════
 
 window._onShow_aba_gestao_modulos = function() {
-  if (!_modState.carregado) _modAtualizarLista();
+  _modAplicarEstiloModo(_modState.modoVisualizacao);
+  if (!_modState.carregado) _modCarregarDoBanco();
 };
 
 // ══════════════════════════════════════════════════════════════════
@@ -32,6 +43,26 @@ window._onShow_aba_gestao_modulos = function() {
 // ══════════════════════════════════════════════════════════════════
 
 function _modAtualizarLista() {
+  var nPend = Object.keys(_modPendentes).length;
+  if (nPend > 0) {
+    Swal.fire({
+      title: 'Alterações não salvas',
+      html: '<span class="text-sm text-gray-500">Há ' + nPend + ' alteraç' + (nPend === 1 ? 'ão' : 'ões') + ' pendente' + (nPend === 1 ? '' : 's') + '. Descartar e atualizar?</span>',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Descartar e atualizar',
+      cancelButtonText: 'Cancelar',
+      confirmButtonColor: '#dc2626',
+      cancelButtonColor: '#6b7280'
+    }).then(function(r) {
+      if (r.isConfirmed) { _modPendentes = {}; _modCarregarDoBanco(); }
+    });
+    return;
+  }
+  _modCarregarDoBanco();
+}
+
+function _modCarregarDoBanco() {
   _modSetLoader(true);
 
   GAS.modulos.obterRegistro(function(res) {
@@ -42,8 +73,17 @@ function _modAtualizarLista() {
     }
     _modState.modulos  = res.modulos || [];
     _modState.carregado = true;
+
+    // Snapshot dos valores originais
+    _modOriginal = {};
+    _modPendentes = {};
+    _modState.modulos.forEach(function(m) {
+      _modOriginal[m.moduleId] = { ativo: !!m.ativo, apenasSuperadmin: !!m.apenasSuperadmin };
+    });
+
+    _modAtualizarBarraSalvar();
     _modAtualizarStats();
-    _modRenderizarGrid(_modState.categoriaAtiva);
+    _modRenderizar();
   }, function(e) {
     _modSetLoader(false);
     Swal.fire({ icon:'error', title:'Erro de conexão', text: String(e), confirmButtonColor:'#7c3aed' });
@@ -51,7 +91,158 @@ function _modAtualizarLista() {
 }
 
 // ══════════════════════════════════════════════════════════════════
-// BLOCO: Renderização do grid
+// BLOCO: Toggles locais (sem chamar GAS)
+// ══════════════════════════════════════════════════════════════════
+
+function _modToggleAtivo(moduleId) {
+  var mod = _modState.modulos.find(function(m) { return m.moduleId === moduleId; });
+  if (!mod || mod.nucleo) return;
+  mod.ativo = !mod.ativo;
+  _modMarcarPendente(moduleId, 'ativo', mod.ativo);
+  _modAtualizarStats();
+  _modRenderizar();
+}
+
+function _modToggleSuperadminOnly(moduleId) {
+  var mod = _modState.modulos.find(function(m) { return m.moduleId === moduleId; });
+  if (!mod) return;
+  mod.apenasSuperadmin = !mod.apenasSuperadmin;
+  _modMarcarPendente(moduleId, 'apenasSuperadmin', mod.apenasSuperadmin);
+  _modRenderizar();
+}
+
+// ══════════════════════════════════════════════════════════════════
+// BLOCO: Rastreamento de mudanças pendentes
+// ══════════════════════════════════════════════════════════════════
+
+function _modMarcarPendente(moduleId, campo, valor) {
+  var orig = _modOriginal[moduleId];
+  if (!orig) return;
+  if (!_modPendentes[moduleId]) _modPendentes[moduleId] = {};
+  _modPendentes[moduleId][campo] = valor;
+
+  // Remove se voltou ao estado original
+  var p = _modPendentes[moduleId];
+  var temDiff = false;
+  if ('ativo' in p && p.ativo !== orig.ativo) temDiff = true;
+  if ('apenasSuperadmin' in p && p.apenasSuperadmin !== orig.apenasSuperadmin) temDiff = true;
+  if (!temDiff) delete _modPendentes[moduleId];
+
+  _modAtualizarBarraSalvar();
+}
+
+function _modAtualizarBarraSalvar() {
+  var n = Object.keys(_modPendentes).length;
+  var barra = document.getElementById('mod-barra-salvar');
+  var texto = document.getElementById('mod-barra-texto');
+  if (barra) barra.classList.toggle('hidden', n === 0);
+  if (texto) texto.textContent = n + ' alteraç' + (n === 1 ? 'ão' : 'ões') + ' pendente' + (n === 1 ? '' : 's');
+}
+
+// ══════════════════════════════════════════════════════════════════
+// BLOCO: Salvamento em lote
+// ══════════════════════════════════════════════════════════════════
+
+function _modSalvarLote() {
+  var ids = Object.keys(_modPendentes);
+  if (ids.length === 0) return;
+
+  var alteracoes = [];
+  ids.forEach(function(moduleId) {
+    var mod = _modState.modulos.find(function(m) { return m.moduleId === moduleId; });
+    if (!mod) return;
+    var alt = { moduleId: moduleId };
+    var p = _modPendentes[moduleId];
+    if ('ativo' in p) alt.ativo = mod.ativo;
+    if ('apenasSuperadmin' in p) alt.apenasSuperadmin = mod.apenasSuperadmin;
+    alteracoes.push(alt);
+  });
+
+  var btn = document.getElementById('mod-btn-salvar-lote');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin text-xs"></i> Salvando...'; }
+
+  GAS.modulos.salvarLote(alteracoes, function(res) {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save text-xs"></i> Salvar alterações'; }
+    if (!res || !res.ok) {
+      Swal.fire({ icon:'error', title:'Erro', text:(res && res.msg)||'Falha ao salvar.', confirmButtonColor:'#7c3aed' });
+      return;
+    }
+
+    // Atualiza snapshot e limpa pendentes
+    _modState.modulos.forEach(function(m) {
+      _modOriginal[m.moduleId] = { ativo: !!m.ativo, apenasSuperadmin: !!m.apenasSuperadmin };
+    });
+    _modPendentes = {};
+    _modAtualizarBarraSalvar();
+
+    // Propaga para AppState
+    if (typeof AppState !== 'undefined') {
+      if (!AppState.modulosSuper) AppState.modulosSuper = {};
+      _modState.modulos.forEach(function(m) {
+        AppState.modulos[m.moduleId] = !!m.ativo;
+        AppState.modulosSuper[m.moduleId] = !!m.apenasSuperadmin;
+      });
+    }
+    if (typeof aplicarEstadoModulos === 'function') aplicarEstadoModulos();
+
+    _modAtualizarStats();
+    _modRenderizar();
+
+    Swal.fire({ icon:'success', title:'Alterações salvas', timer:1800, showConfirmButton:false });
+  }, function(e) {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save text-xs"></i> Salvar alterações'; }
+    Swal.fire({ icon:'error', title:'Erro de conexão', text:String(e), confirmButtonColor:'#7c3aed' });
+  });
+}
+
+function _modDescartarPendentes() {
+  _modState.modulos.forEach(function(m) {
+    var orig = _modOriginal[m.moduleId];
+    if (orig) {
+      m.ativo = orig.ativo;
+      m.apenasSuperadmin = orig.apenasSuperadmin;
+    }
+  });
+  _modPendentes = {};
+  _modAtualizarBarraSalvar();
+  _modAtualizarStats();
+  _modRenderizar();
+}
+
+// ══════════════════════════════════════════════════════════════════
+// BLOCO: Modo de visualização (grid / lista)
+// ══════════════════════════════════════════════════════════════════
+
+function _modSetModo(modo) {
+  _modState.modoVisualizacao = modo;
+  try { localStorage.setItem('modulos_modo_view', modo); } catch(e) {}
+  _modAplicarEstiloModo(modo);
+  _modRenderizar();
+}
+
+function _modAplicarEstiloModo(modo) {
+  var ativo   = 'px-3 py-1.5 rounded-lg bg-white text-purple-600 shadow-sm font-bold text-xs transition-all';
+  var inativo = 'px-3 py-1.5 rounded-lg text-slate-500 hover:text-slate-700 font-bold text-xs transition-all';
+  var btnGrid  = document.getElementById('mod-btn-modo-grid');
+  var btnLista = document.getElementById('mod-btn-modo-lista');
+  if (btnGrid)  btnGrid.className  = modo === 'grid'  ? ativo : inativo;
+  if (btnLista) btnLista.className = modo === 'lista' ? ativo : inativo;
+}
+
+// ══════════════════════════════════════════════════════════════════
+// BLOCO: Renderização unificada
+// ══════════════════════════════════════════════════════════════════
+
+function _modRenderizar() {
+  if (_modState.modoVisualizacao === 'lista') {
+    _modRenderizarLista(_modState.categoriaAtiva);
+  } else {
+    _modRenderizarGrid(_modState.categoriaAtiva);
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// BLOCO: Renderização — Grid de cards
 // ══════════════════════════════════════════════════════════════════
 
 var _corCategoria = {
@@ -74,14 +265,17 @@ var _corStatus = {
 };
 
 function _modRenderizarGrid(categoria) {
-  var grid = document.getElementById('mod-grid');
+  var grid  = document.getElementById('mod-grid');
+  var lista = document.getElementById('mod-lista');
   var vazio = document.getElementById('mod-vazio');
   if (!grid) return;
 
-  var lista = _modState.modulos;
-  if (categoria) lista = lista.filter(function(m) { return m.categoria === categoria; });
+  if (lista) lista.classList.add('hidden');
 
-  if (!lista.length) {
+  var itens = _modState.modulos;
+  if (categoria) itens = itens.filter(function(m) { return m.categoria === categoria; });
+
+  if (!itens.length) {
     grid.classList.add('hidden');
     if (vazio) vazio.classList.remove('hidden');
     return;
@@ -89,33 +283,43 @@ function _modRenderizarGrid(categoria) {
 
   if (vazio) vazio.classList.add('hidden');
   grid.classList.remove('hidden');
-  grid.innerHTML = lista.map(_modCardHTML).join('');
+  grid.innerHTML = itens.map(_modCardHTML).join('');
 }
 
 function _modCardHTML(m) {
   var cor  = _corCategoria[m.categoria] || _corCategoria['operacional'];
   var sta  = _corStatus[m.status_operacional] || _corStatus['alpha'];
   var deps = (m.dependencias || []).join(', ') || '—';
+  var isPending = _modPendentes.hasOwnProperty(m.moduleId);
+  var isSA = !!m.apenasSuperadmin;
 
+  var cardBorder = isPending ? 'border-amber-300 ring-1 ring-amber-200' : 'border-slate-100';
   var toggleDisabled = m.nucleo ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer';
   var toggleTitle    = m.nucleo ? 'Módulo de núcleo — não pode ser desativado' : (m.ativo ? 'Desativar módulo' : 'Ativar módulo');
+  var shieldCls = isSA
+    ? 'bg-violet-100 text-violet-500 hover:bg-violet-200'
+    : 'text-slate-300 hover:text-violet-400 hover:bg-violet-50';
+  var shieldTitle = isSA
+    ? 'Restrito ao superadmin — clique para liberar a todos'
+    : 'Clique para restringir ao superadmin';
 
   return [
-    '<div class="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden mod-card" data-categoria="' + m.categoria + '">',
+    '<div class="bg-white rounded-2xl border ' + cardBorder + ' shadow-sm overflow-hidden mod-card" data-categoria="' + m.categoria + '">',
 
-      // Faixa colorida de categoria
-      '<div class="h-1.5 ' + cor.bg.replace('bg-','bg-').replace('-50','-400') + '"></div>',
+      '<div class="h-1.5 ' + cor.bg.replace('-50','-400') + '"></div>',
 
       '<div class="p-5">',
 
-        // Header do card
         '<div class="flex items-start justify-between gap-3 mb-3">',
           '<div class="flex items-center gap-3 min-w-0">',
             '<div class="w-10 h-10 ' + cor.bg + ' rounded-xl flex items-center justify-center shrink-0">',
               '<i class="fas ' + cor.icon + ' ' + cor.text + ' text-sm"></i>',
             '</div>',
             '<div class="min-w-0">',
-              '<h3 class="font-black text-slate-800 text-sm leading-tight truncate">' + _escHTML(m.nome) + '</h3>',
+              '<div class="flex items-center gap-1.5">',
+                '<h3 class="font-black text-slate-800 text-sm leading-tight truncate">' + _escHTML(m.nome) + '</h3>',
+                (isPending ? '<span class="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" title="Alteração pendente"></span>' : ''),
+              '</div>',
               '<div class="flex items-center gap-1.5 mt-0.5 flex-wrap">',
                 '<span class="text-[10px] font-bold px-2 py-0.5 rounded-full ' + cor.badge + '">' + m.categoria + '</span>',
                 '<span class="text-[10px] font-bold px-2 py-0.5 rounded-full ' + sta.cls + '">' + sta.label + '</span>',
@@ -125,10 +329,17 @@ function _modCardHTML(m) {
             '</div>',
           '</div>',
 
-          // Toggle
-          '<div class="shrink-0">',
+          '<div class="shrink-0 flex items-center gap-1.5">',
+            // Shield (apenasSuperadmin)
             '<button',
-              ' onclick="' + (m.nucleo ? '' : '_modAlterarStatus(\'' + m.moduleId + '\',' + (!m.ativo) + ')') + '"',
+              ' onclick="_modToggleSuperadminOnly(\'' + m.moduleId + '\')"',
+              ' title="' + shieldTitle + '"',
+              ' class="w-7 h-7 flex items-center justify-center rounded-lg transition-colors ' + shieldCls + '">',
+              '<i class="fas fa-shield-alt text-xs"></i>',
+            '</button>',
+            // Toggle ativo
+            '<button',
+              ' onclick="' + (m.nucleo ? '' : '_modToggleAtivo(\'' + m.moduleId + '\')') + '"',
               ' title="' + toggleTitle + '"',
               ' class="relative w-11 h-6 rounded-full transition-colors duration-200 focus:outline-none ' + toggleDisabled + ' ' + (m.ativo ? 'bg-emerald-500' : 'bg-slate-300') + '">',
               '<span class="absolute top-0.5 transition-transform duration-200 w-5 h-5 bg-white rounded-full shadow-sm ' + (m.ativo ? 'translate-x-5' : 'translate-x-0.5') + '"></span>',
@@ -137,10 +348,8 @@ function _modCardHTML(m) {
 
         '</div>',
 
-        // Descrição
         '<p class="text-xs text-slate-500 leading-relaxed mb-3">' + _escHTML(m.descricao || '') + '</p>',
 
-        // Detalhes técnicos
         '<div class="bg-slate-50 rounded-xl p-3 space-y-1.5 text-[10px]">',
           '<div class="flex justify-between">',
             '<span class="text-slate-400 font-semibold">Rotas</span>',
@@ -152,12 +361,12 @@ function _modCardHTML(m) {
           '</div>',
         '</div>',
 
-        // Status visual
         '<div class="mt-3 flex items-center gap-2">',
           '<div class="w-2 h-2 rounded-full ' + (m.ativo ? 'bg-emerald-500' : 'bg-slate-300') + '"></div>',
           '<span class="text-[10px] font-bold ' + (m.ativo ? 'text-emerald-600' : 'text-slate-400') + '">',
             (m.ativo ? 'Ativo' : 'Inativo'),
           '</span>',
+          (isSA ? '<span class="ml-auto flex items-center gap-1 text-[9px] text-violet-500 font-bold"><i class="fas fa-shield-alt text-[9px]"></i> apenas superadmin</span>' : ''),
         '</div>',
 
       '</div>',
@@ -165,9 +374,82 @@ function _modCardHTML(m) {
   ].join('');
 }
 
-function _escHTML(str) {
-  if (typeof escaparHTML === 'function') return escaparHTML(str);
-  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+// ══════════════════════════════════════════════════════════════════
+// BLOCO: Renderização — Lista simples
+// ══════════════════════════════════════════════════════════════════
+
+function _modRenderizarLista(categoria) {
+  var lista_el = document.getElementById('mod-lista');
+  var grid_el  = document.getElementById('mod-grid');
+  var vazio    = document.getElementById('mod-vazio');
+  if (!lista_el) return;
+
+  if (grid_el) grid_el.classList.add('hidden');
+
+  var itens = _modState.modulos;
+  if (categoria) itens = itens.filter(function(m) { return m.categoria === categoria; });
+
+  if (!itens.length) {
+    lista_el.classList.add('hidden');
+    if (vazio) vazio.classList.remove('hidden');
+    return;
+  }
+
+  if (vazio) vazio.classList.add('hidden');
+  lista_el.classList.remove('hidden');
+  lista_el.innerHTML = itens.map(_modListaRowHTML).join('');
+}
+
+function _modListaRowHTML(m) {
+  var cor = _corCategoria[m.categoria] || _corCategoria['operacional'];
+  var sta = _corStatus[m.status_operacional] || _corStatus['alpha'];
+  var isPending = _modPendentes.hasOwnProperty(m.moduleId);
+  var isSA = !!m.apenasSuperadmin;
+
+  var rowBorder = isPending ? 'border-amber-300 bg-amber-50' : 'border-slate-100 bg-white';
+  var toggleDisabled = m.nucleo ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer';
+  var shieldCls = isSA
+    ? 'bg-violet-100 text-violet-500 hover:bg-violet-200'
+    : 'text-slate-300 hover:text-violet-400 hover:bg-violet-50';
+
+  return [
+    '<div class="flex items-center gap-3 px-4 py-2.5 rounded-xl border ' + rowBorder + ' hover:border-slate-200 transition-all mod-card" data-categoria="' + m.categoria + '">',
+
+      '<div class="w-8 h-8 ' + cor.bg + ' rounded-lg flex items-center justify-center shrink-0">',
+        '<i class="fas ' + cor.icon + ' ' + cor.text + ' text-xs"></i>',
+      '</div>',
+
+      '<div class="flex-1 min-w-0">',
+        '<div class="flex items-center gap-1.5">',
+          '<span class="font-bold text-slate-800 text-sm truncate">' + _escHTML(m.nome) + '</span>',
+          (m.nucleo ? '<span class="text-[8px] font-black px-1 py-0.5 rounded bg-slate-100 text-slate-500 shrink-0">NÚCLEO</span>' : ''),
+          (isPending ? '<span class="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" title="Alteração pendente"></span>' : ''),
+        '</div>',
+        '<div class="flex items-center gap-1 mt-0.5">',
+          '<span class="text-[9px] font-bold px-1.5 py-0.5 rounded-full ' + cor.badge + '">' + m.categoria + '</span>',
+          '<span class="text-[9px] font-bold px-1.5 py-0.5 rounded-full ' + sta.cls + '">' + sta.label + '</span>',
+          '<span class="text-[8px] text-slate-400 font-mono ml-1">v' + (m.versao || '?') + '</span>',
+        '</div>',
+      '</div>',
+
+      // Shield
+      '<button',
+        ' onclick="_modToggleSuperadminOnly(\'' + m.moduleId + '\')"',
+        ' title="' + (isSA ? 'Restrito ao superadmin — clique para liberar' : 'Restringir ao superadmin') + '"',
+        ' class="w-8 h-8 flex items-center justify-center rounded-lg transition-colors ' + shieldCls + '">',
+        '<i class="fas fa-shield-alt text-xs"></i>',
+      '</button>',
+
+      // Toggle ativo
+      '<button',
+        ' onclick="' + (m.nucleo ? '' : '_modToggleAtivo(\'' + m.moduleId + '\')') + '"',
+        ' title="' + (m.nucleo ? 'Módulo de núcleo' : (m.ativo ? 'Desativar' : 'Ativar')) + '"',
+        ' class="relative w-10 h-5 rounded-full transition-colors duration-200 focus:outline-none shrink-0 ' + toggleDisabled + ' ' + (m.ativo ? 'bg-emerald-500' : 'bg-slate-300') + '">',
+        '<span class="absolute top-0.5 transition-transform duration-200 w-4 h-4 bg-white rounded-full shadow-sm ' + (m.ativo ? 'translate-x-5' : 'translate-x-0.5') + '"></span>',
+      '</button>',
+
+    '</div>'
+  ].join('');
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -189,63 +471,7 @@ function _modFiltrarCategoria(categoria) {
     btnAlvo.classList.remove('bg-white','text-slate-500','border-slate-200');
   }
 
-  _modRenderizarGrid(categoria);
-}
-
-// ══════════════════════════════════════════════════════════════════
-// BLOCO: Ativação / desativação
-// ══════════════════════════════════════════════════════════════════
-
-function _modAlterarStatus(moduleId, novoAtivo) {
-  var mod = _modState.modulos.find(function(m) { return m.moduleId === moduleId; });
-  if (!mod) return;
-
-  var acao = novoAtivo ? 'ativar' : 'desativar';
-  var cor  = novoAtivo ? '#16a34a' : '#dc2626';
-
-  Swal.fire({
-    title: (novoAtivo ? 'Ativar' : 'Desativar') + ' módulo?',
-    html:  '<b>' + _escHTML(mod.nome) + '</b><br><span class="text-sm text-gray-500">' + _escHTML(mod.descricao || '') + '</span>',
-    icon:  novoAtivo ? 'question' : 'warning',
-    showCancelButton: true,
-    confirmButtonText: novoAtivo ? 'Ativar' : 'Desativar',
-    cancelButtonText:  'Cancelar',
-    confirmButtonColor: cor,
-    cancelButtonColor: '#6b7280'
-  }).then(function(result) {
-    if (!result.isConfirmed) return;
-
-    GAS.modulos.alterarStatus(moduleId, novoAtivo, function(res) {
-      if (!res || !res.ok) {
-        Swal.fire({ icon:'error', title:'Erro', text:(res && res.msg) || 'Falha ao salvar.', confirmButtonColor:'#7c3aed' });
-        return;
-      }
-
-      // Atualiza estado local
-      _modState.modulos.forEach(function(m) {
-        if (m.moduleId === moduleId) m.ativo = novoAtivo;
-      });
-
-      // Propaga para AppState.modulos
-      if (typeof AppState !== 'undefined') AppState.modulos[moduleId] = novoAtivo;
-
-      // Aplica na UI global (sidebar + rotas)
-      if (typeof aplicarEstadoModulos === 'function') aplicarEstadoModulos();
-
-      _modAtualizarStats();
-      _modRenderizarGrid(_modState.categoriaAtiva);
-
-      Swal.fire({
-        icon: 'success',
-        title: 'Módulo ' + (novoAtivo ? 'ativado' : 'desativado'),
-        text: mod.nome,
-        timer: 1800,
-        showConfirmButton: false
-      });
-    }, function(e) {
-      Swal.fire({ icon:'error', title:'Erro de conexão', text:String(e), confirmButtonColor:'#7c3aed' });
-    });
-  });
+  _modRenderizar();
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -271,7 +497,8 @@ function _modConfirmarReset() {
         return;
       }
       _modState.carregado = false;
-      _modAtualizarLista();
+      _modPendentes = {};
+      _modCarregarDoBanco();
       Swal.fire({ icon:'success', title:'Módulos resetados', timer:1800, showConfirmButton:false });
     });
   });
@@ -284,8 +511,10 @@ function _modConfirmarReset() {
 function _modSetLoader(show) {
   var loader = document.getElementById('mod-loader');
   var grid   = document.getElementById('mod-grid');
+  var lista  = document.getElementById('mod-lista');
   if (loader) loader.classList.toggle('hidden', !show);
-  if (show && grid) grid.classList.add('hidden');
+  if (show && grid)  grid.classList.add('hidden');
+  if (show && lista) lista.classList.add('hidden');
 }
 
 function _modAtualizarStats() {
@@ -306,6 +535,15 @@ function _modAtualizarStats() {
     var isSA = typeof AppState !== 'undefined' && AppState.usuario && AppState.usuario.isSuperadmin;
     banner.classList.toggle('hidden', !isSA);
   }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// BLOCO: Utilitário de escape HTML
+// ══════════════════════════════════════════════════════════════════
+
+function _escHTML(str) {
+  if (typeof escaparHTML === 'function') return escaparHTML(str);
+  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
 </script>

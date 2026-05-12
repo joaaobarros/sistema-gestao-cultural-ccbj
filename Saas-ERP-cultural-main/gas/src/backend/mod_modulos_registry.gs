@@ -360,6 +360,45 @@ function modulos_alterarStatus(moduleId, ativo, emailFallback) {
 }
 
 /**
+ * Salva múltiplas alterações em uma operação. Acesso: SUPERADMIN only.
+ * Cada item em alteracoes: { moduleId, ativo?, apenasSuperadmin? }
+ */
+function modulos_salvarLote(alteracoes, emailFallback) {
+  if (!_modIsSuperadmin(emailFallback)) return { ok: false, msg: 'Acesso restrito a SUPERADMIN.' };
+  if (!Array.isArray(alteracoes)) return { ok: false, msg: 'alteracoes deve ser um array.' };
+  try {
+    var modulos = _modLerRegistro();
+    var erros = [];
+
+    alteracoes.forEach(function(alt) {
+      var mod = null;
+      for (var i = 0; i < modulos.length; i++) {
+        if (modulos[i].moduleId === alt.moduleId) { mod = modulos[i]; break; }
+      }
+      if (!mod) { erros.push('Não encontrado: ' + alt.moduleId); return; }
+
+      if (typeof alt.ativo !== 'undefined') {
+        if (mod.nucleo && !alt.ativo) { erros.push('Núcleo não desativável: ' + alt.moduleId); return; }
+        mod.ativo = !!alt.ativo;
+      }
+      if (typeof alt.apenasSuperadmin !== 'undefined') {
+        mod.apenasSuperadmin = !!alt.apenasSuperadmin;
+      }
+    });
+
+    _modSalvarRegistro(modulos);
+    try {
+      var email = obterEmailUsuario(emailFallback || '');
+      Logger.info('modulos_registry', 'MODULOS_LOTE_SALVO', { total: alteracoes.length, email: email });
+    } catch(logErr) {}
+
+    return { ok: true, erros: erros };
+  } catch(e) {
+    return { ok: false, msg: e.message };
+  }
+}
+
+/**
  * Reseta o registro para os valores padrão. Acesso: SUPERADMIN only.
  */
 function modulos_resetar(emailFallback) {

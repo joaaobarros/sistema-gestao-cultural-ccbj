@@ -49,3 +49,11 @@ function ctrl_modulos_toggle_superadmin(moduleId, valor, emailFallback) {
     return modulos_toggleSuperadmin(moduleId, valor, email);
   }, 'ctrl_modulos_toggle_superadmin');
 }
+
+function ctrl_modulos_salvar_lote(alteracoes, emailFallback) {
+  return GasResponse.wrap(function() {
+    if (!Array.isArray(alteracoes)) throw new Error('alteracoes deve ser um array.');
+    var email = obterEmailUsuario(emailFallback || '');
+    return modulos_salvarLote(alteracoes, email);
+  }, 'ctrl_modulos_salvar_lote');
+}
