@@ -207,6 +207,99 @@ else
 fi
 
 # ═══════════════════════════════════════════════════════════════════════════
+# FASE 9 — GOVERNANÇA CONTÍNUA (novos invariantes)
+# ═══════════════════════════════════════════════════════════════════════════
+_sec "FASE 9 — Governança: FsmGuardian"
+
+_file  "$SRC/core/services/fsm_guardian.gs"                                 "FsmGuardian existe"
+_has   "registrar:"          "$SRC/core/services/fsm_guardian.gs"           "FsmGuardian.registrar exportado"
+_has   "validar:"            "$SRC/core/services/fsm_guardian.gs"           "FsmGuardian.validar exportado"
+_has   "assertValida:"       "$SRC/core/services/fsm_guardian.gs"           "FsmGuardian.assertValida exportado"
+
+# Todos os engines com FSM devem registrar no Guardian
+for engine in reserva_engine chave_engine habilitacoes_engine contratos_engine; do
+  engine_path=$(find "$SRC" -name "${engine}.gs" 2>/dev/null | head -1)
+  if [ -n "$engine_path" ]; then
+    grep -q "FsmGuardian.registrar" "$engine_path" 2>/dev/null \
+      && _ok "${engine}.gs: FsmGuardian.registrar presente" \
+      || _err "${engine}.gs: FsmGuardian.registrar ausente"
+  else
+    _err "${engine}.gs não encontrado"
+  fi
+done
+
+# action_engine: tem FSM (_TRANSICOES_VALIDAS) mas sem repository → deve ter Guardian
+_has_gs "FsmGuardian.registrar" "$SRC/action_engine"                        "action_engine registrado no FsmGuardian"
+
+_sec "FASE 9 — Governança: Observabilidade"
+
+_file  "$SRC/core/services/auditoria_service.gs"                            "AuditoriaService existe"
+_has   "registrarFsmViolacao:"    "$SRC/core/services/auditoria_service.gs" "AuditoriaService.registrarFsmViolacao exportado"
+_has   "registrarFalhaAuth:"      "$SRC/core/services/auditoria_service.gs" "AuditoriaService.registrarFalhaAuth exportado"
+_has   "registrarMutacaoCritica:" "$SRC/core/services/auditoria_service.gs" "AuditoriaService.registrarMutacaoCritica exportado"
+
+_file  "$SRC/core/services/metrics_engine.gs"                               "MetricsEngine existe"
+_has   "fsm:"       "$SRC/core/services/metrics_engine.gs"                  "MetricsEngine.fsm exportado"
+_has   "seguranca:" "$SRC/core/services/metrics_engine.gs"                  "MetricsEngine.seguranca exportado"
+_has   "governanca:" "$SRC/core/services/metrics_engine.gs"                 "MetricsEngine.governanca exportado"
+_has   "FSM:"       "$SRC/core/services/metrics_engine.gs"                  "METRICA_TIPO.FSM definido"
+
+_sec "FASE 9 — Governança: Event Schema"
+
+_file  "$SRC/core/event_bus_backend.gs"                                     "event_bus_backend.gs existe"
+_has   "validarSchema:"   "$SRC/core/event_bus_backend.gs"                  "SystemEvents.validarSchema exportado"
+_has   "FSM_INVALID_TRANSITION" "$SRC/core/events_constants.gs"             "FSM_INVALID_TRANSITION em SystemEventTypes"
+_has   "FSM_BYPASS_DETECTED"    "$SRC/core/events_constants.gs"             "FSM_BYPASS_DETECTED em SystemEventTypes"
+_has   "MUTATION_CRITICAL"      "$SRC/core/events_constants.gs"             "MUTATION_CRITICAL em SystemEventTypes"
+_has   "AUTH_FAILURE_TRACKED"   "$SRC/core/events_constants.gs"             "AUTH_FAILURE_TRACKED em SystemEventTypes"
+_has   "GOVERNANCE_VIOLATION"   "$SRC/core/events_constants.gs"             "GOVERNANCE_VIOLATION em SystemEventTypes"
+
+# Validar que aliases modernos são suportados no _normalizar
+_has   "actor"     "$SRC/core/event_bus_backend.gs"                         "SystemEvents suporta alias 'actor'"
+_has   "module"    "$SRC/core/event_bus_backend.gs"                         "SystemEvents suporta alias 'module'"
+_has   "payload"   "$SRC/core/event_bus_backend.gs"                         "SystemEvents suporta alias 'payload'"
+
+_sec "FASE 9 — Governança: Lint Arquitetural"
+
+# Governance check deve passar
+if [ -f "$GOV" ]; then
+  if bash "$GOV" > /dev/null 2>&1; then
+    _ok "governance_check.sh (10 checks) passa com exit 0"
+  else
+    _err "governance_check.sh falhou (run: bash $GOV)"
+  fi
+else
+  _err "governance_check.sh não encontrado em $GOV"
+fi
+
+# Verificar ausência de *_service.gs fora do core
+orphan_services=$(find "$SRC" -name "*_service.gs" 2>/dev/null | grep -v "core/services" | wc -l)
+[ "$orphan_services" -eq 0 ] \
+  && _ok "Sem *_service.gs fora de core/services/ ($orphan_services)" \
+  || _err "*_service.gs fora de core/services/: $orphan_services arquivo(s)"
+
+# Verificar ausência de getRange/appendRow em controllers
+ctrl_direct=$(grep -rn "\.getRange(\|\.appendRow(\|\.setValues(" "$SRC/backend/controllers" \
+  --include="*.gs" 2>/dev/null | grep -v "^\s*//" | wc -l)
+[ "$ctrl_direct" -eq 0 ] \
+  && _ok "Sem getRange/appendRow/setValues em controllers ($ctrl_direct)" \
+  || _err "getRange/appendRow/setValues em controllers: $ctrl_direct ocorrência(s)"
+
+# Verificar ausência de Logger.log em core/controllers (exceto logger.gs)
+logger_violations=$(grep -rn "Logger\.log(" "$SRC/core" "$SRC/backend/controllers" \
+  --include="*.gs" 2>/dev/null | grep -v "logger\.gs:" | grep -vP ":\s*//" | grep -vP ":\s+\*" | wc -l)
+[ "$logger_violations" -eq 0 ] \
+  && _ok "Sem Logger.log() legado em core/ e controllers/ ($logger_violations)" \
+  || _err "Logger.log() legado em core/ ou controllers/: $logger_violations ocorrência(s)"
+
+_sec "FASE 9 — Governança: Documentação"
+
+_file  "Saas-ERP-cultural-main/docs/migration/legacy_inventory.md"          "Inventário do legacy existe"
+_file  "Saas-ERP-cultural-main/docs/migration/scalability_analysis.md"      "Análise de escalabilidade existe"
+_has   "DEAD"              "Saas-ERP-cultural-main/docs/migration/legacy_inventory.md" "Legacy classificado (DEAD/CTRL/AUTH presente)"
+_has   "GARGALO"           "Saas-ERP-cultural-main/docs/migration/scalability_analysis.md" "Gargalos documentados"
+
+# ═══════════════════════════════════════════════════════════════════════════
 # INVARIANTES GERAIS — nunca devem regredir
 # ═══════════════════════════════════════════════════════════════════════════
 _sec "INVARIANTES GERAIS"

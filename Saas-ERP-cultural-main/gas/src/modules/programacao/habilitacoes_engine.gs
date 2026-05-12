@@ -231,3 +231,7 @@ var HabilitacoesEngine = (function () {
   };
 
 })();
+
+try { FsmGuardian.registrar('habilitacoes', _TRANSICOES_HABILITACAO); } catch(e) {
+  console.warn('[habilitacoes_engine] FsmGuardian.registrar: ' + e.message);
+}

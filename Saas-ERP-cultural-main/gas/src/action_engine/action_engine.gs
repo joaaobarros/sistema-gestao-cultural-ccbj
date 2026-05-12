@@ -426,3 +426,7 @@ function _eventoParaStatus(status) {
   };
   return mapa[status] || SystemEventTypes.ACTION_STATUS_CHANGED;
 }
+
+try { FsmGuardian.registrar('acoes', _TRANSICOES_VALIDAS); } catch(e) {
+  console.warn('[action_engine] FsmGuardian.registrar: ' + e.message);
+}

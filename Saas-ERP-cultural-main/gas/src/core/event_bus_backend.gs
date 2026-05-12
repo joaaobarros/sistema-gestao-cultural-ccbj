@@ -47,8 +47,12 @@ var SystemEvents = (function () {
 
   /**
    * Normaliza o payload de entrada garantindo todos os campos canônicos.
-   * Preenche valores padrão quando ausentes; nunca falha silenciosamente
-   * em campos que afetam rastreabilidade.
+   * Suporta aliases modernos: actor→usuario, module→origem, payload→contexto.
+   * Campos críticos ausentes geram console.warn (não bloqueiam — backward-compat).
+   *
+   * SCHEMA CANÔNICO (todos os campos aceitos):
+   *   { entidade, entidadeId, usuario, origem,         — nomes originais
+   *     actor,    entityId,   module,  payload, metadata } — aliases modernos
    *
    * @param {string} tipo
    * @param {Object} payload
@@ -57,33 +61,79 @@ var SystemEvents = (function () {
   function _normalizar(tipo, payload) {
     payload = payload || {};
 
-    var usuario = payload.usuario || _emailAtual();
-    var origem  = payload.origem  || _detectarOrigem();
+    // Suporte a aliases modernos (FASE 5 — Governança de Eventos)
+    var entidade   = payload.entidade   || payload.entity      || '';
+    var entidadeId = payload.entidadeId || payload.entityId    || '';
+    var usuario    = payload.usuario    || payload.actor       || _emailAtual();
+    var origem     = payload.origem     || payload.module      || _detectarOrigem();
+    var contexto   = payload.contexto   || payload.payload     || {};
+    if (payload.metadata && typeof payload.metadata === 'object') {
+      contexto = Object.assign ? Object.assign({}, contexto, { _meta: payload.metadata }) : contexto;
+    }
 
-    // Aviso de governança: campos críticos ausentes são registrados no console
-    // (não bloqueiam a operação, mas devem ser corrigidos pelo módulo emissor)
-    if (!payload.entidade) {
-      console.warn('[SystemEvents] AVISO: evento "' + tipo + '" emitido sem campo "entidade". Auditoria incompleta.');
+    // Aviso de governança: campos críticos ausentes registrados no console.
+    // Não bloqueiam — mantemos backward-compatibility com emissores existentes.
+    if (!entidade) {
+      console.warn('[SystemEvents] GOVERNANÇA: evento "' + tipo + '" sem "entidade". Auditoria incompleta.');
     }
-    if (!payload.entidadeId) {
-      console.warn('[SystemEvents] AVISO: evento "' + tipo + '" emitido sem campo "entidadeId". Rastreabilidade prejudicada.');
+    if (!entidadeId) {
+      console.warn('[SystemEvents] GOVERNANÇA: evento "' + tipo + '" sem "entidadeId". Rastreabilidade prejudicada.');
     }
-    if (!payload.usuario) {
-      console.warn('[SystemEvents] AVISO: evento "' + tipo + '" emitido sem campo "usuario". Usando fallback: ' + usuario);
+    if (!payload.usuario && !payload.actor) {
+      console.warn('[SystemEvents] GOVERNANÇA: evento "' + tipo + '" sem "usuario". Usando fallback: ' + usuario);
     }
-    if (!payload.origem) {
-      console.warn('[SystemEvents] AVISO: evento "' + tipo + '" emitido sem campo "origem". Usando detecção automática: ' + origem);
+    if (!payload.origem && !payload.module) {
+      console.warn('[SystemEvents] GOVERNANÇA: evento "' + tipo + '" sem "origem". Detecção auto: ' + origem);
     }
 
     return {
       id:        _gerarIdEvento(),
       tipo:      tipo,
       origem:    origem,
-      entidade:  payload.entidade   || '',
-      entidadeId:payload.entidadeId || '',
+      entidade:  entidade,
+      entidadeId:entidadeId,
       usuario:   usuario,
       timestamp: new Date().toISOString(),
-      contexto:  JSON.stringify(payload.contexto || {})
+      contexto:  JSON.stringify(contexto)
+    };
+  }
+
+  /**
+   * Valida um payload antes de emissão sem persistir.
+   * Útil para pré-validação em engines e controllers.
+   *
+   * @param {string} tipo
+   * @param {Object} payload
+   * @returns {{ valido: boolean, campos_faltantes: string[], avisos: string[] }}
+   */
+  function validarSchema(tipo, payload) {
+    payload = payload || {};
+    var faltando = [];
+    var avisos = [];
+
+    if (!tipo) faltando.push('tipo');
+
+    var entidade   = payload.entidade   || payload.entity      || '';
+    var entidadeId = payload.entidadeId || payload.entityId    || '';
+    var usuario    = payload.usuario    || payload.actor       || '';
+    var origem     = payload.origem     || payload.module      || '';
+
+    if (!entidade)   faltando.push('entidade');
+    if (!entidadeId) faltando.push('entidadeId');
+    if (!usuario)    faltando.push('usuario/actor');
+    if (!origem)     avisos.push('origem/module ausente (será detectada automaticamente)');
+
+    var tiposConhecidos = typeof SystemEventTypes !== 'undefined'
+      ? Object.values(SystemEventTypes)
+      : [];
+    if (tiposConhecidos.length > 0 && tipo && tiposConhecidos.indexOf(tipo) < 0) {
+      faltando.push('tipo inválido: "' + tipo + '" não está em SystemEventTypes');
+    }
+
+    return {
+      valido:           faltando.length === 0,
+      campos_faltantes: faltando,
+      avisos:           avisos
     };
   }
 
@@ -319,6 +369,7 @@ var SystemEvents = (function () {
 
   return {
     emit:                  emit,
+    validarSchema:         validarSchema,
     getRecentes:           getRecentes,
     getEventosPorEntidade: getEventosPorEntidade,
     validarIntegridade:    validarIntegridade,

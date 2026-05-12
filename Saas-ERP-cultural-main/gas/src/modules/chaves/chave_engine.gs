@@ -234,3 +234,7 @@ var KeyEngine = (function () {
   };
 
 })();
+
+try { FsmGuardian.registrar('chaves', _TRANSICOES_CHAVE); } catch(e) {
+  console.warn('[chave_engine] FsmGuardian.registrar: ' + e.message);
+}

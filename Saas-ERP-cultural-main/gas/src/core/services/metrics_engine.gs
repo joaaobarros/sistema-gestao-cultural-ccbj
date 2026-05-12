@@ -31,7 +31,10 @@ var METRICA_TIPO = {
   USUARIOS:      'USUARIOS',
   AUDITORIA:     'AUDITORIA',
   PERFORMANCE:   'PERFORMANCE',
-  INSTITUCIONAL: 'INSTITUCIONAL'
+  INSTITUCIONAL: 'INSTITUCIONAL',
+  FSM:           'FSM',
+  SEGURANCA:     'SEGURANCA',
+  GOVERNANCA:    'GOVERNANCA'
 };
 
 // ══════════════════════════════════════════════════════════════════
@@ -171,6 +174,59 @@ var MetricsEngine = (function () {
     }
   }
 
+  // ── FSM ───────────────────────────────────────────────────────
+
+  /**
+   * Métricas de violações de FSM: transições inválidas por domínio.
+   * Lê EventLog filtrando por tipo FSM_INVALID_TRANSITION.
+   *
+   * @param {Object} filtros - { dataInicio, dataFim }
+   * @returns {Object} indicadores de saúde das FSMs
+   */
+  function fsm(filtros) {
+    filtros = filtros || {};
+    try {
+      return _calcularMetricasFsm(filtros);
+    } catch(e) {
+      Logger.error('metrics_engine', 'fsm', e.message);
+      return { _tipo: METRICA_TIPO.FSM, erro: e.message };
+    }
+  }
+
+  /**
+   * Métricas de segurança: falhas de autenticação, acessos negados.
+   * Lê EventLog filtrando por tipos AUTH_FAILED e AUTH_FAILURE_TRACKED.
+   *
+   * @param {Object} filtros - { dataInicio, dataFim }
+   * @returns {Object} indicadores de segurança
+   */
+  function seguranca(filtros) {
+    filtros = filtros || {};
+    try {
+      return _calcularMetricasSeguranca(filtros);
+    } catch(e) {
+      Logger.error('metrics_engine', 'seguranca', e.message);
+      return { _tipo: METRICA_TIPO.SEGURANCA, erro: e.message };
+    }
+  }
+
+  /**
+   * Métricas de governança: violações arquiteturais registradas.
+   * Lê EventLog filtrando por tipos GOVERNANCE_VIOLATION e FSM_BYPASS_DETECTED.
+   *
+   * @param {Object} filtros - { dataInicio, dataFim }
+   * @returns {Object} indicadores de conformidade arquitetural
+   */
+  function governanca(filtros) {
+    filtros = filtros || {};
+    try {
+      return _calcularMetricasGovernanca(filtros);
+    } catch(e) {
+      Logger.error('metrics_engine', 'governanca', e.message);
+      return { _tipo: METRICA_TIPO.GOVERNANCA, erro: e.message };
+    }
+  }
+
   // ── Consolidado (dashboard) ───────────────────────────────────
 
   /**
@@ -304,6 +360,108 @@ var MetricsEngine = (function () {
     };
   }
 
+  function _calcularMetricasFsm(filtros) {
+    var aba = _getSheet('EventLog');
+    if (!aba || aba.getLastRow() < 2) return { _tipo: METRICA_TIPO.FSM, totalViolacoes: 0 };
+
+    var dados = aba.getRange(2, 1, aba.getLastRow() - 1, 8).getValues();
+    var fi = filtros.dataInicio ? new Date(filtros.dataInicio) : null;
+    var ff = filtros.dataFim    ? new Date(filtros.dataFim)    : null;
+    if (ff) ff.setHours(23, 59, 59, 999);
+
+    var totalViolacoes = 0;
+    var porDominio = {};
+    var tiposViolacao = {};
+
+    dados.forEach(function(r) {
+      var tipo = String(r[1] || '');
+      if (tipo !== 'FSM_INVALID_TRANSITION' && tipo !== 'FSM_BYPASS_DETECTED' && tipo !== 'FSM_STATE_UNKNOWN') return;
+      var dt = r[6] instanceof Date ? r[6] : new Date(r[6]);
+      if (isNaN(dt.getTime())) return;
+      if (fi && dt < fi) return;
+      if (ff && dt > ff) return;
+      totalViolacoes++;
+      var dominio = String(r[2] || 'desconhecido');
+      porDominio[dominio] = (porDominio[dominio] || 0) + 1;
+      tiposViolacao[tipo] = (tiposViolacao[tipo] || 0) + 1;
+    });
+
+    return {
+      _tipo:          METRICA_TIPO.FSM,
+      totalViolacoes: totalViolacoes,
+      porDominio:     porDominio,
+      tiposViolacao:  tiposViolacao,
+      saudavel:       totalViolacoes === 0
+    };
+  }
+
+  function _calcularMetricasSeguranca(filtros) {
+    var aba = _getSheet('EventLog');
+    if (!aba || aba.getLastRow() < 2) return { _tipo: METRICA_TIPO.SEGURANCA, totalFalhas: 0 };
+
+    var dados = aba.getRange(2, 1, aba.getLastRow() - 1, 8).getValues();
+    var fi = filtros.dataInicio ? new Date(filtros.dataInicio) : null;
+    var ff = filtros.dataFim    ? new Date(filtros.dataFim)    : null;
+    if (ff) ff.setHours(23, 59, 59, 999);
+
+    var totalFalhas = 0;
+    var falhasPorEmail = {};
+    var motivos = {};
+
+    dados.forEach(function(r) {
+      var tipo = String(r[1] || '');
+      if (tipo !== 'AUTH_FAILED' && tipo !== 'AUTH_FAILURE_TRACKED' && tipo !== 'ACCESS_DENIED') return;
+      var dt = r[6] instanceof Date ? r[6] : new Date(r[6]);
+      if (isNaN(dt.getTime())) return;
+      if (fi && dt < fi) return;
+      if (ff && dt > ff) return;
+      totalFalhas++;
+      var usuario = String(r[5] || 'desconhecido').toLowerCase().trim();
+      falhasPorEmail[usuario] = (falhasPorEmail[usuario] || 0) + 1;
+      motivos[tipo] = (motivos[tipo] || 0) + 1;
+    });
+
+    return {
+      _tipo:          METRICA_TIPO.SEGURANCA,
+      totalFalhas:    totalFalhas,
+      usuariosAfetados: Object.keys(falhasPorEmail).length,
+      falhasPorEmail: falhasPorEmail,
+      motivos:        motivos
+    };
+  }
+
+  function _calcularMetricasGovernanca(filtros) {
+    var aba = _getSheet('EventLog');
+    if (!aba || aba.getLastRow() < 2) return { _tipo: METRICA_TIPO.GOVERNANCA, totalViolacoes: 0 };
+
+    var dados = aba.getRange(2, 1, aba.getLastRow() - 1, 8).getValues();
+    var fi = filtros.dataInicio ? new Date(filtros.dataInicio) : null;
+    var ff = filtros.dataFim    ? new Date(filtros.dataFim)    : null;
+    if (ff) ff.setHours(23, 59, 59, 999);
+
+    var totalViolacoes = 0;
+    var porTipo = {};
+
+    dados.forEach(function(r) {
+      var tipo = String(r[1] || '');
+      if (tipo.indexOf('GOVERNANCE') === -1 && tipo.indexOf('FSM') === -1 &&
+          tipo.indexOf('ARCHITECTURAL') === -1) return;
+      var dt = r[6] instanceof Date ? r[6] : new Date(r[6]);
+      if (isNaN(dt.getTime())) return;
+      if (fi && dt < fi) return;
+      if (ff && dt > ff) return;
+      totalViolacoes++;
+      porTipo[tipo] = (porTipo[tipo] || 0) + 1;
+    });
+
+    return {
+      _tipo:          METRICA_TIPO.GOVERNANCA,
+      totalViolacoes: totalViolacoes,
+      porTipo:        porTipo,
+      conforme:       totalViolacoes === 0
+    };
+  }
+
   function _calcularMetricasInstitucionais(filtros) {
     try {
       var codip = typeof obterMetricasCODIP === 'function' ? obterMetricasCODIP() : null;
@@ -319,15 +477,18 @@ var MetricsEngine = (function () {
   // ── API pública ───────────────────────────────────────────────
 
   return {
-    operacional:   operacional,
+    operacional:     operacional,
     graficoReservas: graficoReservas,
-    chaves:        chaves,
-    usuarios:      usuarios,
-    auditoria:     auditoria,
-    performance:   performance,
-    institucional: institucional,
-    dashboard:     dashboard,
-    TIPO:          METRICA_TIPO
+    chaves:          chaves,
+    usuarios:        usuarios,
+    auditoria:       auditoria,
+    performance:     performance,
+    institucional:   institucional,
+    fsm:             fsm,
+    seguranca:       seguranca,
+    governanca:      governanca,
+    dashboard:       dashboard,
+    TIPO:            METRICA_TIPO
   };
 
 })();

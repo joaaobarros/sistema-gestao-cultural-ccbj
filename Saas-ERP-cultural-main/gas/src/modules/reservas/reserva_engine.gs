@@ -255,3 +255,7 @@ var ReservaEngine = (function () {
   };
 
 })();
+
+try { FsmGuardian.registrar('reservas', _TRANSICOES_RESERVA); } catch(e) {
+  console.warn('[reserva_engine] FsmGuardian.registrar: ' + e.message);
+}

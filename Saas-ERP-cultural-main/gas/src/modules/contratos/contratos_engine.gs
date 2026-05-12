@@ -141,3 +141,7 @@ var ContratosEngine = (function () {
   };
 
 })();
+
+try { FsmGuardian.registrar('contratos', _TRANSICOES_CONTRATO); } catch(e) {
+  console.warn('[contratos_engine] FsmGuardian.registrar: ' + e.message);
+}

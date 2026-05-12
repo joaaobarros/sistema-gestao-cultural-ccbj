@@ -115,6 +115,27 @@ var SystemEventTypes = Object.freeze({
   AUTH_FAILED:          'AUTH_FAILED',
   SYSTEM_ERROR:         'SYSTEM_ERROR',
   INTEGRATION_FAILED:   'INTEGRATION_FAILED',
-  SETUP_COMPLETED:      'SETUP_COMPLETED'
+  SETUP_COMPLETED:      'SETUP_COMPLETED',
+
+  // ────────────────────────────────────────────
+  // GOVERNANÇA / FSM (FASE 4 — Enforcement de FSM)
+  // ────────────────────────────────────────────
+  FSM_INVALID_TRANSITION:    'FSM_INVALID_TRANSITION',
+  FSM_BYPASS_DETECTED:       'FSM_BYPASS_DETECTED',
+  FSM_STATE_UNKNOWN:         'FSM_STATE_UNKNOWN',
+
+  // ────────────────────────────────────────────
+  // OBSERVABILIDADE (FASE 3 — Observabilidade Operacional)
+  // ────────────────────────────────────────────
+  MUTATION_CRITICAL:          'MUTATION_CRITICAL',
+  AUTH_FAILURE_TRACKED:       'AUTH_FAILURE_TRACKED',
+  PERFORMANCE_DEGRADED:       'PERFORMANCE_DEGRADED',
+  CONFLICT_ATTEMPT:           'CONFLICT_ATTEMPT',
+
+  // ────────────────────────────────────────────
+  // GOVERNANÇA ARQUITETURAL (FASE 1 — Lint Arquitetural)
+  // ────────────────────────────────────────────
+  GOVERNANCE_VIOLATION:       'GOVERNANCE_VIOLATION',
+  ARCHITECTURAL_REGRESSION:   'ARCHITECTURAL_REGRESSION'
 
 });
