@@ -348,12 +348,6 @@ function _resolverNivelAcesso(email) {
     if (PermissoesService.isSuperAdmin(email)) return 'superadmin';
     if (PermissoesService.isAdmin(email)) return 'admin';
   } catch(_) {}
-  try {
-    if (typeof obterPermissoesUsuario === 'function') {
-      var perms = obterPermissoesUsuario(email);
-      return (perms && perms.perfil) || 'visitante_controlado';
-    }
-  } catch(_) {}
   return 'visitante_controlado';
 }
 

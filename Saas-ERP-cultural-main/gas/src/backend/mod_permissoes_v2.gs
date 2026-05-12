@@ -493,48 +493,6 @@ function obterAuditoriaPermissoes() {
   return readJSON('auditoria_permissoes.json');
 }
 
-// ── Compatibilidade v1 ───────────────────────────────────────
-
-function obterPermissoesUsuario(email) {
-  try {
-
-    var em = email || obterEmailUsuario('');
-    var p2 = obterPermissoesUsuarioV2(em);
-
-    if (!p2 || !p2.permissoes_finais) {
-      throw new Error('Permissões inválidas');
-    }
-
-    var modulos = {};
-    var origem = p2.permissoes_finais;
-
-    Object.keys(origem).forEach(function(mod) {
-
-      var m = origem[mod] || {};
-
-      modulos[mod] = {
-        visualizar: !!m.visualizar,
-        editar:     !!m.editar,
-        excluir:    !!m.excluir
-      };
-
-    });
-
-    return {
-      perfil: p2.perfil_base || 'visitante',
-      modulos: modulos
-    };
-
-  } catch(e) {
-    var _vcModulos = {};
-    _P2_MODULOS.forEach(function(m) {
-      var b = (_P2_BASE.visitante_controlado || {})[m] || { visualizar: false, editar: false, excluir: false };
-      _vcModulos[m] = { visualizar: !!b.visualizar, editar: false, excluir: false };
-    });
-    return { perfil: 'visitante_controlado', modulos: _vcModulos };
-  }
-}
-
 function podeAcessarModulo(email, modulo) {
   try {
     var p = obterPermissoesUsuarioV2(email || obterEmailUsuario(''));
