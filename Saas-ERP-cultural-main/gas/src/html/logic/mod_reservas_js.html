@@ -401,18 +401,24 @@ function resetarFormulario() {
   const itensFixosSala = document.getElementById('itensFixosSala');
   if (itensFixosSala) itensFixosSala.innerHTML = '';
 
+  // Limpa aviso de conflito e classes de erro nos inputs de horário
+  const avisoConflito = document.getElementById('avisoHorarioOcupado');
+  if (avisoConflito) { avisoConflito.classList.add('hidden'); avisoConflito.innerHTML = ''; }
+  const hIni = document.getElementById('horaInicio');
+  const hTer = document.getElementById('horaTermino');
+  if (hIni) hIni.classList.remove('border-red-500', 'bg-red-50');
+  if (hTer) hTer.classList.remove('border-red-500');
+
   // Reseta botão de submissão para estado original
   const btn = document.querySelector('#formReserva button[type="submit"]');
   btn.innerHTML = '<i class="fas fa-check-double"></i> Confirmar Agendamento';
-  btn.className = btn.className.replace('bg-blue-600', 'bg-purple-600');
+  btn.classList.remove('bg-red-500', 'hover:bg-red-600', 'shadow-red-500/30',
+                       'bg-blue-600', 'bg-yellow-500');
+  btn.classList.add('bg-purple-600', 'hover:bg-purple-700', 'shadow-purple-500/30');
   btn.disabled = false;
 
   AppState.editandoId = null;
-    window.modoEdicao = null;  
-  
-    if (btn.classList.contains('bg-yellow-500')) {
-    btn.classList.replace('bg-yellow-500', 'bg-purple-600');
-  }
+  window.modoEdicao = null;
 
   // Reseta RECE
   modoRece = false;
@@ -3795,11 +3801,23 @@ function renderizarModoAgendaRece() {
  * @sideEffects Nenhum além da mutação do DOM; não faz chamadas ao servidor.
  */
 function validarConflitoTempoReal() {
-
-  const horaInicio = document.getElementById('horaInicio');
+  const horaInicio  = document.getElementById('horaInicio');
   const horaTermino = document.getElementById('horaTermino');
-  const selectSala = document.getElementById('selectSala');
-  const aviso = document.getElementById('avisoHorarioOcupado');
+  const selectSala  = document.getElementById('selectSala');
+  const aviso       = document.getElementById('avisoHorarioOcupado');
+
+  // — limpar estado visual
+  if (horaInicio)  horaInicio.classList.remove('border-red-500', 'bg-red-50');
+  if (horaTermino) horaTermino.classList.remove('border-red-500');
+  if (aviso) { aviso.classList.add('hidden'); aviso.innerHTML = ''; }
+
+  const btnSubmit = document.querySelector('#formReserva button[type="submit"]');
+  if (btnSubmit) {
+    btnSubmit.disabled = false;
+    btnSubmit.innerHTML = '<i class="fas fa-check-double"></i> Confirmar Agendamento';
+    btnSubmit.classList.remove('bg-red-500', 'hover:bg-red-600', 'shadow-red-500/30');
+    btnSubmit.classList.add('bg-purple-600', 'hover:bg-purple-700', 'shadow-purple-500/30');
+  }
 
   if (!horaInicio?.value || !horaTermino?.value || !selectSala?.value) return;
 
@@ -3815,31 +3833,40 @@ function validarConflitoTempoReal() {
     sala: selectSala.value
   };
 
-  const c = verificarConflitoFrontend(dados, datas, null);
+  // Coleta TODAS as datas conflitantes (importante para modo lote)
+  const datasConflitantes = [];
+  datas.forEach(dataStr => {
+    const c = verificarConflitoFrontend(dados, [dataStr], null);
+    if (c.conflito) datasConflitantes.push(dataStr);
+  });
 
-  horaInicio.classList.remove('border-red-500');
-  horaTermino.classList.remove('border-red-500');
-  aviso.classList.add('hidden');
-  aviso.innerHTML = '';
+  if (datasConflitantes.length === 0) return;
 
-  const btnSubmit = document.querySelector('#formReserva button[type="submit"]');
-  if (btnSubmit) btnSubmit.disabled = false;
-  if (!c.conflito) return;
+  // Marca input de início
+  if (horaInicio) horaInicio.classList.add('border-red-500', 'bg-red-50');
 
-  if (c.tipo === 'INICIO') {
-    horaInicio.classList.add('border-red-500');
-    aviso.innerHTML = `⚠️ Conflito no início. Use após ${c.sugestao}`;
-  } else if (c.tipo === 'FIM') {
-    horaTermino.classList.add('border-red-500');
-    aviso.innerHTML = `⚠️ Conflito no término. Termine antes de ${c.reserva[2]}`;
-  } else {
-    horaInicio.classList.add('border-red-500');
-    horaTermino.classList.add('border-red-500');
-    aviso.innerHTML = `⚠️ Período ocupado (${c.reserva[2]}–${c.reserva[3]})`;
+  // Sugestão de próximo horário livre
+  const sugestao = (typeof sugerirProximoHorarioLivre === 'function' && calendarInstance?.selectedDates?.[0])
+    ? sugerirProximoHorarioLivre(selectSala.value, calendarInstance.selectedDates[0], horaInicio.value)
+    : null;
+
+  // Aviso com datas e botão de sugestão inline
+  if (aviso) {
+    aviso.innerHTML = `
+      <i class="fas fa-exclamation-triangle mr-1"></i>
+      Horário conflitante em: <b>${datasConflitantes.join(', ')}</b>.
+      ${sugestao ? `<button type="button" onclick="aplicarSugestaoHorario('${sugestao}')" class="ml-2 underline font-black hover:text-amber-800">Usar ${sugestao}?</button>` : ''}
+    `;
+    aviso.classList.remove('hidden');
   }
 
-  aviso.classList.remove('hidden');
-  if (btnSubmit) btnSubmit.disabled = c.conflito;
+  // Botão vermelho desabilitado
+  if (btnSubmit) {
+    btnSubmit.disabled = true;
+    btnSubmit.innerHTML = '<i class="fas fa-ban mr-2"></i> Horário Conflitante';
+    btnSubmit.classList.remove('bg-purple-600', 'hover:bg-purple-700', 'shadow-purple-500/30');
+    btnSubmit.classList.add('bg-red-500', 'hover:bg-red-600', 'shadow-red-500/30');
+  }
 }
 
 function atualizarSugestoes() {
