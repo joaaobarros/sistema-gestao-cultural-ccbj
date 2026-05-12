@@ -283,9 +283,10 @@ function normalizarHora(hora) {
   try {
     if (!hora) return null;
 
-    // Caso 1: Date object
+    // Caso 1: Date object — células Time do GAS usam epoch 1899-12-30 UTC.
+    // getUTCHours() retorna o horário correto independente do fuso do script.
     if (hora instanceof Date) {
-      return hora.getHours() * 60 + hora.getMinutes();
+      return hora.getUTCHours() * 60 + hora.getUTCMinutes();
     }
 
     // Caso 2: String HH:MM ou HH:MM:SS
