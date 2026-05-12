@@ -53,8 +53,6 @@ var FsmGuardian = (function () {
       return;
     }
     _fsms[dominio] = transicoes;
-    Logger.info('fsm_guardian', 'registrar', 'FSM registrada: ' + dominio +
-      ' (' + Object.keys(transicoes).length + ' estados)');
   }
 
   // ─── Validação ────────────────────────────────────────────────────────────
