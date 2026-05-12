@@ -942,14 +942,17 @@ SETORES: ${setores.join(", ")}`;
 
     const s = dados.sugestao;
     if (s && s.salaId && s.data && s.horaInicio && s.horaTermino) {
-      const conflito = verificarConflitoEspaco(
-        s.salaId,
-        s.data,
-        s.horaInicio,
-        s.horaTermino,
-        null,
-      );
-      if (conflito) {
+      // Roteado via possuiConflitoReserva (não verificarConflitoEspaco diretamente)
+      // para garantir auditoria via SystemEvents em toda tentativa de conflito.
+      const conflito = possuiConflitoReserva({
+        espacoId: s.salaId,
+        data:     s.data,
+        inicio:   s.horaInicio,
+        fim:      s.horaTermino,
+        reservaIgnoradaId:  null,
+        usuarioSolicitante: 'ia_metricas'
+      });
+      if (conflito && conflito.conflito) {
         const alternativas = encontrarMelhorAgenda(
           { data: s.data, datasLote: dados.datasLote || [] },
           salas,
@@ -1000,14 +1003,16 @@ function encontrarMelhorAgenda(dados, salas, reservas) {
     datas.forEach((data) => {
       horarios.forEach((inicio) => {
         const fim = adicionar1Hora(inicio);
-        const conflito = verificarConflitoEspaco(
-          sala.id,
-          data,
-          inicio,
-          fim,
-          null,
-        );
-        if (!conflito) {
+        // Roteado via possuiConflitoReserva (não verificarConflitoEspaco diretamente).
+        const conflito = possuiConflitoReserva({
+          espacoId:          sala.id,
+          data:              data,
+          inicio:            inicio,
+          fim:               fim,
+          reservaIgnoradaId: null,
+          usuarioSolicitante: 'ia_metricas'
+        });
+        if (!conflito || !conflito.conflito) {
           resultados.push({
             salaId: sala.id,
             salaNome: sala.nome,

@@ -8,8 +8,14 @@
  *                 de itens por horário; processamento em lote; repositories e services.
  *
  * @conflito-regra  inicioA < fimB E fimA > inicioB  (detecta toda intersecção; encoste exato permitido)
- * @conflito-motor  possuiConflitoReserva → verificarConflitoEspaco (único caminho obrigatório)
+ * @conflito-motor  ReservaEngine.assertSemConflito (escrita) | possuiConflitoReserva (leitura/UX)
+ *                   → verificarConflitoEspaco (NUNCA chamado diretamente por módulos externos)
  * @bloqueio-ccbj   tipoAcao=BLOQUEIO → _cancelarReservasConflitantes (prioridade máxima)
+ *
+ * PAYLOAD CANÔNICO (frontend → controller → analisarDisponibilidadeReal):
+ *   { sala: string, horaInicio: string, horaTermino: string, datas: string[] }
+ * PAYLOAD ENGINE (controller → ReservaEngine → possuiConflitoReserva):
+ *   { espacoId: string, data: string, inicio: string, fim: string }
  *
  * @dependencies utils.js (_getSheet, normalizarData, normalizarHora, horariosSobrepostos,
  *               formatarHora, formatarData, validarEmail, normalizarEmail, sanitizarNumero,
@@ -125,14 +131,22 @@ function verificarConflitoEspaco(sala, data, inicio, termino, idReservaIgnorar) 
 
 /**
  * ========================================
- * BLOCO: possuiConflitoReserva — interface canônica centralizada
+ * BLOCO: possuiConflitoReserva — única interface autorizada para verificarConflitoEspaco
  * ========================================
  * @description Ponto único obrigatório para qualquer verificação de conflito no sistema.
- *              Toda criação/edição/aprovação/duplicação de reserva DEVE passar por aqui.
+ *              Toda criação/edição/aprovação/duplicação de reserva DEVE passar por aqui
+ *              via ReservaEngine.assertSemConflito() (escrita) ou diretamente (leitura/UX).
+ *              NENHUM módulo deve chamar verificarConflitoEspaco() diretamente.
  *              Internamente delega para verificarConflitoEspaco.
  *              BLOQUEIO (CCBJ_FECHADO) não passa por esta função — cancela conflitos diretamente.
  *              Registra tentativas de conflito via SystemEvents para auditoria.
+ *
  * @inputs { data, espacoId, inicio, fim, reservaIgnoradaId, usuarioSolicitante? }
+ *   - Contrato ENGINE: usa "espacoId" (não "sala") e "inicio"/"fim" (não "horaInicio"/"horaTermino").
+ *   - Mapeamento feito no ponto de chamada:
+ *       espacoId ← dados.sala
+ *       inicio   ← dados.horaInicio
+ *       fim      ← dados.horaTermino
  * @outputs { conflito: boolean, tipo?, solicitado?, existente?, contexto? }
  */
 function possuiConflitoReserva({ data, espacoId, inicio, fim, reservaIgnoradaId, usuarioSolicitante }) {
@@ -880,27 +894,54 @@ function obterDisponibilidadeItensPorHorario(
  * ========================================
  * @description Verifica conflitos para múltiplas datas simultaneamente e retorna
  *              horários livres e sugestões de agendamento. Exposto ao frontend como
- *              a fonte de verdade para a funcionalidade de análise/IA.
+ *              fonte de verdade para análise/IA — NÃO persiste nada.
+ *
+ * CONTRATO CANÔNICO (formato oficial):
+ *   payload: { sala: string, horaInicio: string, horaTermino: string, datas: string[] }
+ *
+ * COMPATIBILIDADE RETROATIVA (formato legado — normalizado no ctrl_reservas_disponibilidade):
+ *   { espacoId, inicio, fim, data } → este adapter está no controller.
+ *   Se a função for chamada diretamente com formato legado (bypass do controller),
+ *   o segundo adapter abaixo cobre esse caso.
+ *
  * @inputs payload: { sala, horaInicio, horaTermino, datas: string[] }
  * @outputs { conflito, conflitosDetalhados, horariosLivres, sugestoes }
- * @sideEffects 1 leitura na planilha Reservas
+ * @sideEffects 1 leitura na planilha Reservas; Logger.warn se formato legado detectado
  */
 function analisarDisponibilidadeReal(payload) {
-  if (!payload) throw new Error("Payload não informado.");
+  if (!payload || typeof payload !== 'object') {
+    throw new Error('[analisarDisponibilidadeReal] Payload não informado.');
+  }
 
-  const sala = String(payload.sala || "").trim();
-  const inicio = String(payload.horaInicio || "").trim();
-  const termino = String(payload.horaTermino || "").trim();
-  const datas = payload.datas || [];
+  // ── Adapter de compatibilidade retroativa (segunda linha de defesa) ────────
+  // O controller já normaliza, mas cobre bypass direto desta função.
+  const sala    = String(payload.sala    || payload.espacoId || '').trim();
+  const inicio  = String(payload.horaInicio || payload.inicio || '').trim();
+  const termino = String(payload.horaTermino || payload.fim   || '').trim();
+  const datas   = payload.datas || (payload.data ? [payload.data] : []);
 
-  if (
-    !sala ||
-    !inicio ||
-    !termino ||
-    !Array.isArray(datas) ||
-    datas.length === 0
-  ) {
-    throw new Error("Dados incompletos para análise.");
+  const usouFormatoLegado = !payload.sala || !payload.horaInicio || !payload.horaTermino;
+  if (usouFormatoLegado) {
+    Logger.warn(
+      'analisarDisponibilidadeReal',
+      '[LEGADO] Payload recebido em formato antigo {espacoId/inicio/fim/data}. ' +
+      'Migre para {sala, horaInicio, horaTermino, datas}.',
+      { payload: JSON.stringify(payload) }
+    );
+  }
+
+  // ── Hardening: rejeição explícita de campos obrigatórios ──────────────────
+  if (!sala) {
+    throw new Error('[analisarDisponibilidadeReal] Campo "sala" é obrigatório e não pode ser vazio.');
+  }
+  if (!inicio) {
+    throw new Error('[analisarDisponibilidadeReal] Campo "horaInicio" é obrigatório e não pode ser vazio.');
+  }
+  if (!termino) {
+    throw new Error('[analisarDisponibilidadeReal] Campo "horaTermino" é obrigatório e não pode ser vazio.');
+  }
+  if (!Array.isArray(datas) || datas.length === 0) {
+    throw new Error('[analisarDisponibilidadeReal] Campo "datas" é obrigatório e não pode ser vazio.');
   }
 
   const aba = _getSheet("Reservas");
@@ -931,11 +972,19 @@ function analisarDisponibilidadeReal(payload) {
     }
     return null;
   };
+  // Usa getUTCHours/getUTCMinutes para Date — consistente com normalizarHora() de utils.gs.
+  // GAS serializa células do tipo Time como Date com epoch 1899-12-30 UTC;
+  // getHours() introduz desvio de fuso horário (bug já corrigido em normalizarHora).
   const normHora = (h) => {
-    if (!h) return 0;
-    if (h instanceof Date) return h.getHours() * 60 + h.getMinutes();
+    if (h == null || h === '') return 0;
+    if (h instanceof Date) return h.getUTCHours() * 60 + h.getUTCMinutes();
+    if (typeof h === 'number') {
+      if (h >= 0 && h < 1) return Math.round(h * 24 * 60);
+      return 0;
+    }
     const p = String(h).split(":");
-    return parseInt(p[0]) * 60 + parseInt(p[1]);
+    if (p.length < 2) return 0;
+    return (parseInt(p[0], 10) || 0) * 60 + (parseInt(p[1], 10) || 0);
   };
   const toHora = (m) => {
     const h = String(Math.floor(m / 60)).padStart(2, "0");

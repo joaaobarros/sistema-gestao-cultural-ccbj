@@ -33,10 +33,12 @@ function ctrl_reservas_listar() {
 
 /**
  * Verifica conflito de horário para um espaço antes de criar/editar reserva.
- * @param {string} sala
- * @param {string} data
- * @param {string} inicio
- * @param {string} termino
+ * REGRA: usa possuiConflitoReserva() (não verificarConflitoEspaco diretamente)
+ * para garantir auditoria via SystemEvents em toda tentativa de conflito.
+ * @param {string} sala         — ID do espaço (contrato canônico)
+ * @param {string} data         — data ISO ou DD/MM/YYYY
+ * @param {string} inicio       — hora de início HH:MM
+ * @param {string} termino      — hora de término HH:MM
  * @param {string|null} idIgnorar — ID de reserva a ignorar (edição)
  */
 function ctrl_reservas_verificar_conflito(sala, data, inicio, termino, idIgnorar) {
@@ -45,18 +47,69 @@ function ctrl_reservas_verificar_conflito(sala, data, inicio, termino, idIgnorar
     if (!data)    throw new Error('Parâmetro "data" é obrigatório');
     if (!inicio)  throw new Error('Parâmetro "inicio" é obrigatório');
     if (!termino) throw new Error('Parâmetro "termino" é obrigatório');
-    return verificarConflitoEspaco(sala, data, inicio, termino, idIgnorar || null);
+    // Roteado via possuiConflitoReserva → emite SystemEvent CONFLICT_DETECTED para auditoria
+    return possuiConflitoReserva({
+      espacoId:          sala,
+      data:              data,
+      inicio:            inicio,
+      fim:               termino,
+      reservaIgnoradaId: idIgnorar || null
+    });
   }, 'ctrl_reservas_verificar_conflito');
 }
 
 /**
- * Analisa disponibilidade real de espaço e itens para um payload de agendamento.
- * @param {Object} payload — { espacoId, data, inicio, fim, itens? }
+ * Analisa disponibilidade real de espaço para um ou mais dias.
+ *
+ * CONTRATO CANÔNICO (formato oficial):
+ *   { sala: string, horaInicio: string, horaTermino: string, datas: string[] }
+ *
+ * COMPATIBILIDADE RETROATIVA (formato legado — aceito temporariamente):
+ *   { espacoId: string, inicio: string, fim: string, data: string }
+ *   Os campos legados são normalizados para o contrato canônico antes de
+ *   repassar para analisarDisponibilidadeReal(). Uso do formato legado
+ *   é registrado em log de auditoria para rastreio de migração.
+ *
+ * @param {Object} payload — contrato canônico: { sala, horaInicio, horaTermino, datas }
  */
 function ctrl_reservas_disponibilidade(payload) {
   return GasResponse.wrap(function () {
-    if (!payload || typeof payload !== 'object') throw new Error('Payload de disponibilidade é obrigatório');
-    return analisarDisponibilidadeReal(payload);
+    if (!payload || typeof payload !== 'object') {
+      throw new Error('[ctrl_reservas_disponibilidade] Payload de disponibilidade é obrigatório');
+    }
+
+    // ── Adapter de compatibilidade retroativa ────────────────────────────────
+    // Normaliza formato legado { espacoId, inicio, fim, data } → canônico
+    const sala    = String(payload.sala    || payload.espacoId || '').trim();
+    const inicio  = String(payload.horaInicio || payload.inicio || '').trim();
+    const termino = String(payload.horaTermino || payload.fim   || '').trim();
+    const datas   = payload.datas || (payload.data ? [payload.data] : []);
+
+    const usouFormatoLegado = !payload.sala || !payload.horaInicio || !payload.horaTermino;
+    if (usouFormatoLegado) {
+      Logger.warn(
+        'ctrl_reservas_disponibilidade',
+        '[LEGADO] Payload recebido em formato antigo {espacoId/inicio/fim/data}. ' +
+        'Migre para {sala, horaInicio, horaTermino, datas}.',
+        { payload: JSON.stringify(payload) }
+      );
+    }
+
+    // ── Hardening: rejeita payload incompleto antes de chegar na engine ──────
+    if (!sala)               throw new Error('[ctrl_reservas_disponibilidade] Campo "sala" (ou "espacoId") é obrigatório');
+    if (!inicio)             throw new Error('[ctrl_reservas_disponibilidade] Campo "horaInicio" (ou "inicio") é obrigatório');
+    if (!termino)            throw new Error('[ctrl_reservas_disponibilidade] Campo "horaTermino" (ou "fim") é obrigatório');
+    if (!Array.isArray(datas) || datas.length === 0) {
+      throw new Error('[ctrl_reservas_disponibilidade] Campo "datas" (ou "data") é obrigatório e não pode ser vazio');
+    }
+
+    // ── Repassa payload normalizado para a engine ────────────────────────────
+    return analisarDisponibilidadeReal({
+      sala:        sala,
+      horaInicio:  inicio,
+      horaTermino: termino,
+      datas:       datas
+    });
   }, 'ctrl_reservas_disponibilidade');
 }
 

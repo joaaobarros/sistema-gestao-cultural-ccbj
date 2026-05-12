@@ -5,13 +5,34 @@
  *
  * Centraliza toda a lógica de alto nível do domínio Reservas:
  *   - Status e transições de estado
- *   - Verificação de conflito (ponto único de entrada)
+ *   - Verificação de conflito (ponto único de entrada público)
  *   - Validação temporal e de recursos
  *   - Orquestração de aprovação/cancelamento
  *   - Auditoria de eventos de reserva
  *
- * REGRA ARQUITETURAL:
- *   - Toda verificação de conflito DEVE passar por ReservaEngine.verificarConflito()
+ * ═══════════════════════════════════════════════════════
+ * CONTRATOS DE PAYLOAD — DOIS NÍVEIS DISTINTOS
+ * ═══════════════════════════════════════════════════════
+ *
+ * 1. CONTRATO PÚBLICO (frontend → controller → analisarDisponibilidadeReal):
+ *      { sala: string, horaInicio: string, horaTermino: string, datas: string[] }
+ *    - Usado em ctrl_reservas_disponibilidade e analisarDisponibilidadeReal.
+ *    - Aceita temporariamente o formato legado { espacoId, inicio, fim, data }
+ *      via adapter em ctrl_reservas_disponibilidade (primeira linha) e
+ *      analisarDisponibilidadeReal (segunda linha de defesa).
+ *
+ * 2. CONTRATO ENGINE (controller → ReservaEngine → possuiConflitoReserva):
+ *      { espacoId: string, data: string, inicio: string, fim: string,
+ *        reservaIgnoradaId?: string, usuarioSolicitante?: string }
+ *    - Usado em ReservaEngine.assertSemConflito / verificarConflito.
+ *    - Os callers mapeiam: espacoId ← dados.sala, inicio ← dados.horaInicio,
+ *      fim ← dados.horaTermino. Esse mapeamento é feito no ponto de chamada,
+ *      não na engine, mantendo os contratos separados.
+ *
+ * REGRAS ARQUITETURAIS OBRIGATÓRIAS:
+ *   - Toda verificação de conflito de escrita DEVE passar por ReservaEngine.assertSemConflito()
+ *   - Toda verificação de conflito de leitura/UX DEVE passar por possuiConflitoReserva()
+ *   - NENHUM módulo pode chamar verificarConflitoEspaco() diretamente
  *   - Nenhum módulo externo acessa ReservaRepository diretamente (usar ReservaService)
  *   - Toda transição de status emite um evento via SystemEvents
  *
