@@ -248,7 +248,6 @@ const GAS = {
    */
   ia: {
     chamar:             function(prompt, ctx, cb, err)    { GAS._callCtrl('ctrl_ia_chamar',            [prompt, ctx],              cb, err); },
-    chat:               function(mensagens, ctx, cb, err) { GAS._stub(cb); },
     reescreverDescricao:function(texto, setor, cb, err)   { GAS._callCtrl('ctrl_ia_reescrever',        [texto, setor],             cb, err); },
     perguntar:          function(pergunta, cb, err)        { GAS._callCtrl('ctrl_ia_perguntar',         [pergunta],                 cb, err); },
     gerarRelatorio:     function(filtros, cb, err)         { GAS._callCtrl('ctrl_ia_gerar_relatorio',   [filtros],                  cb, err); },
