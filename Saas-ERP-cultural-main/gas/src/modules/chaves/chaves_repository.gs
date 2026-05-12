@@ -12,7 +12,7 @@
  *   - Toda escrita usa lock externo (obterLockComRetry) via chamador, não aqui.
  *
  * @depends core/utils.gs (_getSheet, gerarId),
- *          modules/chaves/mod_chaves.gs (CHV_COL, PROT_COL, HIST_COL — enums de coluna)
+ *          modules/chaves/chave_engine.gs (CHV_COL, PROT_COL, HIST_COL, CHV_STATUS_* — definidos lá)
  */
 
 var ChavesRepository = (function () {

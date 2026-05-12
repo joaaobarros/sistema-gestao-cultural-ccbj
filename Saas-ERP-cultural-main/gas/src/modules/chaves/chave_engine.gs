@@ -16,14 +16,78 @@
  *   - Toda movimentação emite evento via SystemEvents
  *   - O histórico (HistoricoChaves) é escrito exclusivamente por KeyEngine
  *
- * NOTA: Os enums CHV_STATUS_CHAVE, CHV_STATUS_PROTOCOLO, CHV_COL, PROT_COL e HIST_COL
- *       são definidos em mod_chaves.gs e compartilhados via escopo global GAS.
- *
  * @depends modules/chaves/chaves_repository.gs (ChavesRepository),
- *          mod_chaves.gs (CHV_STATUS_PROTOCOLO, CHV_STATUS_CHAVE, PROT_COL, HIST_COL, CHV_COL),
  *          core/logger.gs, core/event_bus_backend.gs, core/services/auditoria_service.gs,
  *          core/utils.gs (_getSheet, gerarId, obterLockComRetry)
  */
+
+// ══════════════════════════════════════════════════════════════════
+// Constantes do domínio Chaves — definidas aqui (carregado primeiro)
+// e reutilizadas por mod_chaves.gs e chaves_repository.gs
+// ══════════════════════════════════════════════════════════════════
+
+const CHV_STATUS_CHAVE = {
+  DISPONIVEL: 'DISPONIVEL',
+  EM_USO:     'EM_USO',
+  MANUTENCAO: 'MANUTENCAO',
+  BLOQUEADA:  'BLOQUEADA',
+  EXTRAVIADA: 'EXTRAVIADA'
+};
+
+const CHV_TIPO_CHAVE = {
+  COMUM:   'CHAVE COMUM',
+  RESERVA: 'CHAVE RESERVA'
+};
+
+const CHV_STATUS_PROTOCOLO = {
+  SOLICITADA:                     'SOLICITADA',
+  AGUARDANDO_CONFIRMACAO_USUARIO: 'AGUARDANDO_CONFIRMACAO_USUARIO',
+  AGUARDANDO_CONFIRMACAO_INFRA:   'AGUARDANDO_CONFIRMACAO_INFRA',
+  RETIRADA:                       'RETIRADA',
+  DEVOLVIDA:                      'DEVOLVIDA',
+  ATRASADA:                       'ATRASADA',
+  CANCELADA:                      'CANCELADA',
+  NEGADA:                         'NEGADA',
+  TRANSFERENCIA_PENDENTE:         'TRANSFERENCIA_PENDENTE',
+  TRANSFERIDA:                    'TRANSFERIDA'
+};
+
+// Colunas da aba Chaves (0-indexed)
+const CHV_COL = {
+  ID: 0, ESPACO_ID: 1, CODIGO_PATRIMONIAL: 2, TIPO: 3,
+  STATUS: 4, ATIVA: 5, OBSERVACOES: 6, CRIADA_EM: 7, ATUALIZADA_EM: 8
+};
+
+// Colunas da aba ProtocolosChaves (0-indexed)
+const PROT_COL = {
+  ID: 0, CHAVE_ID: 1, ESPACO_ID: 2,
+  RESPONSAVEL_ATUAL_ID: 3, RESPONSAVEL_ATUAL_NOME: 4,
+  SOLICITANTE_ID: 5, SOLICITANTE_NOME: 6,
+  SETOR_ID: 7, SETOR_NOME: 8,
+  DT_SOLICITACAO: 9, DT_RETIRADA: 10, DT_PREVISTA_DEVOLUCAO: 11, DT_DEVOLUCAO: 12,
+  STATUS: 13, OBSERVACOES: 14,
+  ENTREGUE_POR_ID: 15, ENTREGUE_POR_NOME: 16,
+  RECEBIDO_POR_ID: 17, RECEBIDO_POR_NOME: 18,
+  DEVOLUCAO_RECEBIDA_POR_ID: 19, DEVOLUCAO_RECEBIDA_POR_NOME: 20,
+  RESERVA_VINCULADA_ID: 21, ORIGEM: 22,
+  TRANSFERENCIA_DESTINO_ID: 23, TRANSFERENCIA_DESTINO_NOME: 24
+};
+
+// Colunas da aba HistoricoChaves (0-indexed)
+const HIST_COL = {
+  ID: 0, PROTOCOLO_ID: 1, CHAVE_ID: 2, DT_HORA: 3,
+  ACAO: 4, USUARIO_ID: 5, USUARIO_NOME: 6,
+  STATUS_ANTERIOR: 7, STATUS_NOVO: 8,
+  OBSERVACOES: 9, AGENTE: 10
+};
+
+// Colunas expandidas de Configuracoes (0-indexed)
+const CONF_COL = {
+  ID: 0, NOME: 1, CAPACIDADE: 2, RESUMO_ITENS: 3, EMAIL_RESPONSAVEL: 4,
+  POSSUI_CHAVES: 5, QTD_USO_COMUM: 6, QTD_RESERVA: 7,
+  ACEITA_RESERVA: 8, EXIGE_PROTOCOLO: 9, LOCALIZACAO_CHAVE: 10, OBS_INTERNAS: 11,
+  SETOR_RESPONSAVEL: 12
+};
 
 // ══════════════════════════════════════════════════════════════════
 // FSM — Transições permitidas entre estados de protocolo
