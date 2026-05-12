@@ -219,7 +219,7 @@ function sugerirProximoHorarioLivre(sala, data, horarioAtual) {
     const i = _normHoraFrontend(h);
     return !ocupados.some(o => i < o.fim && (i + 60) > o.inicio);
   });
-  return livres.find(h => norm(h) > atual) || livres[0] || null;
+  return livres.find(h => _normHoraFrontend(h) > atual) || livres[0] || null;
 }
 
 /**
