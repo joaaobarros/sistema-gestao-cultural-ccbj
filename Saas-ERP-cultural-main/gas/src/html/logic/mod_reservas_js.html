@@ -3833,10 +3833,13 @@ function validarConflitoTempoReal() {
     sala: selectSala.value
   };
 
+  // Em modo edição, ignora a própria reserva no cache para evitar falso conflito
+  const idIgnorar = (typeof AppState !== 'undefined' && AppState.editandoId) ? AppState.editandoId : null;
+
   // Coleta TODAS as datas conflitantes (importante para modo lote)
   const datasConflitantes = [];
   datas.forEach(dataStr => {
-    const c = verificarConflitoFrontend(dados, [dataStr], null);
+    const c = verificarConflitoFrontend(dados, [dataStr], idIgnorar);
     if (c.conflito) datasConflitantes.push(dataStr);
   });
 

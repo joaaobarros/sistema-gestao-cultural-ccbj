@@ -491,7 +491,7 @@ async function salvarAgendamento() {
     const _ini  = document.getElementById('horaInicio')?.value;
     const _ter  = document.getElementById('horaTermino')?.value;
     if (_sala && _ini && _ter) {
-      const _c = verificarConflitoFrontend({ sala: _sala, horaInicio: _ini, horaTermino: _ter }, datas, null);
+      const _c = verificarConflitoFrontend({ sala: _sala, horaInicio: _ini, horaTermino: _ter }, datas, AppState.editandoId || null);
       if (_c.conflito) {
         Swal.fire('Conflito de Horário', `Já existe reserva neste espaço no período solicitado (${_c.reserva?.[2] || ''}–${_c.reserva?.[3] || ''}). Ajuste o horário ou escolha outro espaço.`, 'warning');
         return;
