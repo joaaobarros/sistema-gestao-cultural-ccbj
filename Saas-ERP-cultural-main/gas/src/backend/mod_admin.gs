@@ -491,6 +491,31 @@ function registrarLog(
       formatarDados(dadosAntes),
       formatarDados(dadosDepois),
     ]);
+
+    // Espelha no AuditoriaStore para que a trilha estruturada seja alimentada
+    try {
+      var _tipoMap = {
+        'RESERVA': 'reservas', 'ESPACO': 'espacos', 'SETOR': 'sistema',
+        'USUARIO': 'sistema',  'ITEM': 'almoxarifado', 'CONTRATO': 'contratos',
+        'CHAVE': 'chaves', 'ACAO': 'acoes', 'HABILITACAO': 'habilitacoes',
+        'APROVACAO': 'aprovacoes', 'MODULO': 'gestao_modulos'
+      };
+      AuditoriaStore.registrar({
+        tipo:         String(acao  || 'LOG_SISTEMA').toUpperCase(),
+        modulo:       _tipoMap[String(tipo || '').toUpperCase()] || 'sistema',
+        acao:         String(acao  || '').toLowerCase(),
+        entidadeId:   String(alvo  || ''),
+        entidadeTipo: String(tipo  || ''),
+        usuario:      String(usuario || ''),
+        resultado:    'sucesso',
+        mensagem:     String(detalhes || acao || ''),
+        antes:        dadosAntes  || null,
+        depois:       dadosDepois || null
+      });
+    } catch (aeErr) {
+      // falha silenciosa — não interrompe o registro principal
+    }
+
   } catch (e) {
     Logger.error('admin', 'Erro ao registrar log', e.message);
   }

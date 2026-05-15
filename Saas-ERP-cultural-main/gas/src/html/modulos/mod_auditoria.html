@@ -69,6 +69,10 @@
       class="audit-tab-btn active px-4 py-2 bg-slate-900 text-white text-xs font-black rounded-xl uppercase">
       <i class="fas fa-shield-alt mr-1"></i>Trilha de Auditoria
     </button>
+    <button onclick="auditMostrarSubAba('logs')" id="audit-tab-logs"
+      class="audit-tab-btn px-4 py-2 bg-slate-200 text-slate-600 text-xs font-black rounded-xl uppercase">
+      <i class="fas fa-table mr-1"></i>Logs do Sistema
+    </button>
     <button onclick="auditMostrarSubAba('acessos')" id="audit-tab-acessos"
       class="audit-tab-btn px-4 py-2 bg-slate-200 text-slate-600 text-xs font-black rounded-xl uppercase">
       <i class="fas fa-users mr-1"></i>Log de Acessos
@@ -153,6 +157,62 @@
     </div>
   </div>
 
+  <!-- ── SUBABA LOGS DO SISTEMA ───────────────────────────────── -->
+  <div id="audit-subaba-logs" class="hidden">
+    <div class="bg-white rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-200 overflow-hidden">
+      <div class="p-6 border-b border-slate-100 bg-slate-900 text-white flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+          <div class="flex items-center gap-3">
+            <div class="w-2 h-6 bg-emerald-400 rounded-full"></div>
+            <h3 class="font-black uppercase tracking-widest text-sm">Logs do Sistema</h3>
+          </div>
+          <p class="text-[10px] text-slate-400 font-bold mt-2 ml-5 uppercase tracking-tighter">
+            Aba <code class="font-mono bg-white/10 px-1 rounded">Logs</code> da planilha master — eventos operacionais registrados pelo sistema
+          </p>
+        </div>
+        <div class="flex gap-2 shrink-0">
+          <div class="relative w-full md:w-64">
+            <i class="fas fa-search absolute left-4 top-3.5 text-emerald-400 text-xs"></i>
+            <input type="text" id="audit-busca-logs" oninput="auditFiltrarLogs(this.value)"
+              placeholder="Filtrar logs..."
+              class="w-full pl-10 pr-4 py-3 bg-white/10 border border-white/5 rounded-2xl text-xs text-white placeholder:text-slate-500 focus:bg-white focus:text-slate-900 outline-none transition-all font-semibold">
+          </div>
+          <button onclick="_audCarregarLogs(true)"
+            class="px-4 py-2 bg-white/10 hover:bg-white/20 text-white text-[10px] font-black rounded-xl uppercase transition-all">
+            <i class="fas fa-sync-alt"></i>
+          </button>
+        </div>
+      </div>
+      <!-- Contador -->
+      <div class="px-6 py-2 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
+        <span id="audit-logs-count" class="text-[10px] text-slate-400 font-medium"></span>
+        <span class="text-[9px] text-slate-300 italic">Exibindo últimas 500 entradas · mais recentes primeiro</span>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full min-w-[900px] text-left border-collapse">
+          <thead class="bg-slate-50 border-b border-slate-100 sticky top-0">
+            <tr>
+              <th class="p-3 text-[9px] font-black text-slate-400 uppercase tracking-widest w-36">Data/Hora</th>
+              <th class="p-3 text-[9px] font-black text-slate-400 uppercase tracking-widest w-40">Usuário</th>
+              <th class="p-3 text-[9px] font-black text-slate-400 uppercase tracking-widest w-36">Ação</th>
+              <th class="p-3 text-[9px] font-black text-slate-400 uppercase tracking-widest w-28">Tipo</th>
+              <th class="p-3 text-[9px] font-black text-slate-400 uppercase tracking-widest w-40">Alvo</th>
+              <th class="p-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Detalhes</th>
+            </tr>
+          </thead>
+          <tbody id="audit-tbody-logs" class="divide-y divide-slate-50">
+            <tr>
+              <td colspan="6" class="p-12 text-center">
+                <i class="fas fa-spinner animate-spin text-slate-200 text-2xl mb-3 block"></i>
+                <p class="text-slate-300 text-xs font-bold uppercase">Clique na aba para carregar</p>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
   <!-- ── SUBABA ACESSOS ─────────────────────────────────────── -->
   <div id="audit-subaba-acessos" class="hidden">
     <div class="bg-white rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-200 overflow-hidden">
@@ -206,7 +266,9 @@
     stats:      null,
     modulosAtivos: [],
     carregado:  false,
-    carregandoAcessos: false
+    carregandoAcessos: false,
+    carregandoLogs:    false,
+    logsCarregados:    false
   };
 
   var _audFiltros = {
@@ -220,7 +282,7 @@
   // ── Navegação de sub-abas ────────────────────────────────────
   window.auditMostrarSubAba = function (aba) {
     _audState.abaAtiva = aba;
-    ['trilha', 'acessos'].forEach(function (a) {
+    ['trilha', 'logs', 'acessos'].forEach(function (a) {
       var subaba = document.getElementById('audit-subaba-' + a);
       var tab    = document.getElementById('audit-tab-' + a);
       if (subaba) subaba.classList.toggle('hidden', a !== aba);
@@ -232,6 +294,7 @@
       }
     });
     if (aba === 'acessos' && !_audState.carregandoAcessos) _audCarregarAcessos();
+    if (aba === 'logs'    && !_audState.logsCarregados)    _audCarregarLogs(false);
   };
 
   // ── Carregamento principal ───────────────────────────────────
@@ -440,6 +503,89 @@
       + '<i class="fas fa-exclamation-triangle text-amber-200 text-3xl mb-3"></i>'
       + '<p class="text-slate-400 text-xs font-bold">' + _audEsc(msg) + '</p>'
     + '</div>';
+  }
+
+  // ── Logs do Sistema (aba Logs da planilha) ───────────────────
+  var _audTodosLogs = [];
+
+  // forcado=true: recarrega mesmo se já carregou antes (botão Atualizar)
+  window._audCarregarLogs = function (forcado) {
+    if (_audState.carregandoLogs) return;
+    _audState.carregandoLogs = true;
+
+    var tbody = document.getElementById('audit-tbody-logs');
+    if (tbody) {
+      tbody.innerHTML = '<tr><td colspan="6" class="p-12 text-center">'
+        + '<i class="fas fa-spinner animate-spin text-slate-200 text-2xl mb-3 block"></i>'
+        + '<p class="text-slate-300 text-xs font-bold uppercase">Carregando logs...</p>'
+        + '</td></tr>';
+    }
+
+    var email = (typeof AppState !== 'undefined' && AppState.usuario) ? AppState.usuario.email || '' : '';
+    GAS.admin.obterLogs(email, function (data) {
+      _audState.carregandoLogs = false;
+      _audState.logsCarregados = true;
+      var lista = [];
+      try { lista = typeof data === 'string' ? JSON.parse(data) : (Array.isArray(data) ? data : []); } catch(e) {}
+      _audTodosLogs = lista;
+      var buscaEl = document.getElementById('audit-busca-logs');
+      var q = buscaEl ? buscaEl.value : '';
+      _audRenderizarLogs(q ? _audTodosLogs.filter(function(r) {
+        return JSON.stringify(r).toLowerCase().indexOf(q.toLowerCase()) !== -1;
+      }) : _audTodosLogs);
+    }, function (e) {
+      _audState.carregandoLogs = false;
+      var msg = (e && e.message) ? e.message : String(e || 'Sem acesso — requer perfil superadmin.');
+      var tbody2 = document.getElementById('audit-tbody-logs');
+      if (tbody2) tbody2.innerHTML = '<tr><td colspan="6" class="p-8 text-center text-slate-300 text-xs font-bold">'
+        + '<i class="fas fa-lock text-slate-200 text-xl mb-2 block"></i>' + _audEsc(msg) + '</td></tr>';
+      var cnt = document.getElementById('audit-logs-count');
+      if (cnt) cnt.textContent = '';
+    });
+  };
+
+  window.auditFiltrarLogs = function (v) {
+    var q = (v || '').toLowerCase();
+    if (!q) { _audRenderizarLogs(_audTodosLogs); return; }
+    _audRenderizarLogs(_audTodosLogs.filter(function (r) {
+      return JSON.stringify(r).toLowerCase().indexOf(q) !== -1;
+    }));
+  };
+
+  function _audRenderizarLogs(lista) {
+    var tbody = document.getElementById('audit-tbody-logs');
+    if (!tbody) return;
+    var cnt = document.getElementById('audit-logs-count');
+    if (cnt) cnt.textContent = lista.length + ' de ' + _audTodosLogs.length + ' registros';
+
+    if (!lista.length) {
+      tbody.innerHTML = '<tr><td colspan="6" class="p-8 text-center text-slate-300 text-xs">Sem registros.</td></tr>';
+      return;
+    }
+
+    // Colunas: [timestamp, usuario, acao, tipo, alvo, detalhes, dadosAntes, dadosDepois]
+    var _acoesComAlerta = { 'USUARIO_EXCLUIDO': 1, 'ESPACO_EXCLUIDO': 1, 'CONTRATO_ARQUIVADO': 1, 'ITEM_EXCLUIDO': 1 };
+
+    tbody.innerHTML = lista.map(function (r) {
+      var ts      = r[0] || '';
+      var usuario = r[1] || '';
+      var acao    = r[2] || '';
+      var tipo    = r[3] || '';
+      var alvo    = r[4] || '';
+      var det     = r[5] || '';
+      var isAlerta = _acoesComAlerta[acao] || acao.indexOf('EXCLU') !== -1 || acao.indexOf('CANCEL') !== -1;
+      var acoeCls = isAlerta
+        ? 'text-[9px] font-black bg-red-100 text-red-700 px-2 py-0.5 rounded-full uppercase'
+        : 'text-[9px] font-black bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full uppercase';
+      return '<tr class="hover:bg-slate-50 transition-colors">'
+        + '<td class="p-3 text-[10px] text-slate-500 font-medium whitespace-nowrap">' + _audEsc(ts) + '</td>'
+        + '<td class="p-3 text-[10px] text-slate-700 font-semibold truncate max-w-[160px]">' + _audEsc(usuario) + '</td>'
+        + '<td class="p-3"><span class="' + acoeCls + '">' + _audEsc(acao) + '</span></td>'
+        + '<td class="p-3 text-[10px] text-slate-500">' + _audEsc(tipo) + '</td>'
+        + '<td class="p-3 text-[10px] text-slate-600 truncate max-w-[160px]">' + _audEsc(alvo) + '</td>'
+        + '<td class="p-3 text-[10px] text-slate-500 truncate max-w-[240px]">' + _audEsc(det) + '</td>'
+        + '</tr>';
+    }).join('');
   }
 
   // ── Acessos ──────────────────────────────────────────────────
