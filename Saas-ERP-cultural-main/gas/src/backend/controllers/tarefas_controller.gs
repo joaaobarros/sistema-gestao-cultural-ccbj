@@ -227,13 +227,104 @@ function ctrl_tarefas_verificar_slas(emailFallback) {
   }, 'ctrl_tarefas_verificar_slas');
 }
 
-// Mantido para compatibilidade — redireciona para TarefaEngine
+/**
+ * Lista tarefas por função (fila da função).
+ * Gestores/admins veem toda a fila; outros veem apenas as suas.
+ */
 function ctrl_tarefas_listar_por_funcao(funcao, emailFallback) {
   return GasResponse.wrap(function() {
     if (!funcao) throw new Error('Função é obrigatória.');
-    _ctrlTarefasObterContexto(emailFallback);
-    return listarTarefasPorFuncao(funcao);
+    var ctx = _ctrlTarefasObterContexto(emailFallback);
+    return TarefaRepository.listarPorFuncao(funcao, ctx.email, ctx.nivel);
   }, 'ctrl_tarefas_listar_por_funcao');
+}
+
+/**
+ * Lista tarefas do módulo comunicação.
+ * Retorna apenas processos (tarefa-pai) ou todas as tarefas de comunicação.
+ */
+function ctrl_tarefas_listar_comunicacao(apenasProcessos, emailFallback) {
+  return GasResponse.wrap(function() {
+    var ctx = _ctrlTarefasObterContexto(emailFallback);
+    var filtros = { modulo: 'comunicacao' };
+    if (apenasProcessos) filtros.tipo = 'processo_comunicacao';
+    return TarefaRepository.listarComFiltros(filtros, ctx.email, ctx.nivel);
+  }, 'ctrl_tarefas_listar_comunicacao');
+}
+
+/**
+ * Lista tarefas com filtros arbitrários.
+ * @param {Object} filtros — { modulo, funcao, status, responsavel, tipo, prioridade, tarefaPai }
+ */
+function ctrl_tarefas_listar_com_filtros(filtros, emailFallback) {
+  return GasResponse.wrap(function() {
+    if (!filtros || typeof filtros !== 'object') throw new Error('Filtros são obrigatórios.');
+    var ctx = _ctrlTarefasObterContexto(emailFallback);
+    return TarefaRepository.listarComFiltros(filtros, ctx.email, ctx.nivel);
+  }, 'ctrl_tarefas_listar_com_filtros');
+}
+
+/**
+ * Calcula indicadores de sobrecarga operacional por usuário e por função.
+ * Visão global restrita a gestores/admins.
+ */
+function ctrl_tarefas_sobrecarga(emailFallback) {
+  return GasResponse.wrap(function() {
+    var ctx = _ctrlTarefasObterContexto(emailFallback);
+    var niveisGestao = ['superadmin', 'admin', 'gestor'];
+    if (niveisGestao.indexOf(ctx.nivel) === -1) {
+      throw new Error('Apenas gestores e admins podem ver indicadores de sobrecarga.');
+    }
+    return TarefaEngine.calcularSobrecarga(ctx.nivel);
+  }, 'ctrl_tarefas_sobrecarga');
+}
+
+/**
+ * Registra solicitação de revisão em uma tarefa/processo.
+ */
+function ctrl_tarefas_registrar_revisao(id, texto, emailFallback) {
+  return GasResponse.wrap(function() {
+    if (!id)    throw new Error('ID da tarefa é obrigatório.');
+    if (!texto) throw new Error('Texto da revisão é obrigatório.');
+    var ctx = _ctrlTarefasObterContexto(emailFallback);
+    return TarefaEngine.registrarRevisao(id, texto, ctx.email);
+  }, 'ctrl_tarefas_registrar_revisao');
+}
+
+/**
+ * Responde a uma revisão existente (aceita ou rejeita).
+ */
+function ctrl_tarefas_responder_revisao(id, revisaoId, resposta, aceita, emailFallback) {
+  return GasResponse.wrap(function() {
+    if (!id)        throw new Error('ID da tarefa é obrigatório.');
+    if (!revisaoId) throw new Error('ID da revisão é obrigatório.');
+    if (!resposta)  throw new Error('Resposta é obrigatória.');
+    var ctx = _ctrlTarefasObterContexto(emailFallback);
+    return TarefaEngine.responderRevisao(id, revisaoId, resposta, aceita !== false, ctx.email);
+  }, 'ctrl_tarefas_responder_revisao');
+}
+
+/**
+ * Cria processo de comunicação (tarefa-pai + subtarefas por entrega).
+ * Substitui ctrl_com_proc_criar — centraliza tudo no TarefaEngine.
+ */
+function ctrl_tarefas_criar_processo_comunicacao(dados, emailFallback) {
+  return GasResponse.wrap(function() {
+    if (!dados || !dados.titulo) throw new Error('Título do processo é obrigatório.');
+    var ctx = _ctrlTarefasObterContexto(emailFallback);
+    return criarProcessoComunicacao(dados, ctx.email);
+  }, 'ctrl_tarefas_criar_processo_comunicacao');
+}
+
+/**
+ * Verificação de deduplicação: retorna demanda de comunicação vinculada a uma reserva, ou null.
+ */
+function ctrl_tarefas_obter_demanda_por_reserva(idReserva, emailFallback) {
+  return GasResponse.wrap(function() {
+    if (!idReserva) throw new Error('ID da reserva é obrigatório.');
+    _ctrlTarefasObterContexto(emailFallback);
+    return obterDemandaPorReservaId(idReserva);
+  }, 'ctrl_tarefas_obter_demanda_por_reserva');
 }
 
 function ctrl_tarefas_atribuir_executores(id, emails, emailFallback) {

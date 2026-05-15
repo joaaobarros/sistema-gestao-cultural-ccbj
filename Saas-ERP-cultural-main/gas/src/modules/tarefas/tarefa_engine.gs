@@ -106,7 +106,82 @@ var _TEMPLATES_AUTO = {
     funcao:    'operacional',
     sla:       168,
     status:    'solicitada'
+  },
+  // ── Comunicação Institucional ─────────────────────────────────────────────
+  demanda_comunicacao: {
+    titulo:    'Demanda de comunicação: {ref}',
+    tipo:      'comunicacao',
+    prioridade: 'media',
+    funcao:    'comunicacao',
+    sla:       72,
+    status:    'solicitada'
+  },
+  cobertura_evento: {
+    titulo:    'Cobertura fotográfica/audiovisual: {ref}',
+    tipo:      'comunicacao',
+    prioridade: 'alta',
+    funcao:    'audiovisual',
+    sla:       24,
+    status:    'solicitada'
+  },
+  divulgacao_evento: {
+    titulo:    'Divulgação nas redes sociais: {ref}',
+    tipo:      'comunicacao',
+    prioridade: 'alta',
+    funcao:    'comunicacao',
+    sla:       48,
+    status:    'solicitada'
+  },
+  release_imprensa: {
+    titulo:    'Release para imprensa: {ref}',
+    tipo:      'comunicacao',
+    prioridade: 'media',
+    funcao:    'redacao',
+    sla:       72,
+    status:    'solicitada'
+  },
+  arte_grafica: {
+    titulo:    'Arte gráfica: {ref}',
+    tipo:      'comunicacao',
+    prioridade: 'media',
+    funcao:    'design',
+    sla:       48,
+    status:    'solicitada'
+  },
+  campanha_comunicacao: {
+    titulo:    'Campanha de comunicação: {ref}',
+    tipo:      'comunicacao',
+    prioridade: 'alta',
+    funcao:    'comunicacao',
+    sla:       120,
+    status:    'solicitada'
   }
+};
+
+// Tipos de entrega de comunicação → função responsável
+var TIPO_ENTREGA_FUNCAO = {
+  design:             'design',
+  diagramacao:        'design',
+  foto:               'fotografia',
+  ensaio_fotografico: 'fotografia',
+  video:              'audiovisual',
+  edicao_video:       'audiovisual',
+  stories:            'audiovisual',
+  materia:            'redacao',
+  release:            'redacao',
+  divulgacao:         'comunicacao',
+  rece:               'comunicacao',
+  campanha:           'comunicacao',
+  cobertura:          'audiovisual'
+};
+
+// SLA padrão por tipo de entrega (horas)
+var SLA_ENTREGA_H = {
+  design:      48,
+  fotografia:  24,
+  audiovisual: 72,
+  redacao:     48,
+  comunicacao: 24
 };
 
 // ── Helpers privados ─────────────────────────────────────────────────────────
@@ -166,7 +241,7 @@ var TarefaEngine = (function() {
       if (!dados || !dados.titulo) throw new Error('Título da tarefa é obrigatório.');
       var pri = (dados.prioridade || 'media').toLowerCase();
       var tarefa = {
-        id:                'tar_' + Date.now(),
+        id:                typeof gerarId === 'function' ? gerarId('tar') : 'tar_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
         titulo:            dados.titulo,
         descricao:         dados.descricao || '',
         tipo:              dados.tipo || 'operacional',
@@ -205,6 +280,9 @@ var TarefaEngine = (function() {
         slaViolado:        false,
 
         criadoPor:         emailCriador || '',
+        // metadados: dados extras específicos do módulo de origem (comunicação, etc.)
+        metadados:         dados.metadados || {},
+
         historico: [{
           data:       _agora(),
           ator:       emailCriador || 'sistema',
@@ -362,7 +440,7 @@ var TarefaEngine = (function() {
 
       tarefa.comentarios = tarefa.comentarios || [];
       tarefa.comentarios.push({
-        id:    'cmt_' + Date.now(),
+        id:    typeof gerarId === 'function' ? gerarId('cmt') : 'cmt_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
         autor: emailAutor || 'sistema',
         texto: texto.trim(),
         data:  _agora()
@@ -493,6 +571,235 @@ var TarefaEngine = (function() {
           tempoMedioH:_tempoMedioH(minhas),
           porStatus:  _contarPor(minhas, 'status')
         } : null
+      };
+    },
+
+    // ── Revisões (tipo especial de comentário com status) ─────────────────────
+
+    /**
+     * Registra uma solicitação de revisão em uma tarefa.
+     * Revisão é um comentário estruturado com tipo='revisao' e status rastreável.
+     */
+    registrarRevisao: function(id, texto, emailSolicitante) {
+      if (!texto || !texto.trim()) throw new Error('Texto da revisão é obrigatório.');
+      var tarefa = TarefaRepository.obterPorId(id);
+      if (!tarefa) throw new Error('Tarefa não encontrada: ' + id);
+
+      tarefa.comentarios = tarefa.comentarios || [];
+      var revisaoId = typeof gerarId === 'function' ? gerarId('rev') : 'rev_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+      tarefa.comentarios.push({
+        id:          revisaoId,
+        tipo:        'revisao',
+        autor:       emailSolicitante || 'sistema',
+        texto:       texto.trim(),
+        data:        _agora(),
+        revisao: {
+          status:     'solicitada',
+          respondidaEm: '',
+          resposta:   '',
+          respondidaPor: '',
+          aceita:     null
+        }
+      });
+      tarefa.atualizadoEm = _agora();
+
+      TarefaRepository.salvar(tarefa);
+      _emitirEvento('TAREFA_REVISAO_SOLICITADA', tarefa, emailSolicitante, { revisaoId: revisaoId });
+      return { ok: true, revisaoId: revisaoId };
+    },
+
+    /**
+     * Responde a uma revisão existente (aceita ou rejeita com resposta).
+     */
+    responderRevisao: function(id, revisaoId, resposta, aceita, emailRespondente) {
+      if (!revisaoId) throw new Error('ID da revisão é obrigatório.');
+      if (!resposta || !resposta.trim()) throw new Error('Resposta à revisão é obrigatória.');
+      var tarefa = TarefaRepository.obterPorId(id);
+      if (!tarefa) throw new Error('Tarefa não encontrada: ' + id);
+
+      tarefa.comentarios = tarefa.comentarios || [];
+      var revisao = tarefa.comentarios.find(function(c) { return c.id === revisaoId && c.tipo === 'revisao'; });
+      if (!revisao) throw new Error('Revisão não encontrada: ' + revisaoId);
+      if (revisao.revisao.status !== 'solicitada') throw new Error('Esta revisão já foi respondida.');
+
+      revisao.revisao.status       = aceita ? 'aceita' : 'rejeitada';
+      revisao.revisao.respondidaEm = _agora();
+      revisao.revisao.resposta     = resposta.trim();
+      revisao.revisao.respondidaPor = emailRespondente || 'sistema';
+      revisao.revisao.aceita       = !!aceita;
+
+      tarefa.atualizadoEm = _agora();
+      TarefaRepository.salvar(tarefa);
+      _emitirEvento('TAREFA_REVISAO_RESPONDIDA', tarefa, emailRespondente, {
+        revisaoId: revisaoId, aceita: aceita
+      });
+      return { ok: true };
+    },
+
+    // ── Criação de processo de comunicação (tarefa-pai + subtarefas) ──────────
+
+    /**
+     * Cria um processo de comunicação como tarefa-pai com subtarefas por entrega.
+     * Esta é a função que substitui criarProcessoComunicacao + _criarTarefasPorEntregas.
+     *
+     * @param {Object} dados — { titulo, descricao, prioridade, prazo, solicitante,
+     *                           responsavel, origem, idReserva, entregas[], observacoes,
+     *                           canais[], tipo }
+     * @param {string} emailCriador
+     * @returns {{ processo: Tarefa, subtarefas: Tarefa[] }}
+     */
+    criarProcessoComunicacao: function(dados, emailCriador) {
+      if (!dados || !dados.titulo) throw new Error('Título do processo é obrigatório.');
+
+      var agora      = _agora();
+      var pri        = (dados.prioridade || 'media').toLowerCase();
+      var entregas   = dados.entregas || [];
+
+      // Cria a tarefa-pai (processo principal)
+      var processo = TarefaEngine.criar({
+        titulo:        dados.titulo,
+        descricao:     dados.descricao || '',
+        tipo:          'processo_comunicacao',
+        prioridade:    pri,
+        modulo:        'comunicacao',
+        idOrigem:      dados.idReserva || dados.idOrigem || '',
+        refOrigem:     dados.titulo,
+        processo:      dados.titulo,
+        responsavel:   dados.responsavel || '',
+        responsavelNome: dados.responsavelNome || dados.responsavel || '',
+        setor:         'comunicacao',
+        funcao:        'comunicacao',
+        prazo:         dados.prazo || '',
+        tags:          (dados.canais || []).concat(dados.tipo ? [dados.tipo] : []),
+        status:        STATUS_TAREFA.SOLICITADA,
+        sla:           SLA_TAREFA_H[pri] || 72,
+        metadados: {
+          solicitante:  dados.solicitante  || emailCriador || '',
+          origem:       dados.origem       || 'manual',
+          idReserva:    dados.idReserva    || '',
+          canais:       dados.canais       || [],
+          observacoes:  dados.observacoes  || '',
+          tipoProcesso: dados.tipo         || 'geral'
+        }
+      }, emailCriador || 'sistema');
+
+      // Cria subtarefas por tipo de entrega
+      var subtarefas = [];
+      entregas.forEach(function(tipo) {
+        var funcao = TIPO_ENTREGA_FUNCAO[tipo] || 'comunicacao';
+        var slaH   = SLA_ENTREGA_H[funcao]     || 48;
+
+        try {
+          var sub = TarefaEngine.criar({
+            titulo:       tipo.toUpperCase() + ' — ' + dados.titulo,
+            tipo:         'entrega_comunicacao',
+            prioridade:   pri,
+            modulo:       'comunicacao',
+            idOrigem:     processo.id,
+            refOrigem:    dados.titulo,
+            processo:     dados.titulo,
+            etapa:        tipo,
+            funcao:       funcao,
+            responsavel:  dados.responsavel || '',
+            tarefaPai:    processo.id,
+            prazo:        dados.prazo || '',
+            status:       STATUS_TAREFA.SOLICITADA,
+            sla:          slaH,
+            metadados: {
+              tipoEntrega:  tipo,
+              idProcesso:   processo.id,
+              solicitante:  dados.solicitante || emailCriador || ''
+            }
+          }, emailCriador || 'sistema');
+          subtarefas.push(sub);
+        } catch(e) {
+          Logger.warn('[TarefaEngine.criarProcessoComunicacao] Subtarefa falhou (' + tipo + '): ' + e.message);
+        }
+      });
+
+      // Atualiza tarefa-pai com referências às subtarefas
+      if (subtarefas.length) {
+        processo.subtarefas = subtarefas.map(function(s) { return s.id; });
+        TarefaRepository.salvar(processo);
+      }
+
+      return { processo: processo, subtarefas: subtarefas };
+    },
+
+    // ── Sobrecarga operacional ─────────────────────────────────────────────────
+
+    /**
+     * Calcula indicadores de sobrecarga por usuário e por função.
+     * Retorna: quem está sobrecarregado, quem está ocioso, gargalos por status.
+     */
+    calcularSobrecarga: function(nivel) {
+      var todas = TarefaRepository.listar();
+      var agora  = Date.now();
+
+      var ativas = todas.filter(function(t) {
+        return t.status !== 'concluida' && t.status !== 'cancelada';
+      });
+
+      // Agrupa tarefas ativas por responsável
+      var porResponsavel = {};
+      ativas.forEach(function(t) {
+        var resp = t.responsavel || '__sem_responsavel__';
+        if (!porResponsavel[resp]) {
+          porResponsavel[resp] = { email: resp, total: 0, atrasadas: 0, criticas: 0, aguardando: 0, tarefas: [] };
+        }
+        porResponsavel[resp].total++;
+        porResponsavel[resp].tarefas.push({ id: t.id, titulo: t.titulo, status: t.status, prazo: t.prazo, prioridade: t.prioridade });
+        if (t.prazo && new Date(t.prazo).getTime() < agora) porResponsavel[resp].atrasadas++;
+        if (t.prioridade === 'critica')                      porResponsavel[resp].criticas++;
+        if (t.status === 'aguardando_aprovacao')             porResponsavel[resp].aguardando++;
+      });
+
+      // Agrupa por função
+      var porFuncao = {};
+      ativas.forEach(function(t) {
+        var func = t.funcao || '__sem_funcao__';
+        if (!porFuncao[func]) porFuncao[func] = { funcao: func, total: 0, atrasadas: 0 };
+        porFuncao[func].total++;
+        if (t.prazo && new Date(t.prazo).getTime() < agora) porFuncao[func].atrasadas++;
+      });
+
+      // Classifica sobrecarga (>5 tarefas ativas = sobrecarregado; 0 = ocioso)
+      var responsaveisOrdenados = Object.values(porResponsavel).sort(function(a, b) { return b.total - a.total; });
+
+      var LIMIAR_SOBRECARGA = 5;
+      var sobrecarregados = responsaveisOrdenados.filter(function(r) { return r.total >= LIMIAR_SOBRECARGA; });
+      var ociosos          = responsaveisOrdenados.filter(function(r) { return r.total === 0; });
+
+      // Tempo médio em cada status (para tarefas com historico)
+      var tempoMedioPorStatus = {};
+      todas.forEach(function(t) {
+        if (!t.historico || t.historico.length < 2) return;
+        for (var i = 1; i < t.historico.length; i++) {
+          var prev = t.historico[i - 1];
+          var curr = t.historico[i];
+          if (!prev.para || !curr.data) continue;
+          var status  = prev.para;
+          var duracaoH = (new Date(curr.data) - new Date(prev.data)) / 3600000;
+          if (!tempoMedioPorStatus[status]) tempoMedioPorStatus[status] = { total: 0, count: 0 };
+          tempoMedioPorStatus[status].total += duracaoH;
+          tempoMedioPorStatus[status].count++;
+        }
+      });
+      var tempoMedio = {};
+      Object.keys(tempoMedioPorStatus).forEach(function(s) {
+        var d = tempoMedioPorStatus[s];
+        tempoMedio[s] = Math.round(d.total / d.count);
+      });
+
+      return {
+        totalAtivas:        ativas.length,
+        sobrecarregados:    sobrecarregados,
+        ociosos:            ociosos,
+        porResponsavel:     responsaveisOrdenados.slice(0, 20),
+        porFuncao:          Object.values(porFuncao).sort(function(a, b) { return b.total - a.total; }),
+        tempoMedioPorStatusH: tempoMedio,
+        filaAprovacao:      ativas.filter(function(t) { return t.status === 'aguardando_aprovacao'; })
+                                  .map(function(t) { return { id: t.id, titulo: t.titulo, responsavel: t.responsavel, prazo: t.prazo }; })
       };
     },
 

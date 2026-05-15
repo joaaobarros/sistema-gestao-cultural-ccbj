@@ -1,1015 +1,1059 @@
 <!--
 @file mod_balcao.html
 @type module
-@description Central de Comunicação — processos de produção, fila por função, Kanban, entregas e revisões.
-@responsibility Estrutura HTML + JS da aba #aba-balcao.
-@dependencies GAS.comunicacaoProcessos, GAS.entregas, GAS.revisao, GAS.tarefas,
+@description Balcão da Comunicação — pipeline editorial institucional.
+             Processa de comunicação são tarefas do TarefaEngine (modulo='comunicacao').
+             Entregas são subtarefas (tipo='entrega_comunicacao').
+             Revisões são comentários estruturados (tipo='revisao').
+@responsibility HTML + CSS + JS da aba #aba-balcao.
+@dependencies GAS.tarefas.listarComunicacao, GAS.tarefas.criarProcessoComunicacao,
+              GAS.tarefas.sobrecarga, GAS.admin.obterDados,
               showLoader, escaparHTML, temPermissao
 -->
 
 <style>
-  .modo-btn {
-    font-size:10px;
-    padding:6px 10px;
-    border-radius:8px;
-    background:#f1f5f9;
-    color:#64748b;
-    transition:all .15s ease;
-    border:none;
-    cursor:pointer;
-    display:inline-flex;
-    align-items:center;
-    gap:4px;
-  }
-  .modo-btn:hover { background:#6366f1; color:#fff; }
-  .modo-btn.ativo  { background:#1e293b; color:#fff; }
+/* ── Botões de modo (Pipeline / Lista / Sobrecarga) ── */
+.balcao-modo-btn {
+  font-size:10px; padding:6px 12px; border-radius:8px;
+  background:#f1f5f9; color:#64748b;
+  transition:all .15s ease; border:none; cursor:pointer;
+  display:inline-flex; align-items:center; gap:4px; font-weight:600;
+}
+.balcao-modo-btn:hover  { background:#6366f1; color:#fff; }
+.balcao-modo-btn.ativo  { background:#1e293b; color:#fff; }
 
-  .kanban-item {
-    transition:all .15s ease;
-    user-select:none;
-  }
-  .kanban-item:hover {
-    transform:translateY(-1px);
-    box-shadow:0 4px 12px rgba(0,0,0,.08);
-  }
-  .kanban-col { transition:background .2s; border-radius:14px; }
-  .kanban-col.drag-over {
-    outline:2px dashed #a5b4fc;
-    background:#eef2ff !important;
-  }
+/* ── Filtros de função ── */
+.balcao-func-btn {
+  padding:5px 12px; border-radius:8px; font-size:10px; font-weight:700;
+  border:1.5px solid #e2e8f0; background:#fff; color:#64748b;
+  cursor:pointer; transition:all .15s; white-space:nowrap;
+}
+.balcao-func-btn.ativo { background:#1e293b; color:#fff; border-color:#1e293b; }
+.balcao-func-btn:hover:not(.ativo) { border-color:#6366f1; color:#6366f1; }
 
-  .balcao-func-btn {
-    padding:5px 12px;
-    border-radius:8px;
-    font-size:10px;
-    font-weight:700;
-    border:1.5px solid #e2e8f0;
-    background:#fff;
-    color:#64748b;
-    cursor:pointer;
-    transition:all .15s;
-    white-space:nowrap;
-  }
-  .balcao-func-btn.ativo { background:#1e293b; color:#fff; border-color:#1e293b; }
-  .balcao-func-btn:hover:not(.ativo) { border-color:#6366f1; color:#6366f1; }
+/* ── Pipeline Kanban ── */
+.balcao-pipeline {
+  display:grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap:14px;
+}
+.pipeline-col {
+  background:#f8fafc; border-radius:16px;
+  border:1.5px solid #e2e8f0; padding:12px; min-height:180px;
+  transition:background .2s, border-color .2s;
+}
+.pipeline-col.drag-over { border-color:#a5b4fc; background:#eef2ff; }
+.pipeline-col-header {
+  font-size:10px; font-weight:800; text-transform:uppercase;
+  letter-spacing:.06em; margin-bottom:10px;
+  display:flex; justify-content:space-between; align-items:center;
+}
+.pipeline-badge {
+  font-size:10px; font-weight:700; padding:2px 8px;
+  border-radius:99px; min-width:20px; text-align:center;
+}
+
+/* ── Cards de processo ── */
+.processo-card {
+  background:#fff; border-radius:12px; padding:12px;
+  border:1.5px solid #e2e8f0; margin-bottom:8px;
+  cursor:pointer; transition:all .15s ease;
+  user-select:none; position:relative;
+}
+.processo-card:hover {
+  border-color:#6366f1; box-shadow:0 4px 16px rgba(99,102,241,.1);
+  transform:translateY(-1px);
+}
+.processo-card.sla-violado { border-left:3px solid #ef4444; }
+.processo-card.atrasado    { border-left:3px solid #f59e0b; }
+.processo-card.revisao-pendente { border-top:2px solid #8b5cf6; }
+
+/* ── Avatar de responsável ── */
+.avatar-chip {
+  width:22px; height:22px; border-radius:50%;
+  font-size:8px; font-weight:700; color:#fff;
+  display:inline-flex; align-items:center; justify-content:center;
+  border:2px solid #fff; margin-right:-4px; flex-shrink:0;
+  cursor:default;
+}
+
+/* ── Indicadores de sobrecarga ── */
+.sobrecarga-bar {
+  height:6px; border-radius:3px; transition:width .4s ease;
+  background:linear-gradient(to right, #6366f1, #8b5cf6);
+}
+.sobrecarga-bar.critico { background:linear-gradient(to right, #ef4444, #f97316); }
+.sobrecarga-bar.alto    { background:linear-gradient(to right, #f59e0b, #fbbf24); }
+
+/* ── Modal de detalhe ── */
+.balcao-modal-overlay {
+  position:fixed; inset:0; background:rgba(0,0,0,.45);
+  z-index:200; display:flex; align-items:center; justify-content:center;
+  padding:16px;
+}
+.balcao-modal {
+  background:#fff; border-radius:20px; width:100%; max-width:720px;
+  max-height:90vh; overflow-y:auto; box-shadow:0 20px 60px rgba(0,0,0,.2);
+  animation:balcao-modal-in .2s ease;
+}
+@keyframes balcao-modal-in {
+  from { transform:scale(.95) translateY(10px); opacity:0; }
+  to   { transform:scale(1)   translateY(0);    opacity:1; }
+}
+
+/* ── Etapas visuais dentro do modal ── */
+.etapa-timeline {
+  display:flex; align-items:center; gap:0; overflow-x:auto; padding:4px 0;
+}
+.etapa-step {
+  display:flex; flex-direction:column; align-items:center;
+  min-width:80px; position:relative;
+}
+.etapa-step:not(:last-child)::after {
+  content:''; position:absolute; top:14px; left:calc(50% + 14px);
+  width:calc(100% - 28px); height:2px; background:#e2e8f0; z-index:0;
+}
+.etapa-step.ativo::after { background:#6366f1; }
+.etapa-dot {
+  width:28px; height:28px; border-radius:50%;
+  border:2px solid #e2e8f0; background:#fff;
+  display:flex; align-items:center; justify-content:center;
+  font-size:10px; position:relative; z-index:1; transition:all .2s;
+}
+.etapa-step.ativo   .etapa-dot { background:#6366f1; border-color:#6366f1; color:#fff; }
+.etapa-step.concluido .etapa-dot { background:#10b981; border-color:#10b981; color:#fff; }
+.etapa-label { font-size:8px; font-weight:600; color:#94a3b8; margin-top:4px; text-align:center; }
+.etapa-step.ativo   .etapa-label { color:#6366f1; }
+.etapa-step.concluido .etapa-label { color:#10b981; }
 </style>
 
 <section id="aba-balcao" class="tab-content hidden pb-20">
 
-  <!-- CARD PRINCIPAL: lista de processos -->
-  <div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
-
-    <!-- HEADER -->
+  <!-- HEADER PRINCIPAL -->
+  <div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden mb-4">
     <div class="p-5 border-b border-slate-100 bg-slate-50/50 flex flex-wrap justify-between items-center gap-3">
       <div>
         <h3 class="font-black text-slate-800 uppercase text-sm">
-          <i class="fas fa-bullhorn text-orange-400 mr-2"></i>Central de Comunicação
+          <i class="fas fa-bullhorn text-orange-400 mr-2"></i>Balcão da Comunicação
         </h3>
-        <p class="text-[10px] text-slate-400">Produção, campanhas e publicização</p>
+        <p class="text-[10px] text-slate-400">Pipeline editorial institucional — demandas, produção e publicização</p>
       </div>
-      <button onclick="abrirModalAtendimento()"
-        class="bg-orange-500 hover:bg-orange-600 text-white text-[10px] font-black px-4 py-2 rounded-xl transition-all uppercase flex items-center gap-1.5">
-        <i class="fas fa-plus text-[9px]"></i>Novo Processo
-      </button>
+      <div class="flex gap-2 flex-wrap items-center">
+        <button onclick="_balcao.nova()"
+          class="bg-orange-500 hover:bg-orange-600 text-white text-[10px] font-black px-4 py-2 rounded-xl transition-all uppercase flex items-center gap-1.5">
+          <i class="fas fa-plus text-[9px]"></i>Nova Demanda
+        </button>
+        <button onclick="_balcao.atualizar()"
+          class="bg-slate-100 hover:bg-slate-200 text-slate-600 text-[10px] font-black px-3 py-2 rounded-xl transition-all">
+          <i class="fas fa-sync-alt text-[9px]"></i>
+        </button>
+      </div>
     </div>
 
-    <!-- FILTROS -->
+    <!-- MÉTRICAS RÁPIDAS -->
+    <div id="balcao-metricas" class="p-4 grid grid-cols-2 sm:grid-cols-5 gap-3 border-b border-slate-100 bg-white">
+      <div class="text-center">
+        <div id="bm-total"     class="text-2xl font-black text-slate-800">—</div>
+        <div class="text-[9px] text-slate-400 uppercase font-semibold">Total</div>
+      </div>
+      <div class="text-center">
+        <div id="bm-andamento" class="text-2xl font-black text-blue-600">—</div>
+        <div class="text-[9px] text-slate-400 uppercase font-semibold">Em Produção</div>
+      </div>
+      <div class="text-center">
+        <div id="bm-revisao"   class="text-2xl font-black text-purple-600">—</div>
+        <div class="text-[9px] text-slate-400 uppercase font-semibold">Revisões</div>
+      </div>
+      <div class="text-center">
+        <div id="bm-atrasadas" class="text-2xl font-black text-red-500">—</div>
+        <div class="text-[9px] text-slate-400 uppercase font-semibold">Atrasadas</div>
+      </div>
+      <div class="text-center">
+        <div id="bm-concluidas" class="text-2xl font-black text-green-600">—</div>
+        <div class="text-[9px] text-slate-400 uppercase font-semibold">Concluídas</div>
+      </div>
+    </div>
+
+    <!-- FILTROS + MODOS -->
     <div class="p-4 flex gap-3 flex-wrap border-b border-slate-100 items-center">
       <div class="relative">
         <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 text-xs"></i>
-        <input id="balcaoBusca" placeholder="Buscar processo..."
-          style="padding:8px 12px 8px 30px;border:1.5px solid #e2e8f0;border-radius:10px;font-size:12px;outline:none;width:200px;transition:border-color .15s"
-          onfocus="this.style.borderColor='#f97316'" onblur="this.style.borderColor='#e2e8f0'">
+        <input id="balcaoBusca" placeholder="Buscar demanda..."
+          oninput="_balcao.renderizar()"
+          class="pl-9 pr-3 py-2 text-xs rounded-xl border border-slate-200 bg-slate-50 w-48 focus:outline-none focus:border-indigo-400">
       </div>
-      <select id="balcaoFiltroStatus"
-        style="padding:8px 12px;border:1.5px solid #e2e8f0;border-radius:10px;font-size:12px;outline:none;color:#475569">
-        <option value="">Todos os status</option>
-        <option>Solicitado</option>
-        <option>Em andamento</option>
-        <option>Concluído</option>
-      </select>
-    </div>
-
-    <!-- CONTADORES -->
-    <div id="balcaoContadores" class="flex gap-2 p-3 flex-wrap border-b border-slate-50"></div>
-
-    <!-- CONTEÚDO PRINCIPAL -->
-    <div id="balcaoContainer">
-      <div class="p-10 text-center">
-        <i class="fas fa-spinner animate-spin text-orange-300 text-xl"></i>
-        <p class="text-[11px] text-slate-400 mt-2">Carregando...</p>
+      <div class="flex gap-2 flex-wrap">
+        <button class="balcao-func-btn ativo" data-func="todos" onclick="_balcao.filtrarFuncao(this)">Todos</button>
+        <button class="balcao-func-btn" data-func="design"      onclick="_balcao.filtrarFuncao(this)"><i class="fas fa-palette mr-1"></i>Design</button>
+        <button class="balcao-func-btn" data-func="fotografia"  onclick="_balcao.filtrarFuncao(this)"><i class="fas fa-camera mr-1"></i>Foto</button>
+        <button class="balcao-func-btn" data-func="audiovisual" onclick="_balcao.filtrarFuncao(this)"><i class="fas fa-video mr-1"></i>AV</button>
+        <button class="balcao-func-btn" data-func="redacao"     onclick="_balcao.filtrarFuncao(this)"><i class="fas fa-pen mr-1"></i>Texto</button>
+        <button class="balcao-func-btn" data-func="comunicacao" onclick="_balcao.filtrarFuncao(this)"><i class="fas fa-share-alt mr-1"></i>Social</button>
+      </div>
+      <div class="flex gap-1 ml-auto flex-wrap">
+        <button class="balcao-modo-btn ativo" data-modo="pipeline" onclick="_balcao.setModo(this)">
+          <i class="fas fa-columns text-[9px]"></i>Pipeline
+        </button>
+        <button class="balcao-modo-btn" data-modo="lista" onclick="_balcao.setModo(this)">
+          <i class="fas fa-list text-[9px]"></i>Lista
+        </button>
+        <button class="balcao-modo-btn" data-modo="sobrecarga" onclick="_balcao.setModo(this)">
+          <i class="fas fa-fire text-[9px]"></i>Carga
+        </button>
       </div>
     </div>
-
   </div>
 
-  <!-- FILA DA EQUIPE -->
-  <div class="mt-6 bg-white border border-slate-200 rounded-3xl p-5">
-
-    <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
-      <div>
-        <div class="text-[10px] uppercase tracking-wider text-slate-400 font-black mb-0.5">Fila da equipe</div>
-        <div id="balcaoFuncaoLabel" class="text-xs font-black text-slate-700">Design</div>
-      </div>
-      <div class="flex items-center gap-3 flex-wrap">
-        <!-- Seletor de função -->
-        <div id="balcaoFuncaoSelector" class="flex gap-1 flex-wrap"></div>
-        <!-- Modos de visualização -->
-        <div class="flex gap-1">
-          <button onclick="mudarModoFila('lista')"     data-modo="lista"     class="modo-btn ativo" title="Lista"><i class="fas fa-list text-[10px]"></i></button>
-          <button onclick="mudarModoFila('kanban')"    data-modo="kanban"    class="modo-btn" title="Kanban"><i class="fas fa-columns text-[10px]"></i></button>
-          <button onclick="mudarModoFila('cards')"     data-modo="cards"     class="modo-btn" title="Cards"><i class="fas fa-th-large text-[10px]"></i></button>
-          <button onclick="mudarModoFila('carga')"     data-modo="carga"     class="modo-btn" title="Carga por pessoa"><i class="fas fa-users text-[10px]"></i></button>
-          <button onclick="mudarModoFila('timeline')"  data-modo="timeline"  class="modo-btn" title="Timeline"><i class="fas fa-stream text-[10px]"></i></button>
-        </div>
-      </div>
+  <!-- ÁREA PRINCIPAL DE CONTEÚDO -->
+  <div id="balcao-conteudo" class="min-h-64">
+    <div class="flex items-center justify-center h-40">
+      <div class="text-slate-400 text-sm"><i class="fas fa-spinner fa-spin mr-2"></i>Carregando...</div>
     </div>
-
-    <div id="fila-funcao"></div>
-
   </div>
 
 </section>
 
+<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+<!-- MODAL DE DETALHE DO PROCESSO                        -->
+<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+<div id="balcao-modal-overlay" class="balcao-modal-overlay hidden" onclick="_balcaoFecharModal(event)">
+  <div class="balcao-modal" onclick="event.stopPropagation()">
+    <div id="balcao-modal-body" class="p-6">
+      <div class="flex items-center justify-center h-32 text-slate-400 text-sm">
+        <i class="fas fa-spinner fa-spin mr-2"></i>Carregando...
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+<!-- MODAL DE NOVA DEMANDA                               -->
+<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+<div id="balcao-form-overlay" class="balcao-modal-overlay hidden" onclick="_balcaoFecharForm(event)">
+  <div class="balcao-modal" onclick="event.stopPropagation()">
+    <div class="p-6">
+      <div class="flex justify-between items-center mb-5">
+        <h3 class="font-black text-slate-800 text-base">
+          <i class="fas fa-plus-circle text-orange-400 mr-2"></i>Nova Demanda de Comunicação
+        </h3>
+        <button onclick="_balcaoFecharForm()" class="text-slate-400 hover:text-slate-700 text-lg">&times;</button>
+      </div>
+
+      <!-- CAMPOS -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+        <div class="sm:col-span-2">
+          <label class="text-[10px] font-bold text-slate-600 uppercase tracking-wide">Título da Demanda *</label>
+          <input id="bForm-titulo" type="text" placeholder="Ex: Arte para Mostra de Cinema 2026"
+            class="w-full mt-1 px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-400">
+        </div>
+        <div>
+          <label class="text-[10px] font-bold text-slate-600 uppercase tracking-wide">Prioridade</label>
+          <select id="bForm-prioridade" class="w-full mt-1 px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-400">
+            <option value="baixa">Baixa</option>
+            <option value="media" selected>Média</option>
+            <option value="alta">Alta</option>
+            <option value="critica">Crítica</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-[10px] font-bold text-slate-600 uppercase tracking-wide">Prazo</label>
+          <input id="bForm-prazo" type="date" class="w-full mt-1 px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-400">
+        </div>
+        <div class="sm:col-span-2">
+          <label class="text-[10px] font-bold text-slate-600 uppercase tracking-wide">Responsável</label>
+          <div class="relative mt-1">
+            <input id="bForm-responsavel" type="text" placeholder="Nome ou e-mail do responsável"
+              oninput="_balcaoAutocompletar(this)"
+              class="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-400">
+            <div id="bForm-responsavel-list" class="absolute z-50 w-full bg-white border border-slate-200 rounded-xl shadow-lg mt-1 hidden max-h-40 overflow-y-auto text-xs"></div>
+          </div>
+        </div>
+        <div class="sm:col-span-2">
+          <label class="text-[10px] font-bold text-slate-600 uppercase tracking-wide">Descrição / Briefing</label>
+          <textarea id="bForm-descricao" rows="3" placeholder="Detalhes da demanda, contexto, referências..."
+            class="w-full mt-1 px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-400 resize-none"></textarea>
+        </div>
+        <div class="sm:col-span-2">
+          <label class="text-[10px] font-bold text-slate-600 uppercase tracking-wide mb-2 block">Tipos de entrega necessários</label>
+          <div id="bForm-entregas" class="flex flex-wrap gap-2">
+            <label class="flex items-center gap-1.5 text-xs cursor-pointer px-3 py-1.5 rounded-lg border border-slate-200 hover:border-indigo-300 has-[:checked]:bg-indigo-50 has-[:checked]:border-indigo-400 transition-all">
+              <input type="checkbox" value="design" class="bform-entrega accent-indigo-500"> <i class="fas fa-palette text-purple-500 text-[9px]"></i> Design
+            </label>
+            <label class="flex items-center gap-1.5 text-xs cursor-pointer px-3 py-1.5 rounded-lg border border-slate-200 hover:border-indigo-300 has-[:checked]:bg-indigo-50 has-[:checked]:border-indigo-400 transition-all">
+              <input type="checkbox" value="foto" class="bform-entrega accent-indigo-500"> <i class="fas fa-camera text-blue-500 text-[9px]"></i> Foto
+            </label>
+            <label class="flex items-center gap-1.5 text-xs cursor-pointer px-3 py-1.5 rounded-lg border border-slate-200 hover:border-indigo-300 has-[:checked]:bg-indigo-50 has-[:checked]:border-indigo-400 transition-all">
+              <input type="checkbox" value="video" class="bform-entrega accent-indigo-500"> <i class="fas fa-video text-red-500 text-[9px]"></i> Vídeo
+            </label>
+            <label class="flex items-center gap-1.5 text-xs cursor-pointer px-3 py-1.5 rounded-lg border border-slate-200 hover:border-indigo-300 has-[:checked]:bg-indigo-50 has-[:checked]:border-indigo-400 transition-all">
+              <input type="checkbox" value="release" class="bform-entrega accent-indigo-500"> <i class="fas fa-newspaper text-green-500 text-[9px]"></i> Release
+            </label>
+            <label class="flex items-center gap-1.5 text-xs cursor-pointer px-3 py-1.5 rounded-lg border border-slate-200 hover:border-indigo-300 has-[:checked]:bg-indigo-50 has-[:checked]:border-indigo-400 transition-all">
+              <input type="checkbox" value="divulgacao" class="bform-entrega accent-indigo-500"> <i class="fas fa-share-alt text-orange-500 text-[9px]"></i> Redes sociais
+            </label>
+            <label class="flex items-center gap-1.5 text-xs cursor-pointer px-3 py-1.5 rounded-lg border border-slate-200 hover:border-indigo-300 has-[:checked]:bg-indigo-50 has-[:checked]:border-indigo-400 transition-all">
+              <input type="checkbox" value="cobertura" class="bform-entrega accent-indigo-500"> <i class="fas fa-broadcast-tower text-pink-500 text-[9px]"></i> Cobertura
+            </label>
+          </div>
+        </div>
+        <div class="sm:col-span-2">
+          <label class="text-[10px] font-bold text-slate-600 uppercase tracking-wide">Observações</label>
+          <input id="bForm-obs" type="text" placeholder="Informações adicionais (opcional)"
+            class="w-full mt-1 px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-400">
+        </div>
+      </div>
+
+      <div class="flex justify-end gap-2">
+        <button onclick="_balcaoFecharForm()"
+          class="px-4 py-2 text-xs font-bold text-slate-500 hover:text-slate-800 rounded-xl border border-slate-200 hover:bg-slate-50 transition-all">
+          Cancelar
+        </button>
+        <button onclick="_balcao.salvarNova()"
+          class="px-5 py-2 text-xs font-black bg-orange-500 hover:bg-orange-600 text-white rounded-xl transition-all">
+          <i class="fas fa-save mr-1"></i>Criar Demanda
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+<!-- JAVASCRIPT DO BALCÃO                                -->
+<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
 <script>
-// ══════════════════════════════════════════════════════
-// ESTADO
-// ══════════════════════════════════════════════════════
-var _balcaoCache       = [];
-var _balcaoFuncaoAtual = 'design';
-var _modoFila          = 'lista';
+(function() {
+'use strict';
 
-var _FUNCOES_BALCAO = [
-  { key:'design',       label:'Design'       },
-  { key:'foto',         label:'Foto'         },
-  { key:'video',        label:'Vídeo'        },
-  { key:'materia',      label:'Texto'        },
-  { key:'comunicacao',  label:'Geral'        }
-];
+// ── Estado local ─────────────────────────────────────────────────────────────
 
-var ENTREGAS_PADRAO = [
-  'design','diagramacao','foto','ensaio_fotografico',
-  'video','edicao_video','stories','materia','divulgacao'
-];
-
-// ══════════════════════════════════════════════════════
-// HELPERS
-// ══════════════════════════════════════════════════════
-function _labelEntrega(k){
-  var m = { design:'Peça gráfica', diagramacao:'Diagramação', foto:'Fotografia',
-            ensaio_fotografico:'Ensaio fotográfico', video:'Captação de vídeo',
-            edicao_video:'Edição de vídeo', stories:'Cobertura (stories)',
-            materia:'Matéria / texto', divulgacao:'Publicação / divulgação' };
-  return m[k] || k;
-}
-
-function _isAtrasadoBalcao(prazo, status){
-  if (!prazo) return false;
-  return new Date(prazo) < new Date() && (status||'').toLowerCase() !== 'concluído';
-}
-
-// ══════════════════════════════════════════════════════
-// CARREGAR
-// ══════════════════════════════════════════════════════
-function carregarBalcao(){
-  GAS.comunicacaoProcessos.listar(function(lista){
-    _balcaoCache = lista || [];
-    _balcaoFiltrar();
-    _balcaoRenderizarContadores();
-  }, function(e){
-    document.getElementById('balcaoContainer').innerHTML =
-      '<div class="p-10 text-center text-red-400 text-sm"><i class="fas fa-exclamation-triangle mr-2"></i>Erro ao carregar processos.</div>';
-  });
-}
-
-// ══════════════════════════════════════════════════════
-// FILTRAR
-// ══════════════════════════════════════════════════════
-function _balcaoFiltrar(){
-  var q  = (document.getElementById('balcaoBusca').value||'').toLowerCase();
-  var st = document.getElementById('balcaoFiltroStatus').value;
-  var filtrados = _balcaoCache.filter(function(a){
-    var matchBusca  = (a.titulo||a.assunto||'').toLowerCase().includes(q) ||
-                      (a.descricao||'').toLowerCase().includes(q);
-    var matchStatus = !st || a.status === st;
-    return matchBusca && matchStatus;
-  });
-  renderizarBalcao(filtrados);
-}
-
-// ══════════════════════════════════════════════════════
-// CONTADORES — com badge de atraso
-// ══════════════════════════════════════════════════════
-function _balcaoRenderizarContadores(){
-  var c = document.getElementById('balcaoContadores');
-  if (!c) return;
-  var map = {}, atrasados = 0;
-  _balcaoCache.forEach(function(a){
-    var s = a.status||'Sem status';
-    map[s] = (map[s]||0)+1;
-    if (_isAtrasadoBalcao(a.prazo, a.status)) atrasados++;
-  });
-  var html = Object.keys(map).map(function(s){
-    var cls = s.toLowerCase()==='concluído' ? 'bg-emerald-100 text-emerald-700'
-            : s.toLowerCase()==='em andamento' ? 'bg-amber-100 text-amber-700'
-            : 'bg-slate-100 text-slate-600';
-    return '<div class="px-3 py-1 rounded-lg text-[11px] font-bold '+cls+'">'+escaparHTML(s)+': '+map[s]+'</div>';
-  }).join('');
-  if (atrasados){
-    html += '<div class="px-3 py-1 bg-red-100 text-red-700 rounded-lg text-[11px] font-black">'
-          + '<i class="fas fa-exclamation-triangle mr-1"></i>'
-          + atrasados+' atrasado'+(atrasados>1?'s':'')+'</div>';
-  }
-  c.innerHTML = html;
-}
-
-// ══════════════════════════════════════════════════════
-// RENDER — tabela de processos
-// ══════════════════════════════════════════════════════
-function renderizarBalcao(lista){
-  lista = lista || _balcaoCache;
-  var c = document.getElementById('balcaoContainer');
-  if (!c) return;
-
-  if (!lista.length){
-    c.innerHTML = '<div class="p-12 text-center">'
-      + '<i class="fas fa-bullhorn text-slate-200 text-4xl mb-3"></i>'
-      + '<p class="text-slate-400 font-bold text-sm">Nenhum processo encontrado</p>'
-      + (temPermissao('balcao','editar')
-          ? '<button onclick="abrirModalAtendimento()" class="mt-4 bg-orange-500 text-white text-xs font-black px-4 py-2 rounded-xl">+ Novo Processo</button>'
-          : '')
-      + '</div>';
-    return;
-  }
-
-  c.innerHTML = '<div class="overflow-x-auto"><table class="w-full text-sm">'
-    + '<thead><tr class="text-[10px] uppercase tracking-wider text-slate-400 border-b bg-slate-50/50">'
-    + '<th class="p-3 text-left">Tipo</th>'
-    + '<th class="p-3 text-left">Processo</th>'
-    + '<th class="p-3 text-left">Status</th>'
-    + '<th class="p-3 text-left">Prazo</th>'
-    + '<th class="p-3 text-left">Responsável</th>'
-    + '<th class="p-3 text-right"></th>'
-    + '</tr></thead><tbody>'
-    + lista.map(function(a){
-        var id       = a.id||'';
-        var status   = (a.status||'').toLowerCase().trim();
-        var atrasado = _isAtrasadoBalcao(a.prazo, a.status);
-        var stCls    = status==='concluído'     ? 'bg-emerald-100 text-emerald-700'
-                     : status==='em andamento'  ? 'bg-amber-100 text-amber-700'
-                     : 'bg-slate-100 text-slate-600';
-        return '<tr class="border-b hover:bg-slate-50 transition cursor-pointer'+(atrasado?' bg-red-50/30':'')+'" onclick="_balcaoToggle(\''+escaparHTML(id)+'\')">'
-          + '<td class="p-3"><span class="text-[10px] font-bold text-slate-500 uppercase">'+escaparHTML(a.tipo||'-')+'</span></td>'
-          + '<td class="p-3">'
-          +   '<div class="font-semibold text-slate-800 leading-tight flex items-center gap-1.5">'
-          +   (atrasado?'<i class="fas fa-circle text-red-400" style="font-size:6px"></i>':'')
-          +   escaparHTML(a.titulo||a.assunto||'-')+'</div>'
-          +   (a.descricao?'<div class="text-[11px] text-slate-400 mt-0.5 truncate max-w-xs">'+escaparHTML(a.descricao)+'</div>':'')
-          + '</td>'
-          + '<td class="p-3"><span class="px-2 py-1 rounded-full text-[10px] font-black '+stCls+'">'+escaparHTML(a.status||'-')+'</span></td>'
-          + '<td class="p-3 text-[11px] '+(atrasado?'text-red-500 font-bold':'text-slate-500')+'">'+escaparHTML(a.prazo||'-')+'</td>'
-          + '<td class="p-3 text-[11px] text-slate-600">'+escaparHTML(a.responsavel||'-')+'</td>'
-          + '<td class="p-3 text-right"><div class="flex justify-end gap-1">'
-          + '<button onclick="event.stopPropagation();editarAtendimento(\''+escaparHTML(id)+'\')" class="w-7 h-7 flex items-center justify-center rounded-md bg-slate-100 text-slate-500 hover:bg-indigo-600 hover:text-white transition" title="Editar"><i class="fas fa-edit text-[10px]"></i></button>'
-          + '<button onclick="event.stopPropagation();excluirAtendimento(\''+escaparHTML(id)+'\')" class="w-7 h-7 flex items-center justify-center rounded-md bg-slate-100 text-slate-400 hover:bg-red-600 hover:text-white transition" title="Excluir"><i class="fas fa-trash text-[10px]"></i></button>'
-          + '<button onclick="event.stopPropagation();abrirSolicitacaoRevisao(\''+escaparHTML(id)+'\')" class="w-7 h-7 flex items-center justify-center rounded-md bg-amber-100 text-amber-600 hover:bg-amber-500 hover:text-white transition" title="Solicitar revisão"><i class="fas fa-pen text-[10px]"></i></button>'
-          + '</div></td>'
-          + '</tr>'
-          + '<tr id="balcao-detail-'+escaparHTML(id)+'" class="hidden bg-slate-50/50">'
-          +   '<td colspan="6" class="p-4"><div id="balcao-detail-content-'+escaparHTML(id)+'"></div></td>'
-          + '</tr>';
-      }).join('')
-    + '</tbody></table></div>';
-}
-
-// ══════════════════════════════════════════════════════
-// TOGGLE DETALHE DO PROCESSO
-// ══════════════════════════════════════════════════════
-function _balcaoToggle(id){
-  var row = document.getElementById('balcao-detail-'+id);
-  if (!row) return;
-  var aberto = !row.classList.contains('hidden');
-  if (aberto){ row.classList.add('hidden'); return; }
-  row.classList.remove('hidden');
-  _renderDetalheProcesso(id);
-}
-
-function _renderDetalheProcesso(id){
-  var proc = _balcaoCache.find(function(a){ return a.id===id; });
-  var el   = document.getElementById('balcao-detail-content-'+id);
-  if (!proc||!el) return;
-
-  el.innerHTML =
-    '<div class="grid md:grid-cols-2 gap-4">'
-    + '<div class="bg-white border border-slate-200 rounded-xl p-4">'
-    +   '<div class="text-[10px] uppercase text-slate-400 mb-1 font-black">Descrição</div>'
-    +   '<div class="text-sm text-slate-700">'+escaparHTML(proc.descricao||'-')+'</div>'
-    +   '<div class="mt-3 text-[10px] uppercase text-slate-400 font-black">Origem</div>'
-    +   '<div class="text-sm text-slate-600">'+escaparHTML(proc.origem||'-')+'</div>'
-    + '</div>'
-    + '<div class="bg-white border border-slate-200 rounded-xl p-4 flex flex-col gap-2">'
-    +   '<button onclick="abrirSolicitacaoRevisao(\''+escaparHTML(id)+'\')" '
-    +     'class="text-xs font-bold px-3 py-2 rounded-lg bg-amber-100 text-amber-700 hover:bg-amber-500 hover:text-white transition">'
-    +     '<i class="fas fa-pen mr-1"></i>Solicitar revisão</button>'
-    + '</div>'
-    + '</div>'
-    + '<div class="mt-4">'
-    +   '<div class="text-[10px] uppercase text-slate-400 mb-2 font-black">Entregas</div>'
-    +   '<div id="entregas-'+escaparHTML(id)+'"><i class="fas fa-spinner animate-spin text-slate-300 text-xs"></i></div>'
-    + '</div>'
-    + '<div class="mt-4">'
-    +   '<div class="text-[10px] uppercase text-slate-400 mb-2 font-black">Revisão</div>'
-    +   '<div id="revisao-'+escaparHTML(id)+'"></div>'
-    + '</div>';
-
-  _renderEntregas(id);
-  _renderRevisao(proc);
-}
-
-// ══════════════════════════════════════════════════════
-// RENDER ENTREGAS
-// ══════════════════════════════════════════════════════
-function _renderEntregas(id){
-  GAS.entregas.listarPorProcesso(id, function(lista){
-    var el = document.getElementById('entregas-'+id);
-    if (!el) return;
-    if (!lista||!lista.length){
-      el.innerHTML = '<div class="text-xs text-slate-400 italic">Sem entregas registradas.</div>';
-      return;
-    }
-    el.innerHTML = lista.map(function(e){
-      var idE    = e['ID Entrega']||'';
-      var tipo   = e['Tipo']||'-';
-      var link   = e['Link Entrega']||'';
-      var entregue = (e['Status']||'').toLowerCase()==='entregue';
-      return '<div class="flex items-center gap-2 mb-2 p-2 rounded-lg '+(entregue?'bg-emerald-50 border border-emerald-100':'bg-slate-50 border border-slate-100')+'">'
-        + '<span class="flex-1 text-xs font-semibold text-slate-700">'+escaparHTML(tipo)+'</span>'
-        + (entregue
-            ? '<span class="text-[10px] text-emerald-600 font-black"><i class="fas fa-check mr-1"></i>Entregue</span>'
-            : '<input id="linkEntrega_'+escaparHTML(idE)+'" value="'+escaparHTML(link)+'" placeholder="Cole o link aqui" '
-            + 'style="border:1.5px solid #e2e8f0;border-radius:8px;padding:4px 10px;font-size:11px;outline:none;width:180px"'
-            + ' onfocus="this.style.borderColor=\'#6366f1\'" onblur="this.style.borderColor=\'#e2e8f0\'">'
-            + '<button onclick="concluirEntrega(\''+escaparHTML(idE)+'\')" '
-            + 'class="text-xs px-2 py-1 rounded-lg bg-emerald-100 text-emerald-700 hover:bg-emerald-600 hover:text-white transition font-bold whitespace-nowrap">'
-            + 'Concluir</button>')
-        + '</div>';
-    }).join('');
-  });
-}
-
-// ══════════════════════════════════════════════════════
-// RENDER REVISÃO
-// ══════════════════════════════════════════════════════
-function _renderRevisao(proc){
-  var el = document.getElementById('revisao-'+proc.id);
-  if (!el) return;
-  if (!proc.revisaoStatus||proc.revisaoStatus!=='Pendente'){
-    el.innerHTML = '<div class="text-xs text-slate-400 italic">Sem solicitações de revisão.</div>';
-    return;
-  }
-  el.innerHTML =
-    '<div class="bg-amber-50 border border-amber-200 rounded-xl p-3">'
-    + '<div class="flex items-start gap-2 mb-3">'
-    +   '<i class="fas fa-pen text-amber-500 text-xs mt-0.5 flex-shrink-0"></i>'
-    +   '<div><p class="text-[10px] font-black text-amber-700 uppercase mb-1">Solicitação de revisão</p>'
-    +   '<p class="text-xs text-slate-700">'+escaparHTML(proc.revisaoSolicitacao||'')+'</p>'
-    +   (proc.revisaoSolicitante?'<p class="text-[10px] text-slate-400 mt-1">Por: '+escaparHTML(proc.revisaoSolicitante)+'</p>':'')
-    +   '</div>'
-    + '</div>'
-    + '<div class="flex gap-2">'
-    +   '<button onclick="_responderRevisao(\''+escaparHTML(proc.id)+'\',\'Aprovado\')" '
-    +     'class="text-xs px-3 py-1.5 bg-emerald-100 text-emerald-700 rounded-lg hover:bg-emerald-600 hover:text-white transition font-bold">'
-    +     '<i class="fas fa-check mr-1"></i>Aprovar</button>'
-    +   '<button onclick="_responderRevisao(\''+escaparHTML(proc.id)+'\',\'Rejeitado\')" '
-    +     'class="text-xs px-3 py-1.5 bg-red-100 text-red-700 rounded-lg hover:bg-red-600 hover:text-white transition font-bold">'
-    +     '<i class="fas fa-times mr-1"></i>Rejeitar</button>'
-    + '</div>'
-    + '</div>';
-}
-
-function _responderRevisao(id, status){
-  Swal.fire({
-    title: status==='Aprovado' ? 'Aprovar revisão' : 'Rejeitar revisão',
-    input:'textarea', inputLabel:'Comentário (opcional)',
-    inputPlaceholder:'Descreva a resposta...',
-    showCancelButton:true,
-    confirmButtonText: status==='Aprovado'
-      ? '<i class="fas fa-check mr-1"></i>Aprovar'
-      : '<i class="fas fa-times mr-1"></i>Rejeitar',
-    confirmButtonColor: status==='Aprovado'?'#059669':'#ef4444',
-    cancelButtonText:'Cancelar',
-    customClass:{ popup:'rounded-3xl', confirmButton:'rounded-xl font-black text-sm', cancelButton:'rounded-xl font-bold text-sm' }
-  }).then(function(r){
-    if (!r.isConfirmed) return;
-    showLoader(true);
-    GAS.revisao.responder(id, status, r.value||'', function(){
-      showLoader(false); carregarBalcao();
-    }, function(e){ showLoader(false); Swal.fire('Erro', String(e), 'error'); });
-  });
-}
-
-// ══════════════════════════════════════════════════════
-// SOLICITAR REVISÃO
-// ══════════════════════════════════════════════════════
-function abrirSolicitacaoRevisao(id){
-  Swal.fire({
-    title:'Solicitar revisão',
-    input:'textarea', inputLabel:'Descreva a alteração necessária',
-    inputPlaceholder:'Ex: Preciso alterar a data do evento na arte...',
-    inputAttributes:{ rows:4 },
-    showCancelButton:true,
-    confirmButtonText:'<i class="fas fa-paper-plane mr-1"></i>Enviar',
-    cancelButtonText:'Cancelar',
-    confirmButtonColor:'#f59e0b',
-    customClass:{ popup:'rounded-3xl', confirmButton:'rounded-xl font-black text-sm', cancelButton:'rounded-xl font-bold text-sm' },
-    preConfirm:function(val){
-      if (!val||!val.trim()){ Swal.showValidationMessage('Descreva a solicitação'); return false; }
-      return val.trim();
-    }
-  }).then(function(r){
-    if (!r.isConfirmed) return;
-    showLoader(true);
-    GAS.revisao.solicitar(id, r.value, '', function(){
-      showLoader(false);
-      Swal.fire({ icon:'success', title:'Solicitação enviada', timer:1800,
-        showConfirmButton:false, customClass:{ popup:'rounded-3xl' } });
-      carregarBalcao();
-    }, function(e){ showLoader(false); Swal.fire('Erro', String(e), 'error'); });
-  });
-}
-
-// ══════════════════════════════════════════════════════
-// MODAL NOVO/EDITAR PROCESSO
-// ══════════════════════════════════════════════════════
-var _balcTipoEntregas = {
-  grafico:   ['design','diagramacao'],
-  foto:      ['foto','ensaio_fotografico'],
-  video:     ['video','edicao_video'],
-  rece:      ['design','materia','divulgacao'],
-  cobertura: ['foto','video','stories'],
-  campanha:  ['design','video','materia','divulgacao']
+var _bState = {
+  processos:    [],
+  sobrecarga:   null,
+  modo:         'pipeline',   // pipeline | lista | sobrecarga
+  funcaoFiltro: 'todos',
+  buscaFiltro:  '',
+  carregando:   false
 };
 
-function _balcSugerirEntregas(tipo){
-  var sugestoes = _balcTipoEntregas[tipo]||[];
-  document.querySelectorAll('#swal2-html-container input.balcEntrega').forEach(function(cb){
-    if (sugestoes.includes(cb.value)){
-      cb.checked = true;
-      var lbl = cb.closest('label');
-      if (lbl){ lbl.style.borderColor='#f97316'; lbl.style.background='#fff7ed'; }
-    }
+// Colunas do pipeline editorial (status canônico → label + cor)
+var _PIPELINE_COLS = [
+  { status: 'solicitada',           label: 'Solicitada',          icon: 'fa-inbox',          cor: '#94a3b8', fundo: '#f8fafc' },
+  { status: 'em_analise',           label: 'Em Análise',          icon: 'fa-search',          cor: '#6366f1', fundo: '#eef2ff' },
+  { status: 'em_execucao',          label: 'Em Produção',         icon: 'fa-tools',           cor: '#0ea5e9', fundo: '#f0f9ff' },
+  { status: 'aguardando_aprovacao', label: 'Aguard. Aprovação',   icon: 'fa-hourglass-half',  cor: '#8b5cf6', fundo: '#f5f3ff' },
+  { status: 'concluida',            label: 'Concluída',           icon: 'fa-check-circle',    cor: '#10b981', fundo: '#f0fdf4' }
+];
+
+var _COR_PRIORIDADE = { critica:'#ef4444', alta:'#f59e0b', media:'#6366f1', baixa:'#94a3b8' };
+var _LABEL_STATUS  = {
+  solicitada:'Solicitada', em_analise:'Em Análise', aguardando_doc:'Aguard. Documento',
+  em_execucao:'Em Produção', aguardando_aprovacao:'Aguard. Aprovação',
+  concluida:'Concluída', cancelada:'Cancelada', bloqueada:'Bloqueada', backlog:'Backlog'
+};
+var _LABEL_FUNCAO  = { design:'Design', fotografia:'Foto/Ensaio', audiovisual:'Audiovisual',
+                       redacao:'Redação/Texto', comunicacao:'Comunicação/Social' };
+var _ICON_FUNCAO   = { design:'fa-palette', fotografia:'fa-camera', audiovisual:'fa-video',
+                       redacao:'fa-pen', comunicacao:'fa-share-alt' };
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function _esc(s)  { return escaparHTML ? escaparHTML(String(s || '')) : String(s || '').replace(/[<>&"]/g, '?'); }
+function _ago(iso) {
+  if (!iso) return '';
+  var d = new Date(iso);
+  if (isNaN(d)) return iso;
+  var diff = Date.now() - d.getTime();
+  var m = Math.floor(diff / 60000);
+  if (m < 1) return 'agora';
+  if (m < 60) return m + 'min atrás';
+  var h = Math.floor(m / 60);
+  if (h < 24) return h + 'h atrás';
+  return Math.floor(h / 24) + 'd atrás';
+}
+function _prazoLabel(iso) {
+  if (!iso) return '';
+  var d = new Date(iso);
+  var hoje = new Date(); hoje.setHours(0,0,0,0);
+  var diff = Math.floor((d - hoje) / 86400000);
+  if (diff < 0)  return '<span class="text-red-500 font-bold">Vencido há ' + Math.abs(diff) + 'd</span>';
+  if (diff === 0) return '<span class="text-orange-500 font-bold">Hoje</span>';
+  if (diff === 1) return '<span class="text-yellow-600 font-bold">Amanhã</span>';
+  return '<span class="text-slate-500">' + diff + 'd restantes</span>';
+}
+function _iniciais(email) {
+  if (!email) return '?';
+  var nome = email.split('@')[0].replace(/[._]/g, ' ');
+  var partes = nome.trim().split(' ');
+  return (partes[0][0] + (partes[1] ? partes[1][0] : '')).toUpperCase();
+}
+function _corAvatar(email) {
+  var cores = ['#6366f1','#0ea5e9','#10b981','#f59e0b','#ef4444','#8b5cf6','#ec4899','#14b8a6'];
+  var sum = 0; for (var i = 0; i < email.length; i++) sum += email.charCodeAt(i);
+  return cores[sum % cores.length];
+}
+function _avatar(email, titulo) {
+  if (!email) return '';
+  var cor = _corAvatar(email);
+  return '<div class="avatar-chip" style="background:' + cor + '" title="' + _esc(titulo || email) + '">' + _iniciais(email) + '</div>';
+}
+
+// ── Filtro aplicado ────────────────────────────────────────────────────────────
+
+function _processosVisiveis() {
+  var busca  = (_bState.buscaFiltro || '').toLowerCase().trim();
+  var funcao = _bState.funcaoFiltro;
+
+  return _bState.processos.filter(function(p) {
+    if (p.tipo !== 'processo_comunicacao') return false;
+    if (busca && !(p.titulo || '').toLowerCase().includes(busca) &&
+                 !((p.metadados && p.metadados.solicitante) || '').toLowerCase().includes(busca)) return false;
+    if (funcao !== 'todos' && p.funcao !== funcao) return false;
+    return true;
   });
 }
 
-function abrirModalAtendimento(atual){
-  atual = atual||{};
-  var sugestoes = _balcTipoEntregas[atual.tipo]||[];
+// ── Renderização — Pipeline ────────────────────────────────────────────────────
 
-  Swal.fire({
-    title: atual.id ? 'Editar Processo' : 'Novo Processo',
-    width: Math.min(720, window.innerWidth-32),
-    showCancelButton:true,
-    confirmButtonText:'<i class="fas fa-save mr-1"></i>Salvar',
-    cancelButtonText:'Cancelar',
-    confirmButtonColor:'#f97316',
-    customClass:{ popup:'rounded-3xl', confirmButton:'rounded-xl font-black text-sm', cancelButton:'rounded-xl font-bold text-sm' },
+function _renderPipeline(processos) {
+  var agora = Date.now();
+  var html = '<div class="balcao-pipeline">';
 
-    html: '<div style="display:flex;flex-direction:column;gap:10px;text-align:left;padding:0 4px">'
+  _PIPELINE_COLS.forEach(function(col) {
+    var items = processos.filter(function(p) { return p.status === col.status; });
+    var badgeCor = items.length ? col.cor : '#94a3b8';
 
-      + '<div style="display:grid;grid-template-columns:1fr 160px;gap:8px">'
-      +   '<div><label style="display:block;font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px">Responsável</label>'
-      +   '<datalist id="_balcSolicitanteList">'+Object.entries(AppState.mapaNomes||{}).map(function(e){ return '<option value="'+escaparHTML(e[0])+'">'+escaparHTML(e[1])+'</option>'; }).join('')+'</datalist>'
-      +   '<input id="balcSolicitante" list="_balcSolicitanteList" style="width:100%;padding:9px 13px;font-size:12px;border:1.5px solid #e2e8f0;border-radius:12px;outline:none;box-sizing:border-box" value="'+escaparHTML(atual.responsavel||'')+'" placeholder="Nome ou e-mail"></div>'
-      +   '<div><label style="display:block;font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px">Status</label>'
-      +   '<select id="balcStatus" style="width:100%;padding:9px 13px;font-size:12px;border:1.5px solid #e2e8f0;border-radius:12px;outline:none">'
-      +   ['Solicitado','Em andamento','Concluído'].map(function(s){ return '<option'+(atual.status===s?' selected':'')+'>'+s+'</option>'; }).join('')
-      +   '</select></div>'
-      + '</div>'
+    html += '<div class="pipeline-col" style="border-top:3px solid ' + col.cor + '">';
+    html += '<div class="pipeline-col-header" style="color:' + col.cor + '">';
+    html += '<span><i class="fas ' + col.icon + ' mr-1"></i>' + col.label + '</span>';
+    html += '<span class="pipeline-badge" style="background:' + badgeCor + ';color:#fff">' + items.length + '</span>';
+    html += '</div>';
 
-      + '<div><label style="display:block;font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px">Título *</label>'
-      + '<input id="balcAssunto" style="width:100%;padding:9px 13px;font-size:13px;border:1.5px solid #e2e8f0;border-radius:12px;outline:none;box-sizing:border-box" value="'+escaparHTML(atual.titulo||atual.assunto||'')+'" placeholder="Título do processo de comunicação"></div>'
-
-      + '<div><label style="display:block;font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px">Descrição</label>'
-      + '<textarea id="balcObs" style="width:100%;padding:9px 13px;font-size:12px;border:1.5px solid #e2e8f0;border-radius:12px;outline:none;resize:vertical;min-height:60px;box-sizing:border-box" placeholder="Detalhe a demanda, contexto e referências...">'+escaparHTML(atual.descricao||'')+'</textarea></div>'
-
-      + '<div style="display:grid;grid-template-columns:1fr 150px;gap:8px">'
-      +   '<div><label style="display:block;font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px">Tipo</label>'
-      +   '<select id="balcCanal" style="width:100%;padding:9px 13px;font-size:12px;border:1.5px solid #e2e8f0;border-radius:12px;outline:none" onchange="_balcSugerirEntregas(this.value)">'
-      +   [['grafico','Design gráfico'],['foto','Fotografia'],['video','Audiovisual'],['rece','Publicação RECE'],['cobertura','Cobertura'],['campanha','Campanha']].map(function(t){
-            return '<option value="'+t[0]+'"'+(atual.tipo===t[0]?' selected':'')+'>'+t[1]+'</option>';
-          }).join('')
-      +   '</select></div>'
-      +   '<div><label style="display:block;font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px">Prazo</label>'
-      +   '<input id="balcPrazo" type="date" style="width:100%;padding:9px 13px;font-size:12px;border:1.5px solid #e2e8f0;border-radius:12px;outline:none;box-sizing:border-box" value="'+escaparHTML(atual.prazo||'')+'"></div>'
-      + '</div>'
-
-      + '<div><label style="display:block;font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">Entregas necessárias</label>'
-      + '<div id="balcEntregasGrid" style="display:flex;gap:7px;flex-wrap:wrap">'
-      + ENTREGAS_PADRAO.map(function(e){
-          var checked = (atual.entregas||[]).includes(e)||sugestoes.includes(e);
-          var style   = checked
-            ? 'font-size:11px;display:flex;align-items:center;gap:5px;background:#fff7ed;border:1.5px solid #f97316;border-radius:8px;padding:4px 10px;cursor:pointer;transition:all .1s'
-            : 'font-size:11px;display:flex;align-items:center;gap:5px;background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:8px;padding:4px 10px;cursor:pointer;transition:all .1s';
-          return '<label style="'+style+'" class="balcEntregaLabel">'
-            + '<input type="checkbox" class="balcEntrega" value="'+e+'"'+(checked?' checked':'')+'> '
-            + _labelEntrega(e)+'</label>';
-        }).join('')
-      + '</div></div>'
-
-      + '</div>',
-
-    didOpen: function(){
-      document.querySelectorAll('.balcEntregaLabel').forEach(function(lbl){
-        var cb = lbl.querySelector('input');
-        function _upd(){ lbl.style.borderColor=cb.checked?'#f97316':'#e2e8f0'; lbl.style.background=cb.checked?'#fff7ed':'#f8fafc'; }
-        cb.addEventListener('change', _upd);
-      });
-    },
-
-    preConfirm:function(){
-      var titulo = (document.getElementById('balcAssunto').value||'').trim();
-      if (!titulo){ Swal.showValidationMessage('Título é obrigatório'); return false; }
-      var entregas = Array.from(document.querySelectorAll('#swal2-html-container input.balcEntrega:checked')).map(function(e){ return e.value; });
-      return {
-        id: atual.id||null, titulo: titulo,
-        descricao: (document.getElementById('balcObs').value||'').trim(),
-        tipo:      document.getElementById('balcCanal').value,
-        status:    document.getElementById('balcStatus').value,
-        responsavel: (document.getElementById('balcSolicitante').value||'').trim(),
-        prazo:     document.getElementById('balcPrazo').value,
-        entregas:  entregas, origem:'manual'
-      };
-    }
-  }).then(function(r){
-    if (!r.isConfirmed||!r.value) return;
-    showLoader(true);
-    var dados = r.value;
-    var onOk  = function(){ showLoader(false); carregarBalcao(); };
-    var onErr = function(e){ showLoader(false); Swal.fire('Erro', String(e), 'error'); };
-    if (dados.id){
-      GAS.comunicacaoProcessos.atualizar(dados.id, dados, onOk, onErr);
+    if (!items.length) {
+      html += '<div class="text-center text-slate-300 text-xs py-8"><i class="fas fa-inbox text-lg mb-2 block"></i>Vazia</div>';
     } else {
-      GAS.comunicacaoProcessos.criar(dados, onOk, onErr);
+      items.forEach(function(p) {
+        html += _renderCard(p, agora);
+      });
     }
+
+    html += '</div>';
   });
+
+  html += '</div>';
+  return html;
 }
 
-function editarAtendimento(id){
-  var atual = _balcaoCache.find(function(a){ return a.id===id; });
-  abrirModalAtendimento(atual);
-}
+function _renderCard(p, agora) {
+  var meta     = p.metadados || {};
+  var atrasado = p.prazo && new Date(p.prazo).getTime() < agora && p.status !== 'concluida';
+  var revisao  = (p.revisoesPendentes || 0) > 0;
+  var slaViol  = p.slaViolado;
 
-function excluirAtendimento(id){
-  var proc = _balcaoCache.find(function(a){ return a.id===id; });
-  Swal.fire({
-    title:'Excluir processo?',
-    html: proc
-      ? '<p class="text-sm text-slate-600">Excluir "<b>'+escaparHTML(proc.titulo||proc.assunto||'')+'</b>"?</p>'
-        + '<p class="text-xs text-slate-400 mt-1">As entregas e tarefas vinculadas serão afetadas.</p>'
-      : 'Confirmar exclusão?',
-    icon:'warning', showCancelButton:true,
-    confirmButtonColor:'#ef4444',
-    confirmButtonText:'<i class="fas fa-trash mr-1"></i>Excluir',
-    cancelButtonText:'Cancelar',
-    customClass:{ popup:'rounded-3xl', confirmButton:'rounded-xl font-black text-sm', cancelButton:'rounded-xl font-bold text-sm' }
-  }).then(function(r){
-    if (!r.isConfirmed) return;
-    showLoader(true);
-    GAS.comunicacaoProcessos.excluir(id, function(){
-      showLoader(false); carregarBalcao();
-    }, function(e){ showLoader(false); Swal.fire('Erro', String(e), 'error'); });
-  });
-}
+  var classes = 'processo-card';
+  if (slaViol)  classes += ' sla-violado';
+  else if (atrasado) classes += ' atrasado';
+  if (revisao)  classes += ' revisao-pendente';
 
-// ══════════════════════════════════════════════════════
-// ON SHOW
-// ══════════════════════════════════════════════════════
-window._onShow_aba_balcao = function(){
-  _renderFuncaoSelector();
-  carregarBalcao();
-  renderFilaFuncao(_balcaoFuncaoAtual);
-};
+  var corPri = _COR_PRIORIDADE[p.prioridade] || '#94a3b8';
 
-document.getElementById('balcaoBusca').addEventListener('input', _balcaoFiltrar);
-document.getElementById('balcaoFiltroStatus').addEventListener('change', _balcaoFiltrar);
+  var html = '<div class="' + classes + '" onclick="_balcao.abrirDetalhe(\'' + p.id + '\')">';
 
-// ══════════════════════════════════════════════════════
-// CONCLUIR ENTREGA (no detalhe do processo)
-// ══════════════════════════════════════════════════════
-function concluirEntrega(idEntrega){
-  var input = document.getElementById('linkEntrega_'+idEntrega);
-  var link  = input ? input.value.trim() : '';
+  // Cabeçalho do card
+  html += '<div class="flex justify-between items-start gap-2 mb-2">';
+  html += '<div class="flex-1 min-w-0">';
+  html += '<div class="flex items-center gap-1.5 mb-0.5">';
+  html += '<span class="w-2 h-2 rounded-full flex-shrink-0" style="background:' + corPri + '"></span>';
+  if (meta.tipoProcesso && meta.tipoProcesso !== 'geral') {
+    html += '<span class="text-[9px] uppercase font-bold text-slate-400">' + _esc(meta.tipoProcesso) + '</span>';
+  }
+  html += '</div>';
+  html += '<div class="text-xs font-bold text-slate-800 leading-tight line-clamp-2">' + _esc(p.titulo) + '</div>';
+  html += '</div>';
 
-  if (!link){
-    Swal.fire({ icon:'warning', title:'Link obrigatório',
-      text:'Adicione o link do material antes de concluir.',
-      timer:2200, showConfirmButton:false, customClass:{ popup:'rounded-3xl' } });
-    return;
+  // Badges de alerta
+  html += '<div class="flex flex-col gap-0.5 flex-shrink-0">';
+  if (slaViol)  html += '<span class="text-[8px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded font-bold">SLA!</span>';
+  if (revisao)  html += '<span class="text-[8px] bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded font-bold">REV</span>';
+  if (atrasado && !slaViol) html += '<span class="text-[8px] bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded font-bold">ATR</span>';
+  html += '</div></div>';
+
+  // Solicitante + Prazo
+  if (meta.solicitante) {
+    html += '<div class="text-[9px] text-slate-400 mb-1.5">';
+    html += '<i class="fas fa-user-circle mr-1"></i>Solicitado por: ' + _esc(meta.solicitante.split('@')[0]);
+    html += '</div>';
   }
 
-  showLoader(true);
-  GAS.entregas.atualizar(idEntrega, { status:'Entregue', link:link }, function(){
-    showLoader(false);
-    // identificar o idProcesso pelo container pai no DOM
-    var detail = input ? input.closest('[id^="balcao-detail-content-"]') : null;
-    var pid    = detail ? detail.id.replace('balcao-detail-content-','') : null;
-    if (pid) _renderEntregas(pid);
-    else carregarBalcao();
-  }, function(err){ showLoader(false); Swal.fire('Erro', String(err), 'error'); });
+  // Subtarefas (entregas)
+  var numEntregas = (p.subtarefas || []).length;
+  if (numEntregas) {
+    html += '<div class="text-[9px] text-slate-400 mb-2"><i class="fas fa-tasks mr-1"></i>' + numEntregas + ' entrega(s)</div>';
+  }
+
+  // Rodapé do card
+  html += '<div class="flex justify-between items-center mt-2 pt-2 border-t border-slate-100">';
+  html += '<div class="text-[9px]">' + (p.prazo ? _prazoLabel(p.prazo) : '<span class="text-slate-300">Sem prazo</span>') + '</div>';
+  if (p.responsavel) {
+    html += '<div class="flex items-center">' + _avatar(p.responsavel) + '</div>';
+  }
+  html += '</div>';
+
+  html += '</div>';
+  return html;
 }
 
-// ══════════════════════════════════════════════════════
-// SELETOR DE FUNÇÃO
-// ══════════════════════════════════════════════════════
-function _renderFuncaoSelector(){
-  var el = document.getElementById('balcaoFuncaoSelector');
-  if (!el) return;
-  el.innerHTML = _FUNCOES_BALCAO.map(function(f){
-    var ativo = f.key===_balcaoFuncaoAtual;
-    return '<button onclick="_selecionarFuncaoFila(\''+escaparHTML(f.key)+'\',\''+escaparHTML(f.label)+'\')" '
-      + 'id="funcbtn-'+escaparHTML(f.key)+'" class="balcao-func-btn'+(ativo?' ativo':'')+'">'
-      + escaparHTML(f.label)+'</button>';
-  }).join('');
-}
+// ── Renderização — Lista ──────────────────────────────────────────────────────
 
-function _selecionarFuncaoFila(funcao, label){
-  _balcaoFuncaoAtual = funcao;
-  document.querySelectorAll('.balcao-func-btn').forEach(function(b){ b.classList.remove('ativo'); });
-  var btn = document.getElementById('funcbtn-'+funcao);
-  if (btn) btn.classList.add('ativo');
-  var lbl = document.getElementById('balcaoFuncaoLabel');
-  if (lbl) lbl.textContent = label;
-  renderFilaFuncao(funcao);
-}
+function _renderLista(processos) {
+  if (!processos.length) {
+    return '<div class="text-center text-slate-400 text-sm py-16"><i class="fas fa-inbox text-3xl mb-3 block"></i>Nenhuma demanda encontrada.</div>';
+  }
+  var agora = Date.now();
+  var html = '<div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">';
+  html += '<table class="w-full text-xs">';
+  html += '<thead class="bg-slate-50 border-b border-slate-100">';
+  html += '<tr class="text-left">';
+  html += '<th class="px-4 py-3 font-bold text-slate-500 uppercase text-[9px] tracking-wide">Título</th>';
+  html += '<th class="px-4 py-3 font-bold text-slate-500 uppercase text-[9px] tracking-wide hidden sm:table-cell">Status</th>';
+  html += '<th class="px-4 py-3 font-bold text-slate-500 uppercase text-[9px] tracking-wide hidden md:table-cell">Responsável</th>';
+  html += '<th class="px-4 py-3 font-bold text-slate-500 uppercase text-[9px] tracking-wide hidden sm:table-cell">Prazo</th>';
+  html += '<th class="px-4 py-3 font-bold text-slate-500 uppercase text-[9px] tracking-wide"></th>';
+  html += '</tr></thead><tbody>';
 
-// ══════════════════════════════════════════════════════
-// ATRIBUIR TAREFA
-// ══════════════════════════════════════════════════════
-function atribuirTarefa(idTarefa, funcao){
-  Swal.fire({
-    title:'Atribuir tarefa',
-    html:'<div class="text-left" style="padding:0 4px">'
-      + '<label style="display:block;font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">Executor(es) — e-mail institucional</label>'
-      + '<textarea id="atribEmails" style="width:100%;padding:9px 13px;font-size:12px;border:1.5px solid #e2e8f0;border-radius:12px;outline:none;resize:vertical;min-height:64px;box-sizing:border-box" placeholder="email1@ccbj.org&#10;email2@ccbj.org"></textarea>'
-      + '</div>',
-    showCancelButton:true,
-    confirmButtonText:'<i class="fas fa-user-check mr-1"></i>Atribuir',
-    cancelButtonText:'Cancelar',
-    confirmButtonColor:'#6366f1',
-    customClass:{ popup:'rounded-3xl', confirmButton:'rounded-xl font-black text-sm', cancelButton:'rounded-xl font-bold text-sm' },
-    preConfirm:function(){
-      var val = (document.getElementById('atribEmails').value||'').trim();
-      if (!val){ Swal.showValidationMessage('Informe ao menos um e-mail'); return false; }
-      return val.split(/[,\n\s]+/).map(function(e){ return e.trim(); }).filter(Boolean);
-    }
-  }).then(function(r){
-    if (!r.isConfirmed) return;
-    showLoader(true);
-    GAS.tarefas.atribuirExecutores(idTarefa, r.value, function(){
-      showLoader(false); renderFilaFuncaoAtual();
-    }, function(e){ showLoader(false); Swal.fire('Erro', String(e), 'error'); });
+  processos.forEach(function(p) {
+    var meta    = p.metadados || {};
+    var atrasado = p.prazo && new Date(p.prazo).getTime() < agora;
+    var corPri  = _COR_PRIORIDADE[p.prioridade] || '#94a3b8';
+    var col = _PIPELINE_COLS.find(function(c) { return c.status === p.status; }) || { cor:'#94a3b8', label: _LABEL_STATUS[p.status] || p.status };
+
+    html += '<tr class="border-b border-slate-50 hover:bg-slate-50/50 cursor-pointer" onclick="_balcao.abrirDetalhe(\'' + p.id + '\')">';
+    html += '<td class="px-4 py-3">';
+    html += '<div class="flex items-center gap-2">';
+    html += '<span class="w-2 h-2 rounded-full flex-shrink-0" style="background:' + corPri + '"></span>';
+    html += '<div>';
+    html += '<div class="font-semibold text-slate-800">' + _esc(p.titulo) + '</div>';
+    if (meta.solicitante) html += '<div class="text-[9px] text-slate-400">' + _esc(meta.solicitante) + '</div>';
+    html += '</div></div></td>';
+    html += '<td class="px-4 py-3 hidden sm:table-cell"><span class="px-2 py-0.5 rounded-full text-[9px] font-bold text-white" style="background:' + col.cor + '">' + col.label + '</span></td>';
+    html += '<td class="px-4 py-3 hidden md:table-cell">' + (p.responsavel ? _avatar(p.responsavel) + ' <span class="ml-2 text-slate-600">' + _esc(p.responsavel.split('@')[0]) + '</span>' : '<span class="text-slate-300">—</span>') + '</td>';
+    html += '<td class="px-4 py-3 hidden sm:table-cell">' + (p.prazo ? _prazoLabel(p.prazo) : '<span class="text-slate-300">—</span>') + '</td>';
+    html += '<td class="px-4 py-3"><button class="text-[9px] text-indigo-500 hover:text-indigo-700 font-bold">Ver</button></td>';
+    html += '</tr>';
   });
+
+  html += '</tbody></table></div>';
+  return html;
 }
 
-// ══════════════════════════════════════════════════════
-// RESPONDER COMO FUNÇÃO
-// ══════════════════════════════════════════════════════
-function responderFuncao(idTarefa){
-  Swal.fire({
-    title:'Responder tarefa',
-    input:'textarea', inputLabel:'Mensagem',
-    inputPlaceholder:'Informe o andamento, dúvidas ou confirmação...',
-    showCancelButton:true,
-    confirmButtonText:'<i class="fas fa-paper-plane mr-1"></i>Enviar',
-    cancelButtonText:'Cancelar',
-    confirmButtonColor:'#f59e0b',
-    customClass:{ popup:'rounded-3xl', confirmButton:'rounded-xl font-black text-sm', cancelButton:'rounded-xl font-bold text-sm' },
-    preConfirm:function(val){
-      if (!val||!val.trim()){ Swal.showValidationMessage('Mensagem obrigatória'); return false; }
-      return val.trim();
-    }
-  }).then(function(r){
-    if (!r.isConfirmed) return;
-    showLoader(true);
-    GAS.tarefas.responderComoFuncao(idTarefa, r.value, '', function(){
-      showLoader(false); renderFilaFuncaoAtual();
-    }, function(e){ showLoader(false); Swal.fire('Erro', String(e), 'error'); });
+// ── Renderização — Sobrecarga ─────────────────────────────────────────────────
+
+function _renderSobrecarga() {
+  if (!_bState.sobrecarga) {
+    return '<div class="text-center text-slate-400 text-sm py-16"><i class="fas fa-spinner fa-spin text-3xl mb-3 block"></i>Calculando...</div>';
+  }
+  var s = _bState.sobrecarga;
+  var MAX = Math.max.apply(null, (s.porResponsavel || []).map(function(r) { return r.total; }).concat([1]));
+
+  var html = '<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">';
+
+  // Card de fila de aprovação
+  if (s.filaAprovacao && s.filaAprovacao.length) {
+    html += '<div class="bg-white rounded-3xl shadow-sm border border-purple-200 p-5">';
+    html += '<h4 class="font-black text-slate-800 text-xs uppercase tracking-wide mb-3"><i class="fas fa-hourglass-half text-purple-400 mr-2"></i>Fila de Aprovação (' + s.filaAprovacao.length + ')</h4>';
+    s.filaAprovacao.slice(0, 8).forEach(function(t) {
+      html += '<div class="flex justify-between items-center py-2 border-b border-slate-50 last:border-0">';
+      html += '<div class="text-xs text-slate-700 font-medium truncate flex-1">' + _esc(t.titulo) + '</div>';
+      html += '<div class="text-[9px] text-slate-400 ml-2 flex-shrink-0">' + (t.responsavel ? _esc(t.responsavel.split('@')[0]) : '—') + '</div>';
+      html += '</div>';
+    });
+    html += '</div>';
+  }
+
+  // Card de sobrecarregados
+  html += '<div class="bg-white rounded-3xl shadow-sm border border-slate-200 p-5">';
+  html += '<h4 class="font-black text-slate-800 text-xs uppercase tracking-wide mb-3"><i class="fas fa-fire text-red-400 mr-2"></i>Carga por Responsável</h4>';
+
+  if (!s.porResponsavel || !s.porResponsavel.length) {
+    html += '<div class="text-slate-400 text-xs text-center py-4">Nenhum dado disponível.</div>';
+  } else {
+    s.porResponsavel.slice(0, 12).forEach(function(r) {
+      if (r.email === '__sem_responsavel__') return;
+      var pct    = Math.min(100, Math.round((r.total / MAX) * 100));
+      var classe = r.total >= 7 ? 'critico' : r.total >= 4 ? 'alto' : '';
+      html += '<div class="mb-3">';
+      html += '<div class="flex justify-between items-center mb-1">';
+      html += '<div class="flex items-center gap-2">';
+      html += _avatar(r.email);
+      html += '<span class="text-xs font-semibold text-slate-700">' + _esc(r.email.split('@')[0]) + '</span>';
+      if (r.atrasadas > 0) html += '<span class="text-[8px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded font-bold">' + r.atrasadas + ' atr</span>';
+      html += '</div>';
+      html += '<span class="text-xs font-bold text-slate-600">' + r.total + '</span>';
+      html += '</div>';
+      html += '<div class="bg-slate-100 rounded-full h-1.5 overflow-hidden">';
+      html += '<div class="sobrecarga-bar ' + classe + '" style="width:' + pct + '%"></div>';
+      html += '</div>';
+      html += '</div>';
+    });
+  }
+  html += '</div>';
+
+  // Card por função
+  html += '<div class="bg-white rounded-3xl shadow-sm border border-slate-200 p-5">';
+  html += '<h4 class="font-black text-slate-800 text-xs uppercase tracking-wide mb-3"><i class="fas fa-sitemap text-blue-400 mr-2"></i>Carga por Função</h4>';
+  if (!s.porFuncao || !s.porFuncao.length) {
+    html += '<div class="text-slate-400 text-xs text-center py-4">Nenhum dado disponível.</div>';
+  } else {
+    var maxFunc = Math.max.apply(null, s.porFuncao.map(function(f) { return f.total; }).concat([1]));
+    s.porFuncao.slice(0, 8).forEach(function(f) {
+      var label = _LABEL_FUNCAO[f.funcao] || f.funcao;
+      var icon  = _ICON_FUNCAO[f.funcao] || 'fa-tasks';
+      var pct   = Math.min(100, Math.round((f.total / maxFunc) * 100));
+      html += '<div class="mb-3">';
+      html += '<div class="flex justify-between items-center mb-1">';
+      html += '<span class="text-xs font-semibold text-slate-700"><i class="fas ' + icon + ' mr-1.5 text-indigo-400"></i>' + _esc(label) + '</span>';
+      html += '<span class="text-xs font-bold text-slate-600">' + f.total + (f.atrasadas ? ' <span class="text-red-500 text-[9px]">(+' + f.atrasadas + ' atr)</span>' : '') + '</span>';
+      html += '</div>';
+      html += '<div class="bg-slate-100 rounded-full h-1.5 overflow-hidden">';
+      html += '<div class="sobrecarga-bar" style="width:' + pct + '%"></div>';
+      html += '</div></div>';
+    });
+  }
+  html += '</div>';
+
+  // Tempo médio por status
+  if (s.tempoMedioPorStatusH && Object.keys(s.tempoMedioPorStatusH).length) {
+    html += '<div class="bg-white rounded-3xl shadow-sm border border-slate-200 p-5">';
+    html += '<h4 class="font-black text-slate-800 text-xs uppercase tracking-wide mb-3"><i class="fas fa-clock text-amber-400 mr-2"></i>Tempo Médio por Status (horas)</h4>';
+    Object.keys(s.tempoMedioPorStatusH).forEach(function(st) {
+      var h = s.tempoMedioPorStatusH[st];
+      var label = _LABEL_STATUS[st] || st;
+      html += '<div class="flex justify-between items-center py-1.5 border-b border-slate-50 last:border-0">';
+      html += '<span class="text-xs text-slate-600">' + _esc(label) + '</span>';
+      html += '<span class="text-xs font-bold text-slate-800">' + h + 'h</span>';
+      html += '</div>';
+    });
+    html += '</div>';
+  }
+
+  html += '</div>';
+  return html;
+}
+
+// ── Detalhe do processo ────────────────────────────────────────────────────────
+
+function _renderDetalhe(p) {
+  var meta = p.metadados || {};
+  var agora = Date.now();
+  var col = _PIPELINE_COLS.find(function(c) { return c.status === p.status; }) || { cor:'#94a3b8', label: _LABEL_STATUS[p.status] || p.status };
+  var corPri = _COR_PRIORIDADE[p.prioridade] || '#94a3b8';
+
+  var html = '';
+
+  // Header do modal
+  html += '<div class="flex justify-between items-start mb-5">';
+  html += '<div class="flex-1 min-w-0">';
+  html += '<div class="flex items-center gap-2 mb-1 flex-wrap">';
+  html += '<span class="px-2 py-0.5 rounded-full text-[10px] font-black text-white" style="background:' + col.cor + '">' + col.label + '</span>';
+  html += '<span class="px-2 py-0.5 rounded-full text-[10px] font-black text-white" style="background:' + corPri + '">' + (p.prioridade || 'media').toUpperCase() + '</span>';
+  if (p.slaViolado) html += '<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-red-100 text-red-600">SLA VIOLADO</span>';
+  html += '</div>';
+  html += '<h3 class="font-black text-slate-800 text-base leading-tight">' + _esc(p.titulo) + '</h3>';
+  if (p.descricao) html += '<p class="text-xs text-slate-500 mt-1">' + _esc(p.descricao) + '</p>';
+  html += '</div>';
+  html += '<button onclick="_balcaoFecharModal()" class="text-slate-400 hover:text-slate-700 text-xl ml-3 flex-shrink-0">&times;</button>';
+  html += '</div>';
+
+  // Timeline de etapas
+  html += '<div class="mb-5 bg-slate-50 rounded-2xl p-4">';
+  html += '<div class="text-[9px] font-bold text-slate-500 uppercase tracking-wide mb-3">Pipeline de Produção</div>';
+  html += '<div class="etapa-timeline">';
+  var statusIdx = _PIPELINE_COLS.findIndex(function(c) { return c.status === p.status; });
+  _PIPELINE_COLS.forEach(function(c, i) {
+    var cls = i < statusIdx ? 'concluido' : i === statusIdx ? 'ativo' : '';
+    var icon = i < statusIdx ? 'fa-check' : c.icon;
+    html += '<div class="etapa-step ' + cls + '">';
+    html += '<div class="etapa-dot"><i class="fas ' + icon + ' text-[9px]"></i></div>';
+    html += '<div class="etapa-label">' + c.label + '</div>';
+    html += '</div>';
   });
+  html += '</div></div>';
+
+  // Envolvidos
+  html += '<div class="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-5">';
+  var envolvidos = [
+    { label: 'Solicitante',  email: meta.solicitante || '' },
+    { label: 'Responsável',  email: p.responsavel     || '' },
+    { label: 'Criado por',   email: p.criadoPor       || '' }
+  ].filter(function(e) { return e.email; });
+
+  envolvidos.forEach(function(e) {
+    html += '<div class="bg-slate-50 rounded-xl p-3 flex items-center gap-2">';
+    html += _avatar(e.email);
+    html += '<div><div class="text-[9px] text-slate-400 uppercase font-semibold">' + e.label + '</div>';
+    html += '<div class="text-xs font-bold text-slate-700">' + _esc(e.email.split('@')[0]) + '</div></div>';
+    html += '</div>';
+  });
+  html += '</div>';
+
+  // Métricas
+  html += '<div class="grid grid-cols-3 gap-3 mb-5">';
+  html += '<div class="bg-slate-50 rounded-xl p-3 text-center"><div class="text-xs font-black text-slate-800">' + (p.prazo ? _prazoLabel(p.prazo) : '—') + '</div><div class="text-[9px] text-slate-400 mt-0.5">Prazo</div></div>';
+  html += '<div class="bg-slate-50 rounded-xl p-3 text-center"><div class="text-xs font-black text-slate-800">' + (p.subtarefas || []).length + '</div><div class="text-[9px] text-slate-400 mt-0.5">Entregas</div></div>';
+  html += '<div class="bg-slate-50 rounded-xl p-3 text-center"><div class="text-xs font-black text-slate-800">' + (p.revisoesPendentes || 0) + '</div><div class="text-[9px] text-slate-400 mt-0.5">Revisões</div></div>';
+  html += '</div>';
+
+  // Entregas (subtarefas)
+  if ((p.subtarefas || []).length) {
+    html += '<div class="mb-5">';
+    html += '<div class="text-[9px] font-bold text-slate-500 uppercase tracking-wide mb-2">Entregas</div>';
+    html += '<div id="balcao-detalhe-entregas-' + p.id + '" class="space-y-1.5">';
+    html += '<div class="text-xs text-slate-400"><i class="fas fa-spinner fa-spin mr-1"></i>Carregando entregas...</div>';
+    html += '</div></div>';
+    // Carrega entregas async
+    setTimeout(function() { _balcao.carregarEntregas(p.id); }, 100);
+  }
+
+  // Revisões pendentes
+  var revisoesPendentes = (p.comentarios || []).filter(function(c) {
+    return c.tipo === 'revisao' && c.revisao && c.revisao.status === 'solicitada';
+  });
+  if (revisoesPendentes.length) {
+    html += '<div class="mb-5">';
+    html += '<div class="text-[9px] font-bold text-purple-600 uppercase tracking-wide mb-2"><i class="fas fa-sync-alt mr-1"></i>Revisões Pendentes</div>';
+    revisoesPendentes.forEach(function(r) {
+      html += '<div class="bg-purple-50 border border-purple-200 rounded-xl p-3 mb-2">';
+      html += '<div class="text-xs font-bold text-purple-700 mb-1">' + _esc(r.autor.split('@')[0]) + ' solicitou uma revisão</div>';
+      html += '<div class="text-xs text-slate-700 mb-2">' + _esc(r.texto) + '</div>';
+      html += '<div class="flex gap-2">';
+      html += '<button onclick="_balcao.responderRevisao(\'' + p.id + '\',\'' + r.id + '\',true)" class="text-[10px] bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded-lg font-bold">Aceitar</button>';
+      html += '<button onclick="_balcao.responderRevisao(\'' + p.id + '\',\'' + r.id + '\',false)" class="text-[10px] bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded-lg font-bold">Rejeitar</button>';
+      html += '</div></div>';
+    });
+    html += '</div>';
+  }
+
+  // Histórico
+  if ((p.historico || []).length) {
+    html += '<div class="mb-5">';
+    html += '<div class="text-[9px] font-bold text-slate-500 uppercase tracking-wide mb-2">Histórico</div>';
+    html += '<div class="space-y-1.5 max-h-40 overflow-y-auto">';
+    var hist = (p.historico || []).slice().reverse();
+    hist.forEach(function(h) {
+      html += '<div class="flex items-start gap-2 py-1.5 border-b border-slate-50 last:border-0">';
+      html += _avatar(h.ator);
+      html += '<div class="flex-1">';
+      html += '<span class="text-xs text-slate-700">' + _esc(h.comentario || (h.campo + ': ' + h.de + ' → ' + h.para)) + '</span>';
+      html += '<span class="text-[9px] text-slate-400 ml-2">' + _ago(h.data) + '</span>';
+      html += '</div></div>';
+    });
+    html += '</div></div>';
+  }
+
+  // Comentários
+  html += '<div class="mb-4">';
+  html += '<div class="text-[9px] font-bold text-slate-500 uppercase tracking-wide mb-2">Comentários</div>';
+  var coments = (p.comentarios || []).filter(function(c) { return c.tipo !== 'revisao'; });
+  if (coments.length) {
+    html += '<div class="space-y-1.5 mb-3 max-h-32 overflow-y-auto">';
+    coments.forEach(function(c) {
+      html += '<div class="flex items-start gap-2 bg-slate-50 rounded-xl p-2">';
+      html += _avatar(c.autor);
+      html += '<div class="flex-1"><div class="text-xs text-slate-700">' + _esc(c.texto) + '</div>';
+      html += '<div class="text-[9px] text-slate-400">' + _ago(c.data) + '</div></div>';
+      html += '</div>';
+    });
+    html += '</div>';
+  }
+  html += '<div class="flex gap-2">';
+  html += '<input id="balcao-novo-comentario-' + p.id + '" type="text" placeholder="Adicionar comentário..." class="flex-1 px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-400">';
+  html += '<button onclick="_balcao.comentar(\'' + p.id + '\')" class="text-[10px] bg-indigo-500 hover:bg-indigo-600 text-white px-3 py-2 rounded-xl font-bold">Enviar</button>';
+  html += '</div></div>';
+
+  // Ações
+  html += '<div class="flex flex-wrap gap-2 pt-4 border-t border-slate-100">';
+  // Botões de mudança de status FSM
+  var proximosStatus = {
+    solicitada:           ['em_analise', 'cancelada'],
+    em_analise:           ['em_execucao', 'cancelada'],
+    em_execucao:          ['aguardando_aprovacao', 'concluida', 'cancelada'],
+    aguardando_aprovacao: ['concluida', 'em_execucao'],
+    bloqueada:            ['em_analise']
+  };
+  var proximos = proximosStatus[p.status] || [];
+  var labelsAcao = { em_analise:'Iniciar Análise', em_execucao:'Iniciar Produção',
+                     aguardando_aprovacao:'Enviar para Aprovação', concluida:'Concluir', cancelada:'Cancelar' };
+  var coresAcao  = { concluida:'bg-green-500 hover:bg-green-600', cancelada:'bg-red-500 hover:bg-red-600' };
+  proximos.forEach(function(st) {
+    var cor = coresAcao[st] || 'bg-indigo-500 hover:bg-indigo-600';
+    html += '<button onclick="_balcao.mudarStatus(\'' + p.id + '\',\'' + st + '\')" class="text-[10px] ' + cor + ' text-white px-3 py-2 rounded-xl font-bold">' + (labelsAcao[st] || st) + '</button>';
+  });
+  html += '<button onclick="_balcao.solicitarRevisao(\'' + p.id + '\')" class="text-[10px] bg-purple-500 hover:bg-purple-600 text-white px-3 py-2 rounded-xl font-bold"><i class="fas fa-sync-alt mr-1"></i>Solicitar Revisão</button>';
+  html += '</div>';
+
+  return html;
 }
 
-// ══════════════════════════════════════════════════════
-// FILA DA FUNÇÃO — renderização multi-modo
-// ══════════════════════════════════════════════════════
-function renderFilaFuncao(funcao){
-  var el = document.getElementById('fila-funcao');
-  if (el) el.innerHTML = '<div class="py-6 text-center"><i class="fas fa-spinner animate-spin text-slate-300 text-lg"></i></div>';
+// ── API pública do Balcão ──────────────────────────────────────────────────────
 
-  GAS.tarefas.listarPorFuncao(funcao, function(lista){
+window._balcao = {
+
+  carregar: function() {
+    if (_bState.carregando) return;
+    _bState.carregando = true;
+    GAS.tarefas.listarComunicacao(false, function(lista) {
+      _bState.processos = lista || [];
+      _bState.carregando = false;
+      _balcao.renderizar();
+      _balcao.atualizarMetricas();
+    }, function(e) {
+      _bState.carregando = false;
+      console.error('[Balcão] Erro ao carregar:', e);
+    });
+  },
+
+  carregarSobrecarga: function() {
+    GAS.tarefas.sobrecarga(function(data) {
+      _bState.sobrecarga = data;
+      _balcao.renderizar();
+    }, function(e) {
+      console.warn('[Balcão] Sem permissão para sobrecarga ou erro:', e);
+    });
+  },
+
+  atualizar: function() {
+    _bState.carregando = false;
+    _bState.sobrecarga = null;
+    _balcao.carregar();
+    if (_bState.modo === 'sobrecarga') _balcao.carregarSobrecarga();
+  },
+
+  renderizar: function() {
+    var el = document.getElementById('balcao-conteudo');
     if (!el) return;
-    if (!lista||!lista.length){
-      el.innerHTML = '<div class="py-10 text-center">'
-        + '<i class="fas fa-inbox text-slate-200 text-2xl mb-2"></i>'
-        + '<p class="text-xs text-slate-400 font-medium">Nenhuma tarefa na fila.</p>'
-        + '</div>';
-      return;
-    }
+    _bState.buscaFiltro = (document.getElementById('balcaoBusca') || {}).value || '';
+    var processos = _processosVisiveis();
 
-    // Ordenação: ordem Kanban → prioridade → prazo
-    lista.sort(function(a,b){
-      var oa=a.ordem||0, ob=b.ordem||0;
-      if (oa!==ob) return oa-ob;
-      var p={'Alta':3,'Média':2,'Baixa':1};
-      var pa=p[a.prioridade]||0, pb=p[b.prioridade]||0;
-      if (pb!==pa) return pb-pa;
-      var da=a.prazo?new Date(a.prazo):null, db=b.prazo?new Date(b.prazo):null;
-      if (da&&db) return da-db; return da?-1:db?1:0;
+    if (_bState.modo === 'pipeline') {
+      el.innerHTML = _renderPipeline(processos);
+    } else if (_bState.modo === 'lista') {
+      el.innerHTML = _renderLista(processos);
+    } else {
+      el.innerHTML = _renderSobrecarga();
+    }
+  },
+
+  atualizarMetricas: function() {
+    var agora = Date.now();
+    var processos = _bState.processos.filter(function(p) { return p.tipo === 'processo_comunicacao'; });
+    var total      = processos.length;
+    var andamento  = processos.filter(function(p) { return p.status === 'em_execucao'; }).length;
+    var revisao    = processos.filter(function(p) { return (p.revisoesPendentes || 0) > 0; }).length;
+    var atrasadas  = processos.filter(function(p) {
+      return p.prazo && new Date(p.prazo).getTime() < agora && p.status !== 'concluida';
+    }).length;
+    var concluidas = processos.filter(function(p) { return p.status === 'concluida'; }).length;
+
+    var set = function(id, v) { var el = document.getElementById(id); if (el) el.textContent = v; };
+    set('bm-total', total); set('bm-andamento', andamento); set('bm-revisao', revisao);
+    set('bm-atrasadas', atrasadas); set('bm-concluidas', concluidas);
+  },
+
+  setModo: function(btn) {
+    document.querySelectorAll('.balcao-modo-btn').forEach(function(b) { b.classList.remove('ativo'); });
+    btn.classList.add('ativo');
+    _bState.modo = btn.dataset.modo;
+    if (_bState.modo === 'sobrecarga' && !_bState.sobrecarga) _balcao.carregarSobrecarga();
+    _balcao.renderizar();
+  },
+
+  filtrarFuncao: function(btn) {
+    document.querySelectorAll('.balcao-func-btn').forEach(function(b) { b.classList.remove('ativo'); });
+    btn.classList.add('ativo');
+    _bState.funcaoFiltro = btn.dataset.func;
+    _balcao.renderizar();
+  },
+
+  nova: function() {
+    document.getElementById('balcao-form-overlay').classList.remove('hidden');
+    document.getElementById('bForm-titulo').focus();
+  },
+
+  salvarNova: function() {
+    var titulo = (document.getElementById('bForm-titulo') || {}).value || '';
+    if (!titulo.trim()) { alert('Informe o título da demanda.'); return; }
+
+    var entregas = [];
+    document.querySelectorAll('.bform-entrega:checked').forEach(function(cb) { entregas.push(cb.value); });
+
+    // Captura id de reserva pendente (caso venha da integração Reservas→Comunicação)
+    var idReservaPendente = window.__rcPendingReservaId || '';
+    if (idReservaPendente) { window.__rcPendingReservaId = ''; }
+
+    var dados = {
+      titulo:       titulo.trim(),
+      prioridade:   (document.getElementById('bForm-prioridade') || {}).value || 'media',
+      prazo:        (document.getElementById('bForm-prazo')      || {}).value || '',
+      responsavel:  (document.getElementById('bForm-responsavel') || {}).value || '',
+      descricao:    (document.getElementById('bForm-descricao')  || {}).value || '',
+      observacoes:  (document.getElementById('bForm-obs')        || {}).value || '',
+      entregas:     entregas,
+      origem:       idReservaPendente ? 'reserva' : 'manual',
+      idReserva:    idReservaPendente
+    };
+
+    var btn = document.querySelector('#balcao-form-overlay .bg-orange-500');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Criando...'; }
+
+    GAS.tarefas.criarProcessoComunicacao(dados, function(res) {
+      _balcaoFecharForm();
+      _balcao.atualizar();
+    }, function(e) {
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save mr-1"></i>Criar Demanda'; }
+      alert('Erro ao criar demanda: ' + (e || 'Tente novamente.'));
     });
+  },
 
-    // Carga por pessoa
-    var carga = {};
-    lista.forEach(function(t){
-      (t.executores||[]).forEach(function(e){ carga[e]=(carga[e]||0)+1; });
-    });
+  abrirDetalhe: function(id) {
+    var p = _bState.processos.find(function(t) { return t.id === id; });
+    if (!p) return;
+    var overlay = document.getElementById('balcao-modal-overlay');
+    var body    = document.getElementById('balcao-modal-body');
+    if (!overlay || !body) return;
+    body.innerHTML = _renderDetalhe(p);
+    overlay.classList.remove('hidden');
+  },
 
-    // ── HELPERS DE RENDERIZAÇÃO ─────────────────────
-    function _stPill(status){
-      var s=(status||'').toLowerCase();
-      var cls=s==='concluído'?'background:#d1fae5;color:#065f46'
-              :s==='em andamento'?'background:#fef3c7;color:#92400e'
-              :'background:#eff6ff;color:#1d4ed8';
-      return '<span style="font-size:9px;font-weight:900;padding:2px 8px;border-radius:99px;'+cls+'">'+escaparHTML(status||'-')+'</span>';
-    }
-
-    function _prioPill(p){
-      var cls=p==='Alta'?'background:#fee2e2;color:#991b1b'
-             :p==='Média'?'background:#fef3c7;color:#92400e'
-             :'background:#f1f5f9;color:#64748b';
-      return '<span style="font-size:9px;font-weight:900;padding:2px 8px;border-radius:99px;'+cls+'">'+escaparHTML(p||'—')+'</span>';
-    }
-
-    function _execHtml(t){
-      return (t.executores&&t.executores.length)
-        ? t.executores.map(function(e){
-            var n=carga[e]||0, cor=n>5?'#ef4444':n>3?'#f59e0b':'#6366f1';
-            return '<span style="font-size:9px;padding:2px 8px;border-radius:99px;background:#f1f5f9;color:'+cor+';font-weight:700">'+escaparHTML(e.split('@')[0])+'('+n+')</span>';
-          }).join('')
-        : '<span style="font-size:9px;color:#94a3b8;font-style:italic">Sem responsável</span>';
-    }
-
-    function _entHtml(t){
-      return (t.entregas&&t.entregas.length)
-        ? t.entregas.map(function(e){
-            var s=(e['Status']||'').toLowerCase();
-            var idE=e['ID Entrega']||'';
-            var atrE=e['Prazo']&&new Date(e['Prazo'])<new Date()&&s!=='entregue';
-            var cls=s==='entregue'?'background:#d1fae5;color:#065f46;text-decoration:line-through'
-                   :atrE?'background:#fee2e2;color:#991b1b'
-                   :s==='em andamento'?'background:#fef3c7;color:#92400e'
-                   :'background:#f1f5f9;color:#64748b';
-            return '<span onclick="concluirEntregaFila(\''+escaparHTML(idE)+'\')" style="font-size:9px;font-weight:700;padding:2px 8px;border-radius:99px;cursor:pointer;'+cls+'">'+escaparHTML(e['Tipo']||'-')+'</span>';
-          }).join('')
-        : '<span style="font-size:9px;color:#94a3b8;font-style:italic">Sem entregas</span>';
-    }
-
-    function _cardHtml(t){
-      var atrasado=_isAtrasadoBalcao(t.prazo,t.status);
-      return '<div class="kanban-item p-3 border rounded-xl mb-2 bg-white shadow-sm cursor-move'
-        +(atrasado?' border-red-200 bg-red-50/40':' border-slate-200')+'"'
-        +' draggable="true" data-id="'+escaparHTML(t.id||'')+'" ondragstart="onDragStartKanban(event)">'
-        +'<div class="font-semibold text-slate-800 text-xs mb-2 flex items-center gap-1.5">'
-        +(atrasado?'<i class="fas fa-exclamation-circle text-red-400" style="font-size:9px;flex-shrink:0"></i>':'')
-        +escaparHTML(t.titulo||'-')+'</div>'
-        +'<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px">'
-        +_stPill(t.status)+_prioPill(t.prioridade)
-        +(t.prazo?'<span style="font-size:9px;color:#94a3b8">até '+escaparHTML(t.prazo)+'</span>':'')
-        +'</div>'
-        +'<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px">'+_execHtml(t)+'</div>'
-        +'<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px">'+_entHtml(t)+'</div>'
-        +'<div style="display:flex;gap:6px">'
-        +'<button onclick="responderFuncao(\''+escaparHTML(t.id||'')+'\''+')" style="font-size:10px;padding:4px 10px;border-radius:8px;background:#fef3c7;color:#92400e;border:none;cursor:pointer;font-weight:700"><i class="fas fa-comment" style="margin-right:4px;font-size:9px"></i>Responder</button>'
-        +'<button onclick="atribuirTarefa(\''+escaparHTML(t.id||'')+'\',\''+escaparHTML(t.funcao||'')+'\''+')" style="font-size:10px;padding:4px 10px;border-radius:8px;background:#eff6ff;color:#1d4ed8;border:none;cursor:pointer;font-weight:700"><i class="fas fa-user-check" style="margin-right:4px;font-size:9px"></i>Atribuir</button>'
-        +'</div></div>';
-    }
-
-    // ── MODO KANBAN ─────────────────────────────────
-    if (_modoFila==='kanban'){
-      var cols={'Solicitado':[],'Em andamento':[],'Concluído':[]};
-      lista.forEach(function(t){ var s=t.status||'Solicitado'; if(!cols[s])cols[s]=[]; cols[s].push(t); });
-      var colDef={
-        'Solicitado':  { bg:'background:#eff6ff', border:'border:1.5px solid #dbeafe', txt:'color:#1d4ed8' },
-        'Em andamento':{ bg:'background:#fffbeb', border:'border:1.5px solid #fde68a', txt:'color:#92400e' },
-        'Concluído':   { bg:'background:#f0fdf4', border:'border:1.5px solid #bbf7d0', txt:'color:#065f46' }
-      };
-      el.innerHTML = '<div class="grid grid-cols-3 gap-3">'
-        + Object.keys(cols).map(function(status){
-            var def=colDef[status]||{bg:'background:#f8fafc',border:'border:1.5px solid #e2e8f0',txt:'color:#475569'};
-            var n=cols[status].length, over=n>5;
-            return '<div class="kanban-col p-3 min-h-64" style="'+def.bg+';'+def.border+';border-radius:14px" data-status="'+escaparHTML(status)+'" ondragover="onDragOverKanban(event)" ondrop="onDropKanban(event,\''+escaparHTML(status)+'\')">'
-              +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">'
-              +'<span style="font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;'+def.txt+'">'+escaparHTML(status)+'</span>'
-              +'<span style="font-size:9px;font-weight:900;padding:1px 8px;border-radius:99px;'+(over?'background:#fee2e2;color:#991b1b':'background:rgba(0,0,0,.06);color:#64748b')+'">'+n+'</span>'
-              +'</div>'
-              +'<div class="kanban-list space-y-2">'+cols[status].map(_cardHtml).join('')+'</div>'
-              +'</div>';
-          }).join('')
-        + '</div>';
-      return;
-    }
-
-    // ── MODO CARDS ──────────────────────────────────
-    if (_modoFila==='cards'){
-      el.innerHTML = '<div class="grid grid-cols-2 gap-3">'+lista.map(_cardHtml).join('')+'</div>';
-      return;
-    }
-
-    // ── MODO CARGA ──────────────────────────────────
-    if (_modoFila==='carga'){
-      if (!Object.keys(carga).length){
-        el.innerHTML = '<div class="py-8 text-center text-xs text-slate-400 italic">Nenhuma tarefa atribuída.</div>';
+  carregarEntregas: function(idProcesso) {
+    var el = document.getElementById('balcao-detalhe-entregas-' + idProcesso);
+    if (!el) return;
+    GAS.tarefas.listarComFiltros({ tarefaPai: idProcesso, tipo: 'entrega_comunicacao' }, function(entregas) {
+      if (!entregas || !entregas.length) {
+        el.innerHTML = '<div class="text-xs text-slate-400">Nenhuma entrega cadastrada.</div>';
         return;
       }
-      var maxN=Math.max.apply(null, Object.values(carga).concat([1]));
-      el.innerHTML = '<div class="space-y-3 p-2">'
-        + Object.keys(carga).sort(function(a,b){ return carga[b]-carga[a]; }).map(function(p){
-            var n=carga[p], pct=Math.round(n/maxN*100);
-            var cor=n>5?'#ef4444':n>3?'#f59e0b':'#6366f1';
-            var label=n>5?' — sobrecarregado':n>3?' — atenção':'';
-            return '<div style="display:flex;align-items:center;gap:12px">'
-              +'<div style="width:120px;font-size:11px;font-weight:700;color:#334155;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+escaparHTML(p)+'">'+escaparHTML(p.split('@')[0])+'</div>'
-              +'<div style="flex:1;background:#f1f5f9;border-radius:99px;height:8px;overflow:hidden">'
-              +'<div style="width:'+pct+'%;height:100%;background:'+cor+';border-radius:99px;transition:width .4s ease"></div>'
-              +'</div>'
-              +'<div style="font-size:11px;font-weight:900;color:'+cor+';width:24px;text-align:right">'+n+'</div>'
-              +(label?'<div style="font-size:9px;color:'+cor+';white-space:nowrap">'+label+'</div>':'')
-              +'</div>';
-          }).join('')
-        +'</div>';
-      return;
-    }
-
-    // ── MODO TIMELINE ────────────────────────────────
-    if (_modoFila==='timeline'){
-      var comPrazo=lista.filter(function(t){ return !!t.prazo; });
-      var semPrazo=lista.filter(function(t){ return !t.prazo; });
-      comPrazo.sort(function(a,b){ return new Date(a.prazo)-new Date(b.prazo); });
-      var hoje=new Date(); hoje.setHours(0,0,0,0);
-      el.innerHTML = '<div class="space-y-1 p-1">'
-        + comPrazo.map(function(t){
-            var d=new Date(t.prazo); d.setHours(0,0,0,0);
-            var diff=Math.round((d-hoje)/(864e5));
-            var atrasado=diff<0&&(t.status||'').toLowerCase()!=='concluído';
-            var eHoje=diff===0;
-            var icon=atrasado?'<i class="fas fa-exclamation-circle" style="color:#ef4444;font-size:11px"></i>'
-                   :eHoje?'<i class="fas fa-dot-circle" style="color:#f59e0b;font-size:11px"></i>'
-                   :'<i class="fas fa-circle" style="color:#a5b4fc;font-size:8px"></i>';
-            var rowBg=atrasado?'background:#fff5f5;border-left:3px solid #ef4444'
-                     :eHoje?'background:#fffbeb;border-left:3px solid #f59e0b'
-                     :'background:#f8fafc;border-left:3px solid #e2e8f0';
-            var prazoFmt=atrasado?'<span style="color:#ef4444;font-weight:900">'+escaparHTML(t.prazo)+' ('+Math.abs(diff)+'d atraso)</span>'
-                        :eHoje?'<span style="color:#f59e0b;font-weight:900">Hoje</span>'
-                        :'<span style="color:#64748b">'+escaparHTML(t.prazo)+' (+'+diff+'d)</span>';
-            return '<div style="'+rowBg+';padding:8px 12px;border-radius:6px;display:flex;align-items:center;gap:10px;margin-bottom:4px">'
-              +'<div style="flex-shrink:0">'+icon+'</div>'
-              +'<div style="flex:1;min-width:0"><span style="font-size:12px;font-weight:600;color:'+(atrasado?'#991b1b':'#1e293b')+';display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escaparHTML(t.titulo||'-')+'</span></div>'
-              +'<div style="font-size:10px;flex-shrink:0">'+prazoFmt+'</div>'
-              +'</div>';
-          }).join('')
-        +(semPrazo.length?'<div style="padding:8px 12px;color:#94a3b8;font-size:10px;font-style:italic">'+semPrazo.length+' tarefa(s) sem prazo definido.</div>':'')
-        +'</div>';
-      return;
-    }
-
-    // ── MODO LISTA (padrão) ──────────────────────────
-    el.innerHTML = '<div class="space-y-2">'+lista.map(_cardHtml).join('')+'</div>';
-
-  }, function(){
-    var el2=document.getElementById('fila-funcao');
-    if (el2) el2.innerHTML='<div class="py-6 text-center text-red-400 text-xs"><i class="fas fa-exclamation-triangle mr-1"></i>Erro ao carregar fila.</div>';
-  });
-}
-
-// ══════════════════════════════════════════════════════
-// DRAG AND DROP KANBAN
-// ══════════════════════════════════════════════════════
-var _dragEl      = null;
-var _placeholder = null;
-
-function onDragStartKanban(e){
-  _dragEl = e.currentTarget;
-  setTimeout(function(){ if (_dragEl) _dragEl.classList.add('opacity-50'); }, 0);
-  _placeholder = document.createElement('div');
-  _placeholder.className = 'h-10 border-2 border-dashed border-indigo-300 rounded-xl';
-}
-
-function onDragOverKanban(e){
-  e.preventDefault();
-  document.querySelectorAll('.kanban-col').forEach(function(c){ c.classList.remove('drag-over'); });
-  var col = e.currentTarget;
-  col.classList.add('drag-over');
-  var container = col.querySelector('.kanban-list');
-  if (!container) return;
-  var after = getDragAfterElement(container, e.clientY);
-  if (!after) container.appendChild(_placeholder);
-  else container.insertBefore(_placeholder, after);
-}
-
-function onDropKanban(e, novoStatus){
-  e.preventDefault();
-  if (!_dragEl) return;
-  document.querySelectorAll('.kanban-col').forEach(function(c){ c.classList.remove('drag-over'); });
-  var lista = e.currentTarget.querySelector('.kanban-list');
-  if (_placeholder && lista) lista.insertBefore(_dragEl, _placeholder);
-  _dragEl.classList.remove('opacity-50');
-  if (_placeholder && _placeholder.parentNode) _placeholder.remove();
-
-  var ordens = {};
-  document.querySelectorAll('.kanban-col').forEach(function(col){
-    var s = col.getAttribute('data-status');
-    col.querySelectorAll('.kanban-item').forEach(function(item, idx){
-      var id = item.getAttribute('data-id');
-      if (id) ordens[id] = { ordem:idx, status:s };
+      var html = '';
+      entregas.forEach(function(e) {
+        var col = _PIPELINE_COLS.find(function(c) { return c.status === e.status; }) || { cor:'#94a3b8', label: _LABEL_STATUS[e.status] || e.status };
+        var meta = e.metadados || {};
+        var funcao = e.funcao || '';
+        var icon  = _ICON_FUNCAO[funcao] || 'fa-tasks';
+        html += '<div class="flex items-center justify-between bg-slate-50 rounded-xl px-3 py-2">';
+        html += '<div class="flex items-center gap-2">';
+        html += '<i class="fas ' + icon + ' text-[11px] text-indigo-400"></i>';
+        html += '<span class="text-xs font-semibold text-slate-700">' + _esc(meta.tipoEntrega || e.etapa || '—') + '</span>';
+        html += '</div>';
+        html += '<div class="flex items-center gap-2">';
+        if (e.responsavel) html += _avatar(e.responsavel);
+        html += '<span class="px-2 py-0.5 rounded-full text-[9px] font-bold text-white" style="background:' + col.cor + '">' + col.label + '</span>';
+        html += '</div></div>';
+      });
+      el.innerHTML = html;
+    }, function() {
+      el.innerHTML = '<div class="text-xs text-red-400">Erro ao carregar entregas.</div>';
     });
-  });
+  },
 
-  GAS._call('salvarOrdemKanban', [ordens], function(){
-    // UI já reflete a nova ordem
-  }, function(err){
-    console.error('Erro ao salvar ordem Kanban:', err);
-    Swal.fire({ icon:'error', title:'Erro ao salvar ordem',
-      text:'A ordem não foi persistida. Recarregue a fila.',
-      timer:3000, showConfirmButton:false, customClass:{ popup:'rounded-3xl' } });
-    renderFilaFuncaoAtual();
-  });
-
-  _dragEl = null;
-}
-
-function getDragAfterElement(container, y){
-  var els = Array.from(container.querySelectorAll('.kanban-item:not(.opacity-50)'));
-  return els.reduce(function(closest, child){
-    var box    = child.getBoundingClientRect();
-    var offset = y - box.top - box.height/2;
-    if (offset < 0 && offset > closest.offset) return { offset:offset, element:child };
-    return closest;
-  }, { offset:Number.NEGATIVE_INFINITY }).element;
-}
-
-// ══════════════════════════════════════════════════════
-// CONCLUIR ENTREGA — pelo chip na fila
-// ══════════════════════════════════════════════════════
-function concluirEntregaFila(idEntrega){
-  Swal.fire({
-    title:'Concluir entrega',
-    html:'<div class="text-left" style="padding:0 4px">'
-      + '<label style="display:block;font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">Link do material *</label>'
-      + '<input id="linkEntregaFila" style="width:100%;padding:9px 13px;font-size:12px;border:1.5px solid #e2e8f0;border-radius:12px;outline:none;box-sizing:border-box" placeholder="https://drive.google.com/...">'
-      + '</div>',
-    showCancelButton:true,
-    confirmButtonText:'<i class="fas fa-check mr-1"></i>Concluir',
-    cancelButtonText:'Cancelar',
-    confirmButtonColor:'#059669',
-    customClass:{ popup:'rounded-3xl', confirmButton:'rounded-xl font-black text-sm', cancelButton:'rounded-xl font-bold text-sm' },
-    preConfirm:function(){
-      var link=(document.getElementById('linkEntregaFila').value||'').trim();
-      if (!link){ Swal.showValidationMessage('Informe o link do material'); return false; }
-      return link;
+  mudarStatus: function(id, novoStatus) {
+    var motivo = '';
+    if (novoStatus === 'cancelada') {
+      motivo = prompt('Motivo do cancelamento:') || '';
+      if (motivo === null) return;
     }
-  }).then(function(r){
-    if (!r.isConfirmed) return;
-    showLoader(true);
-    GAS.entregas.atualizar(idEntrega, { status:'Entregue', link:r.value }, function(){
-      showLoader(false); renderFilaFuncaoAtual();
-    }, function(e){ showLoader(false); Swal.fire('Erro', String(e), 'error'); });
+    GAS.tarefas.mudarStatus(id, novoStatus, motivo, function() {
+      var p = _bState.processos.find(function(t) { return t.id === id; });
+      if (p) p.status = novoStatus;
+      _balcaoFecharModal();
+      _balcao.renderizar();
+      _balcao.atualizarMetricas();
+    }, function(e) { alert('Erro: ' + (e || 'Tente novamente.')); });
+  },
+
+  comentar: function(id) {
+    var input = document.getElementById('balcao-novo-comentario-' + id);
+    if (!input || !input.value.trim()) return;
+    var texto = input.value.trim();
+    input.value = '';
+    GAS.tarefas.comentar(id, texto, function() {
+      _balcao.atualizar();
+      setTimeout(function() { _balcao.abrirDetalhe(id); }, 600);
+    }, function(e) { alert('Erro ao comentar: ' + (e || '')); });
+  },
+
+  solicitarRevisao: function(id) {
+    var texto = prompt('Descreva a revisão solicitada:');
+    if (!texto || !texto.trim()) return;
+    GAS.tarefas.registrarRevisao(id, texto.trim(), function() {
+      _balcao.atualizar();
+      setTimeout(function() { _balcao.abrirDetalhe(id); }, 600);
+    }, function(e) { alert('Erro: ' + (e || '')); });
+  },
+
+  responderRevisao: function(id, revisaoId, aceita) {
+    var resp = prompt(aceita ? 'Mensagem de aceite (opcional):' : 'Motivo da rejeição:');
+    if (resp === null) return;
+    GAS.tarefas.responderRevisao(id, revisaoId, resp || (aceita ? 'Aceito.' : 'Rejeitado.'), aceita, function() {
+      _balcao.atualizar();
+      setTimeout(function() { _balcao.abrirDetalhe(id); }, 600);
+    }, function(e) { alert('Erro: ' + (e || '')); });
+  }
+};
+
+// ── Autocomplete de usuários ──────────────────────────────────────────────────
+
+function _balcaoAutocompletar(input) {
+  var lista = document.getElementById('bForm-responsavel-list');
+  if (!lista) return;
+  var q = input.value.toLowerCase().trim();
+  if (!q || q.length < 2) { lista.classList.add('hidden'); return; }
+
+  var usuarios = (window.AppState && AppState.usuarios) ? AppState.usuarios : [];
+  var matches = usuarios.filter(function(u) {
+    return (u.email || '').toLowerCase().includes(q) ||
+           (u.nome  || '').toLowerCase().includes(q);
+  }).slice(0, 8);
+
+  if (!matches.length) { lista.classList.add('hidden'); return; }
+
+  lista.innerHTML = matches.map(function(u) {
+    return '<div class="px-3 py-2 hover:bg-indigo-50 cursor-pointer" onclick="_balcaoSelecionarUsuario(\'' + u.email + '\',\'' + (u.nome || u.email) + '\')">' +
+           '<span class="font-semibold text-slate-700">' + _esc(u.nome || u.email.split('@')[0]) + '</span>' +
+           '<span class="text-slate-400 ml-2">' + _esc(u.email) + '</span></div>';
+  }).join('');
+  lista.classList.remove('hidden');
+}
+
+function _balcaoSelecionarUsuario(email, nome) {
+  var input = document.getElementById('bForm-responsavel');
+  var lista = document.getElementById('bForm-responsavel-list');
+  if (input) input.value = email;
+  if (lista) lista.classList.add('hidden');
+}
+
+// ── Fechar overlays ───────────────────────────────────────────────────────────
+
+function _balcaoFecharModal(event) {
+  if (event && event.target !== document.getElementById('balcao-modal-overlay')) return;
+  document.getElementById('balcao-modal-overlay').classList.add('hidden');
+}
+
+function _balcaoFecharForm(event) {
+  if (event && event.target !== document.getElementById('balcao-form-overlay')) return;
+  document.getElementById('balcao-form-overlay').classList.add('hidden');
+}
+
+// ── Inicialização quando a aba é aberta ───────────────────────────────────────
+
+window._onShow_aba_balcao = function() {
+  if (!_bState.processos.length && !_bState.carregando) {
+    _balcao.carregar();
+  }
+};
+
+if (typeof EventBus !== 'undefined') {
+  EventBus.on('aba:aba-balcao:show', function() {
+    window._onShow_aba_balcao();
   });
 }
 
-// ══════════════════════════════════════════════════════
-// MODO E NAVEGAÇÃO
-// ══════════════════════════════════════════════════════
-function renderFilaFuncaoAtual(){
-  renderFilaFuncao(_balcaoFuncaoAtual);
-}
-
-function mudarModoFila(modo){
-  _modoFila = modo;
-  try { localStorage.setItem('modoFila', modo); } catch(e){}
-  document.querySelectorAll('.modo-btn').forEach(function(btn){ btn.classList.remove('ativo'); });
-  var btnAtivo = document.querySelector('[data-modo="'+modo+'"]');
-  if (btnAtivo) btnAtivo.classList.add('ativo');
-  renderFilaFuncaoAtual();
-}
-
-// Restaura modo salvo sem disparar GAS call prematura
-document.addEventListener('DOMContentLoaded', function(){
-  try {
-    var salvo = localStorage.getItem('modoFila');
-    if (salvo){
-      _modoFila = salvo;
-      document.querySelectorAll('.modo-btn').forEach(function(btn){ btn.classList.remove('ativo'); });
-      var btnAtivo = document.querySelector('[data-modo="'+_modoFila+'"]');
-      if (btnAtivo) btnAtivo.classList.add('ativo');
-    }
-  } catch(e){}
-});
-
+})(); // IIFE
 </script>

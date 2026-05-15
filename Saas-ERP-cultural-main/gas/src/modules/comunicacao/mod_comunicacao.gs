@@ -188,7 +188,7 @@ function uploadImagemRece(base64Data, mimeType, nomeArquivo) {
     file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
     return {
       success: true,
-      url: `https://drive.google.com/thumbnail?id=${file.getId()}&sz=w400`,
+      url: `https://drive.google.com/uc?id=${file.getId()}&export=view`,
     };
   } catch (e) {
     return { success: false, erro: e.message };

@@ -85,18 +85,26 @@ function coletarDadosDemandaComunicacao() {
 function criarDemandasComunicacaoAposReserva(ids, dadosReserva, dadosCom) {
   if (!dadosCom || !ids || !ids.length) return;
   ids.forEach(function(idReserva) {
-    GAS._call(
-      'criarDemandaComunicacaoFromReserva',
-      [idReserva, dadosReserva, dadosCom],
-      function(res) {
-        if (res && !res.duplicado) {
-          console.info('[Comunicação] Demanda criada para reserva', idReserva, '→', res.id);
-        }
-      },
-      function(e) {
-        console.warn('[Comunicação] Falha ao criar demanda para reserva', idReserva, e);
+    // Verifica deduplicação antes de criar
+    GAS.tarefas.obterDemandaPorReserva(idReserva, function(existente) {
+      if (existente) {
+        console.info('[Comunicação] Demanda já existe para reserva', idReserva, '→', existente.id);
+        return;
       }
-    );
+      var dados = Object.assign({}, dadosCom, {
+        origem:      'reserva',
+        idReserva:   idReserva,
+        solicitante: (dadosReserva && dadosReserva.responsavel) || '',
+        prioridade:  (dadosCom.prioridade || 'media').toLowerCase()
+      });
+      GAS.tarefas.criarProcessoComunicacao(dados, function(res) {
+        console.info('[Comunicação] Demanda criada para reserva', idReserva, '→', res && res.id);
+      }, function(e) {
+        console.warn('[Comunicação] Falha ao criar demanda para reserva', idReserva, e);
+      });
+    }, function(e) {
+      console.warn('[Comunicação] Falha ao verificar demanda existente', idReserva, e);
+    });
   });
 }
 
@@ -130,28 +138,32 @@ function _rcResetarPainel() {
 // ══════════════════════════════════════════════════════
 // RASTREABILIDADE — detalhe da reserva
 // ══════════════════════════════════════════════════════
+var _RC_STATUS_LABEL = {
+  solicitada: { label: 'Solicitada', cls: 'bg-slate-100 text-slate-600' },
+  em_analise: { label: 'Em Análise', cls: 'bg-indigo-100 text-indigo-700' },
+  em_execucao: { label: 'Em Produção', cls: 'bg-blue-100 text-blue-700' },
+  aguardando_aprovacao: { label: 'Aguard. Aprovação', cls: 'bg-purple-100 text-purple-700' },
+  concluida: { label: 'Concluída', cls: 'bg-emerald-100 text-emerald-700' },
+  cancelada: { label: 'Cancelada', cls: 'bg-red-100 text-red-600' }
+};
+
 function _rcCarregarDemandaNoDetalhe(idReserva) {
   var el = document.getElementById('rc-detalhe-demanda-' + idReserva);
   if (!el) return;
 
-  GAS._call('obterDemandaPorReservaId', [idReserva], function(demanda) {
+  GAS.tarefas.obterDemandaPorReserva(idReserva, function(demanda) {
     if (!demanda) {
-      var btnGerar = (typeof abrirModalAtendimento === 'function')
-        ? '<button onclick="_rcGerarDemandaParaReserva(\'' + escaparHTML(idReserva) + '\')"'
-          + ' class="ml-2 px-2 py-0.5 bg-orange-100 text-orange-700 text-[9px] font-black rounded-lg hover:bg-orange-500 hover:text-white transition">'
-          + '<i class="fas fa-plus mr-1"></i>Gerar demanda</button>'
-        : '';
+      var btnGerar = '<button onclick="_rcGerarDemandaParaReserva(\'' + escaparHTML(idReserva) + '\')"'
+        + ' class="ml-2 px-2 py-0.5 bg-orange-100 text-orange-700 text-[9px] font-black rounded-lg hover:bg-orange-500 hover:text-white transition">'
+        + '<i class="fas fa-plus mr-1"></i>Gerar demanda</button>';
       el.innerHTML = '<span class="text-[10px] text-slate-400 italic">Nenhuma demanda vinculada.</span>' + btnGerar;
       return;
     }
-    var stCls = (demanda.status || '').toLowerCase() === 'concluído'
-      ? 'bg-emerald-100 text-emerald-700'
-      : (demanda.status || '').toLowerCase() === 'em andamento'
-        ? 'bg-amber-100 text-amber-700'
-        : 'bg-slate-100 text-slate-600';
+    var st = _RC_STATUS_LABEL[demanda.status] || { label: demanda.status, cls: 'bg-slate-100 text-slate-600' };
     el.innerHTML = '<div class="flex items-center gap-2 flex-wrap">'
       + '<span class="text-[11px] font-bold text-slate-700">' + escaparHTML(demanda.titulo || '') + '</span>'
-      + '<span class="px-2 py-0.5 rounded-full text-[9px] font-black ' + stCls + '">' + escaparHTML(demanda.status || '') + '</span>'
+      + '<span class="px-2 py-0.5 rounded-full text-[9px] font-black ' + st.cls + '">' + st.label + '</span>'
+      + '<button onclick="mostrarAba(\'aba-balcao\')" class="text-[9px] text-indigo-500 hover:underline">Ver no Balcão →</button>'
       + '</div>';
   }, function() {
     el.innerHTML = '<span class="text-[10px] text-red-400 italic">Erro ao carregar demanda.</span>';
@@ -160,16 +172,22 @@ function _rcCarregarDemandaNoDetalhe(idReserva) {
 
 function _rcGerarDemandaParaReserva(idReserva) {
   var reserva = (AppState.colecoes.reservas || []).find(function(r) { return r[0] === idReserva; });
-  var nomeAcao = reserva ? (reserva[6] || '') : '';
+  var nomeAcao = reserva ? (reserva[1] || reserva[6] || '') : '';
+
+  // Fecha modal atual se houver
   var modal = document.getElementById('modalDetalheRes');
   if (modal) modal.remove();
-  if (typeof abrirModalAtendimento === 'function') {
-    abrirModalAtendimento({
-      titulo:    nomeAcao,
-      origem:    'reserva',
-      idReserva: idReserva
-    });
-  }
+
+  // Navega para o Balcão e pré-preenche o formulário
+  mostrarAba('aba-balcao');
+  setTimeout(function() {
+    if (typeof _balcao === 'undefined') return;
+    _balcao.nova();
+    var inputTitulo = document.getElementById('bForm-titulo');
+    if (inputTitulo && nomeAcao) inputTitulo.value = nomeAcao;
+    // Marca a origem como reserva para criar o vínculo automático
+    window.__rcPendingReservaId = idReserva;
+  }, 300);
 }
 
 // ══════════════════════════════════════════════════════

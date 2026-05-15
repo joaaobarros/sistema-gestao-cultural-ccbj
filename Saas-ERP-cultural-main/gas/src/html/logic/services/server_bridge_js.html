@@ -352,21 +352,28 @@ const GAS = {
    */
   tarefas: {
     // Leitura
-    listar:              function(cb, err)                          { GAS._callCtrl('ctrl_tarefas_listar',               [GAS._sessao()],                            cb, err); },
-    obter:               function(id, cb, err)                      { GAS._callCtrl('ctrl_tarefas_obter',                [id, GAS._sessao()],                         cb, err); },
-    minhaFila:           function(cb, err)                          { GAS._callCtrl('ctrl_tarefas_minha_fila',           [GAS._sessao()],                            cb, err); },
-    obterMetricas:       function(cb, err)                          { GAS._callCtrl('ctrl_tarefas_obter_metricas',        [GAS._sessao()],                            cb, err); },
-    listarPorFuncao:     function(funcao, cb, err)                  { GAS._callCtrl('ctrl_tarefas_listar_por_funcao',    [funcao, GAS._sessao()],                     cb, err); },
+    listar:                    function(cb, err)                             { GAS._callCtrl('ctrl_tarefas_listar',                       [GAS._sessao()],                                  cb, err); },
+    obter:                     function(id, cb, err)                         { GAS._callCtrl('ctrl_tarefas_obter',                        [id, GAS._sessao()],                              cb, err); },
+    minhaFila:                 function(cb, err)                             { GAS._callCtrl('ctrl_tarefas_minha_fila',                   [GAS._sessao()],                                  cb, err); },
+    obterMetricas:             function(cb, err)                             { GAS._callCtrl('ctrl_tarefas_obter_metricas',               [GAS._sessao()],                                  cb, err); },
+    listarPorFuncao:           function(funcao, cb, err)                     { GAS._callCtrl('ctrl_tarefas_listar_por_funcao',            [funcao, GAS._sessao()],                          cb, err); },
+    listarComunicacao:         function(apenasProc, cb, err)                 { GAS._callCtrl('ctrl_tarefas_listar_comunicacao',           [apenasProc, GAS._sessao()],                      cb, err); },
+    listarComFiltros:          function(filtros, cb, err)                    { GAS._callCtrl('ctrl_tarefas_listar_com_filtros',           [filtros, GAS._sessao()],                         cb, err); },
+    sobrecarga:                function(cb, err)                             { GAS._callCtrl('ctrl_tarefas_sobrecarga',                   [GAS._sessao()],                                  cb, err); },
+    obterDemandaPorReserva:    function(idReserva, cb, err)                  { GAS._callCtrl('ctrl_tarefas_obter_demanda_por_reserva',    [idReserva, GAS._sessao()],                       cb, err); },
     // Escrita
-    criar:               function(dados, cb, err)                   { GAS._callCtrl('ctrl_tarefas_criar',                [dados, GAS._sessao()],                      cb, err); },
-    salvar:              function(dados, cb, err)                   { GAS._callCtrl('ctrl_tarefas_salvar',               [dados, GAS._sessao()],                      cb, err); },
-    mudarStatus:         function(id, status, comentario, cb, err)  { GAS._callCtrl('ctrl_tarefas_mudar_status',         [id, status, comentario, GAS._sessao()],     cb, err); },
-    delegar:             function(id, para, comentario, cb, err)    { GAS._callCtrl('ctrl_tarefas_delegar',              [id, para, comentario, GAS._sessao()],       cb, err); },
-    comentar:            function(id, texto, cb, err)               { GAS._callCtrl('ctrl_tarefas_comentar',             [id, texto, GAS._sessao()],                  cb, err); },
-    excluir:             function(id, cb, err)                      { GAS._callCtrl('ctrl_tarefas_excluir',              [id, GAS._sessao()],                         cb, err); },
-    salvarOrdemKanban:   function(ordens, cb, err)                  { GAS._callCtrl('ctrl_tarefas_salvar_ordem_kanban',  [ordens, GAS._sessao()],                     cb, err); },
-    atribuirExecutores:  function(id, emails, cb, err)              { GAS._callCtrl('ctrl_tarefas_atribuir_executores',  [id, emails, GAS._sessao()],                 cb, err); },
-    responderComoFuncao: function(id, msg, autor, cb, err)          { GAS._callCtrl('ctrl_tarefas_responder_como_funcao',[id, msg, autor, GAS._sessao()],             cb, err); }
+    criar:                     function(dados, cb, err)                      { GAS._callCtrl('ctrl_tarefas_criar',                       [dados, GAS._sessao()],                           cb, err); },
+    salvar:                    function(dados, cb, err)                      { GAS._callCtrl('ctrl_tarefas_salvar',                      [dados, GAS._sessao()],                           cb, err); },
+    criarProcessoComunicacao:  function(dados, cb, err)                      { GAS._callCtrl('ctrl_tarefas_criar_processo_comunicacao',   [dados, GAS._sessao()],                           cb, err); },
+    mudarStatus:               function(id, status, comentario, cb, err)     { GAS._callCtrl('ctrl_tarefas_mudar_status',                [id, status, comentario, GAS._sessao()],          cb, err); },
+    delegar:                   function(id, para, comentario, cb, err)       { GAS._callCtrl('ctrl_tarefas_delegar',                     [id, para, comentario, GAS._sessao()],            cb, err); },
+    comentar:                  function(id, texto, cb, err)                  { GAS._callCtrl('ctrl_tarefas_comentar',                    [id, texto, GAS._sessao()],                       cb, err); },
+    registrarRevisao:          function(id, texto, cb, err)                  { GAS._callCtrl('ctrl_tarefas_registrar_revisao',           [id, texto, GAS._sessao()],                       cb, err); },
+    responderRevisao:          function(id, revId, resp, aceita, cb, err)    { GAS._callCtrl('ctrl_tarefas_responder_revisao',           [id, revId, resp, aceita, GAS._sessao()],         cb, err); },
+    excluir:                   function(id, cb, err)                         { GAS._callCtrl('ctrl_tarefas_excluir',                     [id, GAS._sessao()],                              cb, err); },
+    salvarOrdemKanban:         function(ordens, cb, err)                     { GAS._callCtrl('ctrl_tarefas_salvar_ordem_kanban',         [ordens, GAS._sessao()],                          cb, err); },
+    atribuirExecutores:        function(id, emails, cb, err)                 { GAS._callCtrl('ctrl_tarefas_atribuir_executores',         [id, emails, GAS._sessao()],                      cb, err); },
+    responderComoFuncao:       function(id, msg, autor, cb, err)             { GAS._callCtrl('ctrl_tarefas_responder_como_funcao',       [id, msg, autor, GAS._sessao()],                  cb, err); }
   },
 
   /**
@@ -477,9 +484,12 @@ const GAS = {
     obterCargos:         function(cb, err)           { GAS._callCtrl('ctrl_rh_listar_cargos',       [GAS._sessao()],              cb, err); },
     salvarCargo:         function(dados, cb, err)    { GAS._callCtrl('ctrl_rh_salvar_cargo',         [dados, GAS._sessao()],       cb, err); },
     excluirCargo:        function(id, cb, err)       { GAS._callCtrl('ctrl_rh_excluir_cargo',        [id, GAS._sessao()],          cb, err); },
-    obterHistorico:      function(id, cb, err)       { GAS._callCtrl('ctrl_rh_historico',            [id, GAS._sessao()],          cb, err); },
-    registrarEvento:     function(dados, cb, err)    { GAS._callCtrl('ctrl_rh_registrar_evento',     [dados, GAS._sessao()],       cb, err); },
-    excluirEvento:       function(id, cb, err)       { GAS._callCtrl('ctrl_rh_excluir_evento',       [id, GAS._sessao()],          cb, err); },
+    meuNivel:            function(cb, err)            { GAS._callCtrl('ctrl_rh_meu_nivel',                    [GAS._sessao()],                    cb, err); },
+    obterHistorico:      function(id, cb, err)        { GAS._callCtrl('ctrl_rh_historico',                    [id, GAS._sessao()],                cb, err); },
+    registrarEvento:     function(dados, cb, err)     { GAS._callCtrl('ctrl_rh_registrar_evento',             [dados, GAS._sessao()],             cb, err); },
+    registrarEventoEstruturado: function(d, cb, err)  { GAS._callCtrl('ctrl_rh_registrar_evento_estruturado', [d, GAS._sessao()],                 cb, err); },
+    registrarDesligamento:      function(d, cb, err)  { GAS._callCtrl('ctrl_rh_registrar_desligamento',       [d, GAS._sessao()],                 cb, err); },
+    excluirEvento:       function(id, cb, err)        { GAS._callCtrl('ctrl_rh_excluir_evento',               [id, GAS._sessao()],                cb, err); },
     obterAvaliacoes:     function(id, cb, err)       { GAS._callCtrl('ctrl_rh_avaliacoes',           [id, GAS._sessao()],          cb, err); },
     salvarAvaliacao:     function(dados, cb, err)    { GAS._callCtrl('ctrl_rh_salvar_avaliacao',     [dados, GAS._sessao()],       cb, err); },
     excluirAvaliacao:    function(id, cb, err)       { GAS._callCtrl('ctrl_rh_excluir_avaliacao',    [id, GAS._sessao()],          cb, err); },
@@ -499,10 +509,32 @@ const GAS = {
     obterPCCS:           function(cb, err)           { GAS._callCtrl('ctrl_rh_pccs',                 [GAS._sessao()],              cb, err); },
     salvarParametrosPCCS:function(p, cb, err)        { GAS._callCtrl('ctrl_rh_salvar_params_pccs',   [p, GAS._sessao()],           cb, err); },
     aplicarReajustePCCS: function(pct, cb, err)      { GAS._callCtrl('ctrl_rh_aplicar_reajuste_pccs',[pct, GAS._sessao()],         cb, err); },
-    salvarTabelaRowPCCS: function(row, cb, err)      { GAS._callCtrl('ctrl_rh_salvar_tabela_pccs',   [row, GAS._sessao()],         cb, err); },
-    obterCargosPCCS:     function(cb, err)           { GAS._callCtrl('ctrl_rh_cargos_pccs',          [GAS._sessao()],              cb, err); },
-    salvarCargoPCCS:     function(d, cb, err)        { GAS._callCtrl('ctrl_rh_salvar_cargo_pccs',    [d, GAS._sessao()],           cb, err); },
-    excluirCargoPCCS:    function(id, cb, err)       { GAS._callCtrl('ctrl_rh_excluir_cargo_pccs',   [id, GAS._sessao()],          cb, err); }
+    salvarTabelaRowPCCS:    function(row, cb, err)        { GAS._callCtrl('ctrl_rh_salvar_tabela_pccs',         [row, GAS._sessao()],               cb, err); },
+    obterCargosPCCS:        function(cb, err)             { GAS._callCtrl('ctrl_rh_cargos_pccs',                [GAS._sessao()],                    cb, err); },
+    salvarCargoPCCS:        function(d, cb, err)          { GAS._callCtrl('ctrl_rh_salvar_cargo_pccs',          [d, GAS._sessao()],                 cb, err); },
+    excluirCargoPCCS:       function(id, cb, err)         { GAS._callCtrl('ctrl_rh_excluir_cargo_pccs',         [id, GAS._sessao()],                cb, err); },
+    // Férias
+    listarFerias:           function(id, cb, err)         { GAS._callCtrl('ctrl_rh_listar_ferias',              [id, GAS._sessao()],                cb, err); },
+    solicitarFerias:        function(dados, cb, err)      { GAS._callCtrl('ctrl_rh_solicitar_ferias',           [dados, GAS._sessao()],             cb, err); },
+    aprovarFerias:          function(id, d, cb, err)      { GAS._callCtrl('ctrl_rh_aprovar_ferias',             [id, d, GAS._sessao()],             cb, err); },
+    reprovarFerias:         function(id, m, cb, err)      { GAS._callCtrl('ctrl_rh_reprovar_ferias',            [id, m, GAS._sessao()],             cb, err); },
+    ajusteFerias:           function(id, obs, cb, err)    { GAS._callCtrl('ctrl_rh_ajuste_ferias',              [id, obs, GAS._sessao()],           cb, err); },
+    reenviarFerias:         function(id, datas, cb, err)  { GAS._callCtrl('ctrl_rh_reenviar_ferias',            [id, datas, GAS._sessao()],         cb, err); },
+    concluirFerias:         function(id, d, cb, err)      { GAS._callCtrl('ctrl_rh_concluir_ferias',            [id, d, GAS._sessao()],             cb, err); },
+    cancelarFerias:         function(id, m, cb, err)      { GAS._callCtrl('ctrl_rh_cancelar_ferias',            [id, m, GAS._sessao()],             cb, err); },
+    saldoFerias:            function(id, cb, err)         { GAS._callCtrl('ctrl_rh_saldo_ferias',               [id, GAS._sessao()],                cb, err); },
+    alertasFerias:          function(cb, err)             { GAS._callCtrl('ctrl_rh_alertas_ferias',             [GAS._sessao()],                    cb, err); },
+    verificarAlertasFerias: function(cb, err)             { GAS._callCtrl('ctrl_rh_verificar_alertas_ferias',   [GAS._sessao()],                    cb, err); },
+    // Utilitários
+    usuariosAutocomplete:   function(cb, err)             { GAS._callCtrl('ctrl_rh_usuarios_autocomplete',      [GAS._sessao()],                    cb, err); },
+    simularDetalhado:       function(dados, cb, err)      { GAS._callCtrl('ctrl_rh_simular_folha_detalhada',    [dados, GAS._sessao()],             cb, err); },
+    // Rescisão — Simulação (projeção gerencial, não oficial)
+    calcularRescisao:            function(params, cb, err)      { GAS._callCtrl('ctrl_rh_calcular_rescisao',           [params, GAS._sessao()],           cb, err); },
+    salvarSimulacaoRescisao:     function(calc, colId, cb, err) { GAS._callCtrl('ctrl_rh_salvar_simulacao_rescisao',   [calc, colId, GAS._sessao()],      cb, err); },
+    listarSimulacoesRescisao:    function(colId, cb, err)       { GAS._callCtrl('ctrl_rh_listar_simulacoes_rescisao',  [colId, GAS._sessao()],            cb, err); },
+    // Rescisão — Oficial (gerada via registrarDesligamento)
+    listarRescisoes:             function(colId, cb, err)       { GAS._callCtrl('ctrl_rh_listar_rescisoes',            [colId, GAS._sessao()],            cb, err); },
+    obterRescisao:               function(id, cb, err)          { GAS._callCtrl('ctrl_rh_obter_rescisao',              [id, GAS._sessao()],               cb, err); }
   },
 
   /**

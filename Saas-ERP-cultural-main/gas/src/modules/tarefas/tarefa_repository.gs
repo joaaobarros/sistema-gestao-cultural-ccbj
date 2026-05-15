@@ -92,6 +92,47 @@ var TarefaRepository = (function() {
       return _ler().filter(function(t) { return t.modulo === modulo; });
     },
 
+    /**
+     * Lista tarefas de uma função específica, respeitando nível de acesso.
+     * Inclui tarefas onde funcao === funcaoBuscada (responsável indefinido = fila da função).
+     */
+    listarPorFuncao: function(funcao, email, nivel) {
+      var todas = _ler();
+      var atribuidas = funcao
+        ? todas.filter(function(t) { return t.funcao === funcao; })
+        : todas;
+
+      if (_NIVEIS_AMPLOS.indexOf(nivel) !== -1) return atribuidas;
+      return atribuidas.filter(function(t) { return _pertenceAoUsuario(t, email); });
+    },
+
+    /**
+     * Filtro genérico multi-campo — qualquer combinação dos campos abaixo.
+     * @param {Object} filtros — { modulo, funcao, status, responsavel, tipo, prioridade, semResponsavel }
+     * @param {string} email   — para filtragem por permissão
+     * @param {string} nivel   — nível de acesso
+     */
+    listarComFiltros: function(filtros, email, nivel) {
+      var todas = _ler();
+      var f = filtros || {};
+
+      var resultado = todas.filter(function(t) {
+        if (f.modulo      && t.modulo      !== f.modulo)      return false;
+        if (f.funcao      && t.funcao      !== f.funcao)      return false;
+        if (f.status      && t.status      !== f.status)      return false;
+        if (f.responsavel && t.responsavel !== f.responsavel) return false;
+        if (f.tipo        && t.tipo        !== f.tipo)        return false;
+        if (f.prioridade  && t.prioridade  !== f.prioridade)  return false;
+        if (f.tarefaPai   && t.tarefaPai   !== f.tarefaPai)   return false;
+        if (f.semResponsavel && t.responsavel)                return false;
+        if (f.slaViolado  && !t.slaViolado)                   return false;
+        return true;
+      });
+
+      if (_NIVEIS_AMPLOS.indexOf(nivel) !== -1) return resultado;
+      return resultado.filter(function(t) { return _pertenceAoUsuario(t, email); });
+    },
+
     listarAtrasadas: function() {
       var now = Date.now();
       return _ler().filter(function(t) {
@@ -99,6 +140,18 @@ var TarefaRepository = (function() {
         if (t.status === 'concluida' || t.status === 'cancelada') return false;
         return new Date(t.prazo).getTime() < now;
       });
+    },
+
+    /**
+     * Verifica se já existe processo de comunicação vinculado a um ID de origem.
+     * Usado para deduplicação de demandas criadas a partir de reservas.
+     */
+    obterPorOrigem: function(modulo, idOrigem) {
+      return _ler().find(function(t) {
+        return t.modulo === modulo &&
+               t.idOrigem === idOrigem &&
+               t.tipo === 'processo_comunicacao';
+      }) || null;
     }
   };
 })();
