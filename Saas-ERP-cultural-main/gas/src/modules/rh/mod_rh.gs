@@ -53,9 +53,9 @@ function obterHistoricoRH(idColaborador) {
 
 function registrarEventoRH(dados) {
   var lista = readJSON('rh_historico.json') || [];
-  dados.id = 'hist_' + Date.now();
+  dados.id = typeof gerarId === 'function' ? gerarId('hist') : 'hist_' + Date.now() + '_' + Math.random().toString(36).slice(2, 5);
   dados.criadoEm = new Date().toISOString();
-  if (!dados.registradoPor) dados.registradoPor = Session.getActiveUser().getEmail();
+  if (!dados.registradoPor) dados.registradoPor = obterEmailUsuario('');
   lista.push(dados);
   writeJSON('rh_historico.json', lista);
   try {
@@ -87,9 +87,9 @@ function obterAvaliacoesRH(idColaborador) {
 function salvarAvaliacaoRH(dados) {
   var lista = readJSON('rh_avaliacoes.json') || [];
   if (!dados.id) {
-    dados.id = 'aval_' + Date.now();
+    dados.id = typeof gerarId === 'function' ? gerarId('aval') : 'aval_' + Date.now() + '_' + Math.random().toString(36).slice(2, 5);
     dados.criadoEm = new Date().toISOString();
-    if (!dados.avaliador) dados.avaliador = Session.getActiveUser().getEmail();
+    if (!dados.avaliador) dados.avaliador = obterEmailUsuario('');
     lista.push(dados);
   } else {
     var i = lista.findIndex(function(a) { return a.id === dados.id; });
@@ -236,6 +236,76 @@ function simularFolhaRH(dados) {
     res.custoTotal = res.liquidoColaborador;
   } else {
     res.liquidoColaborador = Math.round((salario + beneficios) * 100) / 100;
+    res.custoTotal = res.liquidoColaborador;
+  }
+
+  return res;
+}
+
+// ── Simulação detalhada de folha com benefícios subdivididos ──────────────────
+
+function simularFolhaRHDetalhada(dados) {
+  var salario   = parseFloat(dados.salarioBase) || 0;
+  var vinculo   = dados.vinculo || 'CLT';
+  var adicional = parseFloat(dados.adicional) || 0;
+
+  // Benefícios subdivididos
+  var benefs = {
+    planoSaude:        parseFloat(dados.planoSaude)        || 0,
+    planoOdontologico: parseFloat(dados.planoOdontologico) || 0,
+    valeAlimentacao:   parseFloat(dados.valeAlimentacao)   || 0,
+    valeRefeicao:      parseFloat(dados.valeRefeicao)      || 0,
+    valeTransporte:    parseFloat(dados.valeTransporte)    || 0,
+    auxilioCombustivel:parseFloat(dados.auxilioCombustivel)|| 0,
+    auxilioHomeOffice: parseFloat(dados.auxilioHomeOffice) || 0,
+    outrosBeneficios:  parseFloat(dados.outrosBeneficios)  || 0
+  };
+  var totalBeneficios = Object.values(benefs).reduce(function (acc, v) { return acc + v; }, 0);
+  totalBeneficios = Math.round(totalBeneficios * 100) / 100;
+
+  var res = {
+    salarioBase: salario, adicional: adicional,
+    beneficios: benefs, totalBeneficios: totalBeneficios,
+    inss: 0, irrf: 0, fgts: 0, encargosPatronais: 0,
+    provisao13: 0, provisaoFerias: 0, descontoTotal: 0,
+    custoTotal: 0, liquidoColaborador: 0
+  };
+
+  if (vinculo === 'CLT') {
+    var bruto = salario + adicional;
+
+    var inss = 0;
+    if (bruto <= 1412.00)       inss = bruto * 0.075;
+    else if (bruto <= 2666.68)  inss = 105.90 + (bruto - 1412.00) * 0.09;
+    else if (bruto <= 4000.03)  inss = 105.90 + 113.40 + (bruto - 2666.68) * 0.12;
+    else if (bruto <= 7786.02)  inss = 105.90 + 113.40 + 160.00 + (bruto - 4000.03) * 0.14;
+    else                         inss = 908.86;
+    inss = Math.round(inss * 100) / 100;
+
+    var baseIRRF = bruto - inss;
+    var irrf = 0;
+    if (baseIRRF > 5855.60)      irrf = baseIRRF * 0.275 - 869.36;
+    else if (baseIRRF > 4664.68) irrf = baseIRRF * 0.225 - 636.13;
+    else if (baseIRRF > 3751.05) irrf = baseIRRF * 0.15  - 354.80;
+    else if (baseIRRF > 2824.00) irrf = baseIRRF * 0.075 - 142.80;
+    irrf = Math.max(0, Math.round(irrf * 100) / 100);
+
+    var fgts     = Math.round(bruto * 0.08  * 100) / 100;
+    var encargos = Math.round(bruto * 0.348 * 100) / 100;
+    var prov13   = Math.round((bruto / 12) * 100) / 100;
+    var provFer  = Math.round((bruto * 4 / 3 / 12) * 100) / 100;
+
+    res.inss = inss; res.irrf = irrf; res.fgts = fgts;
+    res.encargosPatronais = encargos;
+    res.provisao13 = prov13; res.provisaoFerias = provFer;
+    res.descontoTotal      = Math.round((inss + irrf) * 100) / 100;
+    res.liquidoColaborador = Math.round((bruto - inss - irrf + totalBeneficios) * 100) / 100;
+    res.custoTotal         = Math.round((bruto + encargos + prov13 + provFer + totalBeneficios) * 100) / 100;
+  } else if (vinculo === 'PJ') {
+    res.liquidoColaborador = Math.round((salario + adicional + totalBeneficios) * 100) / 100;
+    res.custoTotal = res.liquidoColaborador;
+  } else {
+    res.liquidoColaborador = Math.round((salario + totalBeneficios) * 100) / 100;
     res.custoTotal = res.liquidoColaborador;
   }
 

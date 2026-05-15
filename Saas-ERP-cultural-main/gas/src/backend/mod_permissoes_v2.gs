@@ -9,7 +9,7 @@ var _P2_MODULOS = [
   'reservas','contratos','financeiro','tarefas',
   'processos','almoxarifado','balcao','rh',
   'eficiencia','contratacoes','relatorios','escuta','pessoal',
-  'acoes'
+  'acoes','reunioes'
 ];
 
 // ── Cache de permissões (CacheService, TTL 5 min) ────────────

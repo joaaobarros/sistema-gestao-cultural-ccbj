@@ -175,7 +175,13 @@ var RHEngine = (function () {
 
   function salvarParametrosPCCS(params, email) {
     if (!params || typeof params !== 'object') throw new Error('Parâmetros PCCS são obrigatórios.');
-    RHRepository.salvarParametrosPCCS(params);
+    // Usa obterPCCS()/writeJSON diretamente — arquivo canônico rh_pccs.json
+    var d = typeof obterPCCS === 'function' ? obterPCCS() : {};
+    var p = d.parametros || {};
+    Object.keys(params).forEach(function(k) { p[k] = params[k]; });
+    p.atualizadoEm = new Date().toISOString();
+    d.parametros = p;
+    writeJSON('rh_pccs.json', d);
     _audit('RH_PCCS_PARAMS_ATUALIZADOS', { operador: email || '' });
   }
 
@@ -188,29 +194,216 @@ var RHEngine = (function () {
 
   function salvarTabelaRow(row, email) {
     if (!row || typeof row !== 'object') throw new Error('Dados da tabela são obrigatórios.');
-    var r = RHRepository.salvarTabelaRowPCCS(row);
-    _audit('RH_PCCS_TABELA_ATUALIZADA', { id: r.id, operador: email || '' });
-    return r.id;
+    // salvarTabelaRowPCCS é global em mod_rh.gs — escreve no arquivo unificado rh_pccs.json
+    var r = typeof salvarTabelaRowPCCS === 'function' ? salvarTabelaRowPCCS(row) : null;
+    _audit('RH_PCCS_TABELA_ATUALIZADA', { tipo: row.tipo, classe: row.classe, operador: email || '' });
+    return (r && r.ok) ? (row.tipo + '_' + row.classe) : (row.tipo + '_' + row.classe);
   }
 
-  function listarCargosPCCS()       { return RHRepository.listarCargosPCCS(); }
+  function listarCargosPCCS() {
+    // obterCargosPCCS é global em mod_rh.gs — lê de rh_pccs.json (consistente com obterPCCSCompleto)
+    return typeof obterCargosPCCS === 'function' ? obterCargosPCCS() : [];
+  }
 
   function salvarCargoPCCS(d, email) {
     if (!d || typeof d !== 'object') throw new Error('Dados do cargo PCCS são obrigatórios.');
-    var r = RHRepository.salvarCargoPCCS(d);
-    _audit(r.isNovo ? 'RH_PCCS_CARGO_CRIADO' : 'RH_PCCS_CARGO_ATUALIZADO',
-      { id: r.id, operador: email || '' });
-    return r.id;
+    // Escreve no arquivo unificado rh_pccs.json manipulando a estrutura diretamente
+    var pccs = typeof obterPCCS === 'function' ? obterPCCS() : {};
+    if (!pccs.cargos) pccs.cargos = [];
+    var isNovo = !d.id;
+    if (isNovo) {
+      d.id = 'pccs_' + Date.now();
+      d.criadoEm = new Date().toISOString();
+      pccs.cargos.push(d);
+    } else {
+      var idx = -1;
+      for (var i = 0; i < pccs.cargos.length; i++) {
+        if (pccs.cargos[i].id === d.id) { idx = i; break; }
+      }
+      if (idx >= 0) pccs.cargos[idx] = d;
+      else pccs.cargos.push(d);
+    }
+    writeJSON('rh_pccs.json', pccs);
+    _audit(isNovo ? 'RH_PCCS_CARGO_CRIADO' : 'RH_PCCS_CARGO_ATUALIZADO',
+      { id: d.id, operador: email || '' });
+    return d.id;
   }
 
   function excluirCargoPCCS(id, email) {
     if (!id) throw new Error('ID do cargo PCCS é obrigatório.');
-    RHRepository.excluirCargoPCCS(id);
+    // Escreve no arquivo unificado rh_pccs.json
+    var pccs = typeof obterPCCS === 'function' ? obterPCCS() : {};
+    pccs.cargos = (pccs.cargos || []).filter(function(c) { return c.id !== id; });
+    writeJSON('rh_pccs.json', pccs);
     _audit('RH_PCCS_CARGO_EXCLUIDO', { id: id, operador: email || '' });
   }
 
   function simularFolha(dados) {
     return typeof simularFolhaRH === 'function' ? simularFolhaRH(dados) : {};
+  }
+
+  function simularFolhaDetalhada(dados) {
+    return typeof simularFolhaRHDetalhada === 'function' ? simularFolhaRHDetalhada(dados) : simularFolha(dados);
+  }
+
+  // ── Rescisão — delega ao RescisaoEngine ─────────────────────────
+
+  var _TIPOS_EVENTO_SENSIVEIS = ['desligamento', 'alteracaoSalarial'];
+  var _CAMPOS_FINANCEIROS_SENSIVEIS = ['rescisaoCalculada', 'rescisaoSnapshot', 'idRescisaoOficial',
+    'salarioAnterior', 'salarioNovo', 'percentual'];
+
+  // Listagem filtrada por perfil (sem eventos e campos sensíveis para não-RH)
+  function listarHistoricoFiltrado(idColaborador, perfil) {
+    var lista = RHRepository.listarHistorico(idColaborador || null);
+    lista = lista.filter(function(h) {
+      if (perfil === 'colaborador') return _TIPOS_EVENTO_SENSIVEIS.indexOf(h.tipo) === -1;
+      if (perfil === 'gestor')     return h.tipo !== 'desligamento';
+      return true;
+    });
+    return lista.map(function(h) {
+      if (perfil === 'colaborador' || perfil === 'gestor') {
+        var clone = {};
+        for (var k in h) { if (h.hasOwnProperty(k)) clone[k] = h[k]; }
+        _CAMPOS_FINANCEIROS_SENSIVEIS.forEach(function(c) { delete clone[c]; });
+        return clone;
+      }
+      return h;
+    });
+  }
+
+  // Desligamento oficial: gera cálculo automático, registra evento e atualiza status
+  function registrarDesligamento(dados, email) {
+    if (!dados || !dados.idColaborador)
+      throw new Error('idColaborador é obrigatório para registrar desligamento.');
+
+    dados.tipo = 'desligamento';
+    dados.registradoPor = email || '';
+
+    // Calcular rescisão automaticamente se houver dados suficientes
+    var rescisaoOficial = null;
+    try {
+      var funcionarios = readJSON('funcionarios.json') || [];
+      var colaborador = null;
+      for (var i = 0; i < funcionarios.length; i++) {
+        if (funcionarios[i].id === dados.idColaborador) { colaborador = funcionarios[i]; break; }
+      }
+      var tipoRsc = dados.tipoRescisao || dados.TipoDesligamento || null;
+      if (colaborador && colaborador.dataAdmissao && colaborador.salarioBase
+          && dados.dataEvento && tipoRsc) {
+        var paramsCalculo = {
+          dataAdmissao:    colaborador.dataAdmissao,
+          dataDesligamento:dados.dataEvento,
+          tipoRescisao:    tipoRsc,
+          salarioBase:     colaborador.salarioBase,
+          beneficios:      colaborador.beneficios || 0,
+          observacoes:     dados.observacoes || ''
+        };
+        rescisaoOficial = RescisaoEngine.calcular(paramsCalculo);
+        var rscSaved    = RescisaoEngine.salvarOficial(rescisaoOficial, dados.idColaborador, email);
+        dados.idRescisaoOficial = rscSaved.id;
+        // Snapshot mínimo no evento — sem dados financeiros completos no histórico
+        dados.rescisaoSnapshot = {
+          tipoRescisao:    rescisaoOficial.tipoRescisao,
+          tipoLabel:       rescisaoOficial.tipoLabel,
+          totalRescisao:   rescisaoOficial.totalRescisao,
+          vacanciaEstimada:rescisaoOficial.vacanciaEstimada,
+          geradoEm:        rescisaoOficial.geradoEm
+        };
+      }
+    } catch (e) {}
+
+    // Registrar evento no histórico funcional
+    var eventoResult = RHRepository.salvarHistorico(dados);
+    _audit('RH_DESLIGAMENTO_REGISTRADO', {
+      id: eventoResult.id, colaborador: dados.idColaborador,
+      rescisaoGerada: !!rescisaoOficial, operador: email
+    });
+
+    // Atualizar status do colaborador para Inativo
+    try {
+      var lista = readJSON('funcionarios.json') || [];
+      for (var j = 0; j < lista.length; j++) {
+        if (lista[j].id === dados.idColaborador) {
+          lista[j].status = 'Inativo';
+          lista[j].dataDesligamento = dados.dataEvento || new Date().toISOString().slice(0, 10);
+          break;
+        }
+      }
+      writeJSON('funcionarios.json', lista);
+    } catch (e) {}
+
+    return {
+      id:             eventoResult.id,
+      rescisaoGerada: !!rescisaoOficial,
+      idRescisao:     dados.idRescisaoOficial || null
+    };
+  }
+
+  function calcularRescisao(params) {
+    if (!params || typeof params !== 'object') throw new Error('Parâmetros de rescisão são obrigatórios.');
+    return RescisaoEngine.calcular(params);
+  }
+
+  function salvarSimulacaoRescisao(calculo, idColaborador, email) {
+    var r = RescisaoEngine.salvarSimulacao(calculo, idColaborador, email);
+    _audit('RH_SIMULACAO_RESCISAO', { id: r.id, colaborador: idColaborador, operador: email || '' });
+    return r.id;
+  }
+
+  function listarSimulacoesRescisao(idColaborador) {
+    return RescisaoEngine.listarSimulacoes(idColaborador || null);
+  }
+
+  function listarRescisoes(idColaborador) {
+    return RescisaoEngine.listar(idColaborador || null);
+  }
+
+  function obterRescisao(id) {
+    return RescisaoEngine.obter(id);
+  }
+
+  // ── Férias — delega ao FeriasEngine ─────────────────────────────
+
+  function listarFerias(idColaborador, email, nivel) {
+    return FeriasEngine.listarFerias(idColaborador, email, nivel);
+  }
+
+  function solicitarFerias(dados, email) {
+    return FeriasEngine.solicitar(dados, email);
+  }
+
+  function aprovarFerias(id, dadosAprovacao, email) {
+    return FeriasEngine.aprovar(id, dadosAprovacao, email);
+  }
+
+  function reprovarFerias(id, motivo, email) {
+    FeriasEngine.reprovar(id, motivo, email);
+  }
+
+  function solicitarAjusteFerias(id, obs, email) {
+    FeriasEngine.solicitarAjuste(id, obs, email);
+  }
+
+  function reenviarFerias(id, novasDatas, email) {
+    FeriasEngine.reenviarAposAjuste(id, novasDatas, email);
+  }
+
+  function concluirFerias(id, dadosConclusao, email) {
+    return FeriasEngine.concluir(id, dadosConclusao, email);
+  }
+
+  function cancelarFerias(id, motivo, email) {
+    FeriasEngine.cancelar(id, motivo, email);
+  }
+
+  function saldoFerias(idColaborador) {
+    var funcionarios = readJSON('funcionarios.json') || [];
+    var f = null;
+    for (var i = 0; i < funcionarios.length; i++) {
+      if (funcionarios[i].id === idColaborador) { f = funcionarios[i]; break; }
+    }
+    if (!f || !f.dataAdmissao) return { error: 'Colaborador ou data de admissão não encontrado.' };
+    return FeriasEngine.calcularSaldo(idColaborador, f.dataAdmissao);
   }
 
   // ── API pública ───────────────────────────────────────────────────
@@ -241,11 +434,28 @@ var RHEngine = (function () {
     salvarParametrosPCCS:salvarParametrosPCCS,
     aplicarReajuste:     aplicarReajuste,
     salvarTabelaRow:     salvarTabelaRow,
-    listarCargosPCCS:    listarCargosPCCS,
-    salvarCargoPCCS:     salvarCargoPCCS,
-    excluirCargoPCCS:    excluirCargoPCCS,
-    simularFolha:        simularFolha,
-    STATUS_VINCULO:      STATUS_VINCULO
+    listarCargosPCCS:      listarCargosPCCS,
+    salvarCargoPCCS:       salvarCargoPCCS,
+    excluirCargoPCCS:      excluirCargoPCCS,
+    simularFolha:          simularFolha,
+    simularFolhaDetalhada: simularFolhaDetalhada,
+    listarHistoricoFiltrado: listarHistoricoFiltrado,
+    registrarDesligamento:   registrarDesligamento,
+    calcularRescisao:        calcularRescisao,
+    salvarSimulacaoRescisao: salvarSimulacaoRescisao,
+    listarSimulacoesRescisao:listarSimulacoesRescisao,
+    listarRescisoes:         listarRescisoes,
+    obterRescisao:           obterRescisao,
+    listarFerias:          listarFerias,
+    solicitarFerias:       solicitarFerias,
+    aprovarFerias:         aprovarFerias,
+    reprovarFerias:        reprovarFerias,
+    solicitarAjusteFerias: solicitarAjusteFerias,
+    reenviarFerias:        reenviarFerias,
+    concluirFerias:        concluirFerias,
+    cancelarFerias:        cancelarFerias,
+    saldoFerias:           saldoFerias,
+    STATUS_VINCULO:        STATUS_VINCULO
   };
 
 })();

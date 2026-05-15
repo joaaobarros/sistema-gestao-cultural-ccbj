@@ -152,12 +152,50 @@
           <div id="acoes-d-desc-row" class="hidden"><i class="fas fa-align-left w-4 text-slate-400 align-top"></i> <span id="acoes-d-desc" class="whitespace-pre-wrap"></span></div>
         </div>
 
-        <!-- Recursos vinculados -->
+        <!-- Painel Integrado — tabs por módulo -->
         <div>
-          <p class="text-[10px] font-black text-slate-500 uppercase tracking-wide mb-2">Recursos Vinculados</p>
-          <div id="acoes-d-recursos-loading" class="hidden text-slate-400 text-xs"><i class="fas fa-spinner fa-spin mr-1"></i>Carregando...</div>
-          <div id="acoes-d-recursos-vazio" class="hidden text-slate-400 text-xs italic">Nenhum recurso vinculado.</div>
-          <ul id="acoes-d-recursos" class="space-y-1"></ul>
+          <div class="flex items-center justify-between mb-2">
+            <p class="text-[10px] font-black text-slate-500 uppercase tracking-wide">Painel Integrado</p>
+            <button onclick="_acoesCarregarPainelIntegrado(window._acoesDetalheAtual && window._acoesDetalheAtual.id)"
+              class="text-[9px] font-black text-slate-400 hover:text-purple-600 transition-colors uppercase tracking-wide">
+              <i class="fas fa-sync-alt mr-1"></i>Atualizar
+            </button>
+          </div>
+
+          <!-- Tabs -->
+          <div class="flex gap-1 mb-3" id="acoes-painel-tabs">
+            <button onclick="_acoesPainelTab('reservas')" id="acoes-tab-reservas"
+              class="acoes-tab acoes-tab-ativa flex-1 py-1.5 text-[9px] font-black rounded-lg uppercase tracking-wide transition-all bg-slate-800 text-white">
+              <i class="fas fa-calendar-alt mr-1"></i>Reservas
+            </button>
+            <button onclick="_acoesPainelTab('tarefas')" id="acoes-tab-tarefas"
+              class="acoes-tab flex-1 py-1.5 text-[9px] font-black rounded-lg uppercase tracking-wide transition-all bg-slate-100 text-slate-500 hover:bg-slate-200">
+              <i class="fas fa-check-square mr-1"></i>Tarefas
+            </button>
+            <button onclick="_acoesPainelTab('reunioes')" id="acoes-tab-reunioes"
+              class="acoes-tab flex-1 py-1.5 text-[9px] font-black rounded-lg uppercase tracking-wide transition-all bg-slate-100 text-slate-500 hover:bg-slate-200">
+              <i class="fas fa-users mr-1"></i>Reuniões
+            </button>
+          </div>
+
+          <div id="acoes-painel-loading" class="hidden text-slate-400 text-xs text-center py-3">
+            <i class="fas fa-spinner fa-spin mr-1"></i>Carregando dados...
+          </div>
+
+          <!-- Conteúdo das tabs -->
+          <div id="acoes-painel-reservas" class="acoes-painel-conteudo space-y-2"></div>
+          <div id="acoes-painel-tarefas"  class="acoes-painel-conteudo hidden space-y-2"></div>
+          <div id="acoes-painel-reunioes" class="acoes-painel-conteudo hidden space-y-2"></div>
+
+          <div id="acoes-painel-vazio" class="hidden text-slate-400 text-xs italic text-center py-3">
+            Nenhum item vinculado nesta categoria.
+          </div>
+
+          <!-- Ação rápida: vincular nova reserva -->
+          <button onclick="mostrarAba('aba-nova-reserva'); _acoesPreencherVinculoReserva(window._acoesDetalheAtual)"
+            class="mt-3 w-full py-2 text-[9px] font-black text-purple-600 border border-dashed border-purple-300 rounded-xl hover:bg-purple-50 transition-all uppercase tracking-wide">
+            <i class="fas fa-plus mr-1"></i>Nova Reserva para esta Ação
+          </button>
         </div>
 
         <!-- Editar -->

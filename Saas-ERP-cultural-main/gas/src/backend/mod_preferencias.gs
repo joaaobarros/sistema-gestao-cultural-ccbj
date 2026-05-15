@@ -11,26 +11,36 @@
 // ============================================================
 
 function salvarPreferenciasUsuario(chave, valor, emailFallback) {
-  const email = Session.getActiveUser().getEmail() || emailFallback || '';
+  const email = obterEmailUsuario(emailFallback || '');
   const sheet = _getSheet('PreferenciasUsuarios');
   if (!sheet) throw new Error("Aba PreferenciasUsuarios não encontrada.");
 
-  const dados = sheet.getDataRange().getValues();
-
-  for (let i = 1; i < dados.length; i++) {
-    if (dados[i][0] === email && dados[i][1] === chave) {
-      sheet.getRange(i + 1, 3).setValue(JSON.stringify(valor));
-      sheet.getRange(i + 1, 4).setValue(new Date());
-      return true;
-    }
+  // Lock para evitar race condition em salvamentos simultâneos
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+  } catch (e) {
+    throw new Error('Sistema ocupado ao salvar preferência. Tente novamente.');
   }
 
-  sheet.appendRow([email, chave, JSON.stringify(valor), new Date()]);
-  return true;
+  try {
+    const dados = sheet.getDataRange().getValues();
+    for (let i = 1; i < dados.length; i++) {
+      if (dados[i][0] === email && dados[i][1] === chave) {
+        sheet.getRange(i + 1, 3).setValue(JSON.stringify(valor));
+        sheet.getRange(i + 1, 4).setValue(new Date());
+        return true;
+      }
+    }
+    sheet.appendRow([email, chave, JSON.stringify(valor), new Date()]);
+    return true;
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function carregarPreferenciasUsuario(emailFallback) {
-  const email = Session.getActiveUser().getEmail() || emailFallback || '';
+  const email = obterEmailUsuario(emailFallback || '');
   const sheet = _getSheet('PreferenciasUsuarios');
   if (!sheet) return {};
 

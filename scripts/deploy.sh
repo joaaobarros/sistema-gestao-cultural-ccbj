@@ -3,7 +3,7 @@
 # Uso: ./scripts/deploy.sh
 set -e
 
-DEPLOYMENT_ID="AKfycbwP-0_0h8c4_c3UnDEEYt_TpzbmOI2DBgNzqUipOOH9VFpyHxDgNqT7G-GZSHV4t9Vz6A"
+DEPLOYMENT_ID="AKfycbxgRSzteN4178H4SROM8nLinARCjP8-QgqCXwVfYnxgYcHjh0r-LGlqhmLPnMBpmoGqiA"
 DESC="v$(date +%Y%m%d-%H%M)"
 
 echo "==> Enviando arquivos para o GAS (clasp push)..."
@@ -14,4 +14,4 @@ clasp deploy --deploymentId "${DEPLOYMENT_ID}" --description "${DESC}"
 
 echo ""
 echo "✅ Deploy concluído: ${DESC}"
-echo "   URL: https://script.google.com/a/macros/idm.org.br/s/${DEPLOYMENT_ID}/exec"
+echo "   URL: https://script.google.com/macros/s/${DEPLOYMENT_ID}/exec"

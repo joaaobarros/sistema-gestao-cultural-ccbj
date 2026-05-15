@@ -545,7 +545,7 @@ function gerarRelatorioIA(filtros) {
       return true;
     });
 
-    const emailAtivo = Session.getActiveUser().getEmail();
+    const emailAtivo = obterEmailUsuario('');
     const amostra = (
       filtros.usuario === "minhas"
         ? filtradas.filter((r) =>
@@ -653,7 +653,7 @@ function perguntarIA(pergunta) {
       )
       .join("\n");
 
-    const emailAtivo = Session.getActiveUser().getEmail().toLowerCase();
+    const emailAtivo = obterEmailUsuario('').toLowerCase();
     const ehUsuarioTeste = emailAtivo.includes("joao.barros");
 
     const prompt = `Você é o Bêjotinha, assistente de gestão de espaços do Centro Cultural Bom Jardim (CCBJ), Fortaleza/CE.

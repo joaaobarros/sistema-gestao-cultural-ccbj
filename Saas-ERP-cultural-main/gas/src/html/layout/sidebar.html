@@ -242,6 +242,22 @@
         </div>
       </div>
 
+      <!-- ── GOVERNANÇA (hidden — controlado por módulos) ──────── -->
+      <div class="mb-1 hidden" id="modulo-governanca">
+        <button onclick="toggleModulo('mod-governanca')"
+          class="w-full flex items-center justify-between px-3 py-2 text-[9px] font-black text-slate-500 uppercase tracking-widest hover:text-purple-300 transition-colors">
+          <span><i class="fas fa-gavel mr-2 text-slate-600"></i>Governança</span>
+          <i id="icon-mod-governanca" class="fas fa-chevron-up text-[8px] text-slate-600"></i>
+        </button>
+        <div id="mod-governanca" class="space-y-0.5 pl-2">
+          <button data-aba="aba-reunioes" class="tab-btn nav-item w-full hidden">
+            <i class="fas fa-comments w-5 text-center text-xs"></i>
+            <span class="text-xs font-semibold flex-1 text-left">Reuniões & Atas</span>
+            <span id="badgeEncAtrasados" class="hidden min-w-[18px] h-[18px] bg-red-500 text-white text-[9px] font-black rounded-full flex items-center justify-center px-1">0</span>
+          </button>
+        </div>
+      </div>
+
       <!-- ── INSTITUCIONAL (hidden — controlado por módulos) ── -->
       <div class="mb-1 hidden" id="modulo-institucional">
         <button onclick="toggleModulo('mod-institucional')"

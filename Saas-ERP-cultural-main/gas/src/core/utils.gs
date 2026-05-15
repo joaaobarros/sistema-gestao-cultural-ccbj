@@ -110,10 +110,14 @@ const ABA_PARA_MODULO = {
   'Acoes':                'ACOES',
   'AcoesRecursos':        'ACOES',
   'Habilitacoes':         'ACOES',
-  'HabDiaria':            'ACOES',
+  'HabDiaria':            'ESPACOS',
 
   // OBSERVABILIDADE (EventLog na MASTER)
   'EventLog':             'MASTER',
+
+  // REUNIÕES E ATAS (índices — dados completos em JSON via DataLayer)
+  'Reunioes':             'REUNIOES',
+  'EncaminhamentosAta':   'REUNIOES',
 };
 
 // ══════════════════════════════════════════════════════

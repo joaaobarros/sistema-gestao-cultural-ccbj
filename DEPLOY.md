@@ -3,7 +3,7 @@
 ## URL permanente do sistema
 
 ```
-https://script.google.com/a/macros/idm.org.br/s/AKfycbwP-0_0h8c4_c3UnDEEYt_TpzbmOI2DBgNzqUipOOH9VFpyHxDgNqT7G-GZSHV4t9Vz6A/exec
+https://script.google.com/macros/s/AKfycbxgRSzteN4178H4SROM8nLinARCjP8-QgqCXwVfYnxgYcHjh0r-LGlqhmLPnMBpmoGqiA/exec
 ```
 
 **Esta URL é vinculada ao Deployment ID, não ao projeto.**  
@@ -14,7 +14,7 @@ Nunca use `clasp deploy` sem `--deploymentId` — isso cria uma nova URL.
 ## Deployment ID fixo
 
 ```
-AKfycbwP-0_0h8c4_c3UnDEEYt_TpzbmOI2DBgNzqUipOOH9VFpyHxDgNqT7G-GZSHV4t9Vz6A
+AKfycbxgRSzteN4178H4SROM8nLinARCjP8-QgqCXwVfYnxgYcHjh0r-LGlqhmLPnMBpmoGqiA
 ```
 
 ---
@@ -34,7 +34,7 @@ clasp push
 ### 3. Atualizar o deployment existente (preserva URL)
 ```bash
 clasp deploy \
-  --deploymentId AKfycbwP-0_0h8c4_c3UnDEEYt_TpzbmOI2DBgNzqUipOOH9VFpyHxDgNqT7G-GZSHV4t9Vz6A \
+  --deploymentId AKfycbxgRSzteN4178H4SROM8nLinARCjP8-QgqCXwVfYnxgYcHjh0r-LGlqhmLPnMBpmoGqiA \
   --description "v$(date +%Y%m%d-%H%M)"
 ```
 
@@ -51,7 +51,7 @@ clasp deploy \
 #!/usr/bin/env bash
 set -e
 
-DEPLOYMENT_ID="AKfycbwP-0_0h8c4_c3UnDEEYt_TpzbmOI2DBgNzqUipOOH9VFpyHxDgNqT7G-GZSHV4t9Vz6A"
+DEPLOYMENT_ID="AKfycbxgRSzteN4178H4SROM8nLinARCjP8-QgqCXwVfYnxgYcHjh0r-LGlqhmLPnMBpmoGqiA"
 DESC="v$(date +%Y%m%d-%H%M)"
 
 echo "==> Enviando arquivos para o GAS..."
@@ -61,7 +61,7 @@ echo "==> Atualizando deployment: $DEPLOYMENT_ID"
 clasp deploy --deploymentId "$DEPLOYMENT_ID" --description "$DESC"
 
 echo "✅ Deploy concluído: $DESC"
-echo "   URL: https://script.google.com/a/macros/idm.org.br/s/${DEPLOYMENT_ID}/exec"
+echo "   URL: https://script.google.com/macros/s/${DEPLOYMENT_ID}/exec"
 ```
 
 ---

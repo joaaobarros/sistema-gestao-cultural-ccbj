@@ -43,6 +43,7 @@ const PROP = {
   PESSOAL:      'SHEET_ID_PESSOAL',
   ESCUTA:       'SHEET_ID_ESCUTA',
   ACOES:        'SHEET_ID_ACOES',
+  REUNIOES:     'SHEET_ID_REUNIOES',
   FOLDER_ROOT:  'FOLDER_ID_ROOT',
   DATA:         'FOLDER_ID_DATA',      // pasta CCBJ_DATA do DataLayer
 };
@@ -62,6 +63,8 @@ const _DATA_FILES = [
   'tarefas.json', 'processos.json', 'demandas.json', 'atendimentos.json',
   // Almoxarifado
   'almoxarifado.json', 'movimentacoes_almox.json',
+  // Reuniões e Encaminhamentos
+  'reunioes.json', 'encaminhamentos.json',
 ];
 
 // ── Estrutura de cada módulo ─────────────────────────────────────────────
@@ -258,6 +261,14 @@ const MODULOS = {
       'ID','ProtocoloId','ChaveId','DataHora',
       'Acao','UsuarioId','UsuarioNome',
       'StatusAnterior','StatusNovo','Observacoes','AgenteOrigem'
+    ],
+
+    // =========================
+    // HABILITAÇÃO DIÁRIA
+    // =========================
+    'HabDiaria': [
+      'id', 'reserva_id', 'sala_id', 'data', 'hora_evento', 'hora_habilitacao',
+      'responsavel', 'responsavel_nome', 'observacao', 'criado_em'
     ]
 
     }
@@ -581,9 +592,25 @@ const MODULOS = {
         'descricao', 'status', 'data_envio', 'data_analise', 'responsavel_analise',
         'observacoes', 'documentos', 'criado_por', 'criado_em', 'atualizado_em'
       ],
-      'HabDiaria': [
-        'id', 'reserva_id', 'sala_id', 'data', 'hora_evento', 'hora_habilitacao',
-        'responsavel', 'responsavel_nome', 'observacao', 'criado_em'
+    }
+  },
+
+  REUNIOES: {
+    nome:  'CCBJ_REUNIOES',
+    pasta: 'CCBJ — Governança',
+    prop:  PROP.REUNIOES,
+    abas: {
+      // Índice de reuniões para relatórios (dados completos em reunioes.json)
+      'Reunioes': [
+        'id', 'titulo', 'tipo', 'data', 'horaInicio', 'horaTermino',
+        'local', 'modalidade', 'status', 'organizador', 'sigilosa',
+        'totalParticipantes', 'totalEncaminhamentos', 'criadoEm'
+      ],
+      // Índice de encaminhamentos para relatórios (dados completos em encaminhamentos.json)
+      'EncaminhamentosAta': [
+        'id', 'reuniaoId', 'reuniaoTitulo', 'titulo', 'responsavel',
+        'prazo', 'prioridade', 'status', 'incompleto', 'tarefaId',
+        'criadoEm', 'atualizadoEm'
       ],
     }
   },
@@ -601,6 +628,7 @@ const COR_MODULO = {
   PESSOAL:     '#3B0764',
   ESCUTA:      '#0F4C75',
   ACOES:       '#7C3AED',
+  REUNIOES:    '#0D47A1',
 }
 
 

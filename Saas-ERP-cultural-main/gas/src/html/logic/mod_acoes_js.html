@@ -219,31 +219,131 @@ function _acoesAbrirDetalhe(id) {
   document.getElementById('acoes-painel').classList.remove('hidden');
 }
 
+// ─── Painel Integrado — dados enriquecidos por módulo ────────────────────────
+
+var _acoesPainelDados = null;   // cache do último painel carregado
+var _acoesPainelTabAtiva = 'reservas';
+
 function _acoesCarregarRecursos(acaoId) {
-  var loading = document.getElementById('acoes-d-recursos-loading');
-  var vazio   = document.getElementById('acoes-d-recursos-vazio');
-  var lista   = document.getElementById('acoes-d-recursos');
+  _acoesCarregarPainelIntegrado(acaoId);
+}
 
-  loading.classList.remove('hidden');
-  vazio.classList.add('hidden');
-  lista.innerHTML = '';
-
-  GAS.acoes.obterRecursos(acaoId, function(recursos) {
-    loading.classList.add('hidden');
-    if (!recursos || !recursos.length) { vazio.classList.remove('hidden'); return; }
-
-    var iconePorTipo = { reserva: 'fa-calendar-alt', contrato: 'fa-file-contract',
-                         chave: 'fa-key', tarefa: 'fa-check-square', relatorio: 'fa-chart-bar' };
-
-    lista.innerHTML = recursos.map(function(r) {
-      var icone = iconePorTipo[r.tipo] || 'fa-link';
-      return '<li class="flex items-center gap-2 text-xs text-slate-600">' +
-             '<i class="fas ' + icone + ' text-slate-400 w-4 text-center text-[10px]"></i>' +
-             '<span class="font-semibold text-slate-500 uppercase text-[9px]">' + escaparHTML(r.tipo) + '</span>' +
-             '<span class="text-slate-400 font-mono text-[9px] truncate">' + escaparHTML(String(r.recursoId)) + '</span>' +
-             '</li>';
-    }).join('');
+function _acoesCarregarPainelIntegrado(acaoId) {
+  if (!acaoId) return;
+  var loading = document.getElementById('acoes-painel-loading');
+  var vazio   = document.getElementById('acoes-painel-vazio');
+  ['reservas','tarefas','reunioes'].forEach(function(t) {
+    var el = document.getElementById('acoes-painel-' + t);
+    if (el) el.innerHTML = '';
   });
+  if (loading) loading.classList.remove('hidden');
+  if (vazio)   vazio.classList.add('hidden');
+
+  GAS.acoes.painelIntegrado(acaoId, function(painel) {
+    _acoesPainelDados = painel || { reservas: [], tarefas: [], reunioes: [], outros: [] };
+    if (loading) loading.classList.add('hidden');
+    _acoesPainelRenderizar(_acoesPainelTabAtiva);
+  }, function() {
+    if (loading) loading.classList.add('hidden');
+    if (vazio)   vazio.classList.remove('hidden');
+  });
+}
+
+function _acoesPainelTab(tipo) {
+  _acoesPainelTabAtiva = tipo;
+  // Tabs visuais
+  document.querySelectorAll('.acoes-tab').forEach(function(btn) {
+    btn.className = 'acoes-tab flex-1 py-1.5 text-[9px] font-black rounded-lg uppercase tracking-wide transition-all bg-slate-100 text-slate-500 hover:bg-slate-200';
+  });
+  var ativa = document.getElementById('acoes-tab-' + tipo);
+  if (ativa) ativa.className = 'acoes-tab acoes-tab-ativa flex-1 py-1.5 text-[9px] font-black rounded-lg uppercase tracking-wide transition-all bg-slate-800 text-white';
+  // Painéis
+  document.querySelectorAll('.acoes-painel-conteudo').forEach(function(el) { el.classList.add('hidden'); });
+  var painel = document.getElementById('acoes-painel-' + tipo);
+  if (painel) painel.classList.remove('hidden');
+  _acoesPainelRenderizar(tipo);
+}
+
+function _acoesPainelRenderizar(tipo) {
+  var dados = _acoesPainelDados;
+  if (!dados) return;
+
+  var vazio = document.getElementById('acoes-painel-vazio');
+  var container = document.getElementById('acoes-painel-' + tipo);
+  if (!container) return;
+
+  var items = dados[tipo] || [];
+
+  if (!items.length) {
+    container.innerHTML = '';
+    if (vazio) vazio.classList.remove('hidden');
+    return;
+  }
+  if (vazio) vazio.classList.add('hidden');
+
+  if (tipo === 'reservas') {
+    var corStatus = { CONFIRMADA:'bg-blue-100 text-blue-700', HABILITADA:'bg-emerald-100 text-emerald-700',
+      CANCELADA:'bg-red-100 text-red-600', PENDENTE:'bg-amber-100 text-amber-700' };
+    container.innerHTML = items.map(function(r) {
+      var cor = corStatus[String(r.status).toUpperCase()] || 'bg-slate-100 text-slate-500';
+      return '<div class="bg-slate-50 border border-slate-100 rounded-xl p-3 space-y-1">' +
+        '<div class="flex items-center justify-between gap-2">' +
+        '<p class="text-xs font-bold text-slate-800 truncate">' + escaparHTML(r.nome || '–') + '</p>' +
+        '<span class="shrink-0 text-[8px] font-black px-2 py-0.5 rounded-full uppercase ' + cor + '">' + escaparHTML(r.status) + '</span>' +
+        '</div>' +
+        '<p class="text-[10px] text-slate-500"><i class="fas fa-map-marker-alt mr-1 text-slate-300"></i>' + escaparHTML(r.sala || '–') + '</p>' +
+        '<p class="text-[10px] text-slate-500"><i class="fas fa-clock mr-1 text-slate-300"></i>' + escaparHTML(String(r.data||'')) + ' · ' + escaparHTML(r.inicio||'') + '–' + escaparHTML(r.fim||'') + '</p>' +
+        '<p class="text-[10px] text-slate-400"><i class="fas fa-user mr-1 text-slate-300"></i>' + escaparHTML(r.responsavel||'') + '</p>' +
+        '</div>';
+    }).join('');
+
+  } else if (tipo === 'tarefas') {
+    var corPrio = { critica:'bg-red-100 text-red-700', alta:'bg-orange-100 text-orange-700',
+      media:'bg-amber-100 text-amber-700', baixa:'bg-slate-100 text-slate-500' };
+    var labelStatusT = { solicitada:'Solicitada', em_analise:'Em Análise', em_execucao:'Em Execução',
+      aguardando_doc:'Aguard. Doc', aguardando_aprovacao:'Aguard. Aprovação',
+      bloqueada:'Bloqueada', concluida:'Concluída', cancelada:'Cancelada', backlog:'Backlog' };
+    container.innerHTML = items.map(function(t) {
+      var cor = corPrio[t.prioridade] || 'bg-slate-100 text-slate-500';
+      return '<div class="bg-slate-50 border border-slate-100 rounded-xl p-3 space-y-1">' +
+        '<div class="flex items-start justify-between gap-2">' +
+        '<p class="text-xs font-bold text-slate-800 leading-snug flex-1">' + escaparHTML(t.titulo||'–') + '</p>' +
+        '<span class="shrink-0 text-[8px] font-black px-2 py-0.5 rounded-full uppercase ' + cor + '">' + escaparHTML(t.prioridade||'') + '</span>' +
+        '</div>' +
+        '<p class="text-[10px] text-slate-500 font-semibold">' + escaparHTML(labelStatusT[t.status] || t.status) + '</p>' +
+        (t.prazo ? '<p class="text-[10px] text-slate-400"><i class="fas fa-flag mr-1 text-slate-300"></i>' + escaparHTML(t.prazo) + '</p>' : '') +
+        '<p class="text-[10px] text-slate-400"><i class="fas fa-user mr-1 text-slate-300"></i>' + escaparHTML(t.responsavel||'') + '</p>' +
+        '</div>';
+    }).join('');
+
+  } else if (tipo === 'reunioes') {
+    var labelStatusR = { planejada:'Planejada', agendada:'Agendada', em_andamento:'Em Andamento',
+      finalizada:'Finalizada', ata_rascunho:'Ata Rascunho', ata_aprovada:'Ata Aprovada',
+      arquivada:'Arquivada', cancelada:'Cancelada' };
+    container.innerHTML = items.map(function(r) {
+      return '<div class="bg-slate-50 border border-slate-100 rounded-xl p-3 space-y-1">' +
+        '<p class="text-xs font-bold text-slate-800 truncate">' + escaparHTML(r.titulo||'–') + '</p>' +
+        '<p class="text-[10px] text-slate-500 font-semibold">' + escaparHTML(labelStatusR[r.status] || r.status) + '</p>' +
+        '<p class="text-[10px] text-slate-400"><i class="fas fa-calendar mr-1 text-slate-300"></i>' + escaparHTML(r.data||'') + '</p>' +
+        '<p class="text-[10px] text-slate-400"><i class="fas fa-map-marker-alt mr-1 text-slate-300"></i>' + escaparHTML(r.local||'') + '</p>' +
+        '</div>';
+    }).join('');
+  }
+}
+
+// Ação rápida: ao clicar em "Nova Reserva para esta Ação", pré-seleciona a ação no card de vínculo
+function _acoesPreencherVinculoReserva(acao) {
+  if (!acao || !acao.id) return;
+  // Seleciona radio "Vinculado a Ação"
+  var radio = document.getElementById('vinculoAcao');
+  if (radio) { radio.checked = true; if (typeof alternarVinculo === 'function') alternarVinculo('acao'); }
+  // Pré-preenche a ação selecionada
+  if (typeof selecionarAcaoVinculo === 'function') {
+    selecionarAcaoVinculo(acao.id, acao.nome);
+  }
+  // Pré-preenche o título com o nome da ação
+  var inputNome = document.getElementById('inputNomeAcao');
+  if (inputNome && !inputNome.value) inputNome.value = acao.nome || '';
 }
 
 // ─────────────────────────────────────────────────────────────

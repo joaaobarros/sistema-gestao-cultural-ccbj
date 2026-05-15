@@ -538,6 +538,9 @@ async function salvarAgendamento() {
     ? _codipColetarPayload()
     : {});
 
+  // Coleta vínculos institucionais (acaoId / tarefaId) se o card existir
+  const _vinculo = (typeof _obterVinculoPayload === 'function') ? _obterVinculoPayload() : {};
+
   const dados = {
     id:            document.getElementById('inputReservaId')?.value || null,
     nomeAcao:      nomeAcaoEl.value.trim().toUpperCase(),
@@ -556,6 +559,8 @@ async function salvarAgendamento() {
     tipoAcao:      'EVENTO/ATIVIDADE',
     imagem:        imagemInput?.value?.trim() || '',
     modoRece:      typeof modoRece !== 'undefined' ? modoRece : false,
+    acaoId:        _vinculo.acaoId   || null,
+    tarefaId:      _vinculo.tarefaId || null,
 
     ...codipData
   };

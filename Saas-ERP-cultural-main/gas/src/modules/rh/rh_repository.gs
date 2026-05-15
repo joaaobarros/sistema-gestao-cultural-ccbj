@@ -23,7 +23,9 @@ var RHRepository = (function () {
     var lista  = _listar(arquivo);
     var isNovo = !dados.id;
     if (isNovo) {
-      dados.id       = prefixo + '_' + Date.now();
+      dados.id       = typeof gerarId === 'function'
+        ? gerarId(prefixo)
+        : prefixo + '_' + Date.now() + '_' + Math.random().toString(36).slice(2, 5);
       dados.criadoEm = new Date().toISOString();
       lista.push(dados);
     } else {
@@ -73,7 +75,10 @@ var RHRepository = (function () {
   function listarPonto(idColaborador, mes) {
     var lista = _listar('rh_ponto.json');
     if (idColaborador) lista = lista.filter(function(p) { return p.idColaborador === idColaborador; });
-    if (mes)           lista = lista.filter(function(p) { return (p.mes || '').startsWith(mes); });
+    // Compatibilidade: dados novos usam campo 'mes' (YYYY-MM), legado usa 'data' (YYYY-MM-DD)
+    if (mes) lista = lista.filter(function(p) {
+      return (p.mes || '').startsWith(mes) || (p.data || '').startsWith(mes);
+    });
     return lista;
   }
 
@@ -113,6 +118,44 @@ var RHRepository = (function () {
 
   function salvarPerfilSocial(d) { return _salvar('rh_social.json', d, 'soc'); }
 
+  // ── Férias ───────────────────────────────────────────────────────
+
+  function listarFerias(idColaborador) {
+    var lista = _listar('rh_ferias.json');
+    if (idColaborador) lista = lista.filter(function (f) { return f.idColaborador === idColaborador; });
+    return lista.sort(function (a, b) { return (b.criadoEm || '') < (a.criadoEm || '') ? -1 : 1; });
+  }
+
+  function salvarFerias(d)   { return _salvar('rh_ferias.json', d, 'fer'); }
+  function excluirFerias(id) { _excluir('rh_ferias.json', id); }
+
+  // ── Rescisão ──────────────────────────────────────────────────────
+
+  // Simulações (não oficiais) — arquivo separado das rescisões efetivadas
+  function listarSimulacoesRescisao(idColaborador) {
+    var lista = _listar('rh_simulacoes_rescisao.json');
+    if (idColaborador) lista = lista.filter(function(r) { return r.idColaborador === idColaborador; });
+    return lista.sort(function(a, b) { return (b.criadoEm || '') < (a.criadoEm || '') ? -1 : 1; });
+  }
+
+  function salvarSimulacaoRescisao(d) { return _salvar('rh_simulacoes_rescisao.json', d, 'sim'); }
+
+  function listarRescisoes(idColaborador) {
+    var lista = _listar('rh_rescisoes.json');
+    if (idColaborador) lista = lista.filter(function(r) { return r.idColaborador === idColaborador; });
+    return lista.sort(function(a, b) { return (b.criadoEm || '') < (a.criadoEm || '') ? -1 : 1; });
+  }
+
+  function salvarRescisao(d)   { return _salvar('rh_rescisoes.json', d, 'rsc'); }
+
+  function obterRescisao(id) {
+    var lista = _listar('rh_rescisoes.json');
+    for (var i = 0; i < lista.length; i++) {
+      if (lista[i].id === id) return lista[i];
+    }
+    return null;
+  }
+
   // ── PCCS ─────────────────────────────────────────────────────────
 
   function obterParametrosPCCS()        { return readJSON('rh_pccs_params.json') || {}; }
@@ -147,13 +190,21 @@ var RHRepository = (function () {
     salvarFolha:         salvarFolha,
     obterPerfilSocial:   obterPerfilSocial,
     salvarPerfilSocial:  salvarPerfilSocial,
+    listarFerias:        listarFerias,
+    salvarFerias:        salvarFerias,
+    excluirFerias:       excluirFerias,
     obterParametrosPCCS: obterParametrosPCCS,
     salvarParametrosPCCS:salvarParametrosPCCS,
     listarTabelaPCCS:    listarTabelaPCCS,
     salvarTabelaRowPCCS: salvarTabelaRowPCCS,
     listarCargosPCCS:    listarCargosPCCS,
     salvarCargoPCCS:     salvarCargoPCCS,
-    excluirCargoPCCS:    excluirCargoPCCS
+    excluirCargoPCCS:    excluirCargoPCCS,
+    listarSimulacoesRescisao: listarSimulacoesRescisao,
+    salvarSimulacaoRescisao:  salvarSimulacaoRescisao,
+    listarRescisoes:          listarRescisoes,
+    salvarRescisao:           salvarRescisao,
+    obterRescisao:            obterRescisao
   };
 
 })();

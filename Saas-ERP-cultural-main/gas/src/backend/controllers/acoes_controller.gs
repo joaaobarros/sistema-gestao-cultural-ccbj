@@ -40,13 +40,82 @@ function ctrl_acoes_obter(id) {
 }
 
 /**
- * Retorna recursos associados a uma Ação.
+ * Retorna recursos associados a uma Ação (lista bruta de IDs e tipos).
  * @param {string} acaoId
  */
 function ctrl_acoes_obter_recursos(acaoId) {
   return GasResponse.wrap(function() {
     return obterRecursosDaAcao(acaoId);
   });
+}
+
+/**
+ * Retorna painel integrado enriquecido: para cada recurso vinculado à Ação,
+ * busca os dados reais da entidade (nome, status, datas, responsável).
+ * Estrutura de retorno: { reservas[], tarefas[], reunioes[], outros[] }
+ * @param {string} acaoId
+ */
+function ctrl_acoes_obter_painel_integrado(acaoId) {
+  return GasResponse.wrap(function() {
+    if (!acaoId) throw new Error('acaoId é obrigatório.');
+
+    var recursos = obterRecursosDaAcao(acaoId);
+    var resultado = { reservas: [], tarefas: [], reunioes: [], outros: [] };
+
+    recursos.forEach(function(r) {
+      try {
+        if (r.tipo === 'reserva') {
+          var linha = ReservaRepository.buscarPorId(r.recursoId);
+          if (linha) {
+            resultado.reservas.push({
+              id:          r.recursoId,
+              nome:        String(linha[6]  || ''),
+              sala:        String(linha[4]  || ''),
+              data:        String(linha[1]  || ''),
+              inicio:      String(linha[2]  || ''),
+              fim:         String(linha[3]  || ''),
+              status:      String(linha[13] || ''),
+              responsavel: String(linha[8]  || ''),
+              setor:       String(linha[9]  || ''),
+              associadoEm: r.associadoEm
+            });
+          }
+        } else if (r.tipo === 'tarefa') {
+          var tarefa = TarefaRepository.obterPorId(r.recursoId);
+          if (tarefa) {
+            resultado.tarefas.push({
+              id:          r.recursoId,
+              titulo:      tarefa.titulo      || '',
+              status:      tarefa.status      || '',
+              prioridade:  tarefa.prioridade  || '',
+              responsavel: tarefa.responsavel || '',
+              prazo:       tarefa.prazo       || '',
+              associadoEm: r.associadoEm
+            });
+          }
+        } else if (r.tipo === 'reuniao') {
+          var reuniao = ReunioesRepository.obterReuniaoPorId(r.recursoId);
+          if (reuniao) {
+            resultado.reunioes.push({
+              id:          r.recursoId,
+              titulo:      reuniao.titulo      || '',
+              status:      reuniao.status      || '',
+              data:        reuniao.data        || '',
+              local:       reuniao.local       || '',
+              organizador: reuniao.organizador || '',
+              associadoEm: r.associadoEm
+            });
+          }
+        } else {
+          resultado.outros.push(r);
+        }
+      } catch (e) {
+        Logger.warn('ctrl_acoes_obter_painel_integrado', 'Falha ao enriquecer recurso ' + r.tipo + ':' + r.recursoId, e.message);
+      }
+    });
+
+    return resultado;
+  }, 'ctrl_acoes_obter_painel_integrado');
 }
 
 // ═══════════════════════════════════════════════════════════════

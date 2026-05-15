@@ -1086,6 +1086,61 @@
                 </div>
               </div>
 
+              <!-- Card: Vinculação Institucional -->
+              <div class="bg-white rounded-3xl shadow-sm border border-slate-200 p-6">
+                <h3 class="text-lg font-black text-slate-800 uppercase tracking-tighter mb-4">
+                  <i class="fas fa-link text-indigo-500 mr-2"></i>Vinculação Institucional
+                </h3>
+                <p class="text-[10px] text-slate-400 mb-4">Esta reserva está relacionada a alguma iniciativa em andamento?</p>
+
+                <!-- Radio: tipo de vínculo -->
+                <div class="flex flex-col gap-2 mb-4">
+                  <label class="flex items-center gap-2 cursor-pointer group">
+                    <input type="radio" name="tipoVinculo" value="independente" id="vinculoIndependente" checked
+                      onchange="alternarVinculo('independente')"
+                      class="w-4 h-4 accent-slate-500">
+                    <span class="text-xs font-bold text-slate-600 group-hover:text-slate-800">Agendamento independente</span>
+                  </label>
+                  <label class="flex items-center gap-2 cursor-pointer group">
+                    <input type="radio" name="tipoVinculo" value="acao" id="vinculoAcao"
+                      onchange="alternarVinculo('acao')"
+                      class="w-4 h-4 accent-purple-600">
+                    <span class="text-xs font-bold text-purple-700 group-hover:text-purple-900">Vinculado a uma Ação</span>
+                  </label>
+                  <label class="flex items-center gap-2 cursor-pointer group">
+                    <input type="radio" name="tipoVinculo" value="tarefa" id="vinculoTarefa"
+                      onchange="alternarVinculo('tarefa')"
+                      class="w-4 h-4 accent-teal-600">
+                    <span class="text-xs font-bold text-teal-700 group-hover:text-teal-900">Vinculado a uma Tarefa</span>
+                  </label>
+                </div>
+
+                <!-- Painel Ação -->
+                <div id="painelVinculoAcao" class="hidden space-y-2">
+                  <label class="text-[10px] font-black text-slate-500 uppercase tracking-wide">Buscar Ação</label>
+                  <input type="text" id="inputVinculoAcaoBusca" placeholder="Digite para buscar..."
+                    oninput="buscarAcoesVinculo(this.value)"
+                    class="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-400">
+                  <div id="vinculoAcaoResultados" class="hidden bg-white border border-slate-200 rounded-xl shadow-lg max-h-40 overflow-y-auto divide-y divide-slate-100"></div>
+                  <div id="vinculoAcaoSelecionada" class="hidden flex items-center gap-2 bg-purple-50 border border-purple-200 rounded-xl px-3 py-2">
+                    <i class="fas fa-theater-masks text-purple-500 text-xs"></i>
+                    <span id="vinculoAcaoNome" class="text-xs font-bold text-purple-700 flex-1 truncate"></span>
+                    <button type="button" onclick="limparVinculoAcao()" class="text-purple-400 hover:text-purple-700 text-xs"><i class="fas fa-times"></i></button>
+                  </div>
+                  <input type="hidden" id="inputVinculoAcaoId">
+                </div>
+
+                <!-- Painel Tarefa -->
+                <div id="painelVinculoTarefa" class="hidden space-y-2">
+                  <label class="text-[10px] font-black text-slate-500 uppercase tracking-wide">Selecionar Tarefa</label>
+                  <select id="selectVinculoTarefaId"
+                    class="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-400">
+                    <option value="">Carregando suas tarefas...</option>
+                  </select>
+                  <p class="text-[9px] text-slate-400">Apenas tarefas em andamento da sua fila são exibidas.</p>
+                </div>
+              </div>
+
               <div class="flex flex-col gap-3">
                 <button type="submit"
                   class="w-full bg-purple-600 hover:bg-purple-700 text-white font-black py-4 rounded-2xl shadow-lg shadow-purple-500/30 transition-all flex items-center justify-center gap-3 uppercase tracking-widest text-sm">

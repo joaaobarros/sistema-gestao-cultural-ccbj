@@ -105,10 +105,25 @@ function iniciarSessaoGAS(credencialOuEmail, emailFallback) {
       return { ok: false, msg: 'Não foi possível identificar o usuário. Faça login com sua conta Google institucional.' };
     }
 
-    // 3. Gerar token de sessão
+    // 3. Verificar domínio permitido (cobre também o caminho JWT, que não passa por _validarEmailAutorizado)
+    var dominiosConf = '';
+    try { dominiosConf = PropertiesService.getScriptProperties().getProperty('DOMINIOS_PERMITIDOS') || ''; } catch(e) {}
+    if (dominiosConf) {
+      var dominiosPermitidos = dominiosConf.split(',').map(function(d) { return d.trim().toLowerCase(); });
+      var dominioEmail = (email.split('@')[1] || '').toLowerCase();
+      if (dominiosPermitidos.length > 0 && dominiosPermitidos.indexOf(dominioEmail) < 0) {
+        return {
+          ok: false,
+          msg: 'Conta Google não autorizada. Apenas domínios ' + dominiosConf + ' têm acesso a este sistema.',
+          dominioNaoPermitido: true
+        };
+      }
+    }
+
+    // 4. Gerar token de sessão
     var sessaoId = _gerarTokenSessao(email);
 
-    // 4. Determinar nível de acesso para retornar ao frontend
+    // 5. Determinar nível de acesso para retornar ao frontend
     var nivel = _resolverNivelAcesso(email);
 
     _registrarLogSessao(email, 'iniciar_sessao');

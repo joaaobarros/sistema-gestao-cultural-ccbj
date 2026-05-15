@@ -1344,11 +1344,36 @@ function criarReservaController(dados, datas) {
       SystemEvents.emit(SystemEventTypes.RESERVATION_CREATED, {
         entidade: 'reserva', entidadeId: id,
         usuario: responsavelNorm, origem: 'mod_reservas',
-        contexto: { sala: dados.sala, data: dados.data || (datas && datas[0]) }
+        contexto: {
+          sala:     dados.sala,
+          data:     dados.data || (datas && datas[0]),
+          acaoId:   dados.acaoId   || null,
+          tarefaId: dados.tarefaId || null
+        }
       });
-      // Vincula reserva a uma Ação institucional quando informada (vínculo fraco)
+      // Vincula reserva a Ação institucional (vínculo fraco via AcoesRecursos)
       if (dados.acaoId) {
         try { associarRecurso(dados.acaoId, 'reserva', id, responsavelNorm); } catch(_) {}
+      }
+      // Vincula reserva a Tarefa: registra associação e adiciona comentário à tarefa
+      if (dados.tarefaId) {
+        try {
+          // Cria vínculo reverso: registra tarefa como recurso da ação (se houver ação)
+          // e registra a reserva no histórico da tarefa via comentário
+          var textoComentario = 'Reserva vinculada: ' + dados.nomeAcao +
+            ' | Espaço: ' + dados.sala +
+            ' | Data: ' + (dados.data || (datas && datas[0]) || '') +
+            ' | Horário: ' + dados.horaInicio + '–' + dados.horaTermino +
+            ' | ID: ' + id;
+          TarefaEngine.registrarComentario(dados.tarefaId, textoComentario, responsavelNorm);
+        } catch(_) {}
+        try {
+          SystemEvents.emit(SystemEventTypes.RESERVATION_CREATED, {
+            entidade: 'tarefa', entidadeId: dados.tarefaId,
+            usuario: responsavelNorm, origem: 'mod_reservas',
+            contexto: { evento: 'reserva_vinculada', reservaId: id, sala: dados.sala }
+          });
+        } catch(_) {}
       }
     });
 

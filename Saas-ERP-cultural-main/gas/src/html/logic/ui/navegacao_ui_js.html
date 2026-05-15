@@ -64,7 +64,8 @@ function mostrarAba(idAba) {
       'aba-dashboard':          'estrategia',
       'aba-gestao-admin':       'sistema',
       'aba-auditoria':          'sistema',
-      'aba-permissoes-v2':      'sistema'
+      'aba-permissoes-v2':      'sistema',
+      'aba-reunioes':           'reunioes'
     };
 
     // Gestão de Módulos: exclusivo SUPERADMIN (hardcoded)
@@ -123,7 +124,8 @@ function mostrarAba(idAba) {
       'aba-protocolo-chaves':  'Protocolo de Chaves',
       'aba-gestao-modulos':    'Gestão de Módulos',
       'aba-acoes':             'Ações Institucionais',
-      'aba-habilitacoes':      'Credenciamento'
+      'aba-habilitacoes':      'Credenciamento',
+      'aba-reunioes':          'Reuniões & Atas'
     };
 
     const titulo = document.getElementById('tituloAba');
@@ -284,6 +286,7 @@ var _abaParaModuloId = {
   'aba-rel-financeiros':  'relatorios_fin',
   'aba-escuta':           'escuta',
   'aba-codip':            'codip',
+  'aba-reunioes':         'reunioes',
   // Sistema (núcleo): mapeados para que aplicarEstadoModulos possa aplicar
   // o flag apenasSuperadmin do registry sem precisar de data-requer-permissao hardcoded.
   'aba-gestao-modulos':   'gestao_modulos'
@@ -298,7 +301,7 @@ function _autoHideGruposVazios() {
     'modulo-espacos-grp', 'modulo-programacao', 'modulo-operacional',
     'modulo-comunicacao-grp', 'modulo-infraestrutura-grp', 'modulo-estrategia-grp',
     'modulo-trabalho', 'modulo-pessoas',
-    'modulo-financeiro', 'modulo-institucional'
+    'modulo-financeiro', 'modulo-institucional', 'modulo-governanca'
   ];
   GRUPOS.forEach(function(grupoId) {
     var wrapper = document.getElementById(grupoId);

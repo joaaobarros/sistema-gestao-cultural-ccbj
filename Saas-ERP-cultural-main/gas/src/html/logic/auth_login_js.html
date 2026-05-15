@@ -186,6 +186,9 @@ function _loginGSICallback(response) {
       _loginSetBusy(false);
       if (res && res.ok) {
         _loginAplicarSessao(res.sessao || res.token, res.email, res.nome || '');
+      } else if (res && res.dominioNaoPermitido) {
+        // Conta Google de domínio não autorizado → redireciona para login por senha
+        _loginFocarSenha(res.msg || 'Conta Google não autorizada para este sistema.');
       } else {
         _loginMostrarErro((res && res.msg) || 'Conta Google não autorizada.');
       }
@@ -196,6 +199,41 @@ function _loginGSICallback(response) {
       console.error('[Login GSI]', err);
     })
     .iniciarSessaoGAS(response.credential, null);
+}
+
+/**
+ * Chamado quando a conta Google não pertence ao domínio autorizado.
+ * Oculta o bloco GSI, exibe o erro e foca o formulário de email+senha.
+ */
+function _loginFocarSenha(erroMsg) {
+  _loginMostrarErro(erroMsg || 'Conta Google não autorizada. Use seu login e senha abaixo.');
+
+  var blocoGSI = document.getElementById('loginBlocoGSI');
+  if (blocoGSI) blocoGSI.style.display = 'none';
+
+  // Botão discreto para tentar outra conta Google
+  if (!document.getElementById('_loginBtnOutraConta')) {
+    var btn = document.createElement('button');
+    btn.id        = '_loginBtnOutraConta';
+    btn.type      = 'button';
+    btn.className = 'w-full mt-4 py-2 border border-slate-200 rounded-xl text-slate-500 text-xs ' +
+                    'hover:bg-slate-50 transition-all flex items-center justify-center gap-2';
+    btn.innerHTML = '<i class="fab fa-google text-red-400"></i> Tentar com outra conta Google';
+    btn.onclick   = function() {
+      var bloco = document.getElementById('loginBlocoGSI');
+      if (bloco) bloco.style.display = '';
+      _loginOcultarErro();
+      this.remove();
+      if (window.google && google.accounts && google.accounts.id) {
+        google.accounts.id.prompt();
+      }
+    };
+    var formEl = document.getElementById('loginForm');
+    if (formEl) formEl.appendChild(btn);
+  }
+
+  var emailEl = document.getElementById('loginEmail');
+  if (emailEl) { setTimeout(function() { emailEl.focus(); }, 50); }
 }
 
 function _loginInicializarGSI(clientId) {
@@ -224,7 +262,7 @@ function _loginInicializarGSI(clientId) {
     google.accounts.id.initialize({
       client_id:   clientId,
       callback:    _loginGSICallback,
-      auto_select: true,
+      auto_select: false, // desabilitado: usuário deve escolher a conta explicitamente
       context:     'signin'
     });
 
@@ -236,12 +274,14 @@ function _loginInicializarGSI(clientId) {
       width:  360
     });
 
-    // Prompt automático (One Tap) se disponível
-    google.accounts.id.prompt();
+    // One Tap automático desabilitado — o usuário clica no botão para escolher a conta
 
     if (loader) loader.style.display = 'none';
     if (btnEl)  btnEl.style.display  = 'flex';
     if (sep)    sep.classList.remove('hidden');
+
+    var hint = document.getElementById('loginDominioHint');
+    if (hint) hint.classList.remove('hidden');
   };
   script.onerror = function() {
     if (loader) loader.style.display = 'none';
@@ -301,12 +341,28 @@ function _loginInicializar() {
  * Para usuários do Google Workspace, Session.getActiveUser() retorna o email
  * real em google.script.run — entra direto sem mostrar o formulário.
  * Usuários externos vão para _loginExibir() normalmente.
+ *
+ * Reinicia o timeout global a cada etapa para cobrir o tempo total das 2 chamadas
+ * e evitar que o timeout dispare entre as chamadas encadeadas.
  */
 function _loginTentarAutoLogin() {
+  // Reinicia o timeout para cobrir as 2 chamadas encadeadas (até 15s cada)
+  clearTimeout(_loginAuthTimeout);
+  _loginAuthTimeout = setTimeout(function() {
+    console.warn('[Auth] Timeout no auto-login — exibindo formulário.');
+    _loginExibir();
+  }, 15000);
+
   _loginSetLoadingTexto('Verificando conta institucional...', 'Domínio @idm.org.br detectado');
   google.script.run
     .withSuccessHandler(function(res) {
       if (res && res.ok && res.email) {
+        // Reinicia timeout para a segunda chamada
+        clearTimeout(_loginAuthTimeout);
+        _loginAuthTimeout = setTimeout(function() {
+          console.warn('[Auth] Timeout ao iniciar sessão — exibindo formulário.');
+          _loginExibir();
+        }, 15000);
         google.script.run
           .withSuccessHandler(function(sr) {
             if (sr && sr.ok) {
@@ -360,7 +416,10 @@ function _loginLogout() {
 
   if (token) {
     try {
-      google.script.run.encerrarSessaoGAS(token);
+      google.script.run
+        .withSuccessHandler(function() {})
+        .withFailureHandler(function(e) { console.warn('[Auth] Falha ao encerrar sessão no servidor:', e); })
+        .encerrarSessaoGAS(token);
     } catch(_) {}
   }
 

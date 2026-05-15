@@ -19,7 +19,7 @@ function salvarFuncionario(dados) {
   var isNovo = !dados.id;
 
   if (isNovo) {
-    dados.id = 'fun_' + Date.now();
+    dados.id = typeof gerarId === 'function' ? gerarId('fun') : 'fun_' + Date.now() + '_' + Math.random().toString(36).slice(2, 5);
     dados.criadoEm = new Date().toISOString();
     dados.ativo = dados.ativo !== false;
     lista.push(dados);
@@ -56,7 +56,7 @@ function salvarEscala(dados) {
   var lista = readJSON('escalas.json') || [];
 
   if (!dados.id) {
-    dados.id = 'esc_' + Date.now();
+    dados.id = typeof gerarId === 'function' ? gerarId('esc') : 'esc_' + Date.now() + '_' + Math.random().toString(36).slice(2, 5);
     dados.criadoEm = new Date().toISOString();
     lista.push(dados);
   } else {
@@ -76,7 +76,7 @@ function salvarEscala(dados) {
 function registrarAvaliacao(dados) {
   var lista = readJSON('avaliacoes.json') || [];
 
-  dados.id = 'aval_' + Date.now();
+  dados.id = typeof gerarId === 'function' ? gerarId('aval') : 'aval_' + Date.now() + '_' + Math.random().toString(36).slice(2, 5);
   dados.criadoEm = new Date().toISOString();
 
   lista.push(dados);
@@ -92,7 +92,7 @@ function registrarAvaliacao(dados) {
 function solicitarFerias(dados) {
   var lista = readJSON('ferias.json') || [];
 
-  dados.id = 'fer_' + Date.now();
+  dados.id = typeof gerarId === 'function' ? gerarId('fer') : 'fer_' + Date.now() + '_' + Math.random().toString(36).slice(2, 5);
   dados.criadoEm = new Date().toISOString();
   dados.status = 'Pendente';
 

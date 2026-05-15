@@ -16,7 +16,7 @@ function salvarContratacao(dados) {
   var lista = readJSON('contratacoes.json');
   var isNovo = !dados.id;
   if (isNovo) {
-    dados.id = 'ctt_' + Date.now();
+    dados.id = typeof gerarId === 'function' ? gerarId('ctt') : 'ctt_' + Date.now() + '_' + Math.random().toString(36).slice(2, 5);
     dados.criadoEm = new Date().toISOString();
     lista.push(dados);
   } else {
@@ -54,7 +54,7 @@ function obterPagamentos() {
 
 function registrarPagamento(dados) {
   var lista = readJSON('pagamentos.json');
-  dados.id = 'pag_' + Date.now();
+  dados.id = typeof gerarId === 'function' ? gerarId('pag') : 'pag_' + Date.now() + '_' + Math.random().toString(36).slice(2, 5);
   dados.criadoEm = new Date().toISOString();
   lista.push(dados);
   writeJSON('pagamentos.json', lista);

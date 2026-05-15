@@ -284,7 +284,7 @@ function _escutaTotalColaboradores() {
 
 function definirTotalColaboradoresEscuta(total) {
   try {
-    var email = Session.getActiveUser().getEmail();
+    var email = obterEmailUsuario('');
     if (!verificarPermissaoEscuta(email, 'editar')) {
       return { ok: false, msg: 'Permissão negada.' };
     }
@@ -347,7 +347,7 @@ function obterConfiguracaoEscuta() {
 
 function salvarConfiguracaoEscuta(configs) {
   try {
-    var email = Session.getActiveUser().getEmail();
+    var email = obterEmailUsuario('');
     if (!verificarPermissaoEscuta(email, 'editar')) return { ok: false, msg: 'Permissão negada.' };
 
     var sh    = _escutaSheet(_ESCUTA_SHEETS.CONFIG);
@@ -408,7 +408,7 @@ function obterPerguntasEscuta() {
 
 function atualizarPerguntaEscuta(id, campos) {
   try {
-    var email = Session.getActiveUser().getEmail();
+    var email = obterEmailUsuario('');
     if (!verificarPermissaoEscuta(email, 'editar')) return { ok: false, msg: 'Permissão negada.' };
 
     var sh    = _escutaSheet(_ESCUTA_SHEETS.PERGUNTAS);
@@ -482,7 +482,7 @@ function obterSaturacaoEscuta() {
 
 function obterPerguntaPulse() {
   try {
-    var email = Session.getActiveUser().getEmail();
+    var email = obterEmailUsuario('');
     var cfg   = obterConfiguracaoEscuta().dados || {};
 
     if (cfg.ativo === 'false') return { ok: true, pergunta: null, motivo: 'sistema_inativo' };
@@ -646,7 +646,7 @@ function registrarRespostaPulse(dados) {
 
     var email = typeof _resolverEmailReal === 'function'
       ? _resolverEmailReal(dados.sessao || dados.email || '')
-      : (Session.getActiveUser().getEmail() || '');
+      : obterEmailUsuario('');
     var cfg   = obterConfiguracaoEscuta().dados || {};
     if (cfg.ativo === 'false') return { ok: false, msg: 'Sistema inativo.' };
     if (cfg.ativoPadrao === 'false' && !dados.sourcePesquisaId) return { ok: false, msg: 'Pesquisas padrão inativas.' };
@@ -695,7 +695,7 @@ function registrarEscutaEspontanea(dados) {
   try {
     var email = typeof _resolverEmailReal === 'function'
       ? _resolverEmailReal(dados.sessao || dados.email || '')
-      : (Session.getActiveUser().getEmail() || '');
+      : obterEmailUsuario('');
     var cfg   = obterConfiguracaoEscuta().dados || {};
     if (cfg.ativo === 'false' || cfg.ativoEspontanea === 'false') {
       return { ok: false, msg: 'Escuta espontânea inativa.' };
@@ -860,7 +860,7 @@ function salvarPesquisaEscuta(dados) {
 
     var email = typeof _resolverEmailReal === 'function'
       ? _resolverEmailReal(dados.sessao || dados.email || '')
-      : (Session.getActiveUser().getEmail() || '');
+      : obterEmailUsuario('');
     if (!verificarPermissaoEscuta(email, 'editar')) return { ok: false, msg: 'Permissão negada.' };
 
     // Normalizar e validar antes de salvar
@@ -918,7 +918,7 @@ function excluirPesquisaEscuta(id, sessaoOuEmail) {
   try {
     var email = typeof _resolverEmailReal === 'function'
       ? _resolverEmailReal(sessaoOuEmail || '')
-      : (Session.getActiveUser().getEmail() || '');
+      : obterEmailUsuario('');
     if (!verificarPermissaoEscuta(email, 'excluir')) return { ok: false, msg: 'Permissão negada.' };
 
     var sh   = _escutaSheet(_ESCUTA_SHEETS.PESQUISAS);
@@ -953,7 +953,7 @@ function obterBancoPesquisas() {
 
 function salvarTemplateBancoPesquisas(dados) {
   try {
-    var email = Session.getActiveUser().getEmail();
+    var email = obterEmailUsuario('');
     if (!verificarPermissaoEscuta(email, 'editar')) return { ok: false, msg: 'Permissão negada.' };
 
     var sh = _escutaSheet(_ESCUTA_SHEETS.BANCO_PESQUISAS);
@@ -1343,7 +1343,7 @@ function resolverAlertaEscuta(id, acao, sessaoOuEmail) {
   try {
     var email = typeof _resolverEmailReal === 'function'
       ? _resolverEmailReal(sessaoOuEmail || '')
-      : (Session.getActiveUser().getEmail() || '');
+      : obterEmailUsuario('');
     if (!verificarPermissaoEscuta(email, 'editar')) return { ok: false, msg: 'Permissão negada.' };
 
     var sh   = _escutaSheet(_ESCUTA_SHEETS.ALERTAS);
@@ -1370,7 +1370,7 @@ function resolverAlertaEscuta(id, acao, sessaoOuEmail) {
 
 function obterPerfilAnaliticoEscuta() {
   try {
-    var email  = Session.getActiveUser().getEmail();
+    var email  = obterEmailUsuario('');
     var rows   = _escutaLerSheet(_ESCUTA_SHEETS.PERFIL_ANALITICO);
     var perfil = rows.find(function(r) { return r.email === email; });
     return { ok: true, dados: perfil || null };
@@ -1386,7 +1386,7 @@ function salvarPerfilAnaliticoEscuta(dados) {
 
     var email = typeof _resolverEmailReal === 'function'
       ? _resolverEmailReal(dados.sessao || dados.email || '')
-      : (Session.getActiveUser().getEmail() || '');
+      : obterEmailUsuario('');
     var sh    = _escutaSheet(_ESCUTA_SHEETS.PERFIL_ANALITICO);
     var rows  = _escutaSheetToArray(sh);
     var idx   = rows.findIndex(function(r) { return r.email === email; });
@@ -1426,7 +1426,7 @@ function salvarPerfilAnaliticoEscuta(dados) {
 
 function gerarRelatorioEscuta(tipo, periodo) {
   try {
-    var email   = Session.getActiveUser().getEmail();
+    var email   = obterEmailUsuario('');
     if (!verificarPermissaoEscuta(email, 'visualizar')) return { ok: false, msg: 'Permissão negada.' };
 
     periodo = periodo || _escutaPeriodoAtual();
@@ -1519,8 +1519,7 @@ function _escutaGerarRecomendacoes(indicadores, resumoEspontanea, alertas) {
 
 function obterDadosEscuta() {
   try {
-    var email = '';
-    try { email = Session.getActiveUser().getEmail() || ''; } catch(e_) {}
+    var email = obterEmailUsuario('');
 
     // Pré-carrega todas as abas no cache de execução de uma só vez
     var sheetsParaCarregar = [

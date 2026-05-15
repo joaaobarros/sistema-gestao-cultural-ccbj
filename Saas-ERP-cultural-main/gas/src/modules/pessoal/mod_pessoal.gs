@@ -15,7 +15,7 @@ function salvarTarefa(dados) {
   var lista = readJSON('tarefas.json');
 
   if (!dados.id) {
-    dados.id = 'tar_' + Date.now();
+    dados.id = typeof gerarId === 'function' ? gerarId('tar') : 'tar_' + Date.now() + '_' + Math.random().toString(36).slice(2, 5);
     dados.criadoEm = new Date().toISOString();
     lista.push(dados);
   } else {
@@ -74,7 +74,7 @@ function obterProcessos() {
 function salvarProcesso(dados) {
   var lista = readJSON('processos.json');
   if (!dados.id) {
-    dados.id = 'proc_' + Date.now();
+    dados.id = typeof gerarId === 'function' ? gerarId('proc') : 'proc_' + Date.now() + '_' + Math.random().toString(36).slice(2, 5);
     dados.criadoEm = new Date().toISOString();
     lista.push(dados);
   } else {
@@ -103,7 +103,7 @@ function obterAtendimentos() {
 function salvarAtendimento(dados) {
   var lista = readJSON('atendimentos.json');
   if (!dados.id) {
-    dados.id = 'ate_' + Date.now();
+    dados.id = typeof gerarId === 'function' ? gerarId('ate') : 'ate_' + Date.now() + '_' + Math.random().toString(36).slice(2, 5);
     dados.criadoEm = new Date().toISOString();
     dados.status = dados.status || 'Aberto';
     lista.push(dados);
@@ -132,7 +132,7 @@ function obterDemandas() {
 
 function registrarDemanda(dados) {
   var lista = readJSON('demandas.json');
-  dados.id = 'dem_' + Date.now();
+  dados.id = typeof gerarId === 'function' ? gerarId('dem') : 'dem_' + Date.now() + '_' + Math.random().toString(36).slice(2, 5);
   dados.criadoEm = new Date().toISOString();
   lista.push(dados);
   writeJSON('demandas.json', lista);
@@ -142,7 +142,7 @@ function registrarDemanda(dados) {
 function criarTarefaPlanilha(dados) {
   var aba = _abrirAba('PESSOAL', 'Tarefas');
 
-  var id = 'tar_' + Date.now();
+  var id = typeof gerarId === 'function' ? gerarId('tar') : 'tar_' + Date.now() + '_' + Math.random().toString(36).slice(2, 5);
 
   aba.appendRow([
     id,
@@ -168,7 +168,7 @@ function _registrarInteracaoTarefa(idTarefa, dados) {
   var aba = _abrirAba('PESSOAL', 'InteracoesTarefas');
 
   aba.appendRow([
-    'int_' + Date.now(),
+    (typeof gerarId === 'function' ? gerarId('int') : 'int_' + Date.now() + '_' + Math.random().toString(36).slice(2, 5)),
     idTarefa,
     dados.tipo || 'comentario',
     dados.mensagem || '',

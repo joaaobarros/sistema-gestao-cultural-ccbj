@@ -1826,7 +1826,7 @@ function _enviarEmailRecusaCadastro(emailAlvo, nome, motivo) {
 }
 
 function salvarPreferencia(chave, valor) {
-  var email = Session.getActiveUser().getEmail();
+  var email = obterEmailUsuario('');
   if (!email || !chave) return;
   var aba = _getSheet('PreferenciasUsuarios');
   if (!aba) return;
@@ -1842,7 +1842,7 @@ function salvarPreferencia(chave, valor) {
 }
 
 function obterPreferencia(chave) {
-  var email = Session.getActiveUser().getEmail();
+  var email = obterEmailUsuario('');
   if (!email || !chave) return null;
   var aba = _getSheet('PreferenciasUsuarios');
   if (!aba || aba.getLastRow() < 2) return null;

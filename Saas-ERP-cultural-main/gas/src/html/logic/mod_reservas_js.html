@@ -481,6 +481,10 @@ function resetarFormulario() {
   var rcPrio = document.getElementById('rcComPrioridade');
   if (rcPrio) rcPrio.value = 'Média';
 
+  // Reset vinculação institucional
+  var radioInd = document.getElementById('vinculoIndependente');
+  if (radioInd) { radioInd.checked = true; if (typeof alternarVinculo === 'function') alternarVinculo('independente'); }
+
 }
 
 
@@ -4997,6 +5001,118 @@ window._onShow_aba_nova_reserva = function() {
     if (typeof indexarReservas === 'function') indexarReservas();
     if (typeof atualizarTudoTempoReal === 'function') atualizarTudoTempoReal();
   });
+  // Pré-carrega tarefas da fila do usuário para o seletor de vínculo
+  _carregarTarefasVinculo();
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BLOCO: Vinculação Institucional — Reserva → Ação ou Tarefa
+// ─────────────────────────────────────────────────────────────────────────────
+
+var _acoesCacheVinculo = null;  // cache da listagem de ações para autocomplete
+
+function alternarVinculo(tipo) {
+  var painelAcao   = document.getElementById('painelVinculoAcao');
+  var painelTarefa = document.getElementById('painelVinculoTarefa');
+  if (!painelAcao || !painelTarefa) return;
+
+  if (tipo === 'acao') {
+    painelAcao.classList.remove('hidden');
+    painelTarefa.classList.add('hidden');
+    // Carrega ações se ainda não tiver cache
+    if (!_acoesCacheVinculo) {
+      GAS.acoes.listar({}, function(lista) {
+        _acoesCacheVinculo = lista || [];
+      });
+    }
+  } else if (tipo === 'tarefa') {
+    painelAcao.classList.add('hidden');
+    painelTarefa.classList.remove('hidden');
+  } else {
+    painelAcao.classList.add('hidden');
+    painelTarefa.classList.add('hidden');
+    // Limpa seleções
+    limparVinculoAcao();
+    var sel = document.getElementById('selectVinculoTarefaId');
+    if (sel) sel.value = '';
+  }
+}
+
+function buscarAcoesVinculo(termo) {
+  var resultados = document.getElementById('vinculoAcaoResultados');
+  if (!resultados) return;
+
+  var lista = (_acoesCacheVinculo || []).filter(function(a) {
+    var t = (termo || '').toLowerCase();
+    return !t || (a.nome || '').toLowerCase().indexOf(t) !== -1;
+  }).slice(0, 8);
+
+  if (!lista.length) { resultados.classList.add('hidden'); return; }
+
+  resultados.innerHTML = lista.map(function(a) {
+    var statusLabel = { rascunho:'Rascunho', planejamento:'Planejamento', aprovado:'Aprovado',
+      em_execucao:'Em Execução', pausado:'Pausado', concluido:'Concluído', arquivado:'Arquivado' }[a.status] || a.status;
+    return '<div onclick="selecionarAcaoVinculo(\'' + escaparHTML(a.id) + '\',\'' + escaparHTML(a.nome) + '\')"' +
+      ' class="px-3 py-2 cursor-pointer hover:bg-purple-50 transition-colors">' +
+      '<p class="text-xs font-bold text-slate-800 truncate">' + escaparHTML(a.nome) + '</p>' +
+      '<p class="text-[9px] text-slate-400 uppercase">' + escaparHTML(statusLabel) + '</p>' +
+      '</div>';
+  }).join('');
+  resultados.classList.remove('hidden');
+}
+
+function selecionarAcaoVinculo(id, nome) {
+  document.getElementById('inputVinculoAcaoId').value  = id;
+  document.getElementById('vinculoAcaoNome').textContent = nome;
+  document.getElementById('vinculoAcaoSelecionada').classList.remove('hidden');
+  document.getElementById('inputVinculoAcaoBusca').value = '';
+  document.getElementById('vinculoAcaoResultados').classList.add('hidden');
+}
+
+function limparVinculoAcao() {
+  document.getElementById('inputVinculoAcaoId').value = '';
+  var chip = document.getElementById('vinculoAcaoSelecionada');
+  if (chip) chip.classList.add('hidden');
+  var busca = document.getElementById('inputVinculoAcaoBusca');
+  if (busca) busca.value = '';
+}
+
+function _carregarTarefasVinculo() {
+  var sel = document.getElementById('selectVinculoTarefaId');
+  if (!sel) return;
+  GAS.tarefas.minhaFila(function(tarefas) {
+    var ativas = (tarefas || []).filter(function(t) {
+      return ['solicitada','em_analise','em_execucao','aguardando_doc','bloqueada'].indexOf(t.status) !== -1;
+    });
+    if (!ativas.length) {
+      sel.innerHTML = '<option value="">Nenhuma tarefa ativa em sua fila</option>';
+      return;
+    }
+    var labelStatus = { solicitada:'Solicitada', em_analise:'Em Análise', em_execucao:'Em Execução',
+      aguardando_doc:'Aguard. Documento', bloqueada:'Bloqueada' };
+    sel.innerHTML = '<option value="">Selecione a tarefa...</option>' +
+      ativas.map(function(t) {
+        return '<option value="' + escaparHTML(t.id) + '">' +
+          escaparHTML(t.titulo) + ' [' + (labelStatus[t.status] || t.status) + ']' +
+          '</option>';
+      }).join('');
+  });
+}
+
+// Expõe getters para salvarAgendamento() coletar os campos de vínculo
+function _obterVinculoPayload() {
+  var tipo = document.querySelector('input[name="tipoVinculo"]:checked');
+  var tipoVal = tipo ? tipo.value : 'independente';
+  if (tipoVal === 'acao') {
+    var id = (document.getElementById('inputVinculoAcaoId') || {}).value || '';
+    return { acaoId: id || null, tarefaId: null };
+  }
+  if (tipoVal === 'tarefa') {
+    var tid = (document.getElementById('selectVinculoTarefaId') || {}).value || '';
+    return { acaoId: null, tarefaId: tid || null };
+  }
+  return { acaoId: null, tarefaId: null };
+}
+
 
 </script>

@@ -218,6 +218,15 @@ var _MOD_DEFAULTS = [
     rotas: ['aba-codip'],
     menus: [],
     dependencias: [], status_operacional: 'alpha'
+  },
+  {
+    moduleId: 'reunioes', nome: 'Reuniões & Atas', categoria: 'governanca',
+    descricao: 'Gestão de reuniões, atas e encaminhamentos rastreáveis integrados ao fluxo de tarefas',
+    versao: '1.0',
+    ativo: false, nucleo: false, apenasSuperadmin: false,
+    rotas: ['aba-reunioes'],
+    menus: [],
+    dependencias: ['tarefas'], status_operacional: 'beta'
   }
 ];
 

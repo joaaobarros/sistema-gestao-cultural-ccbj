@@ -675,8 +675,9 @@ const GAS = {
     criar:           function(dados, cb, err)                { GAS._callCtrl('ctrl_acoes_criar',            [dados, GAS._sessao()],                  cb, err); },
     atualizar:       function(id, dados, cb, err)            { GAS._callCtrl('ctrl_acoes_atualizar',        [id, dados, GAS._sessao()],              cb, err); },
     mudarStatus:     function(id, novoStatus, motivo, cb, err) { GAS._callCtrl('ctrl_acoes_mudar_status',  [id, novoStatus, GAS._sessao(), motivo||''], cb, err); },
-    associarRecurso: function(acaoId, tipo, recursoId, cb, err) { GAS._callCtrl('ctrl_acoes_associar_recurso', [acaoId, tipo, recursoId, GAS._sessao()], cb, err); },
-    obterRecursos:   function(acaoId, cb, err)               { GAS._callCtrl('ctrl_acoes_obter_recursos',  [acaoId],                                cb, err); }
+    associarRecurso: function(acaoId, tipo, recursoId, cb, err) { GAS._callCtrl('ctrl_acoes_associar_recurso',      [acaoId, tipo, recursoId, GAS._sessao()], cb, err); },
+    obterRecursos:   function(acaoId, cb, err)               { GAS._callCtrl('ctrl_acoes_obter_recursos',          [acaoId],                                cb, err); },
+    painelIntegrado: function(acaoId, cb, err)               { GAS._callCtrl('ctrl_acoes_obter_painel_integrado',  [acaoId],                                cb, err); }
   },
 
   /**
@@ -707,6 +708,77 @@ const GAS = {
     },
     registrar: function(dados, cb, err) {
       GAS._callCtrl('ctrl_hab_diaria', [dados, GAS._sessao()], cb, err);
+    }
+  },
+
+  /**
+   * @namespace GAS.reunioes
+   * @description Sistema de Gestão de Reuniões, Atas e Encaminhamentos.
+   *              Visibilidade restrita: superadmin/admin/gestor veem tudo;
+   *              demais usuários veem apenas reuniões em que participam.
+   * @via backend/controllers/reunioes_controller.gs
+   */
+  reunioes: {
+    // ── Reuniões ────────────────────────────────────────────────────────────
+    listar: function(filtros, cb, err, s) {
+      GAS._callCtrl('ctrl_reunioes_listar', [filtros, s || GAS._sessao()], cb, err);
+    },
+    obter: function(id, cb, err, s) {
+      GAS._callCtrl('ctrl_reunioes_obter', [id, s || GAS._sessao()], cb, err);
+    },
+    criar: function(dados, cb, err, s) {
+      GAS._callCtrl('ctrl_reunioes_criar', [dados, s || GAS._sessao()], cb, err);
+    },
+    atualizar: function(id, dados, cb, err, s) {
+      GAS._callCtrl('ctrl_reunioes_atualizar', [id, dados, s || GAS._sessao()], cb, err);
+    },
+    transicao: function(id, novoStatus, contexto, cb, err, s) {
+      GAS._callCtrl('ctrl_reunioes_transicao', [id, novoStatus, contexto, s || GAS._sessao()], cb, err);
+    },
+    excluir: function(id, cb, err, s) {
+      GAS._callCtrl('ctrl_reunioes_excluir', [id, s || GAS._sessao()], cb, err);
+    },
+
+    // ── Ata ─────────────────────────────────────────────────────────────────
+    salvarAta: function(id, dadosAta, cb, err, s) {
+      GAS._callCtrl('ctrl_reunioes_salvar_ata', [id, dadosAta, s || GAS._sessao()], cb, err);
+    },
+    aprovarAta: function(id, aprovado, cb, err, s) {
+      GAS._callCtrl('ctrl_reunioes_aprovar_ata', [id, aprovado, s || GAS._sessao()], cb, err);
+    },
+    registrarPresenca: function(id, presentes, ausentes, cb, err, s) {
+      GAS._callCtrl('ctrl_reunioes_registrar_presenca', [id, presentes, ausentes, s || GAS._sessao()], cb, err);
+    },
+    atualizarPauta: function(reuniaoId, itemId, dadosItem, cb, err, s) {
+      GAS._callCtrl('ctrl_reunioes_atualizar_pauta', [reuniaoId, itemId, dadosItem, s || GAS._sessao()], cb, err);
+    },
+
+    // ── Encaminhamentos ──────────────────────────────────────────────────────
+    listarEncaminhamentos: function(filtros, cb, err, s) {
+      GAS._callCtrl('ctrl_reunioes_listar_encaminhamentos', [filtros, s || GAS._sessao()], cb, err);
+    },
+    criarEncaminhamento: function(reuniaoId, dados, cb, err, s) {
+      GAS._callCtrl('ctrl_reunioes_criar_encaminhamento', [reuniaoId, dados, s || GAS._sessao()], cb, err);
+    },
+    atualizarEncaminhamento: function(id, dados, cb, err, s) {
+      GAS._callCtrl('ctrl_reunioes_atualizar_encaminhamento', [id, dados, s || GAS._sessao()], cb, err);
+    },
+    transicaoEncaminhamento: function(id, novoStatus, comentario, cb, err, s) {
+      GAS._callCtrl('ctrl_reunioes_transicao_encaminhamento', [id, novoStatus, comentario, s || GAS._sessao()], cb, err);
+    },
+    comentarEncaminhamento: function(id, texto, cb, err, s) {
+      GAS._callCtrl('ctrl_reunioes_comentar_encaminhamento', [id, texto, s || GAS._sessao()], cb, err);
+    },
+    gerarTarefa: function(encId, cb, err, s) {
+      GAS._callCtrl('ctrl_reunioes_gerar_tarefa', [encId, s || GAS._sessao()], cb, err);
+    },
+
+    // ── Usuários / Dashboard ─────────────────────────────────────────────────
+    listarUsuarios: function(cb, err, s) {
+      GAS._callCtrl('ctrl_reunioes_listar_usuarios', [s || GAS._sessao()], cb, err);
+    },
+    dashboard: function(cb, err, s) {
+      GAS._callCtrl('ctrl_reunioes_dashboard', [s || GAS._sessao()], cb, err);
     }
   }
 
