@@ -352,3 +352,262 @@ function reunioes_verificarAtrasosDiario() {
     Logger.error('[reunioes_verificarAtrasosDiario] ' + e.message);
   }
 }
+
+// ════════════════════════════════════════════════════════════════════════════
+// SÉRIES / PRESETS
+// ════════════════════════════════════════════════════════════════════════════
+
+/** Lista séries visíveis para o usuário. */
+function ctrl_reunioes_series_listar(emailFallback) {
+  try {
+    var ctx = _ctrlReunioesObterContexto(emailFallback);
+    var series = ReunioesSeriesEngine.listarSeries(ctx.email, ctx.nivel);
+    return GasResponse.ok({ series: series, nivel: ctx.nivel });
+  } catch(e) {
+    Logger.error('[ctrl_reunioes_series_listar] ' + e.message);
+    return GasResponse.error(e.message);
+  }
+}
+
+/** Obtém uma série por ID. */
+function ctrl_reunioes_series_obter(id, emailFallback) {
+  try {
+    var ctx = _ctrlReunioesObterContexto(emailFallback);
+    var serie = ReunioesSeriesEngine.obterSerie(id);
+    if (!serie) return GasResponse.error('Série não encontrada.', 'NOT_FOUND');
+    return GasResponse.ok({ serie: serie, nivel: ctx.nivel });
+  } catch(e) {
+    Logger.error('[ctrl_reunioes_series_obter] ' + e.message);
+    return GasResponse.error(e.message);
+  }
+}
+
+/** Cria uma nova série/preset. */
+function ctrl_reunioes_series_criar(dados, emailFallback) {
+  try {
+    var ctx = _ctrlReunioesObterContexto(emailFallback);
+    var NIVEIS_AMPLOS = ['superadmin', 'admin', 'gestor'];
+    if (NIVEIS_AMPLOS.indexOf(ctx.nivel) === -1) {
+      return GasResponse.error('Somente gestores e administradores podem criar séries.', 'FORBIDDEN');
+    }
+    var serie = ReunioesSeriesEngine.criarSerie(dados, ctx.email);
+    return GasResponse.ok(serie);
+  } catch(e) {
+    Logger.error('[ctrl_reunioes_series_criar] ' + e.message);
+    return GasResponse.error(e.message);
+  }
+}
+
+/** Atualiza uma série existente. */
+function ctrl_reunioes_series_atualizar(id, dados, emailFallback) {
+  try {
+    var ctx = _ctrlReunioesObterContexto(emailFallback);
+    var serie = ReunioesSeriesEngine.obterSerie(id);
+    if (!serie) return GasResponse.error('Série não encontrada.', 'NOT_FOUND');
+    var NIVEIS_AMPLOS = ['superadmin', 'admin', 'gestor'];
+    var podeEditar = NIVEIS_AMPLOS.indexOf(ctx.nivel) !== -1 ||
+                     serie.organizadorPadrao === ctx.email ||
+                     serie.criadoPor === ctx.email;
+    if (!podeEditar) return GasResponse.error('Sem permissão para editar esta série.', 'FORBIDDEN');
+    return GasResponse.ok(ReunioesSeriesEngine.atualizarSerie(id, dados, ctx.email));
+  } catch(e) {
+    Logger.error('[ctrl_reunioes_series_atualizar] ' + e.message);
+    return GasResponse.error(e.message);
+  }
+}
+
+/** Altera status de uma série (ativa/pausada/encerrada). */
+function ctrl_reunioes_series_status(id, novoStatus, emailFallback) {
+  try {
+    var ctx = _ctrlReunioesObterContexto(emailFallback);
+    var NIVEIS_AMPLOS = ['superadmin', 'admin', 'gestor'];
+    var serie = ReunioesSeriesEngine.obterSerie(id);
+    if (!serie) return GasResponse.error('Série não encontrada.', 'NOT_FOUND');
+    var podeEditar = NIVEIS_AMPLOS.indexOf(ctx.nivel) !== -1 || serie.criadoPor === ctx.email;
+    if (!podeEditar) return GasResponse.error('Sem permissão.', 'FORBIDDEN');
+    return GasResponse.ok(ReunioesSeriesEngine.alterarStatusSerie(id, novoStatus, ctx.email));
+  } catch(e) {
+    Logger.error('[ctrl_reunioes_series_status] ' + e.message);
+    return GasResponse.error(e.message);
+  }
+}
+
+/** Exclui uma série (apenas admin). */
+function ctrl_reunioes_series_excluir(id, emailFallback) {
+  try {
+    var ctx = _ctrlReunioesObterContexto(emailFallback);
+    var NIVEIS_ADMIN = ['superadmin', 'admin'];
+    if (NIVEIS_ADMIN.indexOf(ctx.nivel) === -1) {
+      return GasResponse.error('Somente administradores podem excluir séries.', 'FORBIDDEN');
+    }
+    return GasResponse.ok(ReunioesSeriesEngine.excluirSerie(id, ctx.email));
+  } catch(e) {
+    Logger.error('[ctrl_reunioes_series_excluir] ' + e.message);
+    return GasResponse.error(e.message);
+  }
+}
+
+/** Cria uma reunião a partir de um preset de série. */
+function ctrl_reunioes_criar_de_serie(serieId, dadosEspecificos, emailFallback) {
+  try {
+    var ctx = _ctrlReunioesObterContexto(emailFallback);
+    var reuniao = ReunioesSeriesEngine.criarReuniaoDeSerie(serieId, dadosEspecificos || {}, ctx.email);
+    return GasResponse.ok(reuniao);
+  } catch(e) {
+    Logger.error('[ctrl_reunioes_criar_de_serie] ' + e.message);
+    return GasResponse.error(e.message);
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// PAUTA COLABORATIVA
+// ════════════════════════════════════════════════════════════════════════════
+
+/** Adiciona item à pauta de uma reunião. */
+function ctrl_reunioes_pauta_adicionar(reuniaoId, dados, emailFallback) {
+  try {
+    var ctx = _ctrlReunioesObterContexto(emailFallback);
+    var reuniao = ReunioesSeriesEngine.adicionarItemPauta(reuniaoId, dados, ctx.email, ctx.nivel);
+    return GasResponse.ok(reuniao);
+  } catch(e) {
+    Logger.error('[ctrl_reunioes_pauta_adicionar] ' + e.message);
+    return GasResponse.error(e.message);
+  }
+}
+
+/** Edita item de pauta. */
+function ctrl_reunioes_pauta_editar(reuniaoId, itemId, dados, emailFallback) {
+  try {
+    var ctx = _ctrlReunioesObterContexto(emailFallback);
+    var reuniao = ReunioesSeriesEngine.editarItemPauta(reuniaoId, itemId, dados, ctx.email, ctx.nivel);
+    return GasResponse.ok(reuniao);
+  } catch(e) {
+    Logger.error('[ctrl_reunioes_pauta_editar] ' + e.message);
+    return GasResponse.error(e.message);
+  }
+}
+
+/** Remove item de pauta (somente antes do início da reunião). */
+function ctrl_reunioes_pauta_remover(reuniaoId, itemId, emailFallback) {
+  try {
+    var ctx = _ctrlReunioesObterContexto(emailFallback);
+    var reuniao = ReunioesSeriesEngine.removerItemPauta(reuniaoId, itemId, ctx.email, ctx.nivel);
+    return GasResponse.ok(reuniao);
+  } catch(e) {
+    Logger.error('[ctrl_reunioes_pauta_remover] ' + e.message);
+    return GasResponse.error(e.message);
+  }
+}
+
+/** Reordena a pauta de uma reunião. novaOrdem: array de ids */
+function ctrl_reunioes_pauta_reordenar(reuniaoId, novaOrdem, emailFallback) {
+  try {
+    var ctx = _ctrlReunioesObterContexto(emailFallback);
+    if (!Array.isArray(novaOrdem) || novaOrdem.length === 0) {
+      return GasResponse.error('novaOrdem deve ser um array de IDs.');
+    }
+    var reuniao = ReunioesSeriesEngine.reordenarPauta(reuniaoId, novaOrdem, ctx.email, ctx.nivel);
+    return GasResponse.ok(reuniao);
+  } catch(e) {
+    Logger.error('[ctrl_reunioes_pauta_reordenar] ' + e.message);
+    return GasResponse.error(e.message);
+  }
+}
+
+/**
+ * Marca status final de uma pauta (após início da reunião).
+ * statusFinal: nao_debatida | parcialmente_debatida | sem_encaminhamento |
+ *              adiada | transferida | pendente_proxima
+ */
+function ctrl_reunioes_pauta_status_final(reuniaoId, itemId, statusFinal, observacao, emailFallback) {
+  try {
+    var ctx = _ctrlReunioesObterContexto(emailFallback);
+    var reuniao = ReunioesSeriesEngine.marcarStatusFinalPauta(
+      reuniaoId, itemId, statusFinal, observacao || '', ctx.email, ctx.nivel
+    );
+    return GasResponse.ok(reuniao);
+  } catch(e) {
+    Logger.error('[ctrl_reunioes_pauta_status_final] ' + e.message);
+    return GasResponse.error(e.message);
+  }
+}
+
+/**
+ * Transfere uma pauta de uma reunião para outra.
+ * Mantém histórico completo de transferência.
+ */
+function ctrl_reunioes_pauta_transferir(reuniaoOrigemId, pautaId, reuniaoDestinoId, emailFallback) {
+  try {
+    var ctx = _ctrlReunioesObterContexto(emailFallback);
+    var reuniao = ReunioesSeriesEngine.transferirPauta(
+      reuniaoOrigemId, pautaId, reuniaoDestinoId, ctx.email, ctx.nivel
+    );
+    return GasResponse.ok(reuniao);
+  } catch(e) {
+    Logger.error('[ctrl_reunioes_pauta_transferir] ' + e.message);
+    return GasResponse.error(e.message);
+  }
+}
+
+/** Retorna histórico de auditoria de pautas de uma reunião. */
+function ctrl_reunioes_pauta_historico(reuniaoId, pautaId, emailFallback) {
+  try {
+    var ctx = _ctrlReunioesObterContexto(emailFallback);
+    var reuniao = ReunioesRepository.obterReuniaoPorId(reuniaoId);
+    if (!reuniao) return GasResponse.error('Reunião não encontrada.', 'NOT_FOUND');
+    var NIVEIS_AMPLOS = ['superadmin', 'admin', 'gestor'];
+    var podeVer = NIVEIS_AMPLOS.indexOf(ctx.nivel) !== -1 ||
+                  reuniao.organizador === ctx.email ||
+                  (reuniao.participantes || []).indexOf(ctx.email) !== -1;
+    if (!podeVer) return GasResponse.error('Acesso negado.', 'FORBIDDEN');
+    var historico = ReunioesSeriesEngine.listarHistoricoPauta(reuniaoId, pautaId || null);
+    return GasResponse.ok({ historico: historico });
+  } catch(e) {
+    Logger.error('[ctrl_reunioes_pauta_historico] ' + e.message);
+    return GasResponse.error(e.message);
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// INTELIGÊNCIA ORGANIZACIONAL — RECORRÊNCIA E DASHBOARDS
+// ════════════════════════════════════════════════════════════════════════════
+
+/** Análise de recorrência temática de uma série. */
+function ctrl_reunioes_recorrencia_analisar(serieId, emailFallback) {
+  try {
+    var ctx = _ctrlReunioesObterContexto(emailFallback);
+    var analise = ReunioesSeriesEngine.analisarRecorrenciaSerial(serieId);
+    return GasResponse.ok(analise);
+  } catch(e) {
+    Logger.error('[ctrl_reunioes_recorrencia_analisar] ' + e.message);
+    return GasResponse.error(e.message);
+  }
+}
+
+/** Dashboard completo de uma série (timeline, métricas, pendências). */
+function ctrl_reunioes_dashboard_serie(serieId, emailFallback) {
+  try {
+    var ctx = _ctrlReunioesObterContexto(emailFallback);
+    var dashboard = ReunioesSeriesEngine.obterDashboardSerie(serieId);
+    return GasResponse.ok(dashboard);
+  } catch(e) {
+    Logger.error('[ctrl_reunioes_dashboard_serie] ' + e.message);
+    return GasResponse.error(e.message);
+  }
+}
+
+/**
+ * Contexto IA para pauta de uma reunião.
+ * Retorna pautas recorrentes e encaminhamentos pendentes da série — sem inventar dados.
+ */
+function ctrl_reunioes_contexto_ia(serieId, reuniaoAtualId, emailFallback) {
+  try {
+    var ctx = _ctrlReunioesObterContexto(emailFallback);
+    if (!serieId) return GasResponse.error('serieId é obrigatório.');
+    var contexto = ReunioesSeriesEngine.gerarContextoIA(serieId, reuniaoAtualId || null);
+    return GasResponse.ok(contexto);
+  } catch(e) {
+    Logger.error('[ctrl_reunioes_contexto_ia] ' + e.message);
+    return GasResponse.error(e.message);
+  }
+}

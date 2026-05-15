@@ -205,6 +205,11 @@ var _trk = {
   _dragOrig: null
 };
 
+// Cache de usuários para autocomplete (carregado via GAS.rh.usuariosAutocomplete)
+var _trkUsuariosCache = [];
+// Cache de ações para autocomplete (carregado via GAS.acoes.paraAutocomplete)
+var _trkAcoesCache = [];
+
 // ══ CONSTANTES UI ════════════════════════════════════════════════════════════
 
 var _TRK_STATUS_COR = {
@@ -281,6 +286,8 @@ function _trkNorm(t) {
     concluidoEm: t.concluidoEm||'', duracaoReal: t.duracaoReal||0,
     sla: t.sla||72, slaViolado: !!t.slaViolado, ordem: t.ordem||0,
     idOrigem: t.idOrigem||'', refOrigem: t.refOrigem||'', processo: t.processo||'',
+    tarefaPai: t.tarefaPai||'',
+    idAcao: t.idAcao||'', acaoNome: t.acaoNome||'',
     historico: t.historico||[], comentarios: t.comentarios||[], tags: t.tags||[]
   };
 }
@@ -289,6 +296,18 @@ function _trkNorm(t) {
 
 function carregarTarefas() {
   _trkSetLoading(true);
+  // Carrega usuários para autocomplete se ainda não tiver
+  if (!_trkUsuariosCache.length) {
+    GAS.rh.usuariosAutocomplete(function(lista) {
+      _trkUsuariosCache = lista || [];
+    }, function() {});
+  }
+  // Carrega ações para autocomplete se ainda não tiver
+  if (!_trkAcoesCache.length) {
+    GAS.acoes.paraAutocomplete('', function(lista) {
+      _trkAcoesCache = lista || [];
+    }, function() {});
+  }
   GAS.tarefas.listar(function(lista) {
     _trk.tarefas = (lista||[]).map(_trkNorm);
     _trkRenderizar();
@@ -298,6 +317,98 @@ function carregarTarefas() {
     _trkSetLoading(false);
     _trkMsgErro(document.getElementById('trkListaContainer'), 'Erro ao carregar tarefas: ' + (e&&e.message||''));
   });
+}
+
+// ── Helpers de autocomplete ────────────────────────────────────────────────────
+
+/**
+ * Renderiza dropdown de usuários para campos de responsável/delegação.
+ * Filtra _trkUsuariosCache pelo termo digitado; ao selecionar seta email no campo
+ * principal e nome no campo de display (se fornecido).
+ */
+/**
+ * Renderiza dropdown de usuários. _inputEl e _onSelect são armazenados no dropEl
+ * para uso direto em _trkSelecionarUsuario sem depender de escopo do DOM.
+ */
+function _trkAutocompletarUsuario(inputEl, dropEl, onSelect) {
+  var q = (inputEl.value || '').toLowerCase().trim();
+  if (!q || q.length < 2) { dropEl.innerHTML = ''; dropEl.style.display = 'none'; return; }
+  var matches = _trkUsuariosCache.filter(function(u) {
+    return (u.email || '').toLowerCase().indexOf(q) !== -1 ||
+           (u.nome  || '').toLowerCase().indexOf(q) !== -1;
+  }).slice(0, 8);
+  if (!matches.length) { dropEl.innerHTML = ''; dropEl.style.display = 'none'; return; }
+  dropEl.style.cssText = 'position:absolute;top:100%;left:0;right:0;background:white;border:1.5px solid #c7d2fe;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.12);z-index:9999;overflow:hidden;margin-top:4px';
+  dropEl.innerHTML = matches.map(function(u, i) {
+    var ini = (u.nome||u.email||'?').charAt(0).toUpperCase();
+    var cor = ['#6366f1','#10b981','#f59e0b','#3b82f6','#ec4899','#14b8a6'][i % 6];
+    return '<div onclick="_trkSelecionarUsuario(this)" data-email="' + escaparHTML(u.email||'') + '" data-nome="' + escaparHTML(u.nome||'') + '"'
+      + ' style="display:flex;align-items:center;gap:10px;padding:9px 14px;cursor:pointer;transition:background .1s" onmouseenter="this.style.background=\'#f8fafc\'" onmouseleave="this.style.background=\'white\'">'
+      + '<div style="width:28px;height:28px;border-radius:99px;background:' + cor + ';color:white;font-weight:900;font-size:11px;display:flex;align-items:center;justify-content:center;flex-shrink:0">' + escaparHTML(ini) + '</div>'
+      + '<div><div style="font-size:11px;font-weight:700;color:#334155">' + escaparHTML(u.nome||u.email) + '</div>'
+      + '<div style="font-size:10px;color:#94a3b8">' + escaparHTML(u.email||'') + '</div></div></div>';
+  }).join('');
+  dropEl.style.display = 'block';
+  // Guarda referências no próprio dropEl para acesso em _trkSelecionarUsuario
+  dropEl._inputEl  = inputEl;
+  dropEl._onSelect = onSelect || null;
+}
+
+function _trkSelecionarUsuario(el) {
+  var email = el.getAttribute('data-email') || '';
+  var nome  = el.getAttribute('data-nome')  || email;
+  var drop  = el.parentElement;
+  // Preenche o input de nome diretamente via referência armazenada
+  if (drop._inputEl)  drop._inputEl.value = nome;
+  // Dispara callback para preencher campo de email (hidden ou visível)
+  if (drop._onSelect) drop._onSelect(email, nome);
+  drop.innerHTML = ''; drop.style.display = 'none';
+}
+
+/**
+ * Renderiza dropdown de ações para o campo de vínculo com ação.
+ */
+function _trkAutocompletarAcao(inputEl, dropEl, hiddenIdEl) {
+  var q = (inputEl.value || '').toLowerCase().trim();
+  if (!q || q.length < 2) { dropEl.innerHTML = ''; dropEl.style.display = 'none'; return; }
+  // Busca local primeiro; se não houver resultado busca no backend
+  var matches = _trkAcoesCache.filter(function(a) {
+    return (a.nome || '').toLowerCase().indexOf(q) !== -1 ||
+           (a.tipo || '').toLowerCase().indexOf(q) !== -1;
+  }).slice(0, 8);
+  var renderDropAcao = function(lista) {
+    if (!lista.length) { dropEl.innerHTML = ''; dropEl.style.display = 'none'; return; }
+    dropEl.style.cssText = 'position:absolute;top:100%;left:0;right:0;background:white;border:1.5px solid #a7f3d0;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.12);z-index:9999;overflow:hidden;margin-top:4px';
+    dropEl.innerHTML = lista.map(function(a) {
+      return '<div onclick="_trkSelecionarAcao(this)" data-id="' + escaparHTML(a.id||'') + '" data-nome="' + escaparHTML(a.nome||'') + '"'
+        + ' style="display:flex;align-items:center;gap:10px;padding:9px 14px;cursor:pointer;transition:background .1s" onmouseenter="this.style.background=\'#f0fdf4\'" onmouseleave="this.style.background=\'white\'">'
+        + '<div style="width:28px;height:28px;border-radius:99px;background:#10b981;color:white;font-weight:900;font-size:11px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="fas fa-bolt" style="font-size:10px"></i></div>'
+        + '<div><div style="font-size:11px;font-weight:700;color:#334155">' + escaparHTML(a.nome||'') + '</div>'
+        + '<div style="font-size:10px;color:#94a3b8">' + escaparHTML(a.tipo||'') + ' · ' + escaparHTML(a.status||'') + '</div></div></div>';
+    }).join('');
+    dropEl.style.display = 'block';
+    dropEl._hiddenEl = hiddenIdEl;
+    dropEl._inputEl  = inputEl;
+  };
+  if (matches.length) {
+    renderDropAcao(matches);
+  } else {
+    GAS.acoes.paraAutocomplete(q, function(lista) {
+      _trkAcoesCache = _trkAcoesCache.concat((lista||[]).filter(function(a) {
+        return !_trkAcoesCache.find(function(x){ return x.id === a.id; });
+      }));
+      renderDropAcao(lista || []);
+    }, function() {});
+  }
+}
+
+function _trkSelecionarAcao(el) {
+  var id   = el.getAttribute('data-id')   || '';
+  var nome = el.getAttribute('data-nome') || '';
+  var drop = el.parentElement;
+  if (drop._inputEl)  drop._inputEl.value  = nome;
+  if (drop._hiddenEl) drop._hiddenEl.value = id;
+  drop.innerHTML = ''; drop.style.display = 'none';
 }
 
 function _trkAtualizar() {
@@ -892,6 +1003,18 @@ function _trkAbrirDetalhe(id) {
   var podeDelegas = temPermissao('tarefas','editar') && (isGestao || t.responsavel===meuEmail || t.criadoPor===meuEmail);
   var podeEditar  = temPermissao('tarefas','editar');
 
+  // Chips de vínculo bidirecional
+  var chipsVinculo = '';
+  if (t.tarefaPai) {
+    var tPai = _trk.tarefas.find(function(x){ return x.id === t.tarefaPai; });
+    chipsVinculo += '<span style="display:inline-flex;align-items:center;gap:5px;padding:3px 10px;background:#eef2ff;color:#4338ca;border-radius:99px;font-size:9px;font-weight:900;border:1px solid #c7d2fe;cursor:pointer" onclick="Swal.close();_trkAbrirDetalhe(\'' + t.tarefaPai + '\')">'
+      + '<i class="fas fa-sitemap"></i> Processo: ' + escaparHTML(tPai ? tPai.titulo : t.tarefaPai) + '</span>';
+  }
+  if (t.idAcao) {
+    chipsVinculo += '<span style="display:inline-flex;align-items:center;gap:5px;padding:3px 10px;background:#ecfdf5;color:#065f46;border-radius:99px;font-size:9px;font-weight:900;border:1px solid #a7f3d0">'
+      + '<i class="fas fa-bolt"></i> Ação: ' + escaparHTML(t.acaoNome || t.idAcao) + '</span>';
+  }
+
   Swal.fire({
     title: '',
     width: Math.min(720, window.innerWidth - 32),
@@ -909,6 +1032,7 @@ function _trkAbrirDetalhe(id) {
       + '<span style="font-size:9px;font-weight:700;padding:3px 9px;border-radius:99px;background:#f1f5f9;color:#475569"><i class="fas ' + (_TRK_MOD_ICON[t.modulo]||'fa-circle') + ' mr-1"></i>' + escaparHTML(t.modulo) + '</span>'
       + (t.slaViolado ? '<span style="font-size:9px;font-weight:900;padding:3px 9px;border-radius:99px;background:#fef2f2;color:#dc2626"><i class="fas fa-fire mr-1"></i>SLA violado</span>' : '')
       + (atrasada     ? '<span style="font-size:9px;font-weight:900;padding:3px 9px;border-radius:99px;background:#fef2f2;color:#dc2626"><i class="fas fa-clock mr-1"></i>Atrasada</span>' : '')
+      + chipsVinculo
       + '</div></div></div>'
       // Info grid
       + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">'
@@ -929,13 +1053,19 @@ function _trkAbrirDetalhe(id) {
         + '<input id="trkDetComent" placeholder="Motivo (opcional)" style="flex:1;padding:6px 10px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:11px;outline:none">'
         + '<button onclick="_trkDetalheConfirmarStatus(\'' + id + '\')" style="padding:6px 14px;background:#6366f1;color:white;border:none;border-radius:8px;font-size:10px;font-weight:900;cursor:pointer">Mover</button>'
         + '</div>' : '')
-      // Delegação
-      + (podeDelegas ? '<div style="background:#f5f3ff;border-radius:12px;padding:10px 14px;margin-bottom:16px;display:flex;align-items:center;gap:8px">'
-        + '<span style="font-size:10px;font-weight:900;color:#6d28d9;flex-shrink:0"><i class="fas fa-user-edit mr-1.5"></i>Delegar:</span>'
-        + '<input id="trkDetDest" placeholder="Nome/email do destinatário" style="flex:1;padding:6px 10px;border:1.5px solid #ddd6fe;border-radius:8px;font-size:11px;outline:none">'
+      // Delegação com autocomplete dinâmico
+      + (podeDelegas ? '<div style="background:#f5f3ff;border-radius:12px;padding:10px 14px;margin-bottom:16px">'
+        + '<div style="font-size:10px;font-weight:900;color:#6d28d9;margin-bottom:8px"><i class="fas fa-user-edit mr-1.5"></i>Delegar tarefa</div>'
+        + '<div style="display:flex;gap:8px;align-items:flex-start">'
+        + '<div style="flex:1;position:relative">'
+        + '<input id="trkDetDestNome" placeholder="Nome ou email do destinatário" style="width:100%;padding:6px 10px;border:1.5px solid #ddd6fe;border-radius:8px;font-size:11px;outline:none;box-sizing:border-box" autocomplete="off"'
+        + ' oninput="_trkAutocompletarUsuario(this,document.getElementById(\'trkDetDestDrop\'),function(email,nome){document.getElementById(\'trkDetDestEmail\').value=email;})">'
+        + '<div id="trkDetDestDrop" style="display:none"></div>'
+        + '<input type="hidden" id="trkDetDestEmail">'
+        + '</div>'
         + '<input id="trkDetDelegCom" placeholder="Motivo (opcional)" style="flex:1;padding:6px 10px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:11px;outline:none">'
-        + '<button onclick="_trkDetalheConfirmarDelegar(\'' + id + '\')" style="padding:6px 14px;background:#7c3aed;color:white;border:none;border-radius:8px;font-size:10px;font-weight:900;cursor:pointer">Delegar</button>'
-        + '</div>' : '')
+        + '<button onclick="_trkDetalheConfirmarDelegar(\'' + id + '\')" style="padding:6px 14px;background:#7c3aed;color:white;border:none;border-radius:8px;font-size:10px;font-weight:900;cursor:pointer;white-space:nowrap">Delegar</button>'
+        + '</div></div>' : '')
       // Comentário
       + '<div style="display:flex;gap:8px;margin-bottom:16px">'
       + '<input id="trkDetNovoCmt" placeholder="Adicionar comentário..." style="flex:1;padding:8px 12px;border:1.5px solid #e2e8f0;border-radius:10px;font-size:11px;outline:none">'
@@ -978,8 +1108,11 @@ function _trkDetalheConfirmarStatus(id) {
 }
 
 function _trkDetalheConfirmarDelegar(id) {
-  var dest   = (document.getElementById('trkDetDest')||{}).value||'';
-  var coment = (document.getElementById('trkDetDelegCom')||{}).value||'';
+  // Pega email (campo hidden preenchido pelo autocomplete) ou nome como fallback
+  var destEmail = (document.getElementById('trkDetDestEmail')||{}).value||'';
+  var destNome  = (document.getElementById('trkDetDestNome') ||{}).value||'';
+  var dest      = destEmail || destNome;
+  var coment    = (document.getElementById('trkDetDelegCom')||{}).value||'';
   if (!dest.trim()) { alert('Informe o destinatário.'); return; }
 
   showLoader(true);
@@ -1026,94 +1159,166 @@ function abrirModalTarefa(id, statusPre) {
   var dado = id ? (_trk.tarefas.find(function(t){return t.id===id;}) || {}) : {};
   var statusInicial = dado.status || statusPre || 'solicitada';
 
-  var rhOpts = (typeof _rhCache !== 'undefined' ? _rhCache : [])
-    .map(function(p){ return '<option value="' + escaparHTML(p.nome||'') + '">'; }).join('');
-
   var statusOpts = Object.keys(_TRK_STATUS_LABEL).map(function(s){
     return '<option value="' + s + '"' + (statusInicial===s?' selected':'') + '>' + _TRK_STATUS_LABEL[s] + '</option>';
   }).join('');
 
+  var LABEL = 'display:block;font-size:9px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px';
+  var INPUT = 'width:100%;padding:9px 12px;font-size:12px;border:1.5px solid #e2e8f0;border-radius:12px;outline:none;box-sizing:border-box';
+  var SELECT = 'width:100%;padding:9px 12px;font-size:12px;border:1.5px solid #e2e8f0;border-radius:12px;outline:none';
+
+  // Chips de vínculo existentes (editando)
+  var chipsVinculo = '';
+  if (dado.tarefaPai) {
+    var pai = _trk.tarefas.find(function(x){ return x.id === dado.tarefaPai; });
+    chipsVinculo += '<span style="display:inline-flex;align-items:center;gap:5px;padding:3px 10px;background:#eef2ff;color:#4338ca;border-radius:99px;font-size:9px;font-weight:900;border:1px solid #c7d2fe">'
+      + '<i class="fas fa-sitemap"></i> Processo: ' + escaparHTML(pai ? pai.titulo : dado.tarefaPai) + '</span>';
+  }
+  if (dado.idAcao && dado.acaoNome) {
+    chipsVinculo += '<span style="display:inline-flex;align-items:center;gap:5px;padding:3px 10px;background:#ecfdf5;color:#065f46;border-radius:99px;font-size:9px;font-weight:900;border:1px solid #a7f3d0">'
+      + '<i class="fas fa-bolt"></i> Ação: ' + escaparHTML(dado.acaoNome) + '</span>';
+  }
+
   Swal.fire({
     title: id ? 'Editar Tarefa' : 'Nova Tarefa',
-    width: Math.min(600, window.innerWidth - 32),
+    width: Math.min(640, window.innerWidth - 32),
     showCancelButton: true,
     confirmButtonText: '<i class="fas fa-save mr-1"></i>Salvar',
     cancelButtonText: 'Cancelar',
     confirmButtonColor: '#6366f1',
     customClass: { popup:'rounded-3xl', confirmButton:'rounded-xl font-black text-sm', cancelButton:'rounded-xl font-bold text-sm' },
     html: '<div class="text-left" style="padding:0 8px 8px">'
+      // Chips de vínculo existentes
+      + (chipsVinculo ? '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">' + chipsVinculo + '</div>' : '')
       // Título
       + '<div style="margin-bottom:10px">'
-      + '<label style="display:block;font-size:9px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px">Título *</label>'
-      + '<input id="tarTitulo" style="width:100%;padding:9px 12px;font-size:13px;border:1.5px solid #e2e8f0;border-radius:12px;outline:none;box-sizing:border-box" value="' + escaparHTML(dado.titulo||'') + '" placeholder="Descrição da tarefa">'
+      + '<label style="' + LABEL + '">Título *</label>'
+      + '<input id="tarTitulo" style="' + INPUT + ';font-size:13px" value="' + escaparHTML(dado.titulo||'') + '" placeholder="Descrição da tarefa">'
       + '</div>'
       // Descrição
       + '<div style="margin-bottom:10px">'
-      + '<label style="display:block;font-size:9px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px">Descrição</label>'
-      + '<textarea id="tarDesc" rows="2" style="width:100%;padding:9px 12px;font-size:12px;border:1.5px solid #e2e8f0;border-radius:12px;outline:none;box-sizing:border-box;resize:none" placeholder="Detalhes da tarefa...">' + escaparHTML(dado.descricao||'') + '</textarea>'
+      + '<label style="' + LABEL + '">Descrição</label>'
+      + '<textarea id="tarDesc" rows="2" style="' + INPUT + ';resize:none" placeholder="Detalhes da tarefa...">' + escaparHTML(dado.descricao||'') + '</textarea>'
       + '</div>'
       // Grade: prioridade + status
       + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">'
-      + '<div><label style="display:block;font-size:9px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px">Prioridade</label>'
-      + '<select id="tarPrioridade" style="width:100%;padding:9px 12px;font-size:12px;border:1.5px solid #e2e8f0;border-radius:12px;outline:none">'
+      + '<div><label style="' + LABEL + '">Prioridade</label>'
+      + '<select id="tarPrioridade" style="' + SELECT + '">'
       + ['critica','alta','media','baixa'].map(function(p){return '<option value="'+p+'"'+(dado.prioridade===p?' selected':'')+'>'+(_TRK_PRI_LABEL[p]||p)+'</option>';}).join('')
       + '</select></div>'
-      + '<div><label style="display:block;font-size:9px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px">Status</label>'
-      + '<select id="tarStatus" style="width:100%;padding:9px 12px;font-size:12px;border:1.5px solid #e2e8f0;border-radius:12px;outline:none">' + statusOpts + '</select></div>'
+      + '<div><label style="' + LABEL + '">Status</label>'
+      + '<select id="tarStatus" style="' + SELECT + '">' + statusOpts + '</select></div>'
       + '</div>'
-      // Grade: responsável + prazo
-      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">'
-      + '<div><label style="display:block;font-size:9px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px">Responsável</label>'
-      + '<datalist id="rh-dl-tar2">' + rhOpts + '</datalist>'
-      + '<input id="tarResp" list="rh-dl-tar2" style="width:100%;padding:9px 12px;font-size:12px;border:1.5px solid #e2e8f0;border-radius:12px;outline:none;box-sizing:border-box" value="' + escaparHTML(dado.responsavel||'') + '" placeholder="Nome ou email">'
+      // Responsável com autocomplete dinâmico
+      + '<div style="margin-bottom:10px">'
+      + '<label style="' + LABEL + '">Responsável</label>'
+      + '<div style="position:relative">'
+      + '<input id="tarRespNome" data-role="nome" style="' + INPUT + '" value="' + escaparHTML(dado.responsavelNome||dado.responsavel||'') + '" placeholder="Digite nome ou email para buscar..." autocomplete="off" oninput="_trkAutocompletarUsuario(this,document.getElementById(\'tarRespDrop\'),function(email,nome){document.getElementById(\'tarRespEmail\').value=email;})">'
+      + '<div id="tarRespDrop" style="display:none"></div>'
       + '</div>'
-      + '<div><label style="display:block;font-size:9px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px">Prazo</label>'
-      + '<input id="tarPrazo" type="date" style="width:100%;padding:9px 12px;font-size:12px;border:1.5px solid #e2e8f0;border-radius:12px;outline:none;box-sizing:border-box" value="' + escaparHTML(dado.prazo||'') + '">'
-      + '</div></div>'
-      // Grade: módulo + tipo
+      + '<input type="hidden" id="tarRespEmail" data-role="email" value="' + escaparHTML(dado.responsavel||'') + '">'
+      + '</div>'
+      // Grade: prazo + módulo
       + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">'
-      + '<div><label style="display:block;font-size:9px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px">Módulo de origem</label>'
-      + '<select id="tarModulo" style="width:100%;padding:9px 12px;font-size:12px;border:1.5px solid #e2e8f0;border-radius:12px;outline:none">'
-      + ['manual','reservas','contratos','chaves','rh','comunicacao','almoxarifado','financeiro','manutencao'].map(function(m){return '<option value="'+m+'"'+(dado.modulo===m?' selected':'')+'>'+m+'</option>';}).join('')
+      + '<div><label style="' + LABEL + '">Prazo</label>'
+      + '<input id="tarPrazo" type="date" style="' + INPUT + '" value="' + escaparHTML(dado.prazo||'') + '">'
+      + '</div>'
+      + '<div><label style="' + LABEL + '">Módulo de origem</label>'
+      + '<select id="tarModulo" style="' + SELECT + '">'
+      + ['manual','reservas','contratos','chaves','rh','comunicacao','almoxarifado','financeiro','manutencao','acoes'].map(function(m){return '<option value="'+m+'"'+(dado.modulo===m?' selected':'')+'>'+m+'</option>';}).join('')
       + '</select></div>'
-      + '<div><label style="display:block;font-size:9px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px">Processo / Referência</label>'
-      + '<input id="tarProcesso" style="width:100%;padding:9px 12px;font-size:12px;border:1.5px solid #e2e8f0;border-radius:12px;outline:none;box-sizing:border-box" value="' + escaparHTML(dado.processo||dado.refOrigem||'') + '" placeholder="Ex: Evento X, Contrato Y">'
-      + '</div></div>'
+      + '</div>'
+      // Processo / Referência
+      + '<div style="margin-bottom:10px">'
+      + '<label style="' + LABEL + '">Processo / Referência</label>'
+      + '<input id="tarProcesso" style="' + INPUT + '" value="' + escaparHTML(dado.processo||dado.refOrigem||'') + '" placeholder="Ex: Evento X, Contrato Y">'
+      + '</div>'
+      // Vínculo com Ação Institucional (autocomplete)
+      + '<div style="margin-bottom:4px">'
+      + '<label style="' + LABEL + '"><i class="fas fa-bolt text-emerald-500 mr-1"></i>Vincular a Ação Institucional <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:9px">(opcional)</span></label>'
+      + '<div style="position:relative">'
+      + '<input id="tarAcaoNome" style="' + INPUT + '" value="' + escaparHTML(dado.acaoNome||'') + '" placeholder="Digite para buscar ações ativas..." autocomplete="off" oninput="_trkAutocompletarAcao(this,document.getElementById(\'tarAcaoDrop\'),document.getElementById(\'tarAcaoId\'))">'
+      + '<div id="tarAcaoDrop" style="display:none"></div>'
+      + '</div>'
+      + '<input type="hidden" id="tarAcaoId" value="' + escaparHTML(dado.idAcao||'') + '">'
+      + '</div>'
       + '</div>',
+    didOpen: function() {
+      // Fecha dropdowns ao clicar fora
+      document.addEventListener('click', function _closeDrops(e) {
+        var drops = ['tarRespDrop','tarAcaoDrop'];
+        drops.forEach(function(dId) {
+          var d = document.getElementById(dId);
+          if (d && !d.contains(e.target)) { d.innerHTML = ''; d.style.display = 'none'; }
+        });
+      }, { once: false, capture: true });
+    },
     preConfirm: function() {
       var titulo = (document.getElementById('tarTitulo')?.value||'').trim();
       if (!titulo) { Swal.showValidationMessage('Título é obrigatório'); return false; }
+
+      var respNome  = (document.getElementById('tarRespNome')?.value||'').trim();
+      var respEmail = (document.getElementById('tarRespEmail')?.value||'').trim();
+      // Se email não foi preenchido via autocomplete mas nome parece email, usa como email
+      if (!respEmail && respNome.indexOf('@') !== -1) respEmail = respNome;
+
+      var acaoId   = (document.getElementById('tarAcaoId')?.value||'').trim();
+      var acaoNome = (document.getElementById('tarAcaoNome')?.value||'').trim();
+
       return {
-        id:          dado.id || null,
-        titulo:      titulo,
-        descricao:   document.getElementById('tarDesc')?.value.trim()    || '',
-        prioridade:  document.getElementById('tarPrioridade')?.value     || 'media',
-        status:      document.getElementById('tarStatus')?.value         || 'solicitada',
-        responsavel: document.getElementById('tarResp')?.value.trim()    || '',
-        prazo:       document.getElementById('tarPrazo')?.value          || '',
-        modulo:      document.getElementById('tarModulo')?.value         || 'manual',
-        processo:    document.getElementById('tarProcesso')?.value.trim()|| ''
+        id:              dado.id || null,
+        titulo:          titulo,
+        descricao:       document.getElementById('tarDesc')?.value.trim()     || '',
+        prioridade:      document.getElementById('tarPrioridade')?.value      || 'media',
+        status:          document.getElementById('tarStatus')?.value          || 'solicitada',
+        responsavel:     respEmail || respNome,
+        responsavelNome: respNome  || respEmail,
+        prazo:           document.getElementById('tarPrazo')?.value           || '',
+        modulo:          document.getElementById('tarModulo')?.value          || 'manual',
+        processo:        document.getElementById('tarProcesso')?.value.trim() || '',
+        idAcao:          acaoId,
+        acaoNome:        acaoNome
       };
     }
   }).then(function(r) {
     if (!r.isConfirmed) return;
+    var payload   = r.value;
+    var acaoIdNov = payload.idAcao;
+    delete payload.idAcao;
+    delete payload.acaoNome;
+
     showLoader(true);
-    GAS.tarefas.salvar(r.value, function(tarefa) {
-      showLoader(false);
-      // Atualiza cache local
-      if (tarefa && tarefa.id) {
-        var norm = _trkNorm(tarefa);
-        var idx  = _trk.tarefas.findIndex(function(x){return x.id===tarefa.id;});
-        if (idx === -1) _trk.tarefas.push(norm);
-        else _trk.tarefas[idx] = norm;
+    GAS.tarefas.salvar(payload, function(tarefa) {
+      // Se há vínculo com ação e mudou, chama vincularAcao separadamente
+      var acaoAnterior = dado.idAcao || '';
+      if (tarefa && tarefa.id && acaoIdNov !== acaoAnterior) {
+        GAS.tarefas.vincularAcao(tarefa.id, acaoIdNov, function(tarefaAtual) {
+          showLoader(false);
+          _trkAtualizarCache(tarefaAtual || tarefa);
+        }, function() {
+          showLoader(false);
+          _trkAtualizarCache(tarefa);
+        });
+      } else {
+        showLoader(false);
+        _trkAtualizarCache(tarefa);
       }
-      _trkRenderizar();
-      _trkCarregarMetricas();
     }, function(e) {
       showLoader(false);
       Swal.fire({ icon:'error', title:'Erro', text: e&&e.message||'Não foi possível salvar.', confirmButtonColor:'#6366f1', customClass:{popup:'rounded-3xl',confirmButton:'rounded-xl font-black text-sm'} });
     });
   });
+}
+
+function _trkAtualizarCache(tarefa) {
+  if (tarefa && tarefa.id) {
+    var norm = _trkNorm(tarefa);
+    var idx  = _trk.tarefas.findIndex(function(x){return x.id===tarefa.id;});
+    if (idx === -1) _trk.tarefas.push(norm);
+    else _trk.tarefas[idx] = norm;
+  }
+  _trkRenderizar();
+  _trkCarregarMetricas();
 }
 
 // ══ EXCLUSÃO ═════════════════════════════════════════════════════════════════

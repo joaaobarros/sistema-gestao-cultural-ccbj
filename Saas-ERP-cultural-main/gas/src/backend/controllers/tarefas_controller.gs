@@ -312,7 +312,7 @@ function ctrl_tarefas_criar_processo_comunicacao(dados, emailFallback) {
   return GasResponse.wrap(function() {
     if (!dados || !dados.titulo) throw new Error('Título do processo é obrigatório.');
     var ctx = _ctrlTarefasObterContexto(emailFallback);
-    return criarProcessoComunicacao(dados, ctx.email);
+    return TarefaEngine.criarProcessoComunicacao(dados, ctx.email);
   }, 'ctrl_tarefas_criar_processo_comunicacao');
 }
 
@@ -323,8 +323,46 @@ function ctrl_tarefas_obter_demanda_por_reserva(idReserva, emailFallback) {
   return GasResponse.wrap(function() {
     if (!idReserva) throw new Error('ID da reserva é obrigatório.');
     _ctrlTarefasObterContexto(emailFallback);
-    return obterDemandaPorReservaId(idReserva);
+    return TarefaRepository.obterPorOrigem('comunicacao', idReserva);
   }, 'ctrl_tarefas_obter_demanda_por_reserva');
+}
+
+/**
+ * Vincula uma tarefa a uma Ação Institucional (vínculo bidirecional).
+ * Atualiza o histórico da tarefa e associa a tarefa como recurso na Ação.
+ *
+ * @param {string} tarefaId    — ID da tarefa
+ * @param {string} acaoId      — ID da ação (passar '' para desvincular)
+ */
+function ctrl_tarefas_vincular_acao(tarefaId, acaoId, emailFallback) {
+  return GasResponse.wrap(function() {
+    if (!tarefaId) throw new Error('ID da tarefa é obrigatório.');
+    var ctx = _ctrlTarefasObterContexto(emailFallback);
+
+    // Busca nome legível da ação para exibição no histórico
+    var acaoNome = '';
+    if (acaoId) {
+      try {
+        var acao = obterAcao(acaoId);
+        acaoNome = acao ? (acao.nome || '') : '';
+      } catch(e) {
+        Logger.warn('[ctrl_tarefas_vincular_acao] Falha ao buscar ação ' + acaoId + ': ' + e.message);
+      }
+    }
+
+    var tarefa = TarefaEngine.vincularAcao(tarefaId, acaoId, acaoNome, ctx.email);
+
+    // Propaga vínculo para a Ação: associa a tarefa como recurso (bidirecional)
+    if (acaoId) {
+      try {
+        associarRecurso(acaoId, 'tarefa', tarefaId, ctx.email);
+      } catch(e) {
+        Logger.warn('[ctrl_tarefas_vincular_acao] Falha ao associar recurso na ação: ' + e.message);
+      }
+    }
+
+    return tarefa;
+  }, 'ctrl_tarefas_vincular_acao');
 }
 
 function ctrl_tarefas_atribuir_executores(id, emails, emailFallback) {

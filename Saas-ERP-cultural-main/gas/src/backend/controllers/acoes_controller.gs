@@ -184,6 +184,41 @@ function ctrl_acoes_associar_recurso(acaoId, tipo, recursoId, emailFallback) {
   });
 }
 
+/**
+ * Retorna lista leve de Ações para autocomplete em outros módulos (Tarefas, Reuniões, etc.).
+ * Exclui ações concluídas e canceladas. Filtra por termo de busca se fornecido.
+ * Retorna: [{ id, nome, tipo, status, responsavel }]
+ *
+ * @param {string} termo       — texto para filtrar por nome ou tipo (opcional)
+ * @param {string} emailFallback
+ */
+function ctrl_acoes_para_autocomplete(termo, emailFallback) {
+  return GasResponse.wrap(function() {
+    obterEmailUsuario(emailFallback || '');
+    var todas  = listarAcoes({});
+    var t      = (termo || '').toLowerCase().trim();
+    var STATUS_EXCLUIDOS = ['concluido', 'cancelado', 'arquivado'];
+    return todas
+      .filter(function(a) {
+        if (STATUS_EXCLUIDOS.indexOf(a.status) !== -1) return false;
+        if (!t) return true;
+        return (a.nome  || '').toLowerCase().indexOf(t) !== -1 ||
+               (a.tipo  || '').toLowerCase().indexOf(t) !== -1 ||
+               (a.descricao || '').toLowerCase().indexOf(t) !== -1;
+      })
+      .slice(0, 15)
+      .map(function(a) {
+        return {
+          id:          a.id          || '',
+          nome:        a.nome        || '',
+          tipo:        a.tipo        || '',
+          status:      a.status      || '',
+          responsavel: a.responsavel || ''
+        };
+      });
+  }, 'ctrl_acoes_para_autocomplete');
+}
+
 // ═══════════════════════════════════════════════════════════════
 // SOLICITAÇÕES (migrado de mod_admin.gs)
 // ═══════════════════════════════════════════════════════════════

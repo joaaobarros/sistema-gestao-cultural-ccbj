@@ -1,0 +1,989 @@
+<script>
+/**
+ * @file html/logic/mod_reunioes_series_js.html
+ * @description Lógica frontend do sistema de Séries, Pauta Colaborativa,
+ *              Transferência e Indicadores de Recorrência Temática.
+ *
+ *  Depende de: mod_reunioes_js.html (_reuState, _esc, _reuNome, _reuIniciais, _reuCor)
+ *              GAS.reunioes.series.*, GAS.reunioes.pauta.*
+ */
+
+// ── Estado de séries ───────────────────────────────────────────────────────
+
+var _reuSeriesState = {
+  series:             [],
+  serieSelecionada:   null,   // objeto série do dashboard
+  dashboardAtual:     null,   // dados do dashboard da série atual
+  recorrenciaAtual:   null,   // dados de análise de recorrência
+  pautaReuniaoId:     null,   // reuniaoId da visão pauta colaborativa
+  pautaStatusItemId:  null,   // id do item em processo de status final
+  pautaTransferirId:  null,   // id da pauta em processo de transferência
+  carregadoSeries:    false
+};
+
+// ── Label helpers ──────────────────────────────────────────────────────────
+
+var _LABEL_STATUS_SERIE = { ativa: 'Ativa', pausada: 'Pausada', encerrada: 'Encerrada' };
+var _COR_STATUS_SERIE   = { ativa: 'green', pausada: 'yellow', encerrada: 'slate' };
+
+var _LABEL_STATUS_FINAL_PAUTA = {
+  nao_debatida:          'Não debatida',
+  parcialmente_debatida: 'Parc. debatida',
+  sem_encaminhamento:    'Sem encaminhamento',
+  adiada:                'Adiada',
+  transferida:           'Transferida',
+  pendente_proxima:      'Pendente próxima'
+};
+
+var _COR_STATUS_FINAL_PAUTA = {
+  nao_debatida:          'bg-gray-100 text-gray-600',
+  parcialmente_debatida: 'bg-orange-100 text-orange-700',
+  sem_encaminhamento:    'bg-yellow-100 text-yellow-700',
+  adiada:                'bg-blue-100 text-blue-700',
+  transferida:           'bg-indigo-100 text-indigo-700',
+  pendente_proxima:      'bg-purple-100 text-purple-700'
+};
+
+// ── Status badge helpers ───────────────────────────────────────────────────
+
+function _reuBadgeSerie(status) {
+  var label = _LABEL_STATUS_SERIE[status] || status;
+  var cores = { ativa: 'bg-green-100 text-green-700', pausada: 'bg-yellow-100 text-yellow-700', encerrada: 'bg-slate-100 text-slate-600' };
+  return '<span class="px-2 py-0.5 rounded-full text-xs font-medium ' + (cores[status] || 'bg-gray-100 text-gray-600') + '">' + label + '</span>';
+}
+
+function _reuBadgePautaStatus(statusFinal) {
+  if (!statusFinal) return '';
+  var label = _LABEL_STATUS_FINAL_PAUTA[statusFinal] || statusFinal;
+  var cor = _COR_STATUS_FINAL_PAUTA[statusFinal] || 'bg-gray-100 text-gray-600';
+  return '<span class="px-1.5 py-0.5 rounded text-xs font-medium ' + cor + '">' + label + '</span>';
+}
+
+function _reuFmtData(d) {
+  if (!d) return '—';
+  try { var dt = new Date(d + 'T00:00:00'); return dt.toLocaleDateString('pt-BR'); } catch(e) { return d; }
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// BLOCO 1: SÉRIES — LISTAGEM E GESTÃO
+// ══════════════════════════════════════════════════════════════════════════
+
+function _reuSeriesCarregar() {
+  GAS.reunioes.series.listar(function(res) {
+    _reuSeriesState.series = res.series || [];
+    _reuSeriesState.carregadoSeries = true;
+    _reuSeriesRenderizarGrid(_reuSeriesState.series);
+  }, function(err) {
+    _reuSeriesRenderizarGrid([]);
+  }, GAS._sessao());
+}
+
+function _reuSeriesFiltrar() {
+  var busca  = (document.getElementById('reu-serie-busca')         || {}).value || '';
+  var status = (document.getElementById('reu-serie-status-filtro') || {}).value || '';
+  var b = busca.toLowerCase();
+  var filtradas = _reuSeriesState.series.filter(function(s) {
+    if (status && s.status !== status) return false;
+    if (b && (s.nome || '').toLowerCase().indexOf(b) === -1) return false;
+    return true;
+  });
+  _reuSeriesRenderizarGrid(filtradas);
+}
+
+function _reuSeriesRenderizarGrid(lista) {
+  var el = document.getElementById('reu-series-grid');
+  if (!el) return;
+  if (!lista || !lista.length) {
+    el.innerHTML = '<div class="col-span-full text-center text-gray-400 py-10 text-sm">' +
+      '<i class="fas fa-layer-group text-2xl mb-2 block opacity-30"></i>Nenhuma série encontrada.</div>';
+    return;
+  }
+  el.innerHTML = lista.map(function(s) {
+    var recLabel = s.recorrencia && s.recorrencia.tipo
+      ? ({ semanal:'Semanal', quinzenal:'Quinzenal', mensal:'Mensal', trimestral:'Trimestral' }[s.recorrencia.tipo] || s.recorrencia.tipo)
+      : 'Sob demanda';
+    return '<div class="bg-white border border-gray-100 rounded-xl shadow-sm p-4 hover:shadow-md transition flex flex-col gap-3">' +
+      '<div class="flex items-start justify-between gap-2">' +
+        '<div>' +
+          '<p class="font-semibold text-gray-800 text-sm leading-tight">' + _esc(s.nome) + '</p>' +
+          '<p class="text-xs text-gray-500 mt-0.5">' + _esc(s.descricao || '') + '</p>' +
+        '</div>' +
+        _reuBadgeSerie(s.status) +
+      '</div>' +
+      '<div class="flex gap-3 text-xs text-gray-500">' +
+        '<span><i class="fas fa-sync-alt mr-1 text-indigo-300"></i>' + recLabel + '</span>' +
+        '<span><i class="fas fa-map-marker-alt mr-1 text-gray-300"></i>' + _esc(s.local || '—') + '</span>' +
+        '<span><i class="fas fa-users mr-1 text-gray-300"></i>' + (s.participantesRecorrentes || []).length + '</span>' +
+      '</div>' +
+      '<div class="flex gap-2 mt-auto pt-2 border-t border-gray-50">' +
+        '<button onclick="_reuSerieDashboard(\'' + _esc(s.id) + '\')" ' +
+          'class="flex-1 text-xs bg-indigo-50 text-indigo-700 border border-indigo-100 rounded-lg py-1.5 hover:bg-indigo-100 transition">' +
+          '<i class="fas fa-tachometer-alt mr-1"></i>Dashboard</button>' +
+        '<button onclick="_reuSerieEditarModal(\'' + _esc(s.id) + '\')" ' +
+          'class="text-xs border border-gray-200 text-gray-500 rounded-lg px-3 py-1.5 hover:bg-gray-50 transition">' +
+          '<i class="fas fa-pen"></i></button>' +
+        (s.status === 'ativa'
+          ? '<button onclick="_reuSerieCriarReuniaoModal(\'' + _esc(s.id) + '\')" ' +
+              'class="text-xs bg-green-50 text-green-700 border border-green-100 rounded-lg px-3 py-1.5 hover:bg-green-100 transition">' +
+              '<i class="fas fa-calendar-plus"></i></button>'
+          : '') +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+// ── Modais de série ────────────────────────────────────────────────────────
+
+function _reuSerieNovaModal() {
+  document.getElementById('modal-reu-serie-titulo').textContent = 'Nova Série';
+  document.getElementById('reu-serie-edit-id').value = '';
+  document.getElementById('form-reu-serie').reset();
+  document.getElementById('modal-reu-serie').classList.remove('hidden');
+}
+
+function _reuSerieEditarModal(id) {
+  var serie = _reuSeriesState.series.find(function(s) { return s.id === id; });
+  if (!serie) return;
+  document.getElementById('modal-reu-serie-titulo').textContent = 'Editar Série';
+  document.getElementById('reu-serie-edit-id').value = id;
+  document.getElementById('reu-serie-nome').value         = serie.nome || '';
+  document.getElementById('reu-serie-tipo').value         = serie.tipo || 'ordinaria';
+  document.getElementById('reu-serie-modalidade').value   = serie.modalidade || 'presencial';
+  document.getElementById('reu-serie-local').value        = serie.local || '';
+  document.getElementById('reu-serie-duracao').value      = serie.duracao || 60;
+  if (serie.recorrencia) {
+    document.getElementById('reu-serie-rec-tipo').value   = serie.recorrencia.tipo || '';
+    document.getElementById('reu-serie-rec-horaInicio').value  = serie.recorrencia.horaInicio || '';
+    document.getElementById('reu-serie-rec-horaTermino').value = serie.recorrencia.horaTermino || '';
+    _reuSerieToggleRecorrencia();
+  }
+  if (serie.permissoes) {
+    document.getElementById('reu-serie-perm-participantes').checked = serie.permissoes.participantesPodemAdicionarPauta !== false;
+    document.getElementById('reu-serie-perm-reordenar').checked     = !!serie.permissoes.participantesPodemReordenar;
+    document.getElementById('reu-serie-perm-janela').value          = serie.permissoes.janelaPautaHoras || 24;
+  }
+  document.getElementById('modal-reu-serie').classList.remove('hidden');
+}
+
+function _reuSerieFecharModal() {
+  document.getElementById('modal-reu-serie').classList.add('hidden');
+}
+
+function _reuSerieToggleRecorrencia() {
+  var tipo = document.getElementById('reu-serie-rec-tipo').value;
+  var semanalWrap = document.getElementById('reu-serie-rec-diaSemana-wrap');
+  var mesWrap     = document.getElementById('reu-serie-rec-diaDoMes-wrap');
+  if (semanalWrap) semanalWrap.classList.toggle('hidden', tipo !== 'semanal' && tipo !== 'quinzenal');
+  if (mesWrap)     mesWrap.classList.toggle('hidden', tipo !== 'mensal' && tipo !== 'trimestral');
+}
+
+function _reuSerieSalvar(ev) {
+  ev.preventDefault();
+  var id = document.getElementById('reu-serie-edit-id').value;
+  var dados = {
+    nome:      document.getElementById('reu-serie-nome').value.trim(),
+    tipo:      document.getElementById('reu-serie-tipo').value,
+    modalidade:document.getElementById('reu-serie-modalidade').value,
+    local:     document.getElementById('reu-serie-local').value,
+    duracao:   parseInt(document.getElementById('reu-serie-duracao').value) || 60,
+    recorrencia: {
+      tipo:        document.getElementById('reu-serie-rec-tipo').value || null,
+      diaSemana:   parseInt(document.getElementById('reu-serie-rec-diaSemana').value) || null,
+      diaDoMes:    parseInt(document.getElementById('reu-serie-rec-diaDoMes').value) || null,
+      horaInicio:  document.getElementById('reu-serie-rec-horaInicio').value,
+      horaTermino: document.getElementById('reu-serie-rec-horaTermino').value
+    },
+    permissoes: {
+      participantesPodemAdicionarPauta: document.getElementById('reu-serie-perm-participantes').checked,
+      participantesPodemReordenar:      document.getElementById('reu-serie-perm-reordenar').checked,
+      janelaPautaHoras: parseInt(document.getElementById('reu-serie-perm-janela').value) || 24
+    }
+  };
+
+  var fn = id
+    ? function(cb, err) { GAS.reunioes.series.atualizar(id, dados, cb, err, GAS._sessao()); }
+    : function(cb, err) { GAS.reunioes.series.criar(dados, cb, err, GAS._sessao()); };
+
+  fn(function(res) {
+    _reuSerieFecharModal();
+    _reuSeriesCarregar();
+    Swal && Swal.fire({ icon:'success', title:'Série salva!', toast:true, position:'top-end', timer:2500, showConfirmButton:false });
+  }, function(err) {
+    Swal && Swal.fire({ icon:'error', title:'Erro', text: err || 'Erro ao salvar.', timer:3000, toast:true, position:'top-end', showConfirmButton:false });
+  });
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// BLOCO 2: DASHBOARD DE SÉRIE
+// ══════════════════════════════════════════════════════════════════════════
+
+function _reuSerieDashboard(serieId) {
+  _reu_mostrarVisao('serie-dashboard');
+  document.getElementById('reu-serie-dash-nome').textContent = 'Carregando...';
+
+  GAS.reunioes.series.dashboard(serieId, function(res) {
+    _reuSeriesState.serieSelecionada = res.serie;
+    _reuSeriesState.dashboardAtual   = res;
+    _reuSerieRenderizarDashboard(res);
+  }, null, GAS._sessao());
+}
+
+function _reuSerieRenderizarDashboard(d) {
+  if (!d) return;
+  var serie = d.serie || {};
+  document.getElementById('reu-serie-dash-nome').textContent = serie.nome || '—';
+
+  // Cards de métricas
+  var m = d.metricas || {};
+  var cards = [
+    { icon:'fa-calendar-check', cor:'indigo', label:'Reuniões', valor: m.totalReunioes || 0 },
+    { icon:'fa-tasks', cor:'blue', label:'Encaminhamentos', valor: m.totalEncs || 0 },
+    { icon:'fa-check-circle', cor:'green', label:'Concluídos', valor: m.encsConcluidos || 0 },
+    { icon:'fa-exclamation-triangle', cor:'red', label:'Atrasados', valor: m.encsAtrasados || 0 },
+    { icon:'fa-percentage', cor:'purple', label:'Taxa Resolução', valor: m.taxaResolutividade !== null ? m.taxaResolutividade + '%' : '—' },
+    { icon:'fa-clock', cor:'amber', label:'Pautas Pendentes', valor: m.totalPautasPendentes || 0 }
+  ];
+  var cardsEl = document.getElementById('reu-serie-metricas-cards');
+  if (cardsEl) {
+    cardsEl.innerHTML = cards.map(function(c) {
+      return '<div class="bg-white border border-gray-100 rounded-xl shadow-sm p-3 flex items-center gap-3">' +
+        '<div class="w-8 h-8 rounded-lg bg-' + c.cor + '-50 flex items-center justify-center">' +
+          '<i class="fas ' + c.icon + ' text-' + c.cor + '-500 text-sm"></i>' +
+        '</div>' +
+        '<div><p class="text-lg font-bold text-gray-800">' + c.valor + '</p>' +
+          '<p class="text-xs text-gray-500">' + c.label + '</p></div>' +
+      '</div>';
+    }).join('');
+  }
+
+  // Alertas de pautas pendentes
+  var alertasEl = document.getElementById('reu-serie-alertas');
+  var alertasListaEl = document.getElementById('reu-serie-alertas-lista');
+  var pendentes = d.pautasPendentes || [];
+  if (alertasEl && alertasListaEl) {
+    if (pendentes.length > 0) {
+      alertasEl.classList.remove('hidden');
+      alertasListaEl.innerHTML = pendentes.slice(0,5).map(function(p) {
+        return '<div class="flex items-center gap-2 text-xs">' +
+          '<span class="w-2 h-2 rounded-full bg-amber-400 shrink-0"></span>' +
+          '<span class="font-medium">' + _esc(p.titulo) + '</span>' +
+          '<span class="text-amber-600">(' + _reuFmtData(p.reuniaoData) + ')</span>' +
+          (p.vezesTransferida > 0 ? '<span class="bg-amber-200 text-amber-800 px-1.5 rounded text-xs">' + p.vezesTransferida + 'x transf.</span>' : '') +
+        '</div>';
+      }).join('');
+    } else {
+      alertasEl.classList.add('hidden');
+    }
+  }
+
+  // Timeline
+  var timelineEl = document.getElementById('reu-serie-timeline');
+  if (timelineEl) {
+    var timeline = d.timeline || [];
+    timelineEl.innerHTML = timeline.length
+      ? timeline.map(function(t) {
+          var cor = { planejada:'gray', agendada:'blue', em_andamento:'green', finalizada:'indigo',
+                      ata_rascunho:'yellow', ata_aprovada:'purple', arquivada:'slate', cancelada:'red' }[t.status] || 'gray';
+          return '<div class="flex items-start gap-3 py-2 border-b border-gray-50 last:border-0">' +
+            '<div class="w-2 h-2 rounded-full bg-' + cor + '-400 mt-1.5 shrink-0"></div>' +
+            '<div class="flex-1 min-w-0">' +
+              '<p class="text-xs font-medium text-gray-700 truncate">' + _esc(t.titulo) + '</p>' +
+              '<p class="text-xs text-gray-400">' + _reuFmtData(t.data) +
+                (t.serieNumero ? ' · #' + t.serieNumero : '') + '</p>' +
+            '</div>' +
+            '<div class="text-right shrink-0">' +
+              '<p class="text-xs text-gray-600">' + (t.totalEncs > 0 ? t.encsConcluidos + '/' + t.totalEncs + ' enc.' : '—') + '</p>' +
+              (t.pautasTransferidas > 0
+                ? '<p class="text-xs text-amber-600">' + t.pautasTransferidas + ' transf.</p>' : '') +
+            '</div>' +
+          '</div>';
+        }).join('')
+      : '<p class="text-xs text-gray-400 text-center py-4">Nenhuma reunião nesta série ainda.</p>';
+  }
+
+  // Mais transferidas
+  var transEl = document.getElementById('reu-serie-mais-transferidas');
+  if (transEl) {
+    var transfs = d.maisTransferidas || [];
+    transEl.innerHTML = transfs.length
+      ? transfs.map(function(t) {
+          return '<div class="flex items-center gap-2 text-xs py-1.5 border-b border-gray-50 last:border-0">' +
+            '<span class="w-6 h-6 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center font-bold shrink-0">' + t.vezesTransferida + '</span>' +
+            '<span class="truncate flex-1 text-gray-700">' + _esc(t.titulo) + '</span>' +
+          '</div>';
+        }).join('')
+      : '<p class="text-xs text-gray-400 text-center py-4">Nenhuma pauta transferida ainda.</p>';
+  }
+
+  // Encaminhamentos por responsável
+  var encRespEl = document.getElementById('reu-serie-enc-resp');
+  if (encRespEl) {
+    var encResp = d.encaminhamentosPorResponsavel || {};
+    var responsaveis = Object.keys(encResp).sort(function(a,b) {
+      return (encResp[b].total || 0) - (encResp[a].total || 0);
+    }).slice(0, 10);
+    encRespEl.innerHTML = responsaveis.length
+      ? responsaveis.map(function(email) {
+          var r = encResp[email];
+          var pct = r.total > 0 ? Math.round(r.concluidos / r.total * 100) : 0;
+          return '<div class="flex items-center gap-3">' +
+            '<div class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0" style="background:' + _reuCor(email) + '">' +
+              _reuIniciais(email) +
+            '</div>' +
+            '<div class="flex-1 min-w-0">' +
+              '<p class="text-xs font-medium text-gray-700 truncate">' + _esc(_reuNome(email)) + '</p>' +
+              '<div class="mt-0.5 h-1.5 bg-gray-100 rounded-full overflow-hidden">' +
+                '<div class="h-full rounded-full bg-green-400 transition-all" style="width:' + pct + '%"></div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="text-right shrink-0 text-xs">' +
+              '<p class="font-medium text-gray-700">' + r.concluidos + '/' + r.total + '</p>' +
+              '<p class="text-gray-400">' + pct + '%</p>' +
+            '</div>' +
+          '</div>';
+        }).join('')
+      : '<p class="text-xs text-gray-400 text-center py-4">Sem encaminhamentos.</p>';
+  }
+}
+
+// ── Criar reunião da série ──────────────────────────────────────────────────
+
+function _reuSerieCriarReuniao() {
+  var serie = _reuSeriesState.serieSelecionada;
+  if (!serie) return;
+  _reuSerieCriarReuniaoModal(serie.id);
+}
+
+function _reuSerieCriarReuniaoModal(serieId) {
+  var serie = _reuSeriesState.series.find(function(s) { return s.id === serieId; }) ||
+              _reuSeriesState.serieSelecionada;
+  var modal = document.getElementById('modal-reu-serie-nova-reuniao');
+  if (!modal) return;
+  document.getElementById('reu-nova-reu-serie-id').value = serieId;
+  document.getElementById('reu-nova-reu-data').value     = '';
+  if (serie && serie.recorrencia) {
+    document.getElementById('reu-nova-reu-inicio').value   = serie.recorrencia.horaInicio  || '';
+    document.getElementById('reu-nova-reu-termino').value  = serie.recorrencia.horaTermino || '';
+  }
+  modal.classList.remove('hidden');
+}
+
+function _reuSerieCriarReunioConfirmar(ev) {
+  ev.preventDefault();
+  var serieId = document.getElementById('reu-nova-reu-serie-id').value;
+  var dados = {
+    data:        document.getElementById('reu-nova-reu-data').value,
+    horaInicio:  document.getElementById('reu-nova-reu-inicio').value,
+    horaTermino: document.getElementById('reu-nova-reu-termino').value,
+    titulo:      document.getElementById('reu-nova-reu-titulo').value.trim() || null
+  };
+  document.getElementById('modal-reu-serie-nova-reuniao').classList.add('hidden');
+
+  GAS.reunioes.series.criarReuniao(serieId, dados, function(reuniao) {
+    Swal && Swal.fire({ icon:'success', title:'Reunião criada!', toast:true, position:'top-end', timer:2500, showConfirmButton:false });
+    _reuSerieDashboard(serieId);
+    // Recarregar lista geral também
+    GAS.reunioes.listar({}, function(r) { _reuState.reunioes = r.reunioes || []; }, null, GAS._sessao());
+  }, function(err) {
+    Swal && Swal.fire({ icon:'error', title:'Erro', text: err || 'Erro ao criar.', timer:3000, toast:true, position:'top-end', showConfirmButton:false });
+  }, GAS._sessao());
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// BLOCO 3: PAUTA COLABORATIVA
+// ══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Abre a visão de pauta colaborativa para uma reunião.
+ * Chamado do contexto da lista de reuniões.
+ */
+function _reuAbrirPautaColaborativa(reuniaoId) {
+  var reuniao = _reuState.reunioes.find(function(r) { return r.id === reuniaoId; });
+  if (!reuniao) return;
+
+  _reuSeriesState.pautaReuniaoId = reuniaoId;
+  _reu_mostrarVisao('pauta-colaborativa');
+
+  // Atualizar cabeçalho
+  var tituloEl = document.getElementById('reu-pauta-colab-titulo');
+  var badgeEl  = document.getElementById('reu-pauta-colab-status-badge');
+  if (tituloEl) tituloEl.textContent = reuniao.titulo || '—';
+  if (badgeEl) {
+    var corBadge = { planejada:'bg-gray-100 text-gray-600', agendada:'bg-blue-100 text-blue-700',
+                     em_andamento:'bg-green-100 text-green-700' }[reuniao.status] || 'bg-gray-100 text-gray-600';
+    badgeEl.textContent = reuniao.status.replace(/_/g,' ');
+    badgeEl.className = 'px-2 py-0.5 rounded-full text-xs font-medium ' + corBadge;
+  }
+
+  // Aviso de controle temporal
+  _reuPautaAtualizarAviso(reuniao);
+
+  // Botão IA (só para reuniões com série)
+  var btnIA = document.getElementById('btn-reu-pauta-ia');
+  if (btnIA) btnIA.classList.toggle('hidden', !reuniao.serieId);
+
+  // Carregar reunião atualizada do servidor
+  GAS.reunioes.obter(reuniaoId, function(res) {
+    var r = res.reuniao;
+    // Atualizar na lista local
+    var idx = _reuState.reunioes.findIndex(function(x) { return x.id === r.id; });
+    if (idx !== -1) _reuState.reunioes[idx] = r;
+    _reuPautaRenderizarLista(r);
+  }, null, GAS._sessao());
+
+  // Carregar histórico de auditoria da pauta
+  _reuPautaCarregarHistorico(reuniaoId);
+}
+
+function _reuPautaAtualizarAviso(reuniao) {
+  var avisoEl = document.getElementById('reu-pauta-colab-aviso');
+  if (!avisoEl) return;
+  var posInicio = ['em_andamento','finalizada','ata_rascunho','ata_aprovada','arquivada'].indexOf(reuniao.status) !== -1;
+  if (posInicio) {
+    avisoEl.className = 'rounded-lg p-3 text-xs font-medium border bg-amber-50 border-amber-300 text-amber-700';
+    avisoEl.innerHTML = '<i class="fas fa-lock mr-2"></i>' +
+      'A reunião está em andamento. Pautas <strong>não podem ser removidas</strong>. ' +
+      'Use "Marcar Status" para indicar o que ocorreu com cada item (não debatida, adiada, transferida etc.).';
+    avisoEl.classList.remove('hidden');
+  } else {
+    var btnAdd = document.getElementById('btn-reu-pauta-adicionar');
+    var permSerie = (reuniao._seriePermissoes || {});
+    if (permSerie.participantesPodemAdicionarPauta === false) {
+      avisoEl.className = 'rounded-lg p-3 text-xs font-medium border bg-yellow-50 border-yellow-300 text-yellow-700';
+      avisoEl.innerHTML = '<i class="fas fa-info-circle mr-2"></i>Nesta série, apenas o organizador pode adicionar pautas.';
+      avisoEl.classList.remove('hidden');
+    } else {
+      avisoEl.classList.add('hidden');
+    }
+  }
+}
+
+function _reuPautaRenderizarLista(reuniao) {
+  var el  = document.getElementById('reu-pauta-colab-lista');
+  var cnt = document.getElementById('reu-pauta-colab-count');
+  var pauta = reuniao ? (reuniao.pauta || []) : [];
+  if (cnt) cnt.textContent = pauta.length;
+  if (!el) return;
+
+  if (!pauta.length) {
+    el.innerHTML = '<div class="text-center text-gray-400 py-8 text-sm">' +
+      '<i class="fas fa-list-ul text-2xl mb-2 block opacity-30"></i>' +
+      'Nenhuma pauta adicionada ainda. Clique em "Adicionar Pauta" para começar.</div>';
+    return;
+  }
+
+  var posInicio = reuniao && ['em_andamento','finalizada','ata_rascunho','ata_aprovada','arquivada'].indexOf(reuniao.status) !== -1;
+
+  el.innerHTML = pauta.map(function(item, idx) {
+    var isTransferida = item.transferidaDe ? true : false;
+    var transferBadge = isTransferida
+      ? '<span class="text-xs bg-indigo-50 text-indigo-600 border border-indigo-100 px-1.5 py-0.5 rounded ml-1">' +
+          '<i class="fas fa-exchange-alt mr-0.5"></i>' + item.vezesTransferida + 'x transf.</span>'
+      : '';
+    var statusFinalBadge = _reuBadgePautaStatus(item.statusFinal);
+
+    var acoes = '';
+    if (posInicio) {
+      // Após início: apenas marcar status
+      acoes = '<button onclick="_reuPautaAbrirStatusModal(\'' + _esc(item.id) + '\')" ' +
+        'class="text-xs border border-gray-200 text-gray-500 px-2 py-1 rounded-lg hover:bg-gray-50 transition">' +
+        '<i class="fas fa-tag mr-1"></i>Marcar</button>';
+    } else {
+      // Antes do início: editar, remover, reordenar
+      acoes = '<button onclick="_reuPautaEditarModal(\'' + _esc(item.id) + '\')" ' +
+          'class="text-xs border border-gray-200 text-gray-500 px-2 py-1 rounded-lg hover:bg-gray-50 transition">' +
+          '<i class="fas fa-pen"></i></button>' +
+        '<button onclick="_reuPautaRemoverConfirmar(\'' + _esc(item.id) + '\')" ' +
+          'class="text-xs border border-red-100 text-red-400 px-2 py-1 rounded-lg hover:bg-red-50 transition">' +
+          '<i class="fas fa-trash"></i></button>';
+    }
+
+    // Botão de transferir (para organiz e admin)
+    acoes += '<button onclick="_reuPautaAbrirTransferirModal(\'' + _esc(item.id) + '\')" ' +
+      'class="text-xs border border-amber-100 text-amber-600 px-2 py-1 rounded-lg hover:bg-amber-50 transition" title="Transferir para outra reunião">' +
+      '<i class="fas fa-exchange-alt"></i></button>';
+
+    return '<div class="flex items-start gap-3 bg-white border border-gray-100 rounded-xl p-3 hover:shadow-sm transition" ' +
+        'data-pauta-id="' + _esc(item.id) + '">' +
+      '<div class="w-6 h-6 rounded-full bg-indigo-50 text-indigo-600 text-xs font-bold flex items-center justify-center shrink-0 mt-0.5">' + (idx+1) + '</div>' +
+      '<div class="flex-1 min-w-0">' +
+        '<div class="flex items-center gap-1 flex-wrap">' +
+          '<p class="text-sm font-medium text-gray-800 ' + (item.statusFinal === 'transferida' ? 'line-through text-gray-400' : '') + '">' +
+            _esc(item.titulo) + '</p>' +
+          transferBadge +
+          statusFinalBadge +
+        '</div>' +
+        (item.responsavel
+          ? '<p class="text-xs text-gray-500 mt-0.5"><i class="fas fa-user mr-1 text-gray-300"></i>' + _esc(_reuNome(item.responsavel)) + '</p>'
+          : '') +
+        (item.tempoEstimado > 0
+          ? '<p class="text-xs text-gray-400"><i class="fas fa-clock mr-1"></i>' + item.tempoEstimado + ' min</p>'
+          : '') +
+        (item.notas
+          ? '<p class="text-xs text-gray-400 mt-1 italic truncate">' + _esc(item.notas) + '</p>'
+          : '') +
+        (isTransferida && item.transferidaDe
+          ? '<p class="text-xs text-indigo-400 mt-0.5"><i class="fas fa-history mr-1"></i>Originada de: ' +
+              _esc(item.transferidaDe.tituloReuniaoOrigem || item.transferidaDe.reuniaoId) + '</p>'
+          : '') +
+        (item.adicionadoPor
+          ? '<p class="text-xs text-gray-300 mt-0.5">Adicionada por ' + _esc(_reuNome(item.adicionadoPor)) + '</p>'
+          : '') +
+      '</div>' +
+      '<div class="flex gap-1.5 items-start">' + acoes + '</div>' +
+    '</div>';
+  }).join('');
+}
+
+// ── Adicionar / Editar item de pauta ───────────────────────────────────────
+
+function _reuPautaAdicionarModal() {
+  document.getElementById('modal-reu-pauta-titulo').textContent = 'Adicionar Pauta';
+  document.getElementById('reu-pauta-item-id').value = '';
+  document.getElementById('form-reu-pauta-item').reset();
+  _reuPautaPopularResponsaveis();
+  document.getElementById('modal-reu-pauta-item').classList.remove('hidden');
+}
+
+function _reuPautaEditarModal(itemId) {
+  var reuniaoId = _reuSeriesState.pautaReuniaoId;
+  var reuniao   = _reuState.reunioes.find(function(r) { return r.id === reuniaoId; });
+  var item = reuniao && (reuniao.pauta||[]).find(function(p) { return p.id === itemId; });
+  if (!item) return;
+  document.getElementById('modal-reu-pauta-titulo').textContent = 'Editar Pauta';
+  document.getElementById('reu-pauta-item-id').value    = itemId;
+  document.getElementById('reu-pauta-item-titulo').value = item.titulo || '';
+  document.getElementById('reu-pauta-item-tempo').value  = item.tempoEstimado || 0;
+  document.getElementById('reu-pauta-item-notas').value  = item.notas || '';
+  _reuPautaPopularResponsaveis(item.responsavel);
+  document.getElementById('modal-reu-pauta-item').classList.remove('hidden');
+}
+
+function _reuPautaPopularResponsaveis(selecionado) {
+  var sel = document.getElementById('reu-pauta-item-responsavel');
+  if (!sel) return;
+  var usuarios = _reuState.usuarios || [];
+  sel.innerHTML = usuarios.map(function(u) {
+    return '<option value="' + _esc(u.email) + '"' + (u.email === selecionado ? ' selected' : '') + '>' +
+      _esc(u.nome || u.email) + '</option>';
+  }).join('');
+}
+
+function _reuPautaFecharModal() {
+  document.getElementById('modal-reu-pauta-item').classList.add('hidden');
+}
+
+function _reuPautaSalvarItem(ev) {
+  ev.preventDefault();
+  var reuniaoId = _reuSeriesState.pautaReuniaoId;
+  var itemId    = document.getElementById('reu-pauta-item-id').value;
+  var dados = {
+    titulo:       document.getElementById('reu-pauta-item-titulo').value.trim(),
+    responsavel:  document.getElementById('reu-pauta-item-responsavel').value,
+    tempoEstimado:parseInt(document.getElementById('reu-pauta-item-tempo').value) || 0,
+    notas:        document.getElementById('reu-pauta-item-notas').value
+  };
+  _reuPautaFecharModal();
+
+  var fn = itemId
+    ? function(cb, err) { GAS.reunioes.pauta.editar(reuniaoId, itemId, dados, cb, err, GAS._sessao()); }
+    : function(cb, err) { GAS.reunioes.pauta.adicionar(reuniaoId, dados, cb, err, GAS._sessao()); };
+
+  fn(function(reuniaoAtualizada) {
+    var idx = _reuState.reunioes.findIndex(function(r) { return r.id === reuniaoId; });
+    if (idx !== -1) _reuState.reunioes[idx] = reuniaoAtualizada;
+    _reuPautaRenderizarLista(reuniaoAtualizada);
+    _reuPautaCarregarHistorico(reuniaoId);
+  }, function(err) {
+    Swal && Swal.fire({ icon:'error', title:'Erro', text: err || 'Erro ao salvar.', timer:3000, toast:true, position:'top-end', showConfirmButton:false });
+  });
+}
+
+// ── Remover pauta ─────────────────────────────────────────────────────────
+
+function _reuPautaRemoverConfirmar(itemId) {
+  var reuniaoId = _reuSeriesState.pautaReuniaoId;
+  if (!reuniaoId || !itemId) return;
+  if (!confirm('Remover esta pauta? Esta ação não pode ser desfeita antes do início da reunião.')) return;
+
+  GAS.reunioes.pauta.remover(reuniaoId, itemId, function(reuniaoAtualizada) {
+    var idx = _reuState.reunioes.findIndex(function(r) { return r.id === reuniaoId; });
+    if (idx !== -1) _reuState.reunioes[idx] = reuniaoAtualizada;
+    _reuPautaRenderizarLista(reuniaoAtualizada);
+  }, function(err) {
+    Swal && Swal.fire({ icon:'error', title:'Erro', text: err || 'Erro ao remover.', timer:3000, toast:true, position:'top-end', showConfirmButton:false });
+  }, GAS._sessao());
+}
+
+// ── Status final de pauta ─────────────────────────────────────────────────
+
+function _reuPautaAbrirStatusModal(itemId) {
+  var reuniaoId = _reuSeriesState.pautaReuniaoId;
+  var reuniao   = _reuState.reunioes.find(function(r) { return r.id === reuniaoId; });
+  var item = reuniao && (reuniao.pauta||[]).find(function(p) { return p.id === itemId; });
+  if (!item) return;
+  _reuSeriesState.pautaStatusItemId = itemId;
+  document.getElementById('reu-pauta-status-titulo').textContent = item.titulo;
+  document.getElementById('reu-pauta-status-item-id').value = itemId;
+  document.getElementById('reu-pauta-status-obs').value = '';
+  document.getElementById('modal-reu-pauta-status').classList.remove('hidden');
+}
+
+function _reuPautaFecharStatusModal() {
+  document.getElementById('modal-reu-pauta-status').classList.add('hidden');
+  _reuSeriesState.pautaStatusItemId = null;
+}
+
+function _reuPautaConfirmarStatus(statusFinal) {
+  var reuniaoId = _reuSeriesState.pautaReuniaoId;
+  var itemId    = _reuSeriesState.pautaStatusItemId;
+  var obs       = document.getElementById('reu-pauta-status-obs').value || '';
+  if (!reuniaoId || !itemId) return;
+
+  // Se "transferida", abrir modal de transferência
+  if (statusFinal === 'transferida') {
+    _reuPautaFecharStatusModal();
+    _reuPautaAbrirTransferirModal(itemId);
+    return;
+  }
+
+  GAS.reunioes.pauta.statusFinal(reuniaoId, itemId, statusFinal, obs, function(reuniaoAtualizada) {
+    _reuPautaFecharStatusModal();
+    var idx = _reuState.reunioes.findIndex(function(r) { return r.id === reuniaoId; });
+    if (idx !== -1) _reuState.reunioes[idx] = reuniaoAtualizada;
+    _reuPautaRenderizarLista(reuniaoAtualizada);
+  }, function(err) {
+    Swal && Swal.fire({ icon:'error', title:'Erro', text: err || 'Erro ao marcar status.', timer:3000, toast:true, position:'top-end', showConfirmButton:false });
+  }, GAS._sessao());
+}
+
+// ── Transferência de pauta ─────────────────────────────────────────────────
+
+function _reuPautaAbrirTransferirModal(itemId) {
+  var reuniaoId = _reuSeriesState.pautaReuniaoId;
+  var reuniao   = _reuState.reunioes.find(function(r) { return r.id === reuniaoId; });
+  var item = reuniao && (reuniao.pauta||[]).find(function(p) { return p.id === itemId; });
+  if (!item) return;
+
+  _reuSeriesState.pautaTransferirId = itemId;
+  document.getElementById('reu-transferir-pauta-titulo').textContent = item.titulo;
+  document.getElementById('reu-transferir-pauta-id').value = itemId;
+
+  // Popular select com reuniões disponíveis (excluindo a atual)
+  var destSel = document.getElementById('reu-transferir-destino');
+  var opcoes = _reuState.reunioes.filter(function(r) {
+    return r.id !== reuniaoId && r.status !== 'arquivada' && r.status !== 'cancelada';
+  });
+  destSel.innerHTML = '<option value="">Selecione a reunião de destino...</option>' +
+    opcoes.map(function(r) {
+      return '<option value="' + _esc(r.id) + '">' + _esc(r.titulo) + ' · ' + _reuFmtData(r.data) + '</option>';
+    }).join('');
+
+  document.getElementById('modal-reu-pauta-transferir').classList.remove('hidden');
+}
+
+function _reuPautaFecharTransferirModal() {
+  document.getElementById('modal-reu-pauta-transferir').classList.add('hidden');
+  _reuSeriesState.pautaTransferirId = null;
+}
+
+function _reuPautaConfirmarTransferir() {
+  var reuniaoOrigemId  = _reuSeriesState.pautaReuniaoId;
+  var pautaId          = _reuSeriesState.pautaTransferirId;
+  var reuniaoDestinoId = document.getElementById('reu-transferir-destino').value;
+  if (!reuniaoDestinoId) {
+    alert('Selecione a reunião de destino.');
+    return;
+  }
+
+  GAS.reunioes.pauta.transferir(reuniaoOrigemId, pautaId, reuniaoDestinoId, function(reuniaoAtualizada) {
+    _reuPautaFecharTransferirModal();
+    var idx = _reuState.reunioes.findIndex(function(r) { return r.id === reuniaoOrigemId; });
+    if (idx !== -1) _reuState.reunioes[idx] = reuniaoAtualizada;
+    _reuPautaRenderizarLista(reuniaoAtualizada);
+    Swal && Swal.fire({ icon:'success', title:'Pauta transferida!', toast:true, position:'top-end', timer:2500, showConfirmButton:false });
+  }, function(err) {
+    Swal && Swal.fire({ icon:'error', title:'Erro', text: err || 'Erro ao transferir.', timer:3000, toast:true, position:'top-end', showConfirmButton:false });
+  }, GAS._sessao());
+}
+
+// ── Histórico de auditoria da pauta ──────────────────────────────────────
+
+function _reuPautaCarregarHistorico(reuniaoId) {
+  GAS.reunioes.pauta.historico(reuniaoId, null, function(res) {
+    _reuPautaRenderizarHistorico(res.historico || []);
+  }, null, GAS._sessao());
+}
+
+function _reuPautaToggleHistorico() {
+  var container = document.getElementById('reu-pauta-historico-container');
+  var icon      = document.getElementById('reu-pauta-hist-icon');
+  if (!container) return;
+  var hidden = container.classList.toggle('hidden');
+  if (icon) icon.classList.toggle('rotate-180', !hidden);
+}
+
+function _reuPautaRenderizarHistorico(lista) {
+  var el = document.getElementById('reu-pauta-historico-lista');
+  if (!el) return;
+  if (!lista.length) {
+    el.innerHTML = '<p class="text-gray-400 text-center py-2">Nenhum registro ainda.</p>';
+    return;
+  }
+  el.innerHTML = lista.slice().reverse().map(function(h) {
+    var icone = {
+      adicionada:'fa-plus text-green-400', editada:'fa-pen text-blue-400',
+      removida:'fa-trash text-red-400', transferida:'fa-exchange-alt text-indigo-400',
+      reordenada:'fa-sort text-gray-400', status_alterado:'fa-tag text-amber-400',
+      recebida_por_transferencia:'fa-download text-purple-400'
+    }[h.acao] || 'fa-circle text-gray-300';
+    var ts = h.timestamp ? new Date(h.timestamp).toLocaleString('pt-BR') : '—';
+    return '<div class="flex items-start gap-2 py-1 border-b border-gray-50 last:border-0">' +
+      '<i class="fas ' + icone + ' mt-0.5 w-3 text-center shrink-0"></i>' +
+      '<div class="flex-1 min-w-0">' +
+        '<span class="font-medium">' + _esc(h.acao.replace(/_/g,' ')) + '</span>' +
+        (h.detalhe ? ' — <em>' + _esc(h.detalhe.substring(0,60)) + '</em>' : '') +
+        ' por <span class="text-indigo-600">' + _esc(_reuNome(h.usuario)) + '</span>' +
+      '</div>' +
+      '<span class="text-gray-300 shrink-0">' + ts + '</span>' +
+    '</div>';
+  }).join('');
+}
+
+// ── Contexto IA ────────────────────────────────────────────────────────────
+
+function _reuPautaCarregarContextoIA() {
+  var reuniaoId = _reuSeriesState.pautaReuniaoId;
+  var reuniao   = _reuState.reunioes.find(function(r) { return r.id === reuniaoId; });
+  if (!reuniao || !reuniao.serieId) return;
+
+  GAS.reunioes.series.contextoIA(reuniao.serieId, reuniaoId, function(ctx) {
+    _reuPautaRenderizarContextoIA(ctx);
+  }, null, GAS._sessao());
+}
+
+function _reuPautaRenderizarContextoIA(ctx) {
+  var el = document.getElementById('reu-pauta-ia-contexto');
+  var conteudo = document.getElementById('reu-pauta-ia-conteudo');
+  if (!el || !conteudo) return;
+
+  var html = '';
+
+  if (ctx.alertas && ctx.alertas.length) {
+    html += '<div class="flex items-start gap-1.5">' +
+      '<i class="fas fa-exclamation-triangle text-amber-500 mt-0.5 text-xs shrink-0"></i>' +
+      '<p class="text-xs text-amber-700 font-medium">' + _esc(ctx.alertas.join(' ')) + '</p>' +
+    '</div>';
+  }
+
+  if (ctx.pautasRecorrentes && ctx.pautasRecorrentes.length) {
+    html += '<div>' +
+      '<p class="text-xs font-semibold text-indigo-700 mb-1">Temas recorrentes nesta série:</p>' +
+      ctx.pautasRecorrentes.map(function(t) {
+        return '<div class="flex items-center gap-2 text-xs text-indigo-600">' +
+          '<span class="px-1.5 py-0.5 bg-indigo-100 rounded font-medium">' + t.aparecimentos + 'x</span>' +
+          '<span>' + _esc(t.titulo) + '</span>' +
+        '</div>';
+      }).join('') +
+    '</div>';
+  }
+
+  if (ctx.encaminhamentosPendentes && ctx.encaminhamentosPendentes.length) {
+    html += '<div>' +
+      '<p class="text-xs font-semibold text-indigo-700 mb-1">Encaminhamentos pendentes de reuniões anteriores:</p>' +
+      ctx.encaminhamentosPendentes.slice(0,5).map(function(e) {
+        return '<div class="flex items-center gap-2 text-xs">' +
+          '<span class="w-1.5 h-1.5 rounded-full bg-indigo-400 shrink-0"></span>' +
+          '<span class="text-indigo-700 truncate flex-1">' + _esc(e.titulo) + '</span>' +
+          '<span class="text-indigo-400 shrink-0">' + _esc(e.responsavel.split('@')[0]) + '</span>' +
+        '</div>';
+      }).join('') +
+    '</div>';
+  }
+
+  if (!html) html = '<p class="text-xs text-indigo-600">Nenhum padrão identificado nas reuniões anteriores.</p>';
+
+  conteudo.innerHTML = html;
+  el.classList.remove('hidden');
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// BLOCO 4: ANÁLISE DE RECORRÊNCIA TEMÁTICA
+// ══════════════════════════════════════════════════════════════════════════
+
+function _reuSerieRecorrenciaModal() {
+  var serie = _reuSeriesState.serieSelecionada;
+  if (!serie) return;
+  _reu_mostrarVisao('recorrencia');
+  document.getElementById('reu-rec-serie-nome').textContent = serie.nome || '';
+
+  GAS.reunioes.series.analisarRecorrencia(serie.id, function(analise) {
+    _reuSeriesState.recorrenciaAtual = analise;
+    _reuRecorrenciaRenderizar(analise);
+  }, null, GAS._sessao());
+}
+
+function _reuRecorrenciaRenderizar(analise) {
+  var r = analise.resumo || {};
+
+  // Cards de resumo
+  var cardsEl = document.getElementById('reu-rec-resumo-cards');
+  if (cardsEl) {
+    cardsEl.innerHTML = [
+      { icon:'fa-calendar', cor:'indigo', label:'Reuniões', valor: r.totalReunioes || 0 },
+      { icon:'fa-exchange-alt', cor:'amber', label:'Transferências', valor: r.totalTransferencias || 0 },
+      { icon:'fa-tasks', cor:'blue', label:'Encaminhamentos', valor: r.totalEncaminhamentos || 0 },
+      { icon:'fa-percentage', cor:'green', label:'Resolutividade', valor: r.taxaResolutividade !== null ? r.taxaResolutividade + '%' : '—' }
+    ].map(function(c) {
+      return '<div class="bg-white border border-gray-100 rounded-xl shadow-sm p-3 flex items-center gap-3">' +
+        '<div class="w-8 h-8 rounded-lg bg-' + c.cor + '-50 flex items-center justify-center">' +
+          '<i class="fas ' + c.icon + ' text-' + c.cor + '-500 text-sm"></i></div>' +
+        '<div><p class="text-lg font-bold text-gray-800">' + c.valor + '</p>' +
+          '<p class="text-xs text-gray-500">' + c.label + '</p></div>' +
+      '</div>';
+    }).join('');
+  }
+
+  // Alertas globais
+  var alertasGlobaisEl = document.getElementById('reu-rec-alertas-globais');
+  var alertasListaEl   = document.getElementById('reu-rec-alertas-lista');
+  var alertas = analise.alertasGlobais || [];
+  if (alertasGlobaisEl && alertasListaEl) {
+    if (alertas.length) {
+      alertasGlobaisEl.classList.remove('hidden');
+      alertasListaEl.innerHTML = alertas.map(function(a) {
+        return '<p><i class="fas fa-arrow-right mr-1"></i>' + _esc(a) + '</p>';
+      }).join('');
+    } else {
+      alertasGlobaisEl.classList.add('hidden');
+    }
+  }
+
+  // Gargalos
+  _reuRecRenderizarGargalos(analise.gargalos || []);
+
+  // Todos os temas
+  _reuRecRenderizarTemas(analise.temas || []);
+}
+
+function _reuRecRenderizarGargalos(gargalos) {
+  var el = document.getElementById('reu-rec-gargalos');
+  if (!el) return;
+  if (!gargalos.length) {
+    el.innerHTML = '<p class="text-xs text-gray-400 text-center py-3">Nenhum gargalos identificado. A série está funcionando bem!</p>';
+    return;
+  }
+  el.innerHTML = gargalos.map(function(g) {
+    return '<div class="bg-red-50 border border-red-100 rounded-lg p-3 flex gap-3">' +
+      '<div class="text-red-400 mt-0.5"><i class="fas fa-traffic-light"></i></div>' +
+      '<div class="flex-1 min-w-0">' +
+        '<p class="text-sm font-medium text-gray-800">' + _esc(g.titulo) + '</p>' +
+        '<div class="flex flex-wrap gap-2 mt-1">' +
+          '<span class="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full">' + g.aparecimentos + ' aparecimentos</span>' +
+          (g.diasAberto > 0 ? '<span class="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">' + g.diasAberto + ' dias aberto</span>' : '') +
+          (g.taxaResolucao !== null ? '<span class="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">' + g.taxaResolucao + '% resolução</span>' : '') +
+        '</div>' +
+        (g.alertas && g.alertas.length
+          ? '<div class="mt-1 space-y-0.5">' + g.alertas.map(function(a) {
+              return '<p class="text-xs text-red-600"><i class="fas fa-exclamation mr-1"></i>' + _esc(a) + '</p>';
+            }).join('') + '</div>'
+          : '') +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function _reuRecFiltrarTemas() {
+  if (!_reuSeriesState.recorrenciaAtual) return;
+  var temas = _reuSeriesState.recorrenciaAtual.temas || [];
+  var busca  = (document.getElementById('reu-rec-busca-tema') || {}).value || '';
+  var apenasRec = (document.getElementById('reu-rec-apenas-recorrentes') || {}).checked;
+  var b = busca.toLowerCase();
+  var filtrados = temas.filter(function(t) {
+    if (apenasRec && !t.ehRecorrente) return false;
+    if (b && t.titulo.toLowerCase().indexOf(b) === -1) return false;
+    return true;
+  });
+  _reuRecRenderizarTemas(filtrados);
+}
+
+function _reuRecRenderizarTemas(temas) {
+  var el = document.getElementById('reu-rec-temas-lista');
+  if (!el) return;
+  if (!temas.length) {
+    el.innerHTML = '<p class="text-xs text-gray-400 text-center py-4">Nenhum tema encontrado.</p>';
+    return;
+  }
+  el.innerHTML = temas.map(function(t) {
+    var corBg = t.alertas && t.alertas.length > 0 ? 'border-amber-200 bg-amber-50' : 'border-gray-100 bg-white';
+    return '<div class="border ' + corBg + ' rounded-xl p-3 flex gap-3 items-start">' +
+      '<div class="text-center shrink-0">' +
+        '<p class="text-lg font-bold text-indigo-600">' + t.aparecimentos + '</p>' +
+        '<p class="text-xs text-gray-400">vezes</p>' +
+      '</div>' +
+      '<div class="flex-1 min-w-0">' +
+        '<p class="text-sm font-medium text-gray-800">' + _esc(t.titulo) + '</p>' +
+        '<div class="flex flex-wrap gap-1.5 mt-1">' +
+          (t.transferencias > 0
+            ? '<span class="text-xs bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded">' + t.transferencias + ' transf.</span>'
+            : '') +
+          (t.diasAberto > 0
+            ? '<span class="text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">' + t.diasAberto + 'd aberta</span>'
+            : '') +
+          (t.taxaResolucao !== null
+            ? '<span class="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded">' + t.taxaResolucao + '% resolvida</span>'
+            : '<span class="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">Sem encaminhamento</span>') +
+          (t.ehRecorrente
+            ? '<span class="text-xs bg-red-100 text-red-600 px-1.5 py-0.5 rounded font-medium">Recorrente</span>'
+            : '') +
+        '</div>' +
+        (t.alertas && t.alertas.length
+          ? '<div class="mt-1">' + t.alertas.map(function(a) {
+              return '<p class="text-xs text-amber-700"><i class="fas fa-exclamation-triangle mr-1"></i>' + _esc(a) + '</p>';
+            }).join('') + '</div>'
+          : '') +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// INTEGRAÇÃO COM _reu_mostrarVisao
+// Sobrescreve (extends) a função existente para suportar as novas visões
+// ══════════════════════════════════════════════════════════════════════════
+
+(function() {
+  var _reuMostrarVisaoOriginal = typeof _reu_mostrarVisao === 'function' ? _reu_mostrarVisao : null;
+
+  window._reu_mostrarVisao = function(visao) {
+    // Esconder todas as visões, incluindo as novas
+    var todasVisoes = document.querySelectorAll('.reu-visao');
+    todasVisoes.forEach(function(el) { el.classList.add('hidden'); });
+
+    // Mostrar a visão solicitada
+    var alvo = document.getElementById('reu-visao-' + visao);
+    if (alvo) {
+      alvo.classList.remove('hidden');
+    } else if (_reuMostrarVisaoOriginal) {
+      // Fallback para visões originais
+      _reuMostrarVisaoOriginal(visao);
+      return;
+    }
+
+    // Atualizar botões de sub-nav (se existir sub-nav)
+    var btns = document.querySelectorAll('.reu-subnav-btn');
+    btns.forEach(function(b) {
+      var isAtivo = b.getAttribute('data-visao') === visao;
+      b.classList.toggle('text-indigo-600', isAtivo);
+      b.classList.toggle('border-indigo-500', isAtivo);
+      b.classList.toggle('text-gray-500', !isAtivo);
+      b.classList.toggle('border-transparent', !isAtivo);
+    });
+
+    // Ações lazy de cada visão
+    if (visao === 'series' && !_reuSeriesState.carregadoSeries) {
+      _reuSeriesCarregar();
+    }
+  };
+})();
+</script>

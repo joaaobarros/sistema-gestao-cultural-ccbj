@@ -276,6 +276,10 @@ var TarefaEngine = (function() {
         tarefaPai:         dados.tarefaPai    || '',
         ordem:             dados.ordem        || 0,
 
+        // Vínculos com outros módulos
+        idAcao:            dados.idAcao       || '',
+        acaoNome:          dados.acaoNome     || '',
+
         sla:               dados.sla || SLA_TAREFA_H[pri] || 72,
         slaViolado:        false,
 
@@ -307,7 +311,8 @@ var TarefaEngine = (function() {
 
       var camposEditaveis = ['titulo','descricao','tipo','prioridade','prazo',
                              'responsavel','responsavelNome','executores','setor',
-                             'funcao','tags','processo','etapa','duracaoPrevista','sla'];
+                             'funcao','tags','processo','etapa','duracaoPrevista','sla',
+                             'idAcao','acaoNome'];
 
       var alteracoes = [];
       camposEditaveis.forEach(function(k) {
@@ -801,6 +806,49 @@ var TarefaEngine = (function() {
         filaAprovacao:      ativas.filter(function(t) { return t.status === 'aguardando_aprovacao'; })
                                   .map(function(t) { return { id: t.id, titulo: t.titulo, responsavel: t.responsavel, prazo: t.prazo }; })
       };
+    },
+
+    // ── Vínculo bidirecional com Ação Institucional ────────────────────────────
+
+    /**
+     * Vincula uma tarefa a uma Ação Institucional existente.
+     * Registra no histórico da tarefa e emite evento para rastreabilidade.
+     * O controller é responsável por chamar associarRecursoAcao na action_engine.
+     *
+     * @param {string} tarefaId  — ID da tarefa a vincular
+     * @param {string} acaoId    — ID da ação de destino ('' para desvincular)
+     * @param {string} acaoNome  — Nome legível da ação (para exibição)
+     * @param {string} emailAtor — Email do usuário que fez a vinculação
+     * @returns {Object}         — Tarefa atualizada
+     */
+    vincularAcao: function(tarefaId, acaoId, acaoNome, emailAtor) {
+      var tarefa = TarefaRepository.obterPorId(tarefaId);
+      if (!tarefa) throw new Error('Tarefa não encontrada: ' + tarefaId);
+
+      var acaoAnterior     = tarefa.idAcao   || '';
+      var acaoNomeAnterior = tarefa.acaoNome  || '';
+
+      tarefa.idAcao       = acaoId   || '';
+      tarefa.acaoNome     = acaoNome || '';
+      tarefa.atualizadoEm = _agora();
+
+      tarefa.historico = tarefa.historico || [];
+      tarefa.historico.push({
+        data:       _agora(),
+        ator:       emailAtor || 'sistema',
+        campo:      'idAcao',
+        de:         acaoAnterior,
+        para:       acaoId || '',
+        comentario: acaoId
+          ? ('Tarefa vinculada à ação: ' + (acaoNome || acaoId))
+          : ('Vínculo com ação removido. Anterior: ' + (acaoNomeAnterior || acaoAnterior))
+      });
+
+      TarefaRepository.salvar(tarefa);
+      _emitirEvento('TAREFA_VINCULADA_ACAO', tarefa, emailAtor, {
+        acaoId: acaoId, acaoNome: acaoNome, acaoAnterior: acaoAnterior
+      });
+      return tarefa;
     },
 
     // ── Verificação batch de SLAs (para trigger diário) ────────────────────────

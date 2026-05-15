@@ -64,8 +64,9 @@ const _DATA_FILES = [
   'tarefas.json', 'processos.json', 'demandas.json', 'atendimentos.json',
   // Almoxarifado
   'almoxarifado.json', 'movimentacoes_almox.json',
-  // Reuniões e Encaminhamentos
+  // Reuniões, Encaminhamentos, Séries e Histórico de Pautas
   'reunioes.json', 'encaminhamentos.json',
+  'reunioes_series.json', 'pauta_historico.json',
 ];
 
 // ── Estrutura de cada módulo ─────────────────────────────────────────────

@@ -1,0 +1,554 @@
+<!-- ╔══════════════════════════════════════════════════════════════════════╗ -->
+<!-- ║  mod_reunioes_series.html                                          ║ -->
+<!-- ║  Visão de Séries integrada ao módulo de Reuniões                   ║ -->
+<!-- ║  Inclui:                                                           ║ -->
+<!-- ║   • Gestão de Séries/Presets                                       ║ -->
+<!-- ║   • Pauta Colaborativa (controle temporal + status final)          ║ -->
+<!-- ║   • Transferência de Pautas com rastreabilidade                    ║ -->
+<!-- ║   • Indicadores de Recorrência Temática                            ║ -->
+<!-- ║   • Dashboard por Série (timeline, métricas, gargalos)             ║ -->
+<!-- ╚══════════════════════════════════════════════════════════════════════╝ -->
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     VISÃO: SÉRIES
+     ══════════════════════════════════════════════════════════════════════ -->
+<div id="reu-visao-series" class="reu-visao hidden flex flex-col gap-4">
+
+  <!-- Header -->
+  <div class="flex items-center justify-between flex-wrap gap-2">
+    <div>
+      <h3 class="text-base font-semibold text-gray-800">Séries de Reuniões</h3>
+      <p class="text-xs text-gray-500">Presets estruturais com memória organizacional e inteligência de recorrência</p>
+    </div>
+    <button onclick="_reuSerieNovaModal()"
+      class="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium px-3 py-2 rounded-lg transition">
+      <i class="fas fa-plus"></i> Nova Série
+    </button>
+  </div>
+
+  <!-- Filtros -->
+  <div class="flex gap-2 flex-wrap">
+    <input id="reu-serie-busca" type="text" placeholder="Buscar série..." oninput="_reuSeriesFiltrar()"
+      class="border border-gray-200 rounded-lg px-3 py-1.5 text-xs w-56 focus:outline-none focus:ring-2 focus:ring-indigo-300">
+    <select id="reu-serie-status-filtro" onchange="_reuSeriesFiltrar()"
+      class="border border-gray-200 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-300">
+      <option value="">Todos os status</option>
+      <option value="ativa">Ativa</option>
+      <option value="pausada">Pausada</option>
+      <option value="encerrada">Encerrada</option>
+    </select>
+  </div>
+
+  <!-- Grid de cards de séries -->
+  <div id="reu-series-grid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+    <div class="col-span-full text-center text-gray-400 py-8 text-sm">
+      <i class="fas fa-layer-group text-2xl mb-2 block opacity-40"></i>
+      Carregando séries...
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     VISÃO: DASHBOARD DE SÉRIE
+     ══════════════════════════════════════════════════════════════════════ -->
+<div id="reu-visao-serie-dashboard" class="reu-visao hidden flex flex-col gap-4">
+
+  <!-- Breadcrumb -->
+  <div class="flex items-center gap-2 text-xs text-gray-500">
+    <button onclick="_reu_mostrarVisao('series')" class="hover:text-indigo-600 transition">
+      <i class="fas fa-layer-group"></i> Séries
+    </button>
+    <i class="fas fa-chevron-right text-gray-300"></i>
+    <span id="reu-serie-dash-nome" class="text-gray-700 font-medium">—</span>
+    <div class="ml-auto flex gap-2">
+      <button onclick="_reuSerieRecorrenciaModal()" title="Análise de Recorrência"
+        class="text-xs bg-amber-50 border border-amber-200 text-amber-700 px-3 py-1.5 rounded-lg hover:bg-amber-100 transition">
+        <i class="fas fa-chart-network mr-1"></i> Recorrência
+      </button>
+      <button onclick="_reuSerieCriarReuniao()" title="Nova reunião desta série"
+        class="text-xs bg-indigo-600 text-white px-3 py-1.5 rounded-lg hover:bg-indigo-700 transition">
+        <i class="fas fa-plus mr-1"></i> Nova Reunião
+      </button>
+    </div>
+  </div>
+
+  <!-- Cards de métricas -->
+  <div id="reu-serie-metricas-cards" class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+    <!-- renderizado por JS -->
+  </div>
+
+  <!-- Alertas de pautas pendentes -->
+  <div id="reu-serie-alertas" class="hidden">
+    <div class="bg-amber-50 border border-amber-200 rounded-lg p-3">
+      <p class="text-xs font-semibold text-amber-700 mb-2"><i class="fas fa-exclamation-triangle mr-1"></i>Pautas Pendentes de Reuniões Anteriores</p>
+      <div id="reu-serie-alertas-lista" class="space-y-1"></div>
+    </div>
+  </div>
+
+  <!-- Duas colunas: timeline + transferidas -->
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+
+    <!-- Timeline -->
+    <div class="lg:col-span-2 bg-white border border-gray-100 rounded-xl shadow-sm p-4">
+      <h4 class="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+        <i class="fas fa-stream text-indigo-400"></i> Timeline da Série
+      </h4>
+      <div id="reu-serie-timeline" class="space-y-2 max-h-80 overflow-y-auto pr-1">
+        <!-- renderizado por JS -->
+      </div>
+    </div>
+
+    <!-- Pautas mais transferidas -->
+    <div class="bg-white border border-gray-100 rounded-xl shadow-sm p-4">
+      <h4 class="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+        <i class="fas fa-exchange-alt text-amber-400"></i> Mais Transferidas
+      </h4>
+      <div id="reu-serie-mais-transferidas" class="space-y-2 max-h-80 overflow-y-auto">
+        <!-- renderizado por JS -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Encaminhamentos por responsável -->
+  <div class="bg-white border border-gray-100 rounded-xl shadow-sm p-4">
+    <h4 class="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+      <i class="fas fa-users text-blue-400"></i> Encaminhamentos por Responsável
+    </h4>
+    <div id="reu-serie-enc-resp" class="space-y-2">
+      <!-- renderizado por JS -->
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     VISÃO: PAUTA COLABORATIVA
+     Exibida ao abrir uma reunião específica no contexto de série
+     ══════════════════════════════════════════════════════════════════════ -->
+<div id="reu-visao-pauta-colaborativa" class="reu-visao hidden flex flex-col gap-4">
+
+  <!-- Breadcrumb -->
+  <div class="flex items-center gap-2 text-xs text-gray-500 flex-wrap">
+    <button onclick="_reu_mostrarVisao('lista')" class="hover:text-indigo-600 transition">
+      <i class="fas fa-list"></i> Reuniões
+    </button>
+    <i class="fas fa-chevron-right text-gray-300"></i>
+    <span id="reu-pauta-colab-titulo" class="text-gray-700 font-medium">—</span>
+    <span id="reu-pauta-colab-status-badge" class="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600"></span>
+  </div>
+
+  <!-- Aviso de controle temporal -->
+  <div id="reu-pauta-colab-aviso" class="hidden rounded-lg p-3 text-xs font-medium border"></div>
+
+  <!-- Contexto IA (se série) -->
+  <div id="reu-pauta-ia-contexto" class="hidden bg-indigo-50 border border-indigo-200 rounded-xl p-3">
+    <div class="flex items-center justify-between mb-2">
+      <p class="text-xs font-semibold text-indigo-700"><i class="fas fa-brain mr-1"></i>Contexto Inteligente da Série</p>
+      <button onclick="document.getElementById('reu-pauta-ia-contexto').classList.add('hidden')"
+        class="text-indigo-400 hover:text-indigo-600 text-xs">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+    <div id="reu-pauta-ia-conteudo" class="space-y-1.5"></div>
+  </div>
+
+  <!-- Header da pauta com ações -->
+  <div class="flex items-center justify-between flex-wrap gap-2">
+    <h4 class="text-sm font-semibold text-gray-700">
+      <i class="fas fa-list-ol text-indigo-400 mr-1"></i>
+      Pauta (<span id="reu-pauta-colab-count">0</span> itens)
+    </h4>
+    <div class="flex gap-2">
+      <button id="btn-reu-pauta-ia" onclick="_reuPautaCarregarContextoIA()" title="Ver contexto inteligente da série"
+        class="hidden text-xs border border-indigo-200 text-indigo-600 px-3 py-1.5 rounded-lg hover:bg-indigo-50 transition">
+        <i class="fas fa-brain mr-1"></i> IA
+      </button>
+      <button id="btn-reu-pauta-adicionar" onclick="_reuPautaAdicionarModal()"
+        class="text-xs bg-indigo-600 text-white px-3 py-1.5 rounded-lg hover:bg-indigo-700 transition">
+        <i class="fas fa-plus mr-1"></i> Adicionar Pauta
+      </button>
+    </div>
+  </div>
+
+  <!-- Lista de pautas colaborativa -->
+  <div id="reu-pauta-colab-lista" class="space-y-2">
+    <!-- renderizado por JS -->
+  </div>
+
+  <!-- Histórico de auditoria (colapsável) -->
+  <div class="border border-gray-100 rounded-xl overflow-hidden">
+    <button onclick="_reuPautaToggleHistorico()"
+      class="w-full flex items-center justify-between px-4 py-2.5 bg-gray-50 hover:bg-gray-100 text-xs font-medium text-gray-600 transition">
+      <span><i class="fas fa-history mr-1 text-gray-400"></i> Histórico de Auditoria da Pauta</span>
+      <i id="reu-pauta-hist-icon" class="fas fa-chevron-down text-gray-400 transition-transform"></i>
+    </button>
+    <div id="reu-pauta-historico-container" class="hidden px-4 py-3 bg-white">
+      <div id="reu-pauta-historico-lista" class="space-y-1 text-xs text-gray-600 max-h-48 overflow-y-auto"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     VISÃO: RECORRÊNCIA TEMÁTICA
+     ══════════════════════════════════════════════════════════════════════ -->
+<div id="reu-visao-recorrencia" class="reu-visao hidden flex flex-col gap-4">
+
+  <!-- Breadcrumb -->
+  <div class="flex items-center gap-2 text-xs text-gray-500">
+    <button onclick="_reu_mostrarVisao('serie-dashboard')" class="hover:text-indigo-600 transition">
+      <i class="fas fa-tachometer-alt"></i> Dashboard
+    </button>
+    <i class="fas fa-chevron-right text-gray-300"></i>
+    <span class="text-gray-700 font-medium">Análise de Recorrência</span>
+    <span id="reu-rec-serie-nome" class="text-indigo-600 font-semibold"></span>
+  </div>
+
+  <!-- Cards resumo -->
+  <div id="reu-rec-resumo-cards" class="grid grid-cols-2 sm:grid-cols-4 gap-3"></div>
+
+  <!-- Alertas globais -->
+  <div id="reu-rec-alertas-globais" class="hidden bg-red-50 border border-red-200 rounded-lg p-3">
+    <p class="text-xs font-semibold text-red-700 mb-1"><i class="fas fa-fire mr-1"></i>Alertas Organizacionais</p>
+    <div id="reu-rec-alertas-lista" class="space-y-1 text-xs text-red-600"></div>
+  </div>
+
+  <!-- Gargalos organizacionais -->
+  <div class="bg-white border border-gray-100 rounded-xl shadow-sm p-4">
+    <h4 class="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+      <i class="fas fa-traffic-light text-red-400"></i> Gargalos Organizacionais
+      <span class="text-xs text-gray-400 font-normal">(aparecem 3+ vezes com baixa resolução)</span>
+    </h4>
+    <div id="reu-rec-gargalos" class="space-y-2"></div>
+  </div>
+
+  <!-- Todos os temas com indicadores -->
+  <div class="bg-white border border-gray-100 rounded-xl shadow-sm p-4">
+    <h4 class="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+      <i class="fas fa-tags text-indigo-400"></i> Todos os Temas
+    </h4>
+    <div class="flex gap-2 mb-3">
+      <input id="reu-rec-busca-tema" type="text" placeholder="Filtrar tema..." oninput="_reuRecFiltrarTemas()"
+        class="border border-gray-200 rounded-lg px-3 py-1.5 text-xs w-48 focus:outline-none focus:ring-2 focus:ring-indigo-300">
+      <label class="flex items-center gap-1 text-xs text-gray-600 cursor-pointer">
+        <input type="checkbox" id="reu-rec-apenas-recorrentes" onchange="_reuRecFiltrarTemas()" class="rounded">
+        Apenas recorrentes
+      </label>
+    </div>
+    <div id="reu-rec-temas-lista" class="space-y-2 max-h-96 overflow-y-auto pr-1"></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     MODALS
+     ══════════════════════════════════════════════════════════════════════ -->
+
+<!-- Modal: Nova / Editar Série -->
+<div id="modal-reu-serie" class="modal-overlay hidden fixed inset-0 z-50 flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+    <div class="flex items-center justify-between p-5 border-b border-gray-100">
+      <h3 id="modal-reu-serie-titulo" class="font-semibold text-gray-800 text-base">Nova Série</h3>
+      <button onclick="_reuSerieFecharModal()" class="text-gray-400 hover:text-gray-600 transition">
+        <i class="fas fa-times text-lg"></i>
+      </button>
+    </div>
+    <form id="form-reu-serie" class="p-5 space-y-4" onsubmit="_reuSerieSalvar(event)">
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div class="sm:col-span-2">
+          <label class="text-xs font-medium text-gray-600 block mb-1">Nome da Série *</label>
+          <input id="reu-serie-nome" type="text" required placeholder="Ex.: Reunião Semanal de Equipe"
+            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300">
+        </div>
+        <div>
+          <label class="text-xs font-medium text-gray-600 block mb-1">Tipo</label>
+          <select id="reu-serie-tipo" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300">
+            <option value="ordinaria">Ordinária</option>
+            <option value="extraordinaria">Extraordinária</option>
+            <option value="emergencial">Emergencial</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-xs font-medium text-gray-600 block mb-1">Modalidade</label>
+          <select id="reu-serie-modalidade" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300">
+            <option value="presencial">Presencial</option>
+            <option value="hibrido">Híbrido</option>
+            <option value="remoto">Remoto</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-xs font-medium text-gray-600 block mb-1">Local padrão</label>
+          <input id="reu-serie-local" type="text" placeholder="Sala de Reuniões / Link"
+            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300">
+        </div>
+        <div>
+          <label class="text-xs font-medium text-gray-600 block mb-1">Duração estimada (min)</label>
+          <input id="reu-serie-duracao" type="number" min="15" step="15" value="60"
+            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300">
+        </div>
+      </div>
+
+      <!-- Recorrência -->
+      <div class="border border-gray-100 rounded-xl p-3 space-y-3">
+        <p class="text-xs font-semibold text-gray-600"><i class="fas fa-sync-alt mr-1 text-indigo-400"></i>Recorrência</p>
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div>
+            <label class="text-xs text-gray-500 block mb-1">Frequência</label>
+            <select id="reu-serie-rec-tipo" onchange="_reuSerieToggleRecorrencia()"
+              class="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-300">
+              <option value="">Sem recorrência</option>
+              <option value="semanal">Semanal</option>
+              <option value="quinzenal">Quinzenal</option>
+              <option value="mensal">Mensal</option>
+              <option value="trimestral">Trimestral</option>
+            </select>
+          </div>
+          <div id="reu-serie-rec-diaSemana-wrap" class="hidden">
+            <label class="text-xs text-gray-500 block mb-1">Dia da semana</label>
+            <select id="reu-serie-rec-diaSemana"
+              class="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-300">
+              <option value="1">Segunda</option>
+              <option value="2">Terça</option>
+              <option value="3">Quarta</option>
+              <option value="4">Quinta</option>
+              <option value="5">Sexta</option>
+            </select>
+          </div>
+          <div id="reu-serie-rec-diaDoMes-wrap" class="hidden">
+            <label class="text-xs text-gray-500 block mb-1">Dia do mês</label>
+            <input id="reu-serie-rec-diaDoMes" type="number" min="1" max="28" placeholder="1-28"
+              class="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-300">
+          </div>
+          <div>
+            <label class="text-xs text-gray-500 block mb-1">Início</label>
+            <input id="reu-serie-rec-horaInicio" type="time"
+              class="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-300">
+          </div>
+          <div>
+            <label class="text-xs text-gray-500 block mb-1">Término</label>
+            <input id="reu-serie-rec-horaTermino" type="time"
+              class="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-300">
+          </div>
+        </div>
+      </div>
+
+      <!-- Permissões de pauta colaborativa -->
+      <div class="border border-gray-100 rounded-xl p-3 space-y-2">
+        <p class="text-xs font-semibold text-gray-600"><i class="fas fa-users-cog mr-1 text-indigo-400"></i>Pauta Colaborativa</p>
+        <label class="flex items-center gap-2 text-xs text-gray-600 cursor-pointer">
+          <input type="checkbox" id="reu-serie-perm-participantes" checked class="rounded">
+          Participantes podem adicionar e editar suas próprias pautas
+        </label>
+        <label class="flex items-center gap-2 text-xs text-gray-600 cursor-pointer">
+          <input type="checkbox" id="reu-serie-perm-reordenar" class="rounded">
+          Participantes podem reordenar pautas
+        </label>
+        <div class="flex items-center gap-2">
+          <label class="text-xs text-gray-600 shrink-0">Janela de edição (horas antes do início):</label>
+          <input id="reu-serie-perm-janela" type="number" min="1" max="168" value="24"
+            class="w-20 border border-gray-200 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-300">
+        </div>
+      </div>
+
+      <input type="hidden" id="reu-serie-edit-id">
+
+      <div class="flex justify-end gap-2 pt-2">
+        <button type="button" onclick="_reuSerieFecharModal()"
+          class="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition">
+          Cancelar
+        </button>
+        <button type="submit"
+          class="px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-medium">
+          <i class="fas fa-save mr-1"></i> Salvar Série
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal: Adicionar / Editar Pauta -->
+<div id="modal-reu-pauta-item" class="modal-overlay hidden fixed inset-0 z-50 flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
+    <div class="flex items-center justify-between p-5 border-b border-gray-100">
+      <h3 id="modal-reu-pauta-titulo" class="font-semibold text-gray-800 text-base">Adicionar Pauta</h3>
+      <button onclick="_reuPautaFecharModal()" class="text-gray-400 hover:text-gray-600 transition">
+        <i class="fas fa-times text-lg"></i>
+      </button>
+    </div>
+    <form id="form-reu-pauta-item" class="p-5 space-y-3" onsubmit="_reuPautaSalvarItem(event)">
+      <div>
+        <label class="text-xs font-medium text-gray-600 block mb-1">Título da Pauta *</label>
+        <input id="reu-pauta-item-titulo" type="text" required placeholder="Descreva o assunto a tratar..."
+          class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300">
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="text-xs font-medium text-gray-600 block mb-1">Responsável</label>
+          <select id="reu-pauta-item-responsavel"
+            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300">
+          </select>
+        </div>
+        <div>
+          <label class="text-xs font-medium text-gray-600 block mb-1">Tempo estimado (min)</label>
+          <input id="reu-pauta-item-tempo" type="number" min="0" step="5" value="0"
+            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300">
+        </div>
+      </div>
+      <div>
+        <label class="text-xs font-medium text-gray-600 block mb-1">Observações</label>
+        <textarea id="reu-pauta-item-notas" rows="2" placeholder="Contexto ou material de apoio..."
+          class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 resize-none"></textarea>
+      </div>
+      <input type="hidden" id="reu-pauta-item-id">
+      <div class="flex justify-end gap-2 pt-1">
+        <button type="button" onclick="_reuPautaFecharModal()"
+          class="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition">
+          Cancelar
+        </button>
+        <button type="submit"
+          class="px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-medium">
+          <i class="fas fa-check mr-1"></i> Confirmar
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal: Status Final de Pauta -->
+<div id="modal-reu-pauta-status" class="modal-overlay hidden fixed inset-0 z-50 flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+    <div class="flex items-center justify-between p-5 border-b border-gray-100">
+      <h3 class="font-semibold text-gray-800 text-base">Marcar Status da Pauta</h3>
+      <button onclick="_reuPautaFecharStatusModal()" class="text-gray-400 hover:text-gray-600 transition">
+        <i class="fas fa-times text-lg"></i>
+      </button>
+    </div>
+    <div class="p-5 space-y-3">
+      <p id="reu-pauta-status-titulo" class="text-sm font-medium text-gray-700 bg-gray-50 rounded-lg px-3 py-2"></p>
+      <div class="grid grid-cols-2 gap-2">
+        <button onclick="_reuPautaConfirmarStatus('nao_debatida')"
+          class="reu-status-final-btn flex items-center gap-2 px-3 py-2.5 rounded-lg border border-gray-200 hover:bg-gray-50 text-left text-xs transition">
+          <span class="w-2 h-2 rounded-full bg-gray-400 shrink-0"></span>
+          <span>Não debatida</span>
+        </button>
+        <button onclick="_reuPautaConfirmarStatus('parcialmente_debatida')"
+          class="reu-status-final-btn flex items-center gap-2 px-3 py-2.5 rounded-lg border border-orange-200 hover:bg-orange-50 text-left text-xs transition">
+          <span class="w-2 h-2 rounded-full bg-orange-400 shrink-0"></span>
+          <span>Parc. debatida</span>
+        </button>
+        <button onclick="_reuPautaConfirmarStatus('sem_encaminhamento')"
+          class="reu-status-final-btn flex items-center gap-2 px-3 py-2.5 rounded-lg border border-yellow-200 hover:bg-yellow-50 text-left text-xs transition">
+          <span class="w-2 h-2 rounded-full bg-yellow-400 shrink-0"></span>
+          <span>Sem encaminhamento</span>
+        </button>
+        <button onclick="_reuPautaConfirmarStatus('adiada')"
+          class="reu-status-final-btn flex items-center gap-2 px-3 py-2.5 rounded-lg border border-blue-200 hover:bg-blue-50 text-left text-xs transition">
+          <span class="w-2 h-2 rounded-full bg-blue-400 shrink-0"></span>
+          <span>Adiada</span>
+        </button>
+        <button onclick="_reuPautaConfirmarStatus('pendente_proxima')"
+          class="reu-status-final-btn flex items-center gap-2 px-3 py-2.5 rounded-lg border border-purple-200 hover:bg-purple-50 text-left text-xs transition">
+          <span class="w-2 h-2 rounded-full bg-purple-400 shrink-0"></span>
+          <span>Pendente próxima</span>
+        </button>
+        <button onclick="_reuPautaConfirmarStatus('transferida')"
+          class="reu-status-final-btn flex items-center gap-2 px-3 py-2.5 rounded-lg border border-indigo-200 hover:bg-indigo-50 text-left text-xs transition">
+          <span class="w-2 h-2 rounded-full bg-indigo-400 shrink-0"></span>
+          <span>Transferida</span>
+        </button>
+      </div>
+      <div>
+        <label class="text-xs font-medium text-gray-600 block mb-1">Observação (opcional)</label>
+        <textarea id="reu-pauta-status-obs" rows="2" placeholder="Motivo, contexto..."
+          class="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-300 resize-none"></textarea>
+      </div>
+      <input type="hidden" id="reu-pauta-status-item-id">
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Transferir Pauta -->
+<div id="modal-reu-pauta-transferir" class="modal-overlay hidden fixed inset-0 z-50 flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+    <div class="flex items-center justify-between p-5 border-b border-gray-100">
+      <h3 class="font-semibold text-gray-800 text-base"><i class="fas fa-exchange-alt text-indigo-400 mr-2"></i>Transferir Pauta</h3>
+      <button onclick="_reuPautaFecharTransferirModal()" class="text-gray-400 hover:text-gray-600 transition">
+        <i class="fas fa-times text-lg"></i>
+      </button>
+    </div>
+    <div class="p-5 space-y-3">
+      <div class="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-700">
+        <p id="reu-transferir-pauta-titulo" class="font-medium mb-1"></p>
+        <p>Esta pauta será marcada como "transferida" na reunião atual e adicionada à reunião de destino com rastreabilidade completa.</p>
+      </div>
+      <div>
+        <label class="text-xs font-medium text-gray-600 block mb-1">Reunião de destino *</label>
+        <select id="reu-transferir-destino"
+          class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300">
+          <option value="">Selecione uma reunião...</option>
+        </select>
+      </div>
+      <input type="hidden" id="reu-transferir-pauta-id">
+      <div class="flex justify-end gap-2 pt-1">
+        <button type="button" onclick="_reuPautaFecharTransferirModal()"
+          class="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition">
+          Cancelar
+        </button>
+        <button onclick="_reuPautaConfirmarTransferir()"
+          class="px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-medium">
+          <i class="fas fa-exchange-alt mr-1"></i> Transferir
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Criar Reunião da Série -->
+<div id="modal-reu-serie-nova-reuniao" class="modal-overlay hidden fixed inset-0 z-50 flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+    <div class="flex items-center justify-between p-5 border-b border-gray-100">
+      <h3 class="font-semibold text-gray-800 text-base"><i class="fas fa-calendar-plus text-indigo-400 mr-2"></i>Nova Reunião da Série</h3>
+      <button onclick="document.getElementById('modal-reu-serie-nova-reuniao').classList.add('hidden')"
+        class="text-gray-400 hover:text-gray-600 transition">
+        <i class="fas fa-times text-lg"></i>
+      </button>
+    </div>
+    <form id="form-reu-serie-nova-reuniao" class="p-5 space-y-3" onsubmit="_reuSerieCriarReunioConfirmar(event)">
+      <div>
+        <label class="text-xs font-medium text-gray-600 block mb-1">Data *</label>
+        <input id="reu-nova-reu-data" type="date" required
+          class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300">
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="text-xs font-medium text-gray-600 block mb-1">Início</label>
+          <input id="reu-nova-reu-inicio" type="time"
+            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300">
+        </div>
+        <div>
+          <label class="text-xs font-medium text-gray-600 block mb-1">Término</label>
+          <input id="reu-nova-reu-termino" type="time"
+            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300">
+        </div>
+      </div>
+      <div>
+        <label class="text-xs font-medium text-gray-600 block mb-1">Título (opcional — usa nome da série + número)</label>
+        <input id="reu-nova-reu-titulo" type="text" placeholder="Deixe em branco para gerar automaticamente"
+          class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300">
+      </div>
+      <input type="hidden" id="reu-nova-reu-serie-id">
+      <div class="bg-blue-50 border border-blue-200 rounded-lg p-2.5 text-xs text-blue-700">
+        <i class="fas fa-info-circle mr-1"></i>
+        Participantes, local e configurações serão herdados do preset. A pauta será iniciada em branco.
+      </div>
+      <div class="flex justify-end gap-2 pt-1">
+        <button type="button" onclick="document.getElementById('modal-reu-serie-nova-reuniao').classList.add('hidden')"
+          class="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition">
+          Cancelar
+        </button>
+        <button type="submit"
+          class="px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-medium">
+          <i class="fas fa-calendar-plus mr-1"></i> Criar Reunião
+        </button>
+      </div>
+    </form>
+  </div>
+</div>

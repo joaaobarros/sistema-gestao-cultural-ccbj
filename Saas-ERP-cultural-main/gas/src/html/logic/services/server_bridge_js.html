@@ -373,7 +373,9 @@ const GAS = {
     excluir:                   function(id, cb, err)                         { GAS._callCtrl('ctrl_tarefas_excluir',                     [id, GAS._sessao()],                              cb, err); },
     salvarOrdemKanban:         function(ordens, cb, err)                     { GAS._callCtrl('ctrl_tarefas_salvar_ordem_kanban',         [ordens, GAS._sessao()],                          cb, err); },
     atribuirExecutores:        function(id, emails, cb, err)                 { GAS._callCtrl('ctrl_tarefas_atribuir_executores',         [id, emails, GAS._sessao()],                      cb, err); },
-    responderComoFuncao:       function(id, msg, autor, cb, err)             { GAS._callCtrl('ctrl_tarefas_responder_como_funcao',       [id, msg, autor, GAS._sessao()],                  cb, err); }
+    responderComoFuncao:       function(id, msg, autor, cb, err)             { GAS._callCtrl('ctrl_tarefas_responder_como_funcao',       [id, msg, autor, GAS._sessao()],                  cb, err); },
+    // Vínculo bidirecional Tarefa ↔ Ação Institucional
+    vincularAcao:              function(tarefaId, acaoId, cb, err)           { GAS._callCtrl('ctrl_tarefas_vincular_acao',               [tarefaId, acaoId, GAS._sessao()],                cb, err); }
   },
 
   /**
@@ -703,14 +705,16 @@ const GAS = {
    * BLOCO: Ações Institucionais — núcleo oficial (acoes_controller.gs → action_engine.gs)
    */
   acoes: {
-    listar:          function(filtros, cb, err)              { GAS._callCtrl('ctrl_acoes_listar',           [filtros||{}],                           cb, err); },
-    obter:           function(id, cb, err)                   { GAS._callCtrl('ctrl_acoes_obter',            [id],                                    cb, err); },
-    criar:           function(dados, cb, err)                { GAS._callCtrl('ctrl_acoes_criar',            [dados, GAS._sessao()],                  cb, err); },
-    atualizar:       function(id, dados, cb, err)            { GAS._callCtrl('ctrl_acoes_atualizar',        [id, dados, GAS._sessao()],              cb, err); },
-    mudarStatus:     function(id, novoStatus, motivo, cb, err) { GAS._callCtrl('ctrl_acoes_mudar_status',  [id, novoStatus, GAS._sessao(), motivo||''], cb, err); },
-    associarRecurso: function(acaoId, tipo, recursoId, cb, err) { GAS._callCtrl('ctrl_acoes_associar_recurso',      [acaoId, tipo, recursoId, GAS._sessao()], cb, err); },
-    obterRecursos:   function(acaoId, cb, err)               { GAS._callCtrl('ctrl_acoes_obter_recursos',          [acaoId],                                cb, err); },
-    painelIntegrado: function(acaoId, cb, err)               { GAS._callCtrl('ctrl_acoes_obter_painel_integrado',  [acaoId],                                cb, err); }
+    listar:           function(filtros, cb, err)                { GAS._callCtrl('ctrl_acoes_listar',                  [filtros||{}],                              cb, err); },
+    obter:            function(id, cb, err)                     { GAS._callCtrl('ctrl_acoes_obter',                   [id],                                       cb, err); },
+    criar:            function(dados, cb, err)                  { GAS._callCtrl('ctrl_acoes_criar',                   [dados, GAS._sessao()],                     cb, err); },
+    atualizar:        function(id, dados, cb, err)              { GAS._callCtrl('ctrl_acoes_atualizar',               [id, dados, GAS._sessao()],                 cb, err); },
+    mudarStatus:      function(id, novoStatus, motivo, cb, err) { GAS._callCtrl('ctrl_acoes_mudar_status',            [id, novoStatus, GAS._sessao(), motivo||''],cb, err); },
+    associarRecurso:  function(acaoId, tipo, recursoId, cb, err){ GAS._callCtrl('ctrl_acoes_associar_recurso',        [acaoId, tipo, recursoId, GAS._sessao()],   cb, err); },
+    obterRecursos:    function(acaoId, cb, err)                 { GAS._callCtrl('ctrl_acoes_obter_recursos',          [acaoId],                                   cb, err); },
+    painelIntegrado:  function(acaoId, cb, err)                 { GAS._callCtrl('ctrl_acoes_obter_painel_integrado',  [acaoId],                                   cb, err); },
+    // Lista leve para autocomplete — exclui concluídas/canceladas, busca por nome/tipo
+    paraAutocomplete: function(termo, cb, err)                  { GAS._callCtrl('ctrl_acoes_para_autocomplete',       [termo||'', GAS._sessao()],                 cb, err); }
   },
 
   /**
@@ -812,6 +816,65 @@ const GAS = {
     },
     dashboard: function(cb, err, s) {
       GAS._callCtrl('ctrl_reunioes_dashboard', [s || GAS._sessao()], cb, err);
+    },
+
+    // ── Séries / Presets ─────────────────────────────────────────────────────
+    series: {
+      listar: function(cb, err, s) {
+        GAS._callCtrl('ctrl_reunioes_series_listar', [s || GAS._sessao()], cb, err);
+      },
+      obter: function(id, cb, err, s) {
+        GAS._callCtrl('ctrl_reunioes_series_obter', [id, s || GAS._sessao()], cb, err);
+      },
+      criar: function(dados, cb, err, s) {
+        GAS._callCtrl('ctrl_reunioes_series_criar', [dados, s || GAS._sessao()], cb, err);
+      },
+      atualizar: function(id, dados, cb, err, s) {
+        GAS._callCtrl('ctrl_reunioes_series_atualizar', [id, dados, s || GAS._sessao()], cb, err);
+      },
+      status: function(id, novoStatus, cb, err, s) {
+        GAS._callCtrl('ctrl_reunioes_series_status', [id, novoStatus, s || GAS._sessao()], cb, err);
+      },
+      excluir: function(id, cb, err, s) {
+        GAS._callCtrl('ctrl_reunioes_series_excluir', [id, s || GAS._sessao()], cb, err);
+      },
+      criarReuniao: function(serieId, dados, cb, err, s) {
+        GAS._callCtrl('ctrl_reunioes_criar_de_serie', [serieId, dados, s || GAS._sessao()], cb, err);
+      },
+      dashboard: function(serieId, cb, err, s) {
+        GAS._callCtrl('ctrl_reunioes_dashboard_serie', [serieId, s || GAS._sessao()], cb, err);
+      },
+      analisarRecorrencia: function(serieId, cb, err, s) {
+        GAS._callCtrl('ctrl_reunioes_recorrencia_analisar', [serieId, s || GAS._sessao()], cb, err);
+      },
+      contextoIA: function(serieId, reuniaoAtualId, cb, err, s) {
+        GAS._callCtrl('ctrl_reunioes_contexto_ia', [serieId, reuniaoAtualId, s || GAS._sessao()], cb, err);
+      }
+    },
+
+    // ── Pauta Colaborativa ───────────────────────────────────────────────────
+    pauta: {
+      adicionar: function(reuniaoId, dados, cb, err, s) {
+        GAS._callCtrl('ctrl_reunioes_pauta_adicionar', [reuniaoId, dados, s || GAS._sessao()], cb, err);
+      },
+      editar: function(reuniaoId, itemId, dados, cb, err, s) {
+        GAS._callCtrl('ctrl_reunioes_pauta_editar', [reuniaoId, itemId, dados, s || GAS._sessao()], cb, err);
+      },
+      remover: function(reuniaoId, itemId, cb, err, s) {
+        GAS._callCtrl('ctrl_reunioes_pauta_remover', [reuniaoId, itemId, s || GAS._sessao()], cb, err);
+      },
+      reordenar: function(reuniaoId, novaOrdem, cb, err, s) {
+        GAS._callCtrl('ctrl_reunioes_pauta_reordenar', [reuniaoId, novaOrdem, s || GAS._sessao()], cb, err);
+      },
+      statusFinal: function(reuniaoId, itemId, statusFinal, observacao, cb, err, s) {
+        GAS._callCtrl('ctrl_reunioes_pauta_status_final', [reuniaoId, itemId, statusFinal, observacao, s || GAS._sessao()], cb, err);
+      },
+      transferir: function(origemId, pautaId, destinoId, cb, err, s) {
+        GAS._callCtrl('ctrl_reunioes_pauta_transferir', [origemId, pautaId, destinoId, s || GAS._sessao()], cb, err);
+      },
+      historico: function(reuniaoId, pautaId, cb, err, s) {
+        GAS._callCtrl('ctrl_reunioes_pauta_historico', [reuniaoId, pautaId, s || GAS._sessao()], cb, err);
+      }
     }
   }
 

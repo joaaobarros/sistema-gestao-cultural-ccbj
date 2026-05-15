@@ -102,6 +102,10 @@ var ReunioesRepository = (function() {
       });
     },
 
+    listarReunioesPorSerie: function(serieId) {
+      return _lerReunioes().filter(function(r) { return r.serieId === serieId; });
+    },
+
     // --- Encaminhamentos ---
 
     listarEncaminhamentos: function() {
