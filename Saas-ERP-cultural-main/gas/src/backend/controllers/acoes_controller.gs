@@ -50,18 +50,30 @@ function ctrl_acoes_obter_recursos(acaoId) {
 }
 
 /**
- * Retorna painel integrado enriquecido: para cada recurso vinculado à Ação,
- * busca os dados reais da entidade (nome, status, datas, responsável).
- * Estrutura de retorno: { reservas[], tarefas[], reunioes[], outros[] }
+ * Retorna painel integrado enriquecido de uma Ação Institucional.
+ * Agrega: reservas, tarefas, reuniões, contratos, equipe e dados financeiros.
+ * Estrutura: { reservas[], tarefas[], reunioes[], contratos[], equipe[], financeiro{}, processos[] }
+ *
  * @param {string} acaoId
+ * @param {string} emailFallback
  */
-function ctrl_acoes_obter_painel_integrado(acaoId) {
+function ctrl_acoes_obter_painel_integrado(acaoId, emailFallback) {
   return GasResponse.wrap(function() {
     if (!acaoId) throw new Error('acaoId é obrigatório.');
 
-    var recursos = obterRecursosDaAcao(acaoId);
-    var resultado = { reservas: [], tarefas: [], reunioes: [], outros: [] };
+    var recursos  = obterRecursosDaAcao(acaoId);
+    var resultado = {
+      reservas:   [],
+      tarefas:    [],
+      reunioes:   [],
+      contratos:  [],
+      equipe:     [],
+      financeiro: { previsto: 0, executado: 0, saldo: 0, contratos: [] },
+      processos:  [],
+      outros:     []
+    };
 
+    // ── Entidades já vinculadas via associarRecurso ───────────────────────────
     recursos.forEach(function(r) {
       try {
         if (r.tipo === 'reserva') {
@@ -90,6 +102,7 @@ function ctrl_acoes_obter_painel_integrado(acaoId) {
               prioridade:  tarefa.prioridade  || '',
               responsavel: tarefa.responsavel || '',
               prazo:       tarefa.prazo       || '',
+              processoId:  tarefa.processoId  || '',
               associadoEm: r.associadoEm
             });
           }
@@ -106,13 +119,92 @@ function ctrl_acoes_obter_painel_integrado(acaoId) {
               associadoEm: r.associadoEm
             });
           }
+        } else if (r.tipo === 'contrato') {
+          // Contratos vinculados via associarRecurso (tipo='contrato')
+          resultado.contratos.push({
+            id:          r.recursoId,
+            associadoEm: r.associadoEm
+          });
         } else {
           resultado.outros.push(r);
         }
       } catch (e) {
-        Logger.warn('ctrl_acoes_obter_painel_integrado', 'Falha ao enriquecer recurso ' + r.tipo + ':' + r.recursoId, e.message);
+        Logger.warn('[ctrl_acoes_obter_painel_integrado] Falha ao enriquecer ' + r.tipo + ':' + r.recursoId + ' — ' + e.message);
       }
     });
+
+    // ── Contratos financeiros vinculados à ação (via acaoId no financeiro) ────
+    try {
+      var contratacoes = lerJSON('contratacoes.json') || [];
+      var contratosDaAcao = contratacoes.filter(function(c) {
+        return c.acaoId === acaoId || c.idAcao === acaoId;
+      });
+      contratosDaAcao.forEach(function(c) {
+        var jaVinculado = resultado.contratos.some(function(x) { return x.id === c.id; });
+        if (!jaVinculado) {
+          resultado.contratos.push({
+            id:          c.id,
+            descricao:   c.descricao   || c.nome || '',
+            valor:       parseFloat(c.valor) || 0,
+            status:      c.status      || '',
+            tipo:        c.tipo        || '',
+            responsavel: c.responsavel || ''
+          });
+        }
+        // Agrega financeiro
+        var val = parseFloat(c.valor) || 0;
+        resultado.financeiro.previsto  += val;
+        resultado.financeiro.contratos.push({ id: c.id, descricao: c.descricao || '', valor: val });
+      });
+
+      // Pagamentos executados vinculados à ação
+      var pagamentos = lerJSON('pagamentos.json') || [];
+      pagamentos.filter(function(p) {
+        return p.acaoId === acaoId || p.idAcao === acaoId;
+      }).forEach(function(p) {
+        resultado.financeiro.executado += parseFloat(p.valor) || 0;
+      });
+
+      resultado.financeiro.saldo = resultado.financeiro.previsto - resultado.financeiro.executado;
+    } catch(e) {
+      Logger.warn('[ctrl_acoes_obter_painel_integrado] Falha ao agregar financeiro: ' + e.message);
+    }
+
+    // ── Equipe vinculada à ação (funcionários com idAcao ou acaoId) ──────────
+    try {
+      var funcionarios = lerJSON('funcionarios.json') || [];
+      resultado.equipe = funcionarios.filter(function(f) {
+        return f.acaoId === acaoId || (f.acoes || []).indexOf(acaoId) !== -1;
+      }).map(function(f) {
+        return {
+          email:  f.email  || '',
+          nome:   f.nome   || '',
+          papel:  f.papel  || f.cargo || '',
+          setor:  f.setor  || '',
+          status: f.status || 'ativo'
+        };
+      });
+    } catch(e) {
+      Logger.warn('[ctrl_acoes_obter_painel_integrado] Falha ao agregar equipe: ' + e.message);
+    }
+
+    // ── Processos Institucionais vinculados à ação ────────────────────────────
+    try {
+      var processos = ProcessoInstitucionalRepository.listarComFiltros({ acaoId: acaoId }, '', 'superadmin');
+      resultado.processos = processos.map(function(p) {
+        return {
+          id:               p.id,
+          titulo:           p.titulo,
+          tipo:             p.tipo,
+          status:           p.status,
+          prioridade:       p.prioridade,
+          responsavelAtual: p.responsavelAtual,
+          setoresEnvolvidos: p.setoresEnvolvidos || []
+        };
+      });
+    } catch(e) {
+      Logger.warn('[ctrl_acoes_obter_painel_integrado] Falha ao agregar processos: ' + e.message);
+    }
 
     return resultado;
   }, 'ctrl_acoes_obter_painel_integrado');

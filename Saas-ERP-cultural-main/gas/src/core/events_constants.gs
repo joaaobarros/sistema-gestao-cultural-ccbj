@@ -157,6 +157,35 @@ var SystemEventTypes = Object.freeze({
   // ────────────────────────────────────────────
   // HABILITAÇÃO DIÁRIA (FASE 2 — Controllers CTRL)
   // ────────────────────────────────────────────
-  QUALIFICATION_DAILY_REGISTERED: 'QUALIFICATION_DAILY_REGISTERED'
+  QUALIFICATION_DAILY_REGISTERED: 'QUALIFICATION_DAILY_REGISTERED',
+
+  // ────────────────────────────────────────────
+  // PROCESSOS INSTITUCIONAIS — Camada transversal
+  // ────────────────────────────────────────────
+  PROCESSO_CRIADO:             'PROCESSO_CRIADO',
+  PROCESSO_ATUALIZADO:         'PROCESSO_ATUALIZADO',
+  PROCESSO_STATUS_CHANGED:     'PROCESSO_STATUS_CHANGED',
+  PROCESSO_VINCULO_ADICIONADO: 'PROCESSO_VINCULO_ADICIONADO',
+  PROCESSO_CONCLUIDO:          'PROCESSO_CONCLUIDO',
+  PROCESSO_CANCELADO:          'PROCESSO_CANCELADO',
+  PROCESSO_ALERTA_DETECTADO:   'PROCESSO_ALERTA_DETECTADO',
+
+  // ────────────────────────────────────────────
+  // TAREFAS — eventos complementares
+  // ────────────────────────────────────────────
+  TAREFA_CRIADA:              'TAREFA_CRIADA',
+  TAREFA_STATUS_ALTERADO:     'TAREFA_STATUS_ALTERADO',
+  TAREFA_DELEGADA:            'TAREFA_DELEGADA',
+  TAREFA_REVISAO_SOLICITADA:  'TAREFA_REVISAO_SOLICITADA',
+  TAREFA_REVISAO_RESPONDIDA:  'TAREFA_REVISAO_RESPONDIDA',
+  TAREFA_VINCULADA_ACAO:      'TAREFA_VINCULADA_ACAO',
+  TAREFA_VINCULADA_PROCESSO:  'TAREFA_VINCULADA_PROCESSO',
+
+  // ────────────────────────────────────────────
+  // NOTIFICAÇÕES TRANSVERSAIS
+  // ────────────────────────────────────────────
+  NOTIFICACAO_EMAIL_ENVIADA:   'NOTIFICACAO_EMAIL_ENVIADA',
+  NOTIFICACAO_ALERTA_EMITIDO:  'NOTIFICACAO_ALERTA_EMITIDO',
+  NOTIFICACAO_FALHA:           'NOTIFICACAO_FALHA'
 
 });

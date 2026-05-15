@@ -67,6 +67,8 @@ const _DATA_FILES = [
   // Reuniões, Encaminhamentos, Séries e Histórico de Pautas
   'reunioes.json', 'encaminhamentos.json',
   'reunioes_series.json', 'pauta_historico.json',
+  // Registry de módulos — pré-criado para evitar perda de estado ao recarregar
+  'modulos_registry.json',
 ];
 
 // ── Estrutura de cada módulo ─────────────────────────────────────────────

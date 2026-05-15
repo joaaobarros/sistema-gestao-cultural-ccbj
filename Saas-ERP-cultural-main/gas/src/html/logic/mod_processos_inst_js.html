@@ -1,0 +1,574 @@
+<script>
+// ── Estado do módulo ─────────────────────────────────────────────────────────
+var _procState = {
+  lista:          [],
+  listaFiltrada:  [],
+  processoAtivo:  null,
+  dashboardAtivo: null,
+  tabAtiva:       'timeline'
+};
+
+// ── Inicialização ────────────────────────────────────────────────────────────
+function procInicializar() {
+  procCarregar();
+}
+
+function procCarregar() {
+  document.getElementById('proc-lista-container').innerHTML =
+    '<div class="text-center text-gray-400 py-8"><i class="fas fa-spinner fa-spin text-2xl mb-2"></i><p class="text-sm">Carregando…</p></div>';
+
+  var filtros = {
+    status: document.getElementById('proc-filtro-status').value || undefined,
+    tipo:   document.getElementById('proc-filtro-tipo').value   || undefined
+  };
+
+  ServerBridge.call('ctrl_proc_listar', [filtros, AppState.email], function(res) {
+    if (!res.ok) { _procMostrarErroLista(res.error); return; }
+    _procState.lista = res.data || [];
+    procFiltrarLista();
+  });
+}
+
+function procFiltrarLista() {
+  var busca   = (document.getElementById('proc-busca').value || '').toLowerCase().trim();
+  var status  = document.getElementById('proc-filtro-status').value;
+  var tipo    = document.getElementById('proc-filtro-tipo').value;
+
+  _procState.listaFiltrada = _procState.lista.filter(function(p) {
+    if (status && p.status !== status) return false;
+    if (tipo   && p.tipo   !== tipo)   return false;
+    if (busca) {
+      var haystack = ((p.titulo || '') + ' ' + (p.tipo || '') + ' ' + (p.responsavelAtual || '')).toLowerCase();
+      if (haystack.indexOf(busca) === -1) return false;
+    }
+    return true;
+  });
+
+  _procRenderizarLista();
+}
+
+function _procRenderizarLista() {
+  var container = document.getElementById('proc-lista-container');
+  var badge     = document.getElementById('proc-badge-total');
+  var lista     = _procState.listaFiltrada;
+
+  badge.textContent = lista.length;
+  badge.classList.toggle('hidden', lista.length === 0);
+
+  if (!lista.length) {
+    container.innerHTML =
+      '<div class="text-center text-gray-400 py-8"><i class="fas fa-inbox text-3xl opacity-30 mb-2"></i><p class="text-sm">Nenhum processo encontrado</p></div>';
+    return;
+  }
+
+  container.innerHTML = lista.map(function(p) {
+    var ativo  = _procState.processoAtivo && _procState.processoAtivo.id === p.id;
+    var corSts = _procCorStatus(p.status);
+    return '<div onclick="procSelecionarProcesso(\'' + p.id + '\')" ' +
+      'class="proc-card cursor-pointer rounded-xl border p-3 transition hover:shadow-sm ' +
+      (ativo ? 'border-indigo-400 bg-indigo-50' : 'border-gray-200 bg-white hover:border-indigo-300') + '">' +
+      '<div class="flex items-start justify-between gap-2">' +
+        '<p class="text-xs font-semibold text-gray-800 leading-snug line-clamp-2 flex-1">' + _esc(p.titulo) + '</p>' +
+        '<span class="flex-shrink-0 text-xs font-medium px-1.5 py-0.5 rounded-full ' + corSts.bg + ' ' + corSts.text + '">' + _procLabelStatus(p.status) + '</span>' +
+      '</div>' +
+      '<div class="flex items-center gap-2 mt-1.5 flex-wrap">' +
+        '<span class="text-xs text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">' + _procLabelTipo(p.tipo) + '</span>' +
+        _procBadgePrioridade(p.prioridade) +
+        (p.prazo ? '<span class="text-xs text-gray-400"><i class="far fa-clock mr-0.5"></i>' + _formatarData(p.prazo) + '</span>' : '') +
+      '</div>' +
+      ((p.setoresEnvolvidos || []).length ? '<div class="flex flex-wrap gap-1 mt-1.5">' +
+        p.setoresEnvolvidos.slice(0,4).map(function(s) {
+          return '<span class="text-xs text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">' + s + '</span>';
+        }).join('') + '</div>' : '') +
+    '</div>';
+  }).join('');
+}
+
+// ── Seleção e carregamento do dashboard ──────────────────────────────────────
+function procSelecionarProcesso(id) {
+  document.getElementById('proc-detalhe-vazio').classList.add('hidden');
+  document.getElementById('proc-detalhe-conteudo').classList.remove('hidden');
+  document.getElementById('proc-detalhe-conteudo').innerHTML =
+    '<div class="flex-1 flex items-center justify-center"><i class="fas fa-spinner fa-spin text-indigo-400 text-2xl"></i></div>';
+
+  ServerBridge.call('ctrl_proc_dashboard', [id, AppState.email], function(res) {
+    if (!res.ok) {
+      document.getElementById('proc-detalhe-conteudo').innerHTML =
+        '<div class="p-4 text-red-500 text-sm">Erro: ' + _esc(res.error || 'Falha ao carregar') + '</div>';
+      return;
+    }
+    _procState.dashboardAtivo = res.data;
+    _procState.processoAtivo  = res.data.processo;
+    _procRenderizarDetalhe(res.data);
+    _procRenderizarLista(); // re-render para marcar ativo
+  });
+}
+
+function _procRenderizarDetalhe(dash) {
+  var proc = dash.processo;
+  var resumo = dash.resumo;
+  var fin  = dash.impactoFinanceiro || {};
+
+  // Restora estrutura do HTML
+  document.getElementById('proc-detalhe-conteudo').innerHTML = '';
+
+  // Rebuild via innerHTML da section original — mais simples
+  // Usamos a mesma estrutura do HTML original via referência direta
+  // O HTML já está no DOM; só precisamos atualizar os valores
+
+  // Re-injetar a estrutura
+  _procInjetarEstruturaDetalhe();
+
+  // Preencher valores
+  document.getElementById('proc-det-titulo').textContent = proc.titulo || '';
+
+  var corSts = _procCorStatus(proc.status);
+  var badgeSts = document.getElementById('proc-det-badge-status');
+  badgeSts.textContent = _procLabelStatus(proc.status);
+  badgeSts.className   = 'text-xs font-medium px-2 py-0.5 rounded-full ' + corSts.bg + ' ' + corSts.text;
+
+  document.getElementById('proc-det-badge-tipo').textContent = _procLabelTipo(proc.tipo);
+  document.getElementById('proc-det-badge-prioridade').className =
+    'text-xs font-medium px-2 py-0.5 rounded-full ' + _procCorPrioridade(proc.prioridade);
+  document.getElementById('proc-det-badge-prioridade').textContent =
+    (proc.prioridade || 'media').charAt(0).toUpperCase() + (proc.prioridade || 'media').slice(1);
+
+  // Cards de resumo
+  document.getElementById('proc-det-n-tarefas').textContent  = resumo.tarefas.total;
+  document.getElementById('proc-det-n-reservas').textContent = resumo.reservas.total;
+  document.getElementById('proc-det-n-reunioes').textContent = resumo.reunioes.total;
+  document.getElementById('proc-det-n-contratos').textContent = resumo.contratos.total;
+
+  // Financeiro
+  if (fin.previsto > 0 || fin.executado > 0) {
+    document.getElementById('proc-det-financeiro').classList.remove('hidden');
+    document.getElementById('proc-fin-previsto').textContent  = 'R$ ' + (fin.previsto  || 0).toFixed(2);
+    document.getElementById('proc-fin-executado').textContent = 'R$ ' + (fin.executado || 0).toFixed(2);
+    var saldoEl = document.getElementById('proc-fin-saldo');
+    saldoEl.textContent = 'R$ ' + (fin.saldo || 0).toFixed(2);
+    saldoEl.className   = 'font-semibold ' + (fin.saldo < 0 ? 'text-red-600' : 'text-green-600');
+  }
+
+  // Renderizar timeline
+  _procRenderizarTimeline(dash.timeline || []);
+
+  // Renderizar tarefas
+  _procRenderizarTarefas(dash.vinculos.tarefas || []);
+
+  // Renderizar reservas
+  _procRenderizarReservas(dash.vinculos.reservas || []);
+
+  // Renderizar contratos
+  _procRenderizarContratos(dash.vinculos.contratos || [], dash.vinculos.contratacoes || []);
+
+  // Renderizar comunicações
+  _procRenderizarComunicacoes(dash.vinculos.comunicacoes || []);
+
+  // Renderizar gargalos
+  _procRenderizarGargalos(dash.gargalos || [], dash.alertas || []);
+
+  // Preencher opções de status no modal
+  _procPreencherOpcoesStatus(proc.status);
+
+  procMostrarTab(_procState.tabAtiva || 'timeline');
+}
+
+function _procInjetarEstruturaDetalhe() {
+  // Estrutura injetada dinamicamente — mantém o padrão do HTML original
+  document.getElementById('proc-detalhe-conteudo').innerHTML = document.getElementById('proc-detalhe-conteudo-template').innerHTML;
+}
+
+// ── Timeline ─────────────────────────────────────────────────────────────────
+function _procRenderizarTimeline(eventos) {
+  var el = document.getElementById('proc-timeline-lista');
+  if (!eventos.length) {
+    el.innerHTML = '<p class="text-xs text-gray-400 text-center py-4">Nenhum evento registrado</p>';
+    return;
+  }
+  var sorted = eventos.slice().sort(function(a, b) { return new Date(b.timestamp) - new Date(a.timestamp); });
+  el.innerHTML = sorted.map(function(evt) {
+    var icon   = _procIconeEvento(evt.tipo);
+    var cor    = _procCorEvento(evt.tipo);
+    return '<div class="flex gap-2.5">' +
+      '<div class="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center mt-0.5 ' + cor + '">' +
+        '<i class="' + icon + ' text-xs"></i>' +
+      '</div>' +
+      '<div class="flex-1 min-w-0">' +
+        '<p class="text-xs text-gray-800 leading-snug">' + _esc(evt.descricao || '') + '</p>' +
+        '<div class="flex items-center gap-2 mt-0.5">' +
+          '<span class="text-xs text-gray-400">' + _formatarDataHora(evt.timestamp) + '</span>' +
+          (evt.ator  ? '<span class="text-xs text-gray-400">· ' + _esc(evt.ator)  + '</span>' : '') +
+          (evt.setor ? '<span class="text-xs text-indigo-500 bg-indigo-50 px-1 rounded">' + evt.setor + '</span>' : '') +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function procAdicionarComentario() {
+  if (!_procState.processoAtivo) return;
+  var texto = (document.getElementById('proc-comentario-input').value || '').trim();
+  if (!texto) return;
+
+  ServerBridge.call('ctrl_proc_comentar', [_procState.processoAtivo.id, texto, AppState.email], function(res) {
+    if (!res.ok) { _notif('error', res.error || 'Erro ao comentar'); return; }
+    document.getElementById('proc-comentario-input').value = '';
+    procSelecionarProcesso(_procState.processoAtivo.id);
+  });
+}
+
+// ── Tarefas ───────────────────────────────────────────────────────────────────
+function _procRenderizarTarefas(tarefas) {
+  var el = document.getElementById('proc-lista-tarefas');
+  if (!tarefas.length) {
+    el.innerHTML = '<p class="text-xs text-gray-400 text-center py-4">Nenhuma tarefa vinculada</p>';
+    return;
+  }
+  el.innerHTML = tarefas.map(function(t) {
+    var cor = _procCorTarefaStatus(t.status);
+    return '<div class="flex items-center justify-between gap-2 p-2.5 rounded-lg border border-gray-100 hover:border-gray-200 transition">' +
+      '<div class="flex-1 min-w-0">' +
+        '<p class="text-xs font-medium text-gray-800 truncate">' + _esc(t.titulo || t.id) + '</p>' +
+        '<div class="flex items-center gap-2 mt-0.5">' +
+          '<span class="text-xs ' + cor + ' font-medium">' + _procLabelTarefaStatus(t.status) + '</span>' +
+          (t.responsavel ? '<span class="text-xs text-gray-400">' + _esc(t.responsavel) + '</span>' : '') +
+          (t.prazo ? '<span class="text-xs text-gray-400">' + _formatarData(t.prazo) + '</span>' : '') +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function procAbrirModalCriarTarefa() {
+  document.getElementById('proc-modal-tarefa').classList.remove('hidden');
+}
+
+function procFecharModalTarefa() {
+  document.getElementById('proc-modal-tarefa').classList.add('hidden');
+}
+
+function procCriarTarefaVinculada() {
+  if (!_procState.processoAtivo) return;
+  var titulo  = (document.getElementById('proc-tar-titulo').value || '').trim();
+  if (!titulo) { _notif('warning', 'Título da tarefa é obrigatório'); return; }
+
+  var dados = {
+    titulo:      titulo,
+    responsavel: document.getElementById('proc-tar-responsavel').value || '',
+    prazo:       document.getElementById('proc-tar-prazo').value       || '',
+    prioridade:  document.getElementById('proc-tar-prioridade').value  || 'media',
+    setor:       document.getElementById('proc-tar-setor').value       || ''
+  };
+
+  ServerBridge.call('ctrl_proc_criar_tarefa_vinculada', [_procState.processoAtivo.id, dados, AppState.email], function(res) {
+    if (!res.ok) { _notif('error', res.error || 'Erro ao criar tarefa'); return; }
+    procFecharModalTarefa();
+    _notif('success', 'Tarefa criada e vinculada ao processo');
+    procSelecionarProcesso(_procState.processoAtivo.id);
+  });
+}
+
+// ── Reservas ──────────────────────────────────────────────────────────────────
+function _procRenderizarReservas(reservas) {
+  var el = document.getElementById('proc-lista-reservas');
+  if (!reservas.length) {
+    el.innerHTML = '<p class="text-xs text-gray-400 text-center py-4">Nenhuma reserva vinculada</p>';
+    return;
+  }
+  el.innerHTML = reservas.map(function(r) {
+    return '<div class="p-2.5 rounded-lg border border-gray-100 text-xs">' +
+      '<div class="flex items-center justify-between">' +
+        '<span class="font-medium text-gray-800">' + _esc(r.espaco || r.id) + '</span>' +
+        '<span class="text-gray-400">' + _esc(r.status || '') + '</span>' +
+      '</div>' +
+      '<div class="text-gray-500 mt-0.5">' + _esc(r.data || '') + (r.inicio ? ' · ' + r.inicio + '–' + (r.fim || '') : '') + '</div>' +
+    '</div>';
+  }).join('');
+}
+
+// ── Contratos ─────────────────────────────────────────────────────────────────
+function _procRenderizarContratos(contratos, contratacoes) {
+  var el = document.getElementById('proc-lista-contratos');
+  var todos = contratos.concat(contratacoes);
+  if (!todos.length) {
+    el.innerHTML = '<p class="text-xs text-gray-400 text-center py-4">Nenhum contrato vinculado</p>';
+    return;
+  }
+  el.innerHTML = todos.map(function(c) {
+    var titulo = c.descricao || c.nome || c.id;
+    var valor  = c.valor ? 'R$ ' + parseFloat(c.valor).toFixed(2) : '';
+    return '<div class="p-2.5 rounded-lg border border-gray-100 text-xs">' +
+      '<div class="flex items-center justify-between">' +
+        '<span class="font-medium text-gray-800">' + _esc(titulo) + '</span>' +
+        (valor ? '<span class="text-green-600 font-semibold">' + valor + '</span>' : '') +
+      '</div>' +
+      (c.status ? '<div class="text-gray-500 mt-0.5">' + _esc(c.status) + '</div>' : '') +
+    '</div>';
+  }).join('');
+}
+
+// ── Comunicações ──────────────────────────────────────────────────────────────
+function _procRenderizarComunicacoes(comunicacoes) {
+  var el = document.getElementById('proc-lista-comunicacoes');
+  if (!comunicacoes.length) {
+    el.innerHTML = '<p class="text-xs text-gray-400 text-center py-4">Nenhuma demanda de comunicação vinculada</p>';
+    return;
+  }
+  el.innerHTML = comunicacoes.map(function(c) {
+    return '<div class="p-2.5 rounded-lg border border-gray-100 text-xs">' +
+      '<div class="font-medium text-gray-800">' + _esc(c.titulo || c.id) + '</div>' +
+      '<div class="text-gray-500 mt-0.5">' + _esc(c.tipo || '') + (c.status ? ' · ' + c.status : '') + '</div>' +
+    '</div>';
+  }).join('');
+}
+
+// ── Gargalos ──────────────────────────────────────────────────────────────────
+function _procRenderizarGargalos(gargalos, alertas) {
+  var el   = document.getElementById('proc-lista-gargalos');
+  var todos = gargalos.concat(alertas);
+
+  // Badge na tab
+  var tabEl = document.getElementById('proc-tab-gargalos');
+  if (todos.length) {
+    tabEl.innerHTML = '<i class="fas fa-exclamation-triangle mr-1 text-red-500"></i>Gargalos <span class="bg-red-100 text-red-600 text-xs font-bold px-1.5 rounded-full">' + todos.length + '</span>';
+  } else {
+    tabEl.innerHTML = '<i class="fas fa-exclamation-triangle mr-1"></i>Gargalos';
+  }
+
+  if (!todos.length) {
+    el.innerHTML = '<div class="text-center py-6 text-green-600"><i class="fas fa-check-circle text-2xl mb-2"></i><p class="text-sm font-medium">Nenhum gargalo detectado</p></div>';
+    return;
+  }
+  el.innerHTML = todos.map(function(g) {
+    var urgencia = g.urgencia || 'media';
+    var cor = urgencia === 'critica' ? 'border-red-400 bg-red-50' :
+              urgencia === 'alta'    ? 'border-amber-400 bg-amber-50' : 'border-yellow-300 bg-yellow-50';
+    var texto = g.descricao || (g.tipo + (g.quantidade ? ' (' + g.quantidade + ')' : ''));
+    return '<div class="p-3 rounded-lg border-l-4 ' + cor + '">' +
+      '<p class="text-xs font-medium text-gray-800">' + _esc(texto) + '</p>' +
+      (g.tipo ? '<p class="text-xs text-gray-500 mt-0.5">' + _esc(g.tipo) + '</p>' : '') +
+    '</div>';
+  }).join('');
+}
+
+// ── Modal Status ──────────────────────────────────────────────────────────────
+var _TRANSICOES_UI = {
+  solicitado:           ['em_andamento', 'cancelado'],
+  em_andamento:         ['aguardando_setor', 'aguardando_aprovacao', 'bloqueado', 'concluido', 'cancelado'],
+  aguardando_setor:     ['em_andamento', 'aguardando_aprovacao', 'bloqueado', 'concluido', 'cancelado'],
+  aguardando_aprovacao: ['em_andamento', 'bloqueado', 'concluido', 'cancelado'],
+  bloqueado:            ['em_andamento', 'cancelado'],
+  concluido:            [],
+  cancelado:            []
+};
+
+var _LABELS_STATUS_UI = {
+  solicitado:           'Solicitado',
+  em_andamento:         'Em Andamento',
+  aguardando_setor:     'Aguardando Setor',
+  aguardando_aprovacao: 'Aguard. Aprovação',
+  bloqueado:            'Bloqueado',
+  concluido:            'Concluído',
+  cancelado:            'Cancelado'
+};
+
+function _procPreencherOpcoesStatus(statusAtual) {
+  var sel    = document.getElementById('proc-status-novo');
+  var opcoes = _TRANSICOES_UI[statusAtual] || [];
+  sel.innerHTML = opcoes.length
+    ? opcoes.map(function(s) { return '<option value="' + s + '">' + (_LABELS_STATUS_UI[s] || s) + '</option>'; }).join('')
+    : '<option value="">Nenhuma transição disponível</option>';
+}
+
+function procAbrirModalStatus() {
+  document.getElementById('proc-modal-status').classList.remove('hidden');
+}
+
+function procFecharModalStatus() {
+  document.getElementById('proc-modal-status').classList.add('hidden');
+}
+
+function procConfirmarStatus() {
+  if (!_procState.processoAtivo) return;
+  var novoStatus = document.getElementById('proc-status-novo').value;
+  var motivo     = document.getElementById('proc-status-motivo').value || '';
+  if (!novoStatus) { _notif('warning', 'Selecione um status'); return; }
+
+  ServerBridge.call('ctrl_proc_mudar_status', [_procState.processoAtivo.id, novoStatus, motivo, AppState.email], function(res) {
+    if (!res.ok) { _notif('error', res.error || 'Erro ao mudar status'); return; }
+    procFecharModalStatus();
+    _notif('success', 'Status atualizado');
+    procSelecionarProcesso(_procState.processoAtivo.id);
+    procCarregar();
+  });
+}
+
+// ── Modal Criar ───────────────────────────────────────────────────────────────
+function procAbrirModal() {
+  document.getElementById('proc-modal-criar').classList.remove('hidden');
+}
+
+function procFecharModal() {
+  document.getElementById('proc-modal-criar').classList.add('hidden');
+}
+
+function procAbrirModalVinculo() {
+  // TODO: abrir modal para vincular entidade existente (tarefa/reserva/reunião/contrato)
+  _notif('info', 'Para vincular entidades existentes, use os módulos específicos e selecione o processo.');
+}
+
+function procSalvar() {
+  var titulo = (document.getElementById('proc-form-titulo').value || '').trim();
+  var tipo   = document.getElementById('proc-form-tipo').value;
+  if (!titulo) { _notif('warning', 'Título é obrigatório'); return; }
+  if (!tipo)   { _notif('warning', 'Tipo é obrigatório');   return; }
+
+  var setores = [];
+  document.querySelectorAll('.proc-setor-cb:checked').forEach(function(cb) { setores.push(cb.value); });
+
+  var dados = {
+    titulo:            titulo,
+    tipo:              tipo,
+    descricao:         document.getElementById('proc-form-descricao').value || '',
+    prioridade:        document.getElementById('proc-form-prioridade').value || 'media',
+    responsavelAtual:  document.getElementById('proc-form-responsavel').value || '',
+    prazo:             document.getElementById('proc-form-prazo').value || '',
+    valorPrevisto:     parseFloat(document.getElementById('proc-form-valor').value) || 0,
+    setoresEnvolvidos: setores
+  };
+
+  ServerBridge.call('ctrl_proc_criar', [dados, AppState.email], function(res) {
+    if (!res.ok) { _notif('error', res.error || 'Erro ao criar processo'); return; }
+    procFecharModal();
+    _notif('success', 'Processo institucional criado');
+    procCarregar();
+    procSelecionarProcesso(res.data.id);
+  });
+}
+
+// ── Tabs ──────────────────────────────────────────────────────────────────────
+function procMostrarTab(tab) {
+  _procState.tabAtiva = tab;
+  document.querySelectorAll('.proc-tab-btn').forEach(function(btn) {
+    btn.classList.remove('border-indigo-500', 'text-indigo-600');
+    btn.classList.add('border-transparent', 'text-gray-500');
+  });
+  document.querySelectorAll('.proc-painel').forEach(function(p) { p.classList.add('hidden'); });
+
+  var tabBtn = document.getElementById('proc-tab-' + tab);
+  var painel = document.getElementById('proc-painel-' + tab);
+  if (tabBtn) { tabBtn.classList.add('border-indigo-500', 'text-indigo-600'); tabBtn.classList.remove('border-transparent', 'text-gray-500'); }
+  if (painel) painel.classList.remove('hidden');
+}
+
+// ── Helpers visuais ───────────────────────────────────────────────────────────
+function _procCorStatus(status) {
+  var mapa = {
+    solicitado:           { bg: 'bg-gray-100',   text: 'text-gray-600' },
+    em_andamento:         { bg: 'bg-blue-100',   text: 'text-blue-700' },
+    aguardando_setor:     { bg: 'bg-yellow-100', text: 'text-yellow-700' },
+    aguardando_aprovacao: { bg: 'bg-orange-100', text: 'text-orange-700' },
+    bloqueado:            { bg: 'bg-red-100',    text: 'text-red-700' },
+    concluido:            { bg: 'bg-green-100',  text: 'text-green-700' },
+    cancelado:            { bg: 'bg-gray-200',   text: 'text-gray-500' }
+  };
+  return mapa[status] || { bg: 'bg-gray-100', text: 'text-gray-600' };
+}
+
+function _procLabelStatus(s) {
+  return _LABELS_STATUS_UI[s] || (s || '');
+}
+
+function _procLabelTipo(tipo) {
+  var mapa = {
+    contratacao_professor:    'Contr. Professor',
+    contratacao_profissional: 'Contr. Profissional',
+    contratacao_servico:      'Contr. Serviço',
+    aquisicao_equipamento:    'Aquisição Equip.',
+    bolsista:                 'Bolsista',
+    manutencao_espaco:        'Manutenção',
+    projeto_cultural:         'Projeto Cultural',
+    campanha_comunicacao:     'Campanha Comuni.',
+    outro:                    'Outro'
+  };
+  return mapa[tipo] || (tipo || '');
+}
+
+function _procBadgePrioridade(pri) {
+  if (!pri) return '';
+  var cor = _procCorPrioridade(pri);
+  var label = pri.charAt(0).toUpperCase() + pri.slice(1);
+  return '<span class="text-xs font-medium px-1.5 py-0.5 rounded-full ' + cor + '">' + label + '</span>';
+}
+
+function _procCorPrioridade(pri) {
+  var mapa = { critica: 'bg-red-100 text-red-700', alta: 'bg-orange-100 text-orange-700',
+               media: 'bg-blue-100 text-blue-700', baixa: 'bg-gray-100 text-gray-600' };
+  return mapa[pri] || 'bg-gray-100 text-gray-600';
+}
+
+function _procIconeEvento(tipo) {
+  var mapa = {
+    criacao: 'fas fa-plus-circle', status_change: 'fas fa-arrow-right',
+    vinculo: 'fas fa-link', comentario: 'fas fa-comment', alerta: 'fas fa-exclamation-triangle',
+    aprovacao: 'fas fa-check-circle', pagamento: 'fas fa-dollar-sign', edicao: 'fas fa-pencil-alt',
+    tarefa_status: 'fas fa-tasks'
+  };
+  return mapa[tipo] || 'fas fa-circle';
+}
+
+function _procCorEvento(tipo) {
+  var mapa = {
+    criacao: 'bg-green-100 text-green-600', status_change: 'bg-blue-100 text-blue-600',
+    vinculo: 'bg-indigo-100 text-indigo-600', comentario: 'bg-gray-100 text-gray-600',
+    alerta: 'bg-red-100 text-red-600', aprovacao: 'bg-green-100 text-green-600',
+    pagamento: 'bg-yellow-100 text-yellow-600', tarefa_status: 'bg-purple-100 text-purple-600'
+  };
+  return mapa[tipo] || 'bg-gray-100 text-gray-500';
+}
+
+function _procCorTarefaStatus(status) {
+  var mapa = {
+    backlog: 'text-gray-500', solicitada: 'text-blue-600', em_analise: 'text-yellow-600',
+    em_execucao: 'text-indigo-600', aguardando_aprovacao: 'text-orange-600',
+    concluida: 'text-green-600', cancelada: 'text-gray-400', bloqueada: 'text-red-600'
+  };
+  return mapa[status] || 'text-gray-500';
+}
+
+function _procLabelTarefaStatus(s) {
+  var mapa = { backlog: 'Backlog', solicitada: 'Solicitada', em_analise: 'Em Análise',
+               em_execucao: 'Em Execução', aguardando_aprovacao: 'Aguard. Aprovação',
+               concluida: 'Concluída', cancelada: 'Cancelada', bloqueada: 'Bloqueada' };
+  return mapa[s] || (s || '');
+}
+
+function _esc(str) {
+  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function _formatarData(iso) {
+  if (!iso) return '';
+  try { return new Date(iso).toLocaleDateString('pt-BR'); } catch(_) { return iso; }
+}
+
+function _formatarDataHora(iso) {
+  if (!iso) return '';
+  try { return new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }); } catch(_) { return iso; }
+}
+
+function _procMostrarErroLista(msg) {
+  document.getElementById('proc-lista-container').innerHTML =
+    '<div class="text-center text-red-400 py-8 text-sm">' + _esc(msg || 'Erro ao carregar') + '</div>';
+}
+
+function _notif(tipo, msg) {
+  if (typeof AppUI !== 'undefined' && AppUI.toast) { AppUI.toast(tipo, msg); return; }
+  console.log('[Processos] ' + tipo + ': ' + msg);
+}
+
+// ── Registro no AppState para ativação da aba ────────────────────────────────
+if (typeof AppState !== 'undefined' && AppState.registrarModulo) {
+  AppState.registrarModulo('processos_institucionais', { onAtivado: procInicializar });
+}
+</script>

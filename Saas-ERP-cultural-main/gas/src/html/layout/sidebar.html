@@ -255,6 +255,10 @@
             <span class="text-xs font-semibold flex-1 text-left">Reuniões & Atas</span>
             <span id="badgeEncAtrasados" class="hidden min-w-[18px] h-[18px] bg-red-500 text-white text-[9px] font-black rounded-full flex items-center justify-center px-1">0</span>
           </button>
+          <button data-aba="aba-processos-institucionais" class="tab-btn nav-item w-full hidden">
+            <i class="fas fa-project-diagram w-5 text-center text-xs"></i>
+            <span class="text-xs font-semibold flex-1 text-left">Processos Institucionais</span>
+          </button>
         </div>
       </div>
 
@@ -382,10 +386,11 @@
 (function() {
   var STORE_KEY = 'sidebar_modules_v3';
   var GRUPOS = ['mod-espacos','mod-programacao','mod-operacional','mod-infraestrutura','mod-comunicacao','mod-estrategia',
-                'mod-trabalho','mod-pessoas','mod-financeiro','mod-institucional'];
+                'mod-trabalho','mod-pessoas','mod-financeiro','mod-institucional','mod-governanca'];
   var FAV_BLOQUEADOS = ['aba-tarefas','aba-processos','aba-almoxarifado','aba-balcao',
     'aba-rh','aba-eficiencia','aba-contratos-fin','aba-contratacoes',
-    'aba-codip','aba-rel-financeiros','aba-escuta','aba-permissoes-v2','aba-gestao-modulos'];
+    'aba-codip','aba-rel-financeiros','aba-escuta','aba-permissoes-v2','aba-gestao-modulos',
+    'aba-processos-institucionais'];
 
   function _setGrupo(id, aberto) {
     var el = document.getElementById(id);

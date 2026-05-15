@@ -227,6 +227,15 @@ var _MOD_DEFAULTS = [
     rotas: ['aba-reunioes'],
     menus: [],
     dependencias: ['tarefas'], status_operacional: 'beta'
+  },
+  {
+    moduleId: 'processos_institucionais', nome: 'Processos Institucionais', categoria: 'governanca',
+    descricao: 'Fio institucional transversal — rastreia processos que cruzam RH, financeiro, reservas, tarefas e reuniões',
+    versao: '1.0',
+    ativo: false, nucleo: false, apenasSuperadmin: false,
+    rotas: ['aba-processos-institucionais'],
+    menus: [],
+    dependencias: ['tarefas', 'reunioes'], status_operacional: 'beta'
   }
 ];
 
@@ -269,10 +278,18 @@ function _modLerRegistro() {
     } else if (dados && Array.isArray(dados.modulos)) {
       modulos = dados.modulos;
     } else {
-      modulos = _modClonarDefaults();
+      // Arquivo corrompido ou formato desconhecido — inicializa com defaults e persiste
+      var defaults = _modClonarDefaults();
+      try { _modSalvarRegistro(defaults); } catch(_) {}
+      return defaults;
     }
 
-    if (!modulos.length) return _modClonarDefaults();
+    if (!modulos.length) {
+      // Arquivo vazio (criado pelo DataLayer mas nunca populado) — persiste defaults para garantir
+      var defaults = _modClonarDefaults();
+      try { _modSalvarRegistro(defaults); } catch(_) {}
+      return defaults;
+    }
 
     // Merge: adiciona novos módulos do default que ainda não existem no arquivo salvo
     var idsSalvos = {};

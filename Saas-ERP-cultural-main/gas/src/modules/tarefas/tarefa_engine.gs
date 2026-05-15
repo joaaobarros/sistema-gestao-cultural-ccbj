@@ -280,6 +280,9 @@ var TarefaEngine = (function() {
         idAcao:            dados.idAcao       || '',
         acaoNome:          dados.acaoNome     || '',
 
+        // Vínculo com Processo Institucional (fio transversal)
+        processoId:        dados.processoId   || '',
+
         sla:               dados.sla || SLA_TAREFA_H[pri] || 72,
         slaViolado:        false,
 
@@ -312,7 +315,7 @@ var TarefaEngine = (function() {
       var camposEditaveis = ['titulo','descricao','tipo','prioridade','prazo',
                              'responsavel','responsavelNome','executores','setor',
                              'funcao','tags','processo','etapa','duracaoPrevista','sla',
-                             'idAcao','acaoNome'];
+                             'idAcao','acaoNome','processoId'];
 
       var alteracoes = [];
       camposEditaveis.forEach(function(k) {
@@ -384,6 +387,22 @@ var TarefaEngine = (function() {
       _emitirEvento('TAREFA_STATUS_ALTERADO', tarefa, emailAtor, {
         de: statusAnterior, para: novoStatus
       });
+
+      // Propaga mudança de status para o Processo Institucional vinculado (tolerante a falhas)
+      if (tarefa.processoId) {
+        try {
+          ProcessoInstitucionalEngine.atualizarSnapshotTarefa(tarefa.processoId, {
+            id:          tarefa.id,
+            titulo:      tarefa.titulo,
+            status:      tarefa.status,
+            responsavel: tarefa.responsavel,
+            prazo:       tarefa.prazo
+          }, emailAtor || 'sistema');
+        } catch(e) {
+          Logger.warn('[TarefaEngine.aplicarTransicao] Falha ao sincronizar com ProcessoEngine: ' + e.message);
+        }
+      }
+
       return tarefa;
     },
 
@@ -848,6 +867,63 @@ var TarefaEngine = (function() {
       _emitirEvento('TAREFA_VINCULADA_ACAO', tarefa, emailAtor, {
         acaoId: acaoId, acaoNome: acaoNome, acaoAnterior: acaoAnterior
       });
+      return tarefa;
+    },
+
+    // ── Vínculo bidirecional com Processo Institucional ───────────────────────
+
+    /**
+     * Vincula a tarefa a um Processo Institucional.
+     * Registra no histórico e propaga snapshot para o ProcessoEngine via try-catch
+     * (tolerante a falhas se o módulo de processos não estiver disponível).
+     *
+     * @param {string} tarefaId
+     * @param {string} processoId — ID do processo ('proc_*') ou '' para desvincular
+     * @param {string} emailAtor
+     * @returns {Object} tarefa atualizada
+     */
+    vincularProcesso: function(tarefaId, processoId, emailAtor) {
+      var tarefa = TarefaRepository.obterPorId(tarefaId);
+      if (!tarefa) throw new Error('Tarefa não encontrada: ' + tarefaId);
+
+      var processoAnterior = tarefa.processoId || '';
+      tarefa.processoId    = processoId || '';
+      tarefa.atualizadoEm  = _agora();
+
+      tarefa.historico = tarefa.historico || [];
+      tarefa.historico.push({
+        data:       _agora(),
+        ator:       emailAtor || 'sistema',
+        campo:      'processoId',
+        de:         processoAnterior,
+        para:       processoId || '',
+        comentario: processoId
+          ? 'Tarefa vinculada ao processo: ' + processoId
+          : 'Vínculo com processo removido'
+      });
+
+      TarefaRepository.salvar(tarefa);
+
+      // Propaga para o ProcessoEngine (tolerante a falhas)
+      if (processoId) {
+        try {
+          ProcessoInstitucionalEngine.vincularTarefa(processoId, {
+            id:          tarefa.id,
+            titulo:      tarefa.titulo,
+            status:      tarefa.status,
+            responsavel: tarefa.responsavel,
+            prazo:       tarefa.prazo,
+            prioridade:  tarefa.prioridade
+          }, emailAtor || 'sistema');
+        } catch(e) {
+          Logger.warn('[TarefaEngine.vincularProcesso] Falha ao propagar para ProcessoEngine: ' + e.message);
+        }
+      }
+
+      _emitirEvento('TAREFA_VINCULADA_PROCESSO', tarefa, emailAtor, {
+        processoId: processoId, processoAnterior: processoAnterior
+      });
+
       return tarefa;
     },
 
