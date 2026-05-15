@@ -22,35 +22,55 @@
         Monitoramento contínuo do clima organizacional — NR-1 compatível
       </p>
     </div>
-    <div class="flex gap-2">
+    <div class="flex gap-2 items-center flex-wrap">
       <span id="escuta-badge-confianca"
         class="px-3 py-1.5 rounded-xl text-[10px] font-black uppercase bg-slate-100 text-slate-500">
         <i class="fas fa-circle-dot mr-1"></i>Carregando...
       </span>
+      <span id="escuta-badge-total-respostas"
+        class="hidden px-3 py-1.5 rounded-xl text-[10px] font-black uppercase bg-violet-50 text-violet-700">
+        <i class="fas fa-database mr-1"></i><span id="escuta-txt-total-respostas">0</span> respostas coletadas
+      </span>
+      <button onclick="_escutaAbrirManual()"
+        class="px-3 py-1.5 rounded-xl text-[10px] font-black uppercase bg-slate-100 text-slate-500 hover:bg-slate-200 transition-all">
+        <i class="fas fa-circle-question mr-1"></i>Como funciona
+      </button>
     </div>
   </div>
 
-  <!-- Sub-navegação -->
+  <!-- Perfil RH identificado -->
+  <div id="escuta-perfil-rh-banner" class="hidden mb-4 bg-violet-50 border border-violet-100 rounded-2xl px-4 py-2.5 flex items-center gap-3">
+    <i class="fas fa-id-card text-violet-400"></i>
+    <span id="escuta-perfil-rh-texto" class="text-xs text-violet-700 font-semibold"></span>
+  </div>
+
+  <!-- Sub-navegação — visibilidade controlada por nível de permissão -->
   <div class="flex gap-2 flex-wrap mb-5" id="escuta-subnav">
-    <button onclick="_escutaSubAba('painel')"    id="escuta-nav-painel"    class="escuta-nav-btn px-4 py-2 text-xs font-black rounded-xl uppercase transition-all bg-violet-600 text-white">
+    <button onclick="_escutaSubAba('painel')" id="escuta-nav-painel"
+      class="escuta-nav-btn escuta-tab-rh px-4 py-2 text-xs font-black rounded-xl uppercase transition-all bg-violet-600 text-white">
       <i class="fas fa-chart-bar mr-1"></i>Painel
     </button>
-    <button onclick="_escutaSubAba('espontanea')" id="escuta-nav-espontanea" class="escuta-nav-btn px-4 py-2 text-xs font-black rounded-xl uppercase transition-all bg-slate-100 text-slate-600 hover:bg-slate-200">
+    <button onclick="_escutaSubAba('espontanea')" id="escuta-nav-espontanea"
+      class="escuta-nav-btn px-4 py-2 text-xs font-black rounded-xl uppercase transition-all bg-slate-100 text-slate-600 hover:bg-slate-200">
       <i class="fas fa-comments mr-1"></i>Escuta Livre
     </button>
-    <button onclick="_escutaSubAba('alertas')"   id="escuta-nav-alertas"   class="escuta-nav-btn px-4 py-2 text-xs font-black rounded-xl uppercase transition-all bg-slate-100 text-slate-600 hover:bg-slate-200">
+    <button onclick="_escutaSubAba('alertas')" id="escuta-nav-alertas"
+      class="escuta-nav-btn escuta-tab-rh px-4 py-2 text-xs font-black rounded-xl uppercase transition-all bg-slate-100 text-slate-600 hover:bg-slate-200">
       <i class="fas fa-bell mr-1"></i>Alertas
       <span id="escuta-badge-alertas" class="hidden ml-1 bg-red-500 text-white text-[8px] px-1.5 py-0.5 rounded-full">0</span>
     </button>
-    <button onclick="_escutaSubAba('relatorios')" id="escuta-nav-relatorios" class="escuta-nav-btn px-4 py-2 text-xs font-black rounded-xl uppercase transition-all bg-slate-100 text-slate-600 hover:bg-slate-200">
+    <button onclick="_escutaSubAba('distribuicao')" id="escuta-nav-distribuicao"
+      class="escuta-nav-btn escuta-tab-rh px-4 py-2 text-xs font-black rounded-xl uppercase transition-all bg-slate-100 text-slate-600 hover:bg-slate-200">
+      <i class="fas fa-paper-plane mr-1"></i>Distribuição
+      <span id="escuta-badge-dist" class="hidden ml-1 bg-amber-500 text-white text-[8px] px-1.5 py-0.5 rounded-full">0</span>
+    </button>
+    <button onclick="_escutaSubAba('relatorios')" id="escuta-nav-relatorios"
+      class="escuta-nav-btn escuta-tab-rh px-4 py-2 text-xs font-black rounded-xl uppercase transition-all bg-slate-100 text-slate-600 hover:bg-slate-200">
       <i class="fas fa-file-chart-column mr-1"></i>Relatórios
     </button>
-    <button onclick="_escutaSubAba('pesquisas')" id="escuta-nav-pesquisas" class="escuta-nav-btn px-4 py-2 text-xs font-black rounded-xl uppercase transition-all bg-slate-100 text-slate-600 hover:bg-slate-200"
-      data-requer-permissao="escuta:visualizar">
+    <button onclick="_escutaSubAba('pesquisas')" id="escuta-nav-pesquisas"
+      class="escuta-nav-btn escuta-tab-rh px-4 py-2 text-xs font-black rounded-xl uppercase transition-all bg-slate-100 text-slate-600 hover:bg-slate-200">
       <i class="fas fa-sliders mr-1"></i>Gestão
-    </button>
-    <button onclick="_escutaSubAba('perfil')"    id="escuta-nav-perfil"    class="escuta-nav-btn px-4 py-2 text-xs font-black rounded-xl uppercase transition-all bg-slate-100 text-slate-600 hover:bg-slate-200">
-      <i class="fas fa-user-circle mr-1"></i>Meu Perfil
     </button>
   </div>
 
@@ -149,19 +169,94 @@
       </div>
     </div>
 
+    <!-- Participação Histórica — visível sempre, independente de grupoMinimo -->
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 mb-4">
+      <h3 class="font-black text-slate-700 text-sm uppercase tracking-tight mb-3 flex items-center gap-2">
+        <i class="fas fa-history text-violet-500"></i>Histórico de Participação
+        <span class="text-[9px] font-black text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">anônimo</span>
+      </h3>
+      <div id="escuta-participacao-kpis" class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+        <div class="bg-violet-50 rounded-xl p-3 text-center">
+          <p class="text-2xl font-black text-violet-700" id="escuta-part-total">—</p>
+          <p class="text-[9px] font-black text-violet-500 uppercase tracking-widest mt-0.5">Respostas totais</p>
+        </div>
+        <div class="bg-slate-50 rounded-xl p-3 text-center">
+          <p class="text-2xl font-black text-slate-700" id="escuta-part-esponts">—</p>
+          <p class="text-[9px] font-black text-slate-500 uppercase tracking-widest mt-0.5">Escutas livres</p>
+        </div>
+        <div class="bg-slate-50 rounded-xl p-3 text-center">
+          <p class="text-sm font-black text-slate-700" id="escuta-part-ultima">—</p>
+          <p class="text-[9px] font-black text-slate-500 uppercase tracking-widest mt-0.5">Última resposta</p>
+        </div>
+        <div class="bg-slate-50 rounded-xl p-3 text-center">
+          <p class="text-2xl font-black text-slate-700" id="escuta-part-periodos">—</p>
+          <p class="text-[9px] font-black text-slate-500 uppercase tracking-widest mt-0.5">Períodos com dados</p>
+        </div>
+      </div>
+      <div id="escuta-historico-periodos" class="space-y-1.5">
+        <p class="text-[10px] text-slate-400 text-center py-3">Carregando histórico...</p>
+      </div>
+    </div>
+
     <!-- Aviso de confiança insuficiente -->
     <div id="escuta-aviso-confianca" class="hidden bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-4">
       <div class="flex items-start gap-3">
         <i class="fas fa-triangle-exclamation text-amber-500 mt-0.5"></i>
         <div>
-          <p class="font-black text-amber-800 text-sm">Taxa de Resposta Insuficiente</p>
+          <p class="font-black text-amber-800 text-sm">Indicadores em formação — Período Atual</p>
           <p class="text-amber-700 text-xs mt-1">
-            O sistema não gera conclusões com baixa taxa de resposta. Continue coletando dados para obter indicadores confiáveis.
+            A amostragem do período atual ainda não é suficiente para análise estatística confiável.
+            Os dados abaixo do histórico permanecem disponíveis.
           </p>
         </div>
       </div>
     </div>
 
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════
+       PAINEL: DISTRIBUIÇÃO DE PESQUISAS
+       ═══════════════════════════════════════════════════ -->
+  <div id="escuta-painel-distribuicao" class="hidden">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+      <!-- Pesquisas ativas -->
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+        <div class="p-5 border-b border-slate-100 bg-slate-50/50">
+          <h3 class="font-black text-slate-800 text-sm uppercase tracking-tight">
+            <i class="fas fa-paper-plane text-violet-500 mr-2"></i>Pesquisas e Coleta
+          </h3>
+          <p class="text-[10px] text-slate-400 mt-0.5">Status de distribuição e participação</p>
+        </div>
+        <div id="escuta-dist-pesquisas" class="divide-y divide-slate-50">
+          <div class="text-center text-slate-400 text-xs py-8">Carregando...</div>
+        </div>
+      </div>
+
+      <!-- Alertas de distribuição -->
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+        <div class="p-5 border-b border-slate-100 bg-slate-50/50">
+          <h3 class="font-black text-slate-800 text-sm uppercase tracking-tight">
+            <i class="fas fa-triangle-exclamation text-amber-500 mr-2"></i>Alertas de Distribuição
+          </h3>
+          <p class="text-[10px] text-slate-400 mt-0.5">Pesquisas que requerem atenção</p>
+        </div>
+        <div id="escuta-dist-alertas" class="divide-y divide-slate-50">
+          <div class="text-center text-slate-400 text-xs py-8">Carregando...</div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Histórico de coleta por período -->
+    <div class="mt-4 bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
+      <h3 class="font-black text-slate-700 text-sm uppercase tracking-tight mb-4 flex items-center gap-2">
+        <i class="fas fa-chart-bar text-violet-500"></i>Evolução da Coleta — Últimos 12 Períodos
+      </h3>
+      <div id="escuta-dist-historico" class="space-y-2">
+        <p class="text-xs text-slate-400 text-center py-4">Carregando histórico...</p>
+      </div>
+    </div>
   </div>
 
   <!-- ═══════════════════════════════════════════════════
@@ -479,102 +574,6 @@
 
   </div>
 
-  <!-- ═══════════════════════════════════════════════════
-       PAINEL: PERFIL ANALÍTICO
-       ═══════════════════════════════════════════════════ -->
-  <div id="escuta-painel-perfil" class="hidden">
-    <div class="max-w-xl">
-      <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
-        <h3 class="font-black text-slate-700 text-sm uppercase tracking-tight mb-2">Meu Perfil Analítico</h3>
-        <p class="text-xs text-slate-400 mb-5">
-          Dados opcionais usados apenas em análises agregadas. Nunca exibidos individualmente.
-          Seu perfil não é obrigatório e pode ser atualizado a qualquer momento.
-        </p>
-
-        <div class="bg-violet-50 border border-violet-100 rounded-xl p-3 mb-5">
-          <p class="text-[10px] text-violet-700">
-            <i class="fas fa-shield-halved mr-1"></i>
-            Os dados abaixo são usados exclusivamente para análises de equidade e desigualdade organizacional.
-            Apenas grupos com mínimo de 5 pessoas são analisados.
-          </p>
-        </div>
-
-        <div class="grid grid-cols-2 gap-3">
-          <div>
-            <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Gênero</label>
-            <select id="perfil-genero" style="width:100%;margin-top:4px;padding:8px 12px;border:1.5px solid #e2e8f0;border-radius:10px;font-size:12px;outline:none;color:#475569">
-              <option value="">Prefiro não informar</option>
-              <option>Mulher cisgênero</option><option>Homem cisgênero</option>
-              <option>Mulher transgênero</option><option>Homem transgênero</option>
-              <option>Não-binário</option><option>Outro</option>
-            </select>
-          </div>
-          <div>
-            <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Raça/Cor</label>
-            <select id="perfil-raca" style="width:100%;margin-top:4px;padding:8px 12px;border:1.5px solid #e2e8f0;border-radius:10px;font-size:12px;outline:none;color:#475569">
-              <option value="">Prefiro não informar</option>
-              <option>Branca</option><option>Preta</option><option>Parda</option>
-              <option>Amarela</option><option>Indígena</option>
-            </select>
-          </div>
-          <div>
-            <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Orientação Sexual</label>
-            <select id="perfil-orientacao" style="width:100%;margin-top:4px;padding:8px 12px;border:1.5px solid #e2e8f0;border-radius:10px;font-size:12px;outline:none;color:#475569">
-              <option value="">Prefiro não informar</option>
-              <option>Heterossexual</option><option>Homossexual</option>
-              <option>Bissexual</option><option>Pansexual</option><option>Outro</option>
-            </select>
-          </div>
-          <div>
-            <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Faixa Salarial</label>
-            <select id="perfil-faixaSalarial" style="width:100%;margin-top:4px;padding:8px 12px;border:1.5px solid #e2e8f0;border-radius:10px;font-size:12px;outline:none;color:#475569">
-              <option value="">Prefiro não informar</option>
-              <option>Até 1 SM</option><option>1–2 SM</option><option>2–4 SM</option>
-              <option>4–8 SM</option><option>Acima de 8 SM</option>
-            </select>
-          </div>
-          <div>
-            <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Vínculo</label>
-            <select id="perfil-vinculo" style="width:100%;margin-top:4px;padding:8px 12px;border:1.5px solid #e2e8f0;border-radius:10px;font-size:12px;outline:none;color:#475569">
-              <option value="">Não informar</option>
-              <option>CLT</option><option>PJ</option><option>Terceirizado</option>
-              <option>Bolsa</option><option>Estágio</option><option>Voluntário</option>
-            </select>
-          </div>
-          <div>
-            <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Nível</label>
-            <select id="perfil-nivel" style="width:100%;margin-top:4px;padding:8px 12px;border:1.5px solid #e2e8f0;border-radius:10px;font-size:12px;outline:none;color:#475569">
-              <option value="">Não informar</option>
-              <option value="operacional">Operacional</option>
-              <option value="tático">Tático</option>
-              <option value="estratégico">Estratégico</option>
-            </select>
-          </div>
-          <div>
-            <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Tempo de Casa</label>
-            <select id="perfil-tempoCasa" style="width:100%;margin-top:4px;padding:8px 12px;border:1.5px solid #e2e8f0;border-radius:10px;font-size:12px;outline:none;color:#475569">
-              <option value="">Não informar</option>
-              <option>Menos de 6 meses</option><option>6 meses – 1 ano</option>
-              <option>1–3 anos</option><option>3–5 anos</option><option>Mais de 5 anos</option>
-            </select>
-          </div>
-          <div>
-            <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Região</label>
-            <select id="perfil-regiao" style="width:100%;margin-top:4px;padding:8px 12px;border:1.5px solid #e2e8f0;border-radius:10px;font-size:12px;outline:none;color:#475569">
-              <option value="">Não informar</option>
-              <option>Norte</option><option>Nordeste</option><option>Centro-Oeste</option>
-              <option>Sudeste</option><option>Sul</option>
-            </select>
-          </div>
-        </div>
-
-        <button onclick="_escutaSalvarPerfil()"
-          class="mt-5 w-full bg-violet-600 hover:bg-violet-700 text-white text-xs font-black py-3 rounded-xl uppercase transition-all">
-          <i class="fas fa-floppy-disk mr-2"></i>Salvar Perfil
-        </button>
-      </div>
-    </div>
-  </div>
 
 </section>
 
@@ -630,6 +629,32 @@
     </div>
 
     <p class="text-[9px] text-slate-300 text-center mt-2">Dados analisados em grupo, nunca individualmente.</p>
+  </div>
+</div>
+
+<!-- Modal: Manual / Como funciona -->
+<div id="escuta-modal-manual" class="fixed inset-0 z-[90] hidden">
+  <div class="absolute inset-0 bg-black/50" onclick="_escutaFecharManual()"></div>
+  <div class="absolute inset-4 md:inset-16 lg:inset-24 bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+    <div class="bg-gradient-to-r from-violet-600 to-purple-600 px-6 py-4 flex justify-between items-center shrink-0">
+      <h3 class="text-white font-black uppercase tracking-tight flex items-center gap-2">
+        <i class="fas fa-circle-question"></i>Como Funciona a Escuta Institucional
+      </h3>
+      <button onclick="_escutaFecharManual()" class="text-white/70 hover:text-white">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+    <div class="flex-1 overflow-y-auto p-6">
+      <div id="escuta-manual-conteudo" class="space-y-5">
+        <div class="text-center text-slate-300 py-8"><i class="fas fa-spinner fa-spin text-2xl"></i></div>
+      </div>
+    </div>
+    <div class="border-t border-slate-100 px-6 py-4 flex justify-end shrink-0">
+      <button onclick="_escutaFecharManual()"
+        class="bg-violet-600 hover:bg-violet-700 text-white text-xs font-black px-5 py-2 rounded-xl transition-all uppercase">
+        Entendido
+      </button>
+    </div>
   </div>
 </div>
 
@@ -767,15 +792,17 @@
 // ── Estado local ─────────────────────────────────────────────
 
 var _escutaCache = {
-  dashboard:   null,
-  alertas:     [],
-  pesquisas:   [],
-  banco:       [],
-  perguntas:   [],
-  config:      {},
-  perfil:      null,
-  periodos:    [],
-  widgetPergunta: null,
+  dashboard:    null,
+  alertas:      [],
+  pesquisas:    [],
+  banco:        [],
+  perguntas:    [],
+  config:       {},
+  periodos:     [],
+  participacao: null,
+  nivel:        'colaborador',
+  perfilRH:     null,
+  widgetPergunta:   null,
   widgetPesquisaId: null
 };
 
@@ -800,14 +827,16 @@ function _escutaRecarregar() {
       Swal.fire('Escuta', res ? res.msg : 'Erro ao carregar dados.', 'error');
       return;
     }
-    _escutaCache.dashboard  = res.dashboard;
-    _escutaCache.alertas    = res.alertas    || [];
-    _escutaCache.pesquisas  = res.pesquisas  || [];
-    _escutaCache.banco      = res.banco      || [];
-    _escutaCache.perguntas  = res.perguntas  || [];
-    _escutaCache.config     = res.config     || {};
-    _escutaCache.perfil     = res.perfil;
-    _escutaCache.periodos   = _escutaGerarPeriodos(12);
+    _escutaCache.dashboard    = res.dashboard;
+    _escutaCache.alertas      = res.alertas      || [];
+    _escutaCache.pesquisas    = res.pesquisas     || [];
+    _escutaCache.banco        = res.banco         || [];
+    _escutaCache.perguntas    = res.perguntas     || [];
+    _escutaCache.config       = res.config        || {};
+    _escutaCache.participacao = res.participacao  || null;
+    _escutaCache.nivel        = res.nivel         || 'colaborador';
+    _escutaCache.perfilRH     = res.perfilRH      || null;
+    _escutaCache.periodos     = _escutaGerarPeriodos(12);
 
     _escutaRenderTudo();
     _escutaAgendarWidget();
@@ -826,21 +855,62 @@ function _escutaGerarPeriodos(n) {
 }
 
 function _escutaRenderTudo() {
+  _escutaAplicarPermissoes();
+  _escutaRenderPerfilRH();
   _escutaPopularSelects();
   _escutaRenderDashboard();
+  _escutaRenderParticipacao();
   _escutaRenderAlertas();
   _escutaRenderConfig();
   _escutaRenderPerguntas();
   _escutaRenderPesquisas();
   _escutaRenderBanco();
+  _escutaRenderDistribuicao();
   _escutaCarregarFeedback();
-  if (_escutaCache.perfil) _escutaPreencherPerfil(_escutaCache.perfil);
+}
+
+// ── Permissões — mostrar/ocultar tabs por nível ───────────────
+
+function _escutaAplicarPermissoes() {
+  var nivel = _escutaCache.nivel || 'colaborador';
+  var isRH  = (nivel === 'rh' || nivel === 'superadmin');
+
+  // Tabs que exigem RH/superadmin
+  document.querySelectorAll('.escuta-tab-rh').forEach(function(el) {
+    el.classList.toggle('hidden', !isRH);
+  });
+
+  // Colaborador começa na aba Escuta Livre
+  if (!isRH) {
+    _escutaSubAba('espontanea');
+    // Esconder painel e ir direto à escuta livre
+    var painelBtn = document.getElementById('escuta-nav-painel');
+    if (painelBtn) painelBtn.classList.add('hidden');
+  } else {
+    // RH/superadmin começa no Painel
+    _escutaSubAba('painel');
+  }
+}
+
+// ── Perfil RH banner ──────────────────────────────────────────
+
+function _escutaRenderPerfilRH() {
+  var rh = _escutaCache.perfilRH;
+  var banner = document.getElementById('escuta-perfil-rh-banner');
+  var texto  = document.getElementById('escuta-perfil-rh-texto');
+  if (!banner || !texto) return;
+  if (rh && rh.nome) {
+    texto.textContent = rh.nome + (rh.cargo ? ' — ' + rh.cargo : '') + (rh.setor ? ' / ' + rh.setor : '');
+    banner.classList.remove('hidden');
+  } else {
+    banner.classList.add('hidden');
+  }
 }
 
 // ── Sub-navegação ─────────────────────────────────────────────
 
 function _escutaSubAba(nome) {
-  var paineis = ['painel','espontanea','alertas','relatorios','pesquisas','perfil'];
+  var paineis = ['painel','espontanea','alertas','distribuicao','relatorios','pesquisas'];
   paineis.forEach(function(p) {
     var el = document.getElementById('escuta-painel-' + p);
     if (el) el.classList.toggle('hidden', p !== nome);
@@ -852,8 +922,9 @@ function _escutaSubAba(nome) {
       btn.classList.toggle('text-slate-600',p !== nome);
     }
   });
-  if (nome === 'espontanea') _escutaRenderEspontanea();
-  if (nome === 'relatorios') _escutaIniciarRelatorios();
+  if (nome === 'espontanea')    _escutaRenderEspontanea();
+  if (nome === 'relatorios')    _escutaIniciarRelatorios();
+  if (nome === 'distribuicao')  _escutaRenderDistribuicao();
 }
 
 function _escutaGestaoAba(nome) {
@@ -904,10 +975,12 @@ function _escutaRenderDashboard() {
   var conf = d.confianca || {};
   var badgeEl = document.getElementById('escuta-badge-confianca');
   if (badgeEl) {
-    badgeEl.className = 'px-3 py-1.5 rounded-xl text-[10px] font-black uppercase ' +
-      (conf.suficiente ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700');
+    var pct = conf.percentual || 0;
+    var cor = pct > 0 ? (conf.suficiente ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700')
+                     : 'bg-slate-100 text-slate-500';
+    badgeEl.className = 'px-3 py-1.5 rounded-xl text-[10px] font-black uppercase ' + cor;
     badgeEl.innerHTML = '<i class="fas fa-circle-dot mr-1"></i>' +
-      (conf.percentual || 0) + '% de resposta';
+      pct + '% — ' + (conf.participantes || 0) + ' participantes';
   }
 
   // Alerta de confiança insuficiente
@@ -962,6 +1035,198 @@ function _escutaRenderDashboard() {
       _escutaRenderEstratificado(d.estratificado, d.bloqueado);
     }
   }
+}
+
+// ── Histórico de Participação ─────────────────────────────────
+
+function _escutaRenderParticipacao() {
+  var p = _escutaCache.participacao;
+  if (!p) return;
+
+  // KPIs
+  _escutaSetEl('escuta-part-total',    String(p.totalRespostas   || 0));
+  _escutaSetEl('escuta-part-esponts',  String(p.totalEspontaneas || 0));
+  _escutaSetEl('escuta-part-periodos', String((p.historico || []).length));
+
+  var ultima = p.ultimaResposta ? _escutaFmtData(p.ultimaResposta) : '—';
+  _escutaSetEl('escuta-part-ultima', ultima);
+
+  // Badge total respostas no cabeçalho
+  var total = (p.totalRespostas || 0) + (p.totalEspontaneas || 0);
+  var badgeTot = document.getElementById('escuta-badge-total-respostas');
+  var txtTot   = document.getElementById('escuta-txt-total-respostas');
+  if (badgeTot && total > 0) {
+    if (txtTot) txtTot.textContent = total;
+    badgeTot.classList.remove('hidden');
+  }
+
+  // Gráfico de barras de histórico
+  var el = document.getElementById('escuta-historico-periodos');
+  if (!el) return;
+  var hist = p.historico || [];
+  if (!hist.length) {
+    el.innerHTML = '<p class="text-[10px] text-slate-400 text-center py-4">Nenhum histórico de participação registrado.</p>';
+    return;
+  }
+  var maxVal = hist.reduce(function(m, h) { return Math.max(m, h.count || 0); }, 1);
+  el.innerHTML = hist.map(function(h) {
+    var pct = Math.round(((h.count || 0) / maxVal) * 100);
+    var cor = pct >= 70 ? 'bg-violet-500' : pct >= 40 ? 'bg-violet-300' : 'bg-slate-200';
+    var uniq = h.participantes ? ' · ' + h.participantes + ' part.' : '';
+    return '<div class="flex items-center gap-3">' +
+      '<span class="text-[10px] font-mono text-slate-500 w-16 shrink-0">' + h.periodo + '</span>' +
+      '<div class="flex-1 h-5 bg-slate-100 rounded-lg overflow-hidden">' +
+        '<div class="h-full ' + cor + ' rounded-lg flex items-center px-2 transition-all" style="width:' + Math.max(pct, 4) + '%">' +
+          (pct >= 20 ? '<span class="text-white text-[9px] font-black">' + (h.count || 0) + '</span>' : '') +
+        '</div>' +
+      '</div>' +
+      '<span class="text-[10px] text-slate-400 w-20 text-right shrink-0">' + (h.count || 0) + ' resp.' + uniq + '</span>' +
+    '</div>';
+  }).join('');
+}
+
+// ── Distribuição de pesquisas ─────────────────────────────────
+
+function _escutaRenderDistribuicao() {
+  var p = _escutaCache.participacao;
+  if (!p) {
+    // Tenta carregar se ainda não veio
+    GAS._call('obterParticipacaoEscuta', [], function(res) {
+      if (res && res.ok) {
+        _escutaCache.participacao = res.dados;
+        _escutaRenderDistribuicao();
+      }
+    });
+    return;
+  }
+
+  // Badge no nav
+  var alertas = p.alertasDistribuicao || [];
+  var badgeDist = document.getElementById('escuta-badge-dist');
+  if (badgeDist) {
+    badgeDist.textContent = alertas.length;
+    badgeDist.classList.toggle('hidden', alertas.length === 0);
+  }
+
+  // Painel: pesquisas
+  var elPesq = document.getElementById('escuta-dist-pesquisas');
+  if (elPesq) {
+    var pesquisas = p.pesquisas || [];
+    if (!pesquisas.length) {
+      elPesq.innerHTML = '<p class="text-[10px] text-slate-400 text-center py-8">Nenhuma pesquisa cadastrada.</p>';
+    } else {
+      elPesq.innerHTML = pesquisas.map(function(ps) {
+        var cor = ps.ativa ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-400';
+        var status = ps.ativa ? 'Ativa' : 'Inativa';
+        return '<div class="flex items-center gap-3 p-4">' +
+          '<div class="flex-1 min-w-0">' +
+            '<p class="text-xs font-black text-slate-700 truncate">' + escaparHTML(ps.titulo || 'Sem título') + '</p>' +
+            '<p class="text-[10px] text-slate-400">' + (ps.respostas || 0) + ' respostas</p>' +
+          '</div>' +
+          '<span class="text-[9px] font-black px-2 py-1 rounded-full ' + cor + '">' + status + '</span>' +
+        '</div>';
+      }).join('');
+    }
+  }
+
+  // Painel: alertas de distribuição
+  var elAl = document.getElementById('escuta-dist-alertas');
+  if (elAl) {
+    if (!alertas.length) {
+      elAl.innerHTML = '<p class="text-[10px] text-green-700 bg-green-50 rounded-xl mx-4 my-6 p-3 text-center">' +
+        '<i class="fas fa-check-circle mr-1"></i>Nenhum alerta de distribuição no momento.</p>';
+    } else {
+      var tipoLabel = { ativa_sem_respostas: 'Ativa sem respostas', pesquisa_vencida: 'Pesquisa vencida' };
+      var tipoIcon  = { ativa_sem_respostas: 'fas fa-inbox text-amber-500', pesquisa_vencida: 'fas fa-clock text-red-400' };
+      elAl.innerHTML = alertas.map(function(a) {
+        return '<div class="flex items-start gap-3 p-4">' +
+          '<i class="' + (tipoIcon[a.tipo] || 'fas fa-bell text-slate-400') + ' mt-0.5 shrink-0"></i>' +
+          '<div class="min-w-0">' +
+            '<p class="text-xs font-black text-slate-700">' + (tipoLabel[a.tipo] || a.tipo) + '</p>' +
+            '<p class="text-[10px] text-slate-500 truncate">' + escaparHTML(a.titulo || '') + '</p>' +
+          '</div>' +
+        '</div>';
+      }).join('');
+    }
+  }
+
+  // Histórico de coleta
+  var elHist = document.getElementById('escuta-dist-historico');
+  if (elHist) {
+    var hist = p.historico || [];
+    if (!hist.length) {
+      elHist.innerHTML = '<p class="text-[10px] text-slate-400 text-center py-4">Sem histórico disponível.</p>';
+    } else {
+      var maxH = hist.reduce(function(m, h) { return Math.max(m, h.count || 0); }, 1);
+      elHist.innerHTML = hist.map(function(h) {
+        var pct = Math.round(((h.count || 0) / maxH) * 100);
+        var cor = pct >= 60 ? 'bg-violet-500' : pct >= 30 ? 'bg-violet-300' : 'bg-slate-200';
+        return '<div class="flex items-center gap-3">' +
+          '<span class="text-[10px] font-mono text-slate-500 w-16 shrink-0">' + h.periodo + '</span>' +
+          '<div class="flex-1 h-5 bg-slate-100 rounded-lg overflow-hidden">' +
+            '<div class="h-full ' + cor + ' rounded-lg transition-all" style="width:' + Math.max(pct, 4) + '%"></div>' +
+          '</div>' +
+          '<span class="text-[10px] text-slate-400 w-16 text-right shrink-0">' + (h.count || 0) + ' resp.</span>' +
+        '</div>';
+      }).join('');
+    }
+  }
+}
+
+// ── Manual / Como funciona ────────────────────────────────────
+
+function _escutaAbrirManual() {
+  var modal = document.getElementById('escuta-modal-manual');
+  if (!modal) return;
+  modal.classList.remove('hidden');
+
+  var conteudo = document.getElementById('escuta-manual-conteudo');
+  if (!conteudo) return;
+  conteudo.innerHTML = '<div class="text-center text-slate-300 py-8"><i class="fas fa-spinner fa-spin text-2xl"></i></div>';
+
+  GAS._call('obterManualEscuta', [null], function(res) {
+    if (!res || !res.ok || !res.dados) {
+      conteudo.innerHTML = '<p class="text-slate-400 text-sm text-center py-8">Não foi possível carregar o manual.</p>';
+      return;
+    }
+    var icons = {
+      objetivo:'fas fa-bullseye', funcionamento:'fas fa-cogs',
+      turnos:'fas fa-clock', dimensoes:'fas fa-layer-group',
+      indicadores:'fas fa-chart-bar', confianca:'fas fa-shield-check',
+      fairness:'fas fa-balance-scale', nr1:'fas fa-scale-balanced',
+      privacidade:'fas fa-user-secret', acesso:'fas fa-lock',
+      direitos:'fas fa-file-signature', pesquisas:'fas fa-clipboard-list'
+    };
+    var secoes = res.dados;
+    conteudo.innerHTML = Object.keys(secoes).map(function(key) {
+      var s = secoes[key];
+      if (!s) return '';
+      var titulo   = s.titulo  || key;
+      var itens    = Array.isArray(s.conteudo) ? s.conteudo : [String(s.conteudo || s)];
+      var fonte    = s.fonte   || '';
+      var icon     = icons[key] || 'fas fa-info-circle';
+      return '<div class="bg-slate-50 rounded-2xl p-5">' +
+        '<h4 class="font-black text-slate-700 text-sm flex items-center gap-2 mb-3">' +
+          '<i class="' + icon + ' text-violet-500 text-xs w-4 text-center"></i>' +
+          escaparHTML(titulo) +
+        '</h4>' +
+        '<ul class="space-y-1.5">' +
+          itens.map(function(item) {
+            return '<li class="flex items-start gap-2 text-xs text-slate-600 leading-relaxed">' +
+              '<i class="fas fa-chevron-right text-violet-300 text-[8px] mt-1 shrink-0"></i>' +
+              escaparHTML(item) +
+            '</li>';
+          }).join('') +
+        '</ul>' +
+        (fonte ? '<p class="text-[9px] text-slate-300 mt-3 font-mono">' + escaparHTML(fonte) + '</p>' : '') +
+      '</div>';
+    }).join('');
+  });
+}
+
+function _escutaFecharManual() {
+  var modal = document.getElementById('escuta-modal-manual');
+  if (modal) modal.classList.add('hidden');
 }
 
 function _escutaRenderDimensoes(ind, bloqueado) {
@@ -1660,41 +1925,6 @@ function _escutaUsarTemplate(id) {
   document.getElementById('modal-pesq-titulo').value = t.titulo || '';
   _escutaAbaPesquisasPerguntas = Array.isArray(t.perguntas) ? t.perguntas.slice() : [];
   _escutaRenderPerguntasModal();
-}
-
-// ── Perfil Analítico ──────────────────────────────────────────
-
-function _escutaPreencherPerfil(p) {
-  if (!p) return;
-  _escutaSetVal('perfil-genero',       p.genero            || '');
-  _escutaSetVal('perfil-raca',         p.raca              || '');
-  _escutaSetVal('perfil-orientacao',   p.orientacaoSexual  || '');
-  _escutaSetVal('perfil-faixaSalarial',p.faixaSalarial     || '');
-  _escutaSetVal('perfil-vinculo',      p.vinculo           || '');
-  _escutaSetVal('perfil-nivel',        p.nivel             || '');
-  _escutaSetVal('perfil-tempoCasa',    p.tempoCasa         || '');
-  _escutaSetVal('perfil-regiao',       p.regiao            || '');
-}
-
-function _escutaSalvarPerfil() {
-  var dados = {
-    genero:           (_val('perfil-genero')       || ''),
-    raca:             (_val('perfil-raca')         || ''),
-    orientacaoSexual: (_val('perfil-orientacao')   || ''),
-    faixaSalarial:    (_val('perfil-faixaSalarial')|| ''),
-    vinculo:          (_val('perfil-vinculo')      || ''),
-    nivel:            (_val('perfil-nivel')        || ''),
-    tempoCasa:        (_val('perfil-tempoCasa')    || ''),
-    regiao:           (_val('perfil-regiao')       || '')
-  };
-  GAS._call('salvarPerfilAnaliticoEscuta', [dados], function(res) {
-    if (res && res.ok) {
-      Swal.fire({ icon: 'success', title: 'Perfil salvo', timer: 1800, showConfirmButton: false });
-      _escutaCache.perfil = dados;
-    } else {
-      Swal.fire('Erro', res ? res.msg : 'Erro.', 'error');
-    }
-  });
 }
 
 // ── Widget Pulse ──────────────────────────────────────────────

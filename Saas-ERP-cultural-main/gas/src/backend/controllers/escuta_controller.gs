@@ -75,6 +75,10 @@ function ctrl_escuta_manual(secao) {
   return GasResponse.wrap(function() { return obterManualEscuta(secao); });
 }
 
+function ctrl_escuta_participacao() {
+  return GasResponse.wrap(function() { return obterParticipacaoEscuta(); });
+}
+
 // ═══════════════════════════════════════════════════════════════
 // ESCRITA
 // ═══════════════════════════════════════════════════════════════
@@ -155,4 +159,8 @@ function ctrl_escuta_sugerir_parametros(objetivo, publico) {
 
 function ctrl_escuta_definir_total_colab(total) {
   return GasResponse.wrap(function() { return definirTotalColaboradoresEscuta(total); });
+}
+
+function ctrl_escuta_suprimir_emails() {
+  return GasResponse.wrap(function() { return escutaSuprimirEmailsAntigos(); });
 }

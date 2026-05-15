@@ -232,6 +232,41 @@ function _escutaInvalidarCacheSheet(nome) {
   else _escutaExecCache = {};
 }
 
+/**
+ * Normaliza valor de período vindo do sheet (string "2026-05" ou Date auto-interpretada).
+ * Google Sheets pode retornar Date objects quando a célula é formatada automaticamente.
+ */
+function _escutaNormPeriodo(val) {
+  if (!val) return '';
+  if (val instanceof Date) {
+    return val.getFullYear() + '-' + String(val.getMonth() + 1).padStart(2, '0');
+  }
+  var s = String(val).trim();
+  return s.length >= 7 ? s.substring(0, 7) : s;
+}
+
+/**
+ * Normaliza valor de timestamp vindo do sheet (string ISO ou Date auto-interpretada).
+ */
+function _escutaNormTimestamp(val) {
+  if (!val) return '';
+  if (val instanceof Date) return val.toISOString();
+  return String(val).trim();
+}
+
+/**
+ * Retorna nível de permissão do usuário para personalização da UI:
+ * 'superadmin' | 'rh' | 'colaborador'
+ */
+function _escutaNivelPermissao(email) {
+  if (!email) return 'colaborador';
+  try {
+    if (PermissoesService.pode(email, 'sistema', 'administrar')) return 'superadmin';
+    if (PermissoesService.pode(email, 'escuta', 'editar'))       return 'rh';
+  } catch(e) {}
+  return 'colaborador';
+}
+
 // ═══════════════════════════════════════════════════════════════
 // SISTEMA TEMPORAL — TURNOS E PROGRESSO
 // ═══════════════════════════════════════════════════════════════
@@ -442,7 +477,7 @@ function _escutaMetaDimensao() {
 function _escutaVerificarSaturacao(dimensao, periodo) {
   periodo  = periodo || _escutaPeriodoAtual();
   var rows = _escutaLerSheet(_ESCUTA_SHEETS.SATURACAO);
-  var reg  = rows.find(function(r) { return r.periodo === periodo && r.dimensao === dimensao; });
+  var reg  = rows.find(function(r) { return _escutaNormPeriodo(r.periodo) === periodo && r.dimensao === dimensao; });
   if (!reg) return false;
   return reg.saturado === 'true' || reg.saturado === true;
 }
@@ -452,7 +487,7 @@ function _escutaIncrementarSaturacao(dimensao, periodo) {
   var meta = _escutaMetaDimensao();
   var sh   = _escutaSheet(_ESCUTA_SHEETS.SATURACAO);
   var rows = _escutaSheetToArray(sh);
-  var idx  = rows.findIndex(function(r) { return r.periodo === periodo && r.dimensao === dimensao; });
+  var idx  = rows.findIndex(function(r) { return _escutaNormPeriodo(r.periodo) === periodo && r.dimensao === dimensao; });
 
   if (idx >= 0) {
     var coletados = parseInt(rows[idx].coletados || 0) + 1;
@@ -469,7 +504,7 @@ function obterSaturacaoEscuta() {
   try {
     var periodo = _escutaPeriodoAtual();
     var rows    = _escutaLerSheet(_ESCUTA_SHEETS.SATURACAO);
-    var atual   = rows.filter(function(r) { return r.periodo === periodo; });
+    var atual   = rows.filter(function(r) { return _escutaNormPeriodo(r.periodo) === periodo; });
     return { ok: true, dados: atual, meta: _escutaMetaDimensao() };
   } catch(e) {
     return { ok: false, msg: e.message };
@@ -504,7 +539,7 @@ function obterPerguntaPulse() {
     var resp = _escutaLerSheet(_ESCUTA_SHEETS.RESPOSTAS);
     var hashU = _escutaEmailHash(email);
     var respostasHoje = resp.filter(function(r) {
-      return r.emailHash === hashU && String(r.timestamp).startsWith(hoje);
+      return r.emailHash === hashU && _escutaNormTimestamp(r.timestamp).startsWith(hoje);
     });
     var limite = parseInt(cfg.limiteDia) || _ESCUTA_DEFAULTS.LIMITE_DIA;
     if (respostasHoje.length >= limite) return { ok: true, pergunta: null, motivo: 'limite_dia' };
@@ -512,9 +547,9 @@ function obterPerguntaPulse() {
     var antiSpam = parseFloat(cfg.antiSpamHoras) || _ESCUTA_DEFAULTS.ANTI_SPAM_HORAS;
     if (respostasHoje.length > 0) {
       var ultima = respostasHoje.sort(function(a, b) {
-        return new Date(b.timestamp) - new Date(a.timestamp);
+        return new Date(_escutaNormTimestamp(b.timestamp)) - new Date(_escutaNormTimestamp(a.timestamp));
       })[0];
-      var diffH = (new Date() - new Date(ultima.timestamp)) / 3600000;
+      var diffH = (new Date() - new Date(_escutaNormTimestamp(ultima.timestamp))) / 3600000;
       if (diffH < antiSpam) return { ok: true, pergunta: null, motivo: 'anti_spam' };
     }
 
@@ -534,7 +569,7 @@ function obterPerguntaPulse() {
 
     var idsRespondidos = {};
     resp.filter(function(r) {
-      return r.emailHash === hashU && (new Date() - new Date(r.timestamp)) < 172800000;
+      return r.emailHash === hashU && (new Date() - new Date(_escutaNormTimestamp(r.timestamp))) < 172800000;
     }).forEach(function(r) { idsRespondidos[r.perguntaId] = true; });
     perguntas = perguntas.filter(function(p) { return !idsRespondidos[p.id]; });
 
@@ -543,7 +578,7 @@ function obterPerguntaPulse() {
     var contagemPorDimensao = {};
     _ESCUTA_DIMENSOES.forEach(function(d) { contagemPorDimensao[d] = 0; });
     resp.filter(function(r) {
-      return String(r.timestamp).startsWith(periodo.substring(0, 7));
+      return _escutaNormTimestamp(r.timestamp).startsWith(periodo.substring(0, 7));
     }).forEach(function(r) {
       if (contagemPorDimensao[r.dimensao] !== undefined) contagemPorDimensao[r.dimensao]++;
     });
@@ -723,6 +758,49 @@ function registrarEscutaEspontanea(dados) {
   } catch(e) {
     return { ok: false, msg: e.message };
   }
+}
+
+/**
+ * Suprime emails em registros com mais de 90 dias, mantendo apenas o hash.
+ * Protocolo §5.1 (respostas) e §5.2 (espontânea não-anônima).
+ * Deve ser chamada via trigger mensal ou manualmente pelo admin técnico.
+ */
+function escutaSuprimirEmailsAntigos() {
+  var limite = new Date(new Date().getTime() - 90 * 24 * 3600 * 1000);
+  var sheets = [_ESCUTA_SHEETS.RESPOSTAS, _ESCUTA_SHEETS.ESPONTANEA];
+  var total  = 0;
+  sheets.forEach(function(nomeSheet) {
+    try {
+      var sh   = _escutaSheet(nomeSheet);
+      var rows = sh.getDataRange().getValues();
+      if (rows.length < 2) return;
+      var headers = rows[0];
+      // Encontra colunas de email e timestamp (flexível)
+      var colEmail = -1, colTs = -1;
+      headers.forEach(function(h, i) {
+        var lower = String(h).toLowerCase();
+        if (lower === 'email') colEmail = i;
+        if (lower === 'timestamp' || lower === 'data') colTs = i;
+      });
+      if (colEmail < 0 || colTs < 0) return;
+      for (var r = 1; r < rows.length; r++) {
+        var emailCell = String(rows[r][colEmail] || '').trim();
+        if (!emailCell || emailCell === '') continue; // já suprimido
+        var ts = _escutaNormTimestamp(rows[r][colTs]);
+        if (!ts) continue;
+        var data = new Date(ts);
+        if (data < limite) {
+          sh.getRange(r + 1, colEmail + 1).setValue('');
+          total++;
+        }
+      }
+      _escutaInvalidarCacheSheet(nomeSheet);
+    } catch(e) {
+      console.warn('[Escuta] supressão falhou em ' + nomeSheet + ': ' + e.message);
+    }
+  });
+  _escutaLog('supressao_emails', 'sistema', { registros: total, limiteData: limite.toISOString() });
+  return { ok: true, suprimidos: total };
 }
 
 function _escutaAnalisarSentimento(texto) {
@@ -999,14 +1077,14 @@ function obterDashboardEscuta(filtros) {
     var alertas     = _escutaLerSheet(_ESCUTA_SHEETS.ALERTAS);
 
     var respPeriodo = respostas.filter(function(r) {
-      return String(r.periodo) === periodo && (!setor || r.setor === setor);
+      return _escutaNormPeriodo(r.periodo) === periodo && (!setor || r.setor === setor);
     });
 
     var indicadores  = _escutaCalcIndicadores(respPeriodo);
     var saturacao    = obterSaturacaoEscuta().dados || [];
     var tendencia    = _escutaCalcTendencia(respostas, periodo);
     var espPeriodo   = espontaneas.filter(function(e) {
-      return String(e.timestamp).startsWith(periodo.substring(0, 7));
+      return _escutaNormTimestamp(e.timestamp).startsWith(periodo.substring(0, 7));
     });
     var resumoEsp    = _escutaResumoEspontanea(espPeriodo);
     var alertasAtivos = alertas.filter(function(a) { return a.status === 'ativo'; });
@@ -1123,7 +1201,7 @@ function _escutaCalcTendencia(respostas, periodoAtual) {
     d.setMonth(d.getMonth() - 1);
   }
   return periodos.map(function(p) {
-    var r   = respostas.filter(function(x) { return String(x.periodo) === p; });
+    var r   = respostas.filter(function(x) { return _escutaNormPeriodo(x.periodo) === p; });
     var ind = _escutaCalcIndicadores(r);
     return { periodo: p, climaGeral: ind._climaGeral.media, n: r.length };
   });
@@ -1241,10 +1319,10 @@ function _escutaVerificarEGerarAlertas() {
   try {
     var periodo = _escutaPeriodoAtual();
     var resp    = _escutaLerSheet(_ESCUTA_SHEETS.RESPOSTAS).filter(function(r) {
-      return String(r.periodo) === periodo;
+      return _escutaNormPeriodo(r.periodo) === periodo;
     });
     var esponts = _escutaLerSheet(_ESCUTA_SHEETS.ESPONTANEA).filter(function(e) {
-      return String(e.timestamp).startsWith(periodo.substring(0, 7));
+      return _escutaNormTimestamp(e.timestamp).startsWith(periodo.substring(0, 7));
     });
 
     var ind   = _escutaCalcIndicadores(resp);
@@ -1263,10 +1341,19 @@ function _escutaVerificarEGerarAlertas() {
 
 function _escutaDetectarAlertas(indicadores, espontaneas, respostas) {
   var alertas    = [];
+
+  // Guard: padrão deve manter-se por ≥7 dias distintos no período (manual §4.2)
+  var diasComDados = {};
+  respostas.forEach(function(r) {
+    var ts = _escutaNormTimestamp(r.timestamp);
+    if (ts.length >= 10) diasComDados[ts.substring(0, 10)] = true;
+  });
+  if (Object.keys(diasComDados).length < 7) return [];
+
   var rows       = _escutaLerSheet(_ESCUTA_SHEETS.ALERTAS);
   var existentes = rows.filter(function(a) {
     return a.status === 'ativo' &&
-      String(a.timestamp).startsWith(_escutaPeriodoAtual().substring(0, 7));
+      _escutaNormTimestamp(a.timestamp).startsWith(_escutaPeriodoAtual().substring(0, 7));
   });
   var tiposExistentes = {};
   existentes.forEach(function(a) { tiposExistentes[a.tipo] = true; });
@@ -1432,13 +1519,13 @@ function gerarRelatorioEscuta(tipo, periodo) {
     periodo = periodo || _escutaPeriodoAtual();
 
     var respostas = _escutaLerSheet(_ESCUTA_SHEETS.RESPOSTAS).filter(function(r) {
-      return String(r.periodo) === periodo;
+      return _escutaNormPeriodo(r.periodo) === periodo;
     });
     var esponts = _escutaLerSheet(_ESCUTA_SHEETS.ESPONTANEA).filter(function(e) {
-      return String(e.timestamp).startsWith(periodo.substring(0, 7));
+      return _escutaNormTimestamp(e.timestamp).startsWith(periodo.substring(0, 7));
     });
     var alertas = _escutaLerSheet(_ESCUTA_SHEETS.ALERTAS).filter(function(a) {
-      return String(a.timestamp).startsWith(periodo.substring(0, 7));
+      return _escutaNormTimestamp(a.timestamp).startsWith(periodo.substring(0, 7));
     });
 
     var ind  = _escutaCalcIndicadores(respostas);
@@ -1514,6 +1601,99 @@ function _escutaGerarRecomendacoes(indicadores, resumoEspontanea, alertas) {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// PARTICIPAÇÃO — CONTAGEM HISTÓRICA (independente de grupoMinimo)
+// ═══════════════════════════════════════════════════════════════
+
+function obterParticipacaoEscuta() {
+  try {
+    var respostas  = _escutaLerSheet(_ESCUTA_SHEETS.RESPOSTAS);
+    var esponts    = _escutaLerSheet(_ESCUTA_SHEETS.ESPONTANEA);
+    var pesquisas  = _escutaLerSheet(_ESCUTA_SHEETS.PESQUISAS);
+
+    var totalRespostas   = respostas.length;
+    var totalEspontaneas = esponts.length;
+
+    // Última resposta (timestamp normalizado)
+    var ultimaTs = null;
+    respostas.forEach(function(r) {
+      var ts = _escutaNormTimestamp(r.timestamp);
+      if (ts && (!ultimaTs || ts > ultimaTs)) ultimaTs = ts;
+    });
+
+    // Histórico por período
+    var porPeriodo = {};
+    respostas.forEach(function(r) {
+      var p = _escutaNormPeriodo(r.periodo);
+      if (!p) return;
+      if (!porPeriodo[p]) porPeriodo[p] = { respostas: 0, participantes: {} };
+      porPeriodo[p].respostas++;
+      if (r.emailHash) porPeriodo[p].participantes[r.emailHash] = true;
+    });
+
+    // Por pesquisa (contagem de respostas)
+    var porPesquisa = {};
+    respostas.forEach(function(r) {
+      var pid = r.sourcePesquisaId || '_pulse';
+      porPesquisa[pid] = (porPesquisa[pid] || 0) + 1;
+    });
+
+    // Pesquisas ativas com status de coleta
+    var hoje = _escutaDataHoje();
+    var pesquisasDetalhadas = pesquisas.map(function(p) {
+      try { p.perguntas = JSON.parse(p.perguntas); } catch(e) { p.perguntas = []; }
+      var conta = porPesquisa[p.id] || 0;
+      var ativa = p.status === 'ativo' && String(p.periodoFim) >= hoje;
+      return {
+        id:           p.id,
+        titulo:       p.titulo        || '',
+        status:       p.status        || '',
+        periodoInicio:p.periodoInicio || '',
+        periodoFim:   p.periodoFim    || '',
+        criadoEm:     p.criadoEm      || '',
+        ativa:        ativa,
+        respostas:    conta,
+        temRespostas: conta > 0
+      };
+    });
+
+    // Histórico ordenado (12 períodos mais recentes)
+    var historico = Object.keys(porPeriodo).sort().reverse().slice(0, 12).map(function(p) {
+      return {
+        periodo:       p,
+        respostas:     porPeriodo[p].respostas,
+        participantes: Object.keys(porPeriodo[p].participantes).length
+      };
+    });
+
+    // Alertas de distribuição
+    var alertasDistribuicao = [];
+    pesquisasDetalhadas.forEach(function(p) {
+      if (p.ativa && p.respostas === 0) {
+        alertasDistribuicao.push({ tipo: 'ativa_sem_respostas', pesquisaId: p.id, titulo: p.titulo });
+      }
+      if (p.status === 'ativo' && p.periodoFim && p.periodoFim < hoje) {
+        alertasDistribuicao.push({ tipo: 'pesquisa_vencida', pesquisaId: p.id, titulo: p.titulo });
+      }
+    });
+
+    return {
+      ok:                  true,
+      totalRespostas:      totalRespostas,
+      totalEspontaneas:    totalEspontaneas,
+      ultimaResposta:      ultimaTs,
+      historico:           historico,
+      porPesquisa:         porPesquisa,
+      pesquisas:           pesquisasDetalhadas,
+      alertasDistribuicao: alertasDistribuicao
+    };
+  } catch(e) {
+    return { ok: false, msg: e.message };
+  }
+}
+
+// Manual contextual — ver implementação completa abaixo (obterManualEscuta)
+
+// ═══════════════════════════════════════════════════════════════
 // CARGA INICIAL — CONSOLIDADA COM CACHE
 // ═══════════════════════════════════════════════════════════════
 
@@ -1542,26 +1722,50 @@ function obterDadosEscuta() {
       }
     });
 
-    var cfg      = obterConfiguracaoEscuta();
-    var dash     = obterDashboardEscuta({});
-    var alertas  = obterAlertasEscuta();
-    var perfil   = obterPerfilAnaliticoEscuta();
-    var pesqs    = obterPesquisasEscuta();
-    var banco    = obterBancoPesquisas();
-    var satur    = obterSaturacaoEscuta();
-    var pergs    = obterPerguntasEscuta();
+    var cfg          = obterConfiguracaoEscuta();
+    var dash         = obterDashboardEscuta({});
+    var alertas      = obterAlertasEscuta();
+    var pesqs        = obterPesquisasEscuta();
+    var banco        = obterBancoPesquisas();
+    var satur        = obterSaturacaoEscuta();
+    var pergs        = obterPerguntasEscuta();
+    var participacao = obterParticipacaoEscuta();
+
+    // Nível de permissão para personalização da UI
+    var nivel = _escutaNivelPermissao(email);
+
+    // Perfil do RH (fonte oficial) — fallback para perfil analítico se não encontrado
+    var perfilRH = null;
+    try {
+      var funcionarios = lerJSON('funcionarios.json') || [];
+      var funcEncontrado = funcionarios.find(function(f) {
+        return (f.email || '').toLowerCase() === (email || '').toLowerCase();
+      });
+      if (funcEncontrado) {
+        perfilRH = {
+          nome:     funcEncontrado.nome     || '',
+          cargo:    funcEncontrado.cargo    || funcEncontrado.papel || '',
+          setor:    funcEncontrado.setor    || '',
+          vinculo:  funcEncontrado.vinculo  || '',
+          status:   funcEncontrado.status   || 'ativo',
+          fonte:    'rh'
+        };
+      }
+    } catch(e_) {}
 
     return {
-      ok:        true,
-      email:     email,
-      config:    cfg.dados,
-      dashboard: dash.dados,
-      alertas:   alertas.dados,
-      perfil:    perfil.dados,
-      pesquisas: pesqs.dados,
-      banco:     banco.dados,
-      saturacao: satur.dados,
-      perguntas: pergs.dados
+      ok:           true,
+      email:        email,
+      nivel:        nivel,
+      config:       cfg.dados,
+      dashboard:    dash.dados,
+      alertas:      alertas.dados,
+      perfilRH:     perfilRH,
+      pesquisas:    pesqs.dados,
+      banco:        banco.dados,
+      saturacao:    satur.dados,
+      perguntas:    pergs.dados,
+      participacao: participacao.ok ? participacao : { totalRespostas: 0, totalEspontaneas: 0, historico: [], pesquisas: [] }
     };
   } catch(e) {
     return { ok: false, msg: e.message };
@@ -1606,10 +1810,10 @@ function obterGovernancaEscuta() {
 
     // Pré-carga consolidada
     var respostas   = _escutaLerSheet(_ESCUTA_SHEETS.RESPOSTAS).filter(function(r) {
-      return String(r.periodo) === periodo;
+      return _escutaNormPeriodo(r.periodo) === periodo;
     });
     var espontaneas = _escutaLerSheet(_ESCUTA_SHEETS.ESPONTANEA).filter(function(e) {
-      return String(e.timestamp).startsWith(periodo.substring(0, 7));
+      return _escutaNormTimestamp(e.timestamp).startsWith(periodo.substring(0, 7));
     });
     var alertasAtivos = _escutaLerSheet(_ESCUTA_SHEETS.ALERTAS).filter(function(a) {
       return a.status === 'ativo';
@@ -2101,78 +2305,175 @@ function obterMapaDadosEscuta(periodo) {
 
 // ═══════════════════════════════════════════════════════════════
 // MANUAL VIVO — INTERFACE EXPLICATIVA INTEGRADA
+// Fonte: manual_metodologico.md + protocolo_uso_dados.md
 // ═══════════════════════════════════════════════════════════════
 
 /**
- * Retorna conteúdo explicativo estruturado para tooltips e blocos de ajuda.
- * secao: 'indicadores' | 'alertas' | 'parametros' | 'fairness' | 'nr1' | 'privacidade' | null (tudo)
+ * Retorna seções do manual para exibição no modal "Como funciona".
+ * Conteúdo derivado de manual_metodologico.md e protocolo_uso_dados.md.
+ * secao: chave específica | null = todas as seções
  */
 function obterManualEscuta(secao) {
   var manual = {
+
+    objetivo: {
+      titulo: 'O que é a Escuta Institucional?',
+      conteudo: [
+        'Canal seguro e contínuo de monitoramento do clima organizacional do CCBJ.',
+        'Capta percepções do cotidiano de forma rápida, sigilosa e não-invasiva.',
+        'Identifica padrões estruturais, desigualdades entre grupos e riscos psicossociais.',
+        'NÃO é canal de denúncia formal, avaliação de desempenho ou diagnóstico clínico individual.',
+        'Os dados são usados exclusivamente para ações organizacionais coletivas — nunca para avaliar ou identificar indivíduos.'
+      ],
+      fonte: 'manual_metodologico.md §6 | protocolo_uso_dados.md §4'
+    },
+
+    funcionamento: {
+      titulo: 'Como funciona na prática?',
+      conteudo: [
+        'Canal 1 — Pesquisa Rápida (Pulse): uma pergunta breve aparece no canto da tela nos horários de trabalho.',
+        'Canal 2 — Escuta Livre: você registra livremente qualquer situação, escolhendo categoria e anonimato.',
+        'Limite diário: máximo de 3 perguntas pulse por usuário/dia.',
+        'Anti-spam: intervalo mínimo de 4 horas entre perguntas para o mesmo usuário.',
+        'Perguntas já respondidas nas últimas 48h não são repetidas.',
+        'Você pode ignorar qualquer pergunta sem nenhuma consequência.'
+      ],
+      fonte: 'manual_metodologico.md §1.1 e §5.2'
+    },
+
+    turnos: {
+      titulo: 'Horários e tipos de pergunta',
+      conteudo: [
+        'Manhã: 7h–14h | Tarde: 14h–18h | Noite: 18h–23h.',
+        'Perguntas instantâneas: disponíveis em qualquer momento do turno.',
+        'Perguntas acumulativas: disponíveis após 50% do turno (avaliação de algo que já aconteceu).',
+        'Perguntas finais: disponíveis após 75% do turno (balanço do dia/turno).',
+        'O sistema prioriza dimensões com menos respostas no período para equilibrar a cobertura.'
+      ],
+      fonte: 'manual_metodologico.md §5.3'
+    },
+
+    dimensoes: {
+      titulo: 'As 8 dimensões monitoradas',
+      conteudo: [
+        'Energia — estado físico e emocional imediato (Basis: Modelo Demandas-Recursos).',
+        'Carga de Trabalho — volume e pressão das demandas (Karasek, 1979). Score invertido: alto = ruim.',
+        'Clareza — clareza de papel e expectativas (Rizzo, 1970).',
+        'Apoio — suporte social no trabalho (House, 1981).',
+        'Autonomia — controle sobre o próprio trabalho (Hackman & Oldham, 1976).',
+        'Cultura — alinhamento e pertencimento organizacional.',
+        'Liderança — qualidade da relação com superiores.',
+        'Risco Psicossocial NR-1 — monitoramento obrigatório desde 2024. Score invertido: alto = ruim.',
+        'Clima Geral = média de Energia, Clareza, Apoio, Autonomia, Cultura e Liderança (carga e risco excluídos).'
+      ],
+      fonte: 'manual_metodologico.md §2'
+    },
+
     indicadores: {
-      titulo: 'Como funcionam os indicadores?',
+      titulo: 'Como os indicadores são calculados?',
       conteudo: [
-        'Cada dimensão recebe um score de 1 a 5 (média ponderada das respostas).',
-        'Níveis: Excelente (≥4.5) | Bom (≥3.5) | Regular (≥2.5) | Baixo (≥1.5) | Crítico (<1.5).',
-        'Dimensões "carga" e "risco_psicossocial" são invertidas: score alto = situação ruim.',
-        'Clima Geral: média das dimensões positivas (energia, clareza, apoio, autonomia, cultura, liderança).'
+        'Score por dimensão = Σ(resposta × peso) / Σ(pesos). Escala de 1 a 5.',
+        'Carga e Risco Psicossocial: score invertido pela fórmula "6 − score_bruto".',
+        'Clima Geral = média das dimensões positivas (excluindo carga e risco).',
+        'Níveis: Excelente ≥4.5 | Bom ≥3.5 | Regular ≥2.5 | Baixo ≥1.5 | Crítico <1.5.',
+        'Meta de saturação por dimensão/período: max(10, min(25, total_usuários × 0.25)).',
+        'Dimensões que atingem a meta de saturação são suspensas automaticamente.'
       ],
-      fonte: 'escuta_institucional.md §5 | manual_metodologico.md §3'
+      fonte: 'manual_metodologico.md §3'
     },
-    alertas: {
-      titulo: 'O que são os alertas institucionais?',
+
+    confianca: {
+      titulo: 'Critérios de confiança estatística',
       conteudo: [
-        'Gerados automaticamente quando padrões preocupantes são detectados.',
-        'Tipos: burnout_risco (carga alta + energia baixa), apoio_baixo, risco_psicossocial_nr1, escuta_negativa, lideranca_baixa, gap_estrutural.',
-        'Alertas só são gerados com confiança mínima de 15% e sem duplicação no mesmo período.',
-        'Alertas NR-1 são de nível crítico e requerem ação institucional imediata.'
+        'Taxa de confiança = participantes únicos / total de usuários do sistema.',
+        'Abaixo de 15%: indicadores bloqueados, nenhuma conclusão é exibida.',
+        '15% a 35%: dados exibidos com aviso de baixa confiança.',
+        'Acima de 35%: dados considerados representativos — exibição completa.',
+        'Grupo mínimo para análise estratificada (por setor, vínculo, gênero): 5 pessoas.',
+        'Alertas institucionais só são gerados com ≥15% de participação E padrão mantido por ao menos 7 dias do período.'
       ],
-      fonte: 'escuta_institucional.md §10 | manual_metodologico.md §3.3'
+      fonte: 'manual_metodologico.md §3.3 e §4'
     },
-    parametros: {
-      titulo: 'Parâmetros do sistema',
-      conteudo: [
-        'Limite diário: máximo de perguntas por usuário/dia (padrão: 3).',
-        'Anti-spam: intervalo mínimo entre perguntas ao mesmo usuário (padrão: 4h).',
-        'Grupo mínimo: tamanho mínimo de grupo para análise estratificada (padrão: 5).',
-        'Meta de saturação: max(10, min(25, total_usuários × 0.25)) respostas/dimensão/período.',
-        'Total de colaboradores: definido via PropertiesService (TOTAL_COLABORADORES).'
-      ],
-      fonte: 'manual_metodologico.md §3.4 | escuta_institucional.md §6'
-    },
+
     fairness: {
-      titulo: 'Como o sistema garante distribuição justa?',
+      titulo: 'Distribuição justa — sem usuário invisível ou sobrecarregado',
       conteudo: [
-        'Perguntas são priorizadas para dimensões com menor cobertura no período.',
-        'Limite diário impede que o mesmo usuário seja sobrecarregado.',
-        'Anti-spam (4h) evita perguntas em sequência.',
-        'Perguntas respondidas nas últimas 48h são excluídas da seleção.',
-        'Dimensões saturadas param de receber perguntas automaticamente.'
+        'Limite diário (padrão: 3 perguntas/dia) impede sobrecarga do mesmo colaborador.',
+        'Anti-spam de 4h garante espaçamento mínimo entre perguntas.',
+        'O sistema prioriza dimensões com menor cobertura no período atual.',
+        'Perguntas respondidas nas últimas 48h são automaticamente excluídas da seleção.',
+        'Dimensões que atingiram a meta de saturação param de receber novas perguntas.',
+        'Perguntas personalizadas têm prioridade sobre o banco padrão quando há pesquisa ativa.'
       ],
-      fonte: 'escuta_institucional.md §8 | manual_metodologico.md §5'
+      fonte: 'manual_metodologico.md §5'
     },
+
     nr1: {
       titulo: 'Monitoramento NR-1 (Risco Psicossocial)',
       conteudo: [
-        'A NR-1 (2024) exige gerenciamento de riscos psicossociais no trabalho.',
+        'A NR-1/2024 exige gestão de riscos psicossociais em todas as empresas.',
         'O sistema monitora via dimensão "risco_psicossocial" com peso reforçado (1.5).',
-        'Alerta crítico é gerado quando o indicador cai abaixo de 2.5.',
-        'IMPORTANTE: Este sistema realiza monitoramento agregado. NÃO substitui acompanhamento clínico individual.',
-        'Em caso de alerta NR-1: acionar protocolos de saúde ocupacional da instituição.'
+        'Alerta crítico gerado quando o indicador cai abaixo de 2.5 por ≥7 dias do período.',
+        'IMPORTANTE: monitoramento agregado — NÃO substitui acompanhamento psicológico individual.',
+        'Em caso de alerta NR-1: acionar os protocolos de saúde ocupacional da instituição.',
+        'Dados de monitoramento NR-1 devem ser documentados conforme exigência legal.'
       ],
-      fonte: 'escuta_institucional.md §7 | manual_metodologico.md §2.1'
+      fonte: 'manual_metodologico.md §2.1 | protocolo_uso_dados.md §4.1'
     },
+
     privacidade: {
-      titulo: 'Privacidade e anonimização',
+      titulo: 'Privacidade, anonimização e LGPD',
       conteudo: [
-        'Email é convertido em hash (djb2 base36) antes de qualquer armazenamento.',
-        'Campo "anônimo": quando ativado, o email original não é gravado.',
-        'Dados estratificados só são exibidos para grupos com ≥5 participantes.',
-        'Perfil analítico é preenchimento voluntário — nunca obrigatório.',
-        'Nenhuma análise individual é realizada ou exibida.'
+        'Email convertido em hash não-reversível (djb2 base36) antes de qualquer armazenamento.',
+        'Escuta espontânea anônima: email não é gravado, apenas o hash.',
+        'Registros com email original são suprimidos automaticamente após 90 dias (protocolo §5.1).',
+        'Análise estratificada só é exibida para grupos com ≥5 pessoas — evita reidentificação.',
+        'Perfil analítico (gênero, raça, orientação) é voluntário, baseado em consentimento (LGPD Art. 11, I).',
+        'Base legal das pesquisas de clima: legítimo interesse (LGPD Art. 7º, IX) e execução de contrato NR-1 (Art. 7º, V).'
       ],
-      fonte: 'escuta_institucional.md §9.3 | manual_metodologico.md §4.3'
+      fonte: 'protocolo_uso_dados.md §5 e §6 | manual_metodologico.md §4'
+    },
+
+    acesso: {
+      titulo: 'Quem vê o quê? Matriz de acesso',
+      conteudo: [
+        'Colaborador: acessa apenas a Escuta Livre (espontânea). Não vê indicadores nem alertas.',
+        'Gestor de Setor: indicadores e alertas do próprio setor. Não acessa dados sensíveis (raça, gênero, salário).',
+        'RH / Gestor Geral: acesso completo a todos os indicadores, alertas e análises estratificadas.',
+        'Admin Técnico: acesso ao sistema e planilhas para manutenção — NÃO tem acesso analítico.',
+        'PRINCÍPIO: acesso técnico ≠ acesso analítico. Separação auditada anualmente.',
+        'Escuta espontânea individual: inacessível — nem mesmo por superadmin em modo normal.'
+      ],
+      fonte: 'protocolo_uso_dados.md §1 e §2'
+    },
+
+    direitos: {
+      titulo: 'Seus direitos sobre os dados (LGPD)',
+      conteudo: [
+        'Acesso: solicite ao RH relatório das suas próprias respostas.',
+        'Retificação: atualize seu perfil analítico pelo sistema a qualquer momento.',
+        'Exclusão: solicite ao RH a remoção do seu perfil e hash.',
+        'Portabilidade: solicite exportação dos seus dados.',
+        'Revogação: limpe seu perfil analítico pelo sistema — elimina dados demográficos voluntários.',
+        'Dúvidas: dirija-se à Coordenação de RH ou ao DPO (Responsável pelo Tratamento de Dados).'
+      ],
+      fonte: 'protocolo_uso_dados.md §7'
+    },
+
+    pesquisas: {
+      titulo: 'Pesquisas personalizadas — boas práticas',
+      conteudo: [
+        'Criadas por gestores para investigação específica de um período ou tema.',
+        'Recomendação: máximo de 5 perguntas por pesquisa personalizada.',
+        'Sempre defina período de início e fim — não deixe em aberto.',
+        'Use templates do banco sempre que possível para garantir comparabilidade.',
+        'O título deve descrever o objetivo (ex: "Clima pós-reforma do espaço — Jun/2026").',
+        'Pesquisas direcionadas a grupos específicos devem ter justificativa em ata de reunião.',
+        'Banco padrão: 24 perguntas em 8 dimensões (3 por dimensão), validadas para resposta em menos de 10s.'
+      ],
+      fonte: 'manual_metodologico.md §1'
     }
+
   };
 
   if (secao && manual[secao]) {
