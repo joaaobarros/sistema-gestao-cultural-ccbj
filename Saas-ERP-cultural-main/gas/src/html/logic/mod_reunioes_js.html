@@ -29,6 +29,9 @@ var _reuState = {
   seletorAlvo:     null  // 'participantes' | 'envolvidos'
 };
 
+// Debounce para autocomplete de participantes
+var _reuDebounceTimer = null;
+
 // Cores para avatares
 var _REU_CORES = ['#7c3aed','#2563eb','#059669','#d97706','#dc2626','#0891b2','#9333ea'];
 function _reuCor(email) {
@@ -362,10 +365,17 @@ function _reuAbrirSeletorUsuarios(selecionados) {
   _reuState.encSelecionados = selecionados ? selecionados.slice() : [];
   _reuRenderizarSeletorUsuarios('');
   _reuAbrirModal('modal-seletor-participantes');
+  setTimeout(function() {
+    var input = document.getElementById('reu-busca-participantes');
+    if (input) { input.value = ''; input.focus(); }
+  }, 60);
 }
 
 function _reu_filtrarUsuarios(q) {
-  _reuRenderizarSeletorUsuarios(q);
+  clearTimeout(_reuDebounceTimer);
+  _reuDebounceTimer = setTimeout(function() {
+    _reuRenderizarSeletorUsuarios(q);
+  }, 150);
 }
 
 function _reuRenderizarSeletorUsuarios(q) {
@@ -401,7 +411,9 @@ function _reuToggleUsuarioSeletor(email) {
 }
 
 // ── Modal Stack Manager ───────────────────────────────────────────────────────
-// Top-level modals are mutually exclusive; sub-modals (seletor) stack on top.
+// Modais top-level são mutuamente exclusivos. O seletor de participantes é
+// um sub-modal que empilha sobre o modal pai sem fechá-lo.
+// Garante: um único overlay real, scroll lock correto, ESC funcional.
 
 var _REU_MODAIS_TOP_LEVEL = [
   'modal-nova-reuniao',
@@ -423,6 +435,18 @@ function _reuAbrirModal(id) {
   }
   var modal = document.getElementById(id);
   if (modal) modal.classList.remove('hidden');
+
+  // Scroll lock no body enquanto algum modal estiver aberto
+  document.body.style.overflow = 'hidden';
+
+  // Foco no primeiro elemento focável do modal (acessibilidade)
+  setTimeout(function() {
+    if (!modal) return;
+    var focusable = modal.querySelector(
+      'input:not([disabled]), textarea:not([disabled]), select:not([disabled]), button:not([disabled])'
+    );
+    if (focusable) focusable.focus();
+  }, 60);
 }
 
 function _reu_fecharModal(modalId) {
@@ -437,7 +461,35 @@ function _reu_fecharModal(modalId) {
   }
   var el = document.getElementById(modalId);
   if (el) el.classList.add('hidden');
+
+  // Restaurar scroll quando não houver mais modal aberto
+  var algumAberto = _REU_MODAIS_TOP_LEVEL.some(function(mid) {
+    var m = document.getElementById(mid);
+    return m && !m.classList.contains('hidden');
+  });
+  var seletor = document.getElementById('modal-seletor-participantes');
+  var seletorAberto = seletor && !seletor.classList.contains('hidden');
+  if (!algumAberto && !seletorAberto) {
+    document.body.style.overflow = '';
+  }
 }
+
+// ESC fecha o modal mais ao topo (seletor > top-level)
+document.addEventListener('keydown', function(e) {
+  if (e.key !== 'Escape') return;
+  var seletor = document.getElementById('modal-seletor-participantes');
+  if (seletor && !seletor.classList.contains('hidden')) {
+    _reu_fecharModal('modal-seletor-participantes');
+    return;
+  }
+  for (var i = _REU_MODAIS_TOP_LEVEL.length - 1; i >= 0; i--) {
+    var m = document.getElementById(_REU_MODAIS_TOP_LEVEL[i]);
+    if (m && !m.classList.contains('hidden')) {
+      _reu_fecharModal(_REU_MODAIS_TOP_LEVEL[i]);
+      return;
+    }
+  }
+});
 
 function _reuRenderizarChipsParticipantes() {
   var container = document.getElementById('reu-form-participantes-chips');

@@ -389,7 +389,7 @@
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
 
 <!-- Modal: Nova/Editar Reunião -->
-<div id="modal-nova-reuniao" class="modal-overlay hidden z-[200]">
+<div id="modal-nova-reuniao" class="modal-overlay hidden z-[200]" role="dialog" aria-modal="true" aria-labelledby="modal-reuniao-titulo">
   <div class="modal-box w-full max-w-2xl">
     <div class="modal-header">
       <h3 id="modal-reuniao-titulo" class="modal-title">Nova Reunião</h3>
@@ -486,7 +486,7 @@
 </div>
 
 <!-- Modal: Novo Encaminhamento -->
-<div id="modal-novo-enc" class="modal-overlay hidden z-[200]">
+<div id="modal-novo-enc" class="modal-overlay hidden z-[200]" role="dialog" aria-modal="true" aria-label="Novo Encaminhamento">
   <div class="modal-box w-full max-w-lg">
     <div class="modal-header">
       <h3 class="modal-title">Novo Encaminhamento</h3>
@@ -562,7 +562,7 @@
 </div>
 
 <!-- Modal: Detalhe Encaminhamento -->
-<div id="modal-detalhe-enc" class="modal-overlay hidden z-[200]">
+<div id="modal-detalhe-enc" class="modal-overlay hidden z-[200]" role="dialog" aria-modal="true" aria-labelledby="modal-enc-titulo">
   <div class="modal-box w-full max-w-lg">
     <div class="modal-header">
       <div>
@@ -631,7 +631,7 @@
 </div>
 
 <!-- Modal: Seletor de participantes -->
-<div id="modal-seletor-participantes" class="modal-overlay hidden z-[300]">
+<div id="modal-seletor-participantes" class="modal-overlay hidden z-[300]" role="dialog" aria-modal="true" aria-label="Selecionar participantes">
   <div class="modal-box w-full max-w-sm">
     <div class="modal-header">
       <h3 class="modal-title text-sm">Selecionar participantes</h3>
@@ -651,7 +651,7 @@
 </div>
 
 <!-- Modal: Assistente IA para Ata -->
-<div id="modal-ia-ata" class="modal-overlay hidden z-[200]">
+<div id="modal-ia-ata" class="modal-overlay hidden z-[200]" role="dialog" aria-modal="true" aria-label="Assistente IA — Organizar Ata">
   <div class="modal-box w-full max-w-lg">
     <div class="modal-header">
       <div>
@@ -844,8 +844,25 @@
 .btn-icon   { background: none; border: none; cursor: pointer; padding: 4px; transition: color .15s; }
 
 /* ── Modal ───────────────────────────────────────────────────────── */
-.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.4); display: flex; align-items: center; justify-content: center; padding: 16px; }
-.modal-box     { background: white; border-radius: 14px; max-height: 90vh; overflow-y: auto; width: 100%; box-shadow: 0 20px 60px rgba(0,0,0,.2); }
+/*
+ * display: none como padrão evita conflito com Tailwind .hidden
+ * (mesma especificidade 0,1,0 — quem aparece por último no CSS vence,
+ *  e este arquivo é carregado depois do CDN Tailwind)
+ * .modal-overlay:not(.hidden) tem especificidade 0,2,0 e garante display:flex
+ * quando o modal está visível, independente da ordem da cascata.
+ */
+.modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.45);
+  align-items: center; justify-content: center;
+  padding: 16px;
+  display: none;
+  z-index: 200;
+}
+.modal-overlay:not(.hidden) { display: flex; }
+.modal-overlay.z-\[300\]    { z-index: 300; }
+
+.modal-box     { background: white; border-radius: 14px; max-height: 90vh; overflow-y: auto; width: 100%; box-shadow: 0 24px 64px rgba(0,0,0,.22); }
 .modal-header  { display: flex; align-items: flex-start; justify-content: space-between; padding: 16px 20px 0; }
 .modal-title   { font-size: 14px; font-weight: 800; color: #1e293b; }
 .modal-body    { padding: 14px 20px; }
