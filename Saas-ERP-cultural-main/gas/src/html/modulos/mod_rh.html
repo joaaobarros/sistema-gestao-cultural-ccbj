@@ -117,6 +117,10 @@
             class="pccs-nav-btn px-4 py-2 text-[10px] font-black rounded-xl uppercase bg-slate-100 text-slate-600 hover:bg-slate-200 transition-all">
             <i class="fas fa-sliders-h mr-1"></i>Parâmetros
           </button>
+          <button onclick="_pccsSubAba('fiscal')" id="pccs-nav-fiscal"
+            class="pccs-nav-btn px-4 py-2 text-[10px] font-black rounded-xl uppercase bg-slate-100 text-slate-600 hover:bg-slate-200 transition-all">
+            <i class="fas fa-file-invoice-dollar mr-1"></i>Fiscal
+          </button>
         </div>
       </div>
 
@@ -212,6 +216,58 @@
                 <i class="fas fa-save mr-1"></i>Salvar Parâmetros
               </button>
             </div>
+          </div>
+
+        </div>
+      </div>
+      <!-- ── Fiscal ─────────────────────────────────────── -->
+      <div id="pccs-panel-fiscal" class="hidden p-6">
+        <div class="grid grid-cols-1 gap-6 max-w-3xl">
+
+          <!-- Tabela oficial por ano -->
+          <div class="p-4 bg-blue-50 border border-blue-200 rounded-2xl">
+            <h4 class="text-xs font-black text-blue-800 uppercase mb-1">
+              <i class="fas fa-calendar-alt mr-1"></i>Tabela Fiscal Oficial por Ano
+            </h4>
+            <p class="text-[10px] text-blue-700 mb-3">Aplica os valores oficiais (INSS, IRRF, FGTS, encargos e multas) publicados pela Portaria MPS/MF para o exercício selecionado.</p>
+            <div class="flex gap-3 items-end flex-wrap">
+              <div>
+                <label class="text-[10px] font-black text-blue-700 uppercase block mb-1">Ano</label>
+                <select id="fiscalAnoSelect"
+                  style="padding:8px 12px;border:1.5px solid #93c5fd;border-radius:10px;font-size:13px;outline:none;min-width:120px">
+                  <option value="">Carregando...</option>
+                </select>
+              </div>
+              <button onclick="_fiscalAplicarOficial()" data-requer-permissao="rh:editar"
+                class="bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-black px-5 py-2.5 rounded-xl uppercase">
+                <i class="fas fa-download mr-1"></i>Aplicar Tabela Oficial
+              </button>
+            </div>
+          </div>
+
+          <!-- Parâmetros vigentes -->
+          <div class="p-4 bg-white border border-slate-200 rounded-2xl">
+            <h4 class="text-xs font-black text-slate-700 uppercase mb-1">
+              <i class="fas fa-edit mr-1 text-slate-400"></i>Parâmetros Vigentes
+            </h4>
+            <p class="text-[10px] text-slate-500 mb-4" id="fiscalFonteLabel">—</p>
+            <div id="fiscalParamsForm" class="grid grid-cols-2 gap-4">
+              <div class="p-6 text-center col-span-2"><i class="fas fa-spinner animate-spin text-slate-300 text-lg"></i></div>
+            </div>
+            <div class="flex justify-end mt-4">
+              <button onclick="_fiscalSalvarParams()" data-requer-permissao="rh:editar"
+                class="bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-black px-5 py-2.5 rounded-xl uppercase">
+                <i class="fas fa-save mr-1"></i>Salvar Alterações
+              </button>
+            </div>
+          </div>
+
+          <!-- Histórico de alterações -->
+          <div class="p-4 bg-white border border-slate-200 rounded-2xl">
+            <h4 class="text-xs font-black text-slate-700 uppercase mb-3">
+              <i class="fas fa-history mr-1 text-slate-400"></i>Histórico de Alterações
+            </h4>
+            <div id="fiscalHistoricoContainer" class="text-[11px] text-slate-500">—</div>
           </div>
 
         </div>
@@ -835,6 +891,18 @@
             <div>
               <label class="text-[10px] font-black text-slate-400 uppercase block mb-1">Descontos (R$)</label>
               <input id="rscDescontos" type="number" min="0" step="0.01" placeholder="0,00"
+                class="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm outline-none focus:border-rose-400">
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="text-[10px] font-black text-slate-400 uppercase block mb-1">Adiantamento 13º pago (R$)</label>
+              <input id="rscAdiant13" type="number" min="0" step="0.01" placeholder="0,00"
+                class="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm outline-none focus:border-rose-400">
+            </div>
+            <div>
+              <label class="text-[10px] font-black text-slate-400 uppercase block mb-1">Data pag. adiantamento</label>
+              <input id="rscAdiant13Data" type="date"
                 class="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm outline-none focus:border-rose-400">
             </div>
           </div>
@@ -1827,7 +1895,7 @@ function _pccsSubAba(aba) {
   });
   var nb = document.getElementById('pccs-nav-' + aba);
   if (nb) nb.className = 'pccs-nav-btn px-4 py-2 text-[10px] font-black rounded-xl uppercase bg-indigo-600 text-white transition-all';
-  ['cargos','tabela','parametros'].forEach(function(p) {
+  ['cargos','tabela','parametros','fiscal'].forEach(function(p) {
     var el = document.getElementById('pccs-panel-' + p);
     if (el) el.classList.add('hidden');
   });
@@ -1836,6 +1904,7 @@ function _pccsSubAba(aba) {
   if (aba === 'cargos')     _pccsRenderCargos();
   if (aba === 'tabela')     _pccsRenderTabela();
   if (aba === 'parametros') _pccsRenderParametros();
+  if (aba === 'fiscal')     _fiscalCarregar();
 }
 
 function _pccsGrupoStyle(grupo) {
@@ -2175,6 +2244,113 @@ function _pccsAplicarReajuste() {
       });
     }, function() { showLoader(false); Swal.fire('Erro','Erro ao aplicar reajuste.','error'); });
   });
+}
+
+// ── Parâmetros Fiscais ────────────────────────────────────────────────────────
+var _fiscalParamsCache = null;
+
+function _fiscalCarregar() {
+  // Carrega anos oficiais e parâmetros vigentes em paralelo
+  GAS.rh.anosOficiais(function(anos) {
+    var sel = document.getElementById('fiscalAnoSelect');
+    if (!sel) return;
+    sel.innerHTML = anos.map(function(a) {
+      return '<option value="' + a.ano + '">' + a.ano + ' — ' + a.fonte + '</option>';
+    }).join('');
+  });
+  GAS.rh.obterParamsFiscais(function(pf) {
+    _fiscalParamsCache = pf;
+    window._fiscalParamsCache = pf; // disponível para cálculos do simulador
+    _fiscalRenderParams(pf);
+    _fiscalRenderHistorico(pf.historico || []);
+    var label = document.getElementById('fiscalFonteLabel');
+    if (label) label.textContent = 'Vigente: ' + (pf.fonte || '—') + ' | Ano: ' + (pf.anoVigente || '—');
+  });
+}
+
+function _fiscalRenderParams(pf) {
+  var c = document.getElementById('fiscalParamsForm');
+  if (!c) return;
+  function campo(label, id, valor, pct) {
+    var v = pct ? Math.round(valor * 10000) / 100 : valor;
+    return '<div><label style="font-size:9px;font-weight:900;color:#94a3b8;text-transform:uppercase;display:block;margin-bottom:3px">'
+      + label + (pct ? ' (%)' : ' (R$)') + '</label>'
+      + '<input id="' + id + '" type="number" step="0.001" value="' + v + '" '
+      + 'style="width:100%;padding:6px 10px;border:1.5px solid #e2e8f0;border-radius:10px;font-size:12px;outline:none">'
+      + '</div>';
+  }
+  c.innerHTML = ''
+    + '<div class="col-span-2 text-[9px] font-black text-slate-400 uppercase">INSS</div>'
+    + campo('Teto INSS', 'fpInssT', pf.inss.teto, false)
+    + campo('Alíquota FGTS', 'fpFgts', pf.fgts.aliquota, true)
+    + '<div class="col-span-2 text-[9px] font-black text-slate-400 uppercase mt-2">Encargos Patronais</div>'
+    + campo('Sem FGTS', 'fpEncSF', pf.encargos.patronalSemFGTS, true)
+    + campo('Com FGTS', 'fpEncCF', pf.encargos.patronalComFGTS, true)
+    + '<div class="col-span-2 text-[9px] font-black text-slate-400 uppercase mt-2">Multas Rescisórias</div>'
+    + campo('Multa sem justa causa', 'fpMulSJ', pf.rescisao.multaSemJusta, true)
+    + campo('Multa acordo (mútuo)', 'fpMulAc', pf.rescisao.multaAcordo, true)
+    + '<div class="col-span-2 text-[9px] font-black text-slate-400 uppercase mt-2">Aviso Prévio</div>'
+    + campo('Dias base', 'fpAvBase', pf.avisoPrevio.diasBase, false)
+    + campo('Dias por ano', 'fpAvAno', pf.avisoPrevio.diasPorAno, false)
+    + campo('Máximo de dias', 'fpAvMax', pf.avisoPrevio.maxDias, false);
+}
+
+function _fiscalSalvarParams() {
+  var pct = function(id) { return parseFloat(document.getElementById(id)?.value) / 100; };
+  var num = function(id) { return parseFloat(document.getElementById(id)?.value); };
+  var campos = {
+    inss:      { teto: num('fpInssT') },
+    fgts:      { aliquota: pct('fpFgts') },
+    encargos:  { patronalSemFGTS: pct('fpEncSF'), patronalComFGTS: pct('fpEncCF') },
+    rescisao:  { multaSemJusta: pct('fpMulSJ'), multaAcordo: pct('fpMulAc') },
+    avisoPrevio: { diasBase: num('fpAvBase'), diasPorAno: num('fpAvAno'), maxDias: num('fpAvMax') }
+  };
+  showLoader(true);
+  GAS.rh.salvarParamsFiscais(campos, function(pf) {
+    showLoader(false);
+    _fiscalParamsCache = pf;
+    window._fiscalParamsCache = pf;
+    _fiscalRenderHistorico(pf.historico || []);
+    Swal.fire({ title:'Parâmetros fiscais salvos!', icon:'success', timer:1800, showConfirmButton:false, customClass:{popup:'rounded-3xl'} });
+  }, function() { showLoader(false); Swal.fire('Erro','Erro ao salvar.','error'); });
+}
+
+function _fiscalAplicarOficial() {
+  var ano = parseInt(document.getElementById('fiscalAnoSelect')?.value);
+  if (!ano) { Swal.fire('Atenção','Selecione um ano.','warning'); return; }
+  Swal.fire({
+    title: 'Aplicar tabela oficial ' + ano + '?',
+    text: 'Os parâmetros INSS, IRRF, FGTS e encargos serão substituídos pelos valores oficiais publicados.',
+    icon: 'question', showCancelButton: true,
+    confirmButtonText: 'Aplicar', cancelButtonText: 'Cancelar',
+    customClass: { popup: 'rounded-3xl' }
+  }).then(function(r) {
+    if (!r.isConfirmed) return;
+    showLoader(true);
+    GAS.rh.aplicarTabelaFiscalOficial(ano, function(pf) {
+      showLoader(false);
+      _fiscalParamsCache = pf;
+      window._fiscalParamsCache = pf;
+      _fiscalRenderParams(pf);
+      _fiscalRenderHistorico(pf.historico || []);
+      var label = document.getElementById('fiscalFonteLabel');
+      if (label) label.textContent = 'Vigente: ' + (pf.fonte || '—') + ' | Ano: ' + (pf.anoVigente || '—');
+      Swal.fire({ title:'Tabela ' + ano + ' aplicada!', icon:'success', timer:1800, showConfirmButton:false, customClass:{popup:'rounded-3xl'} });
+    }, function() { showLoader(false); Swal.fire('Erro','Erro ao aplicar tabela.','error'); });
+  });
+}
+
+function _fiscalRenderHistorico(historico) {
+  var c = document.getElementById('fiscalHistoricoContainer');
+  if (!c) return;
+  if (!historico || historico.length === 0) { c.innerHTML = '<p style="color:#94a3b8">Nenhuma alteração registrada.</p>'; return; }
+  c.innerHTML = historico.slice(0, 8).map(function(h) {
+    var dt = h.dataEvento ? h.dataEvento.slice(0, 10) : '';
+    return '<div style="padding:6px 0;border-bottom:1px solid #f1f5f9">'
+      + '<span style="color:#64748b">' + dt + '</span>'
+      + ' <strong style="color:#334155">' + (h.tipo || '') + '</strong>'
+      + ' — ' + (h.descricao || '') + '</div>';
+  }).join('');
 }
 
 // ── Histórico ─────────────────────────────────────────────────────────────────
@@ -3042,20 +3218,45 @@ function _rhSimular() {
 
   if (vinculo === 'CLT') {
     var bruto = salario + adicional;
-    if (bruto <= 1412)       inss = bruto*0.075;
-    else if (bruto <= 2666.68) inss = 105.90 + (bruto-1412)*0.09;
-    else if (bruto <= 4000.03) inss = 105.90+113.40+(bruto-2666.68)*0.12;
-    else if (bruto <= 7786.02) inss = 105.90+113.40+160+(bruto-4000.03)*0.14;
-    else inss = 908.86;
-    inss = Math.round(inss*100)/100;
+    // INSS progressivo — tabela dinâmica (cache do backend via _fiscalParams)
+    var _pf = window._fiscalParamsCache || {
+      inss: { tabelaProgressiva: [
+        {ate:1412.00,aliq:0.075},{ate:2666.68,aliq:0.09},
+        {ate:4000.03,aliq:0.12},{ate:7786.02,aliq:0.14}
+      ], teto: 908.86 },
+      irrf: { tabela: [
+        {de:0,ate:2259.20,aliq:0,deducao:0},
+        {de:2259.21,ate:2826.65,aliq:0.075,deducao:169.44},
+        {de:2826.66,ate:3751.05,aliq:0.15,deducao:381.44},
+        {de:3751.06,ate:4664.68,aliq:0.225,deducao:662.77},
+        {de:4664.69,ate:999999,aliq:0.275,deducao:896.00}
+      ], isento: 2259.20 },
+      fgts: { aliquota: 0.08 },
+      encargos: { patronalComFGTS: 0.3568 }
+    };
+    var _pInss = 0, _pPrev = 0;
+    for (var _fi = 0; _fi < _pf.inss.tabelaProgressiva.length; _fi++) {
+      var _ff = _pf.inss.tabelaProgressiva[_fi];
+      if (bruto <= _pPrev) break;
+      _pInss += (Math.min(bruto, _ff.ate) - _pPrev) * _ff.aliq;
+      _pPrev = _ff.ate;
+      if (bruto <= _ff.ate) break;
+    }
+    inss = Math.min(Math.round(_pInss*100)/100, _pf.inss.teto);
     var baseI = bruto - inss;
-    if (baseI > 5855.60)       irrf = baseI*0.275-869.36;
-    else if (baseI > 4664.68)  irrf = baseI*0.225-636.13;
-    else if (baseI > 3751.05)  irrf = baseI*0.15-354.80;
-    else if (baseI > 2824)     irrf = baseI*0.075-142.80;
+    irrf = 0;
+    if (baseI > _pf.irrf.isento) {
+      for (var _ri = 0; _ri < _pf.irrf.tabela.length; _ri++) {
+        var _rf = _pf.irrf.tabela[_ri];
+        if (baseI >= _rf.de && baseI <= _rf.ate) {
+          irrf = Math.max(0, baseI * _rf.aliq - _rf.deducao);
+          break;
+        }
+      }
+    }
     irrf = Math.max(0, Math.round(irrf*100)/100);
-    fgts    = Math.round(bruto*0.08*100)/100;
-    encargos= Math.round(bruto*0.348*100)/100;
+    fgts    = Math.round(bruto*_pf.fgts.aliquota*100)/100;
+    encargos= Math.round(bruto*_pf.encargos.patronalComFGTS*100)/100;
     prov13  = Math.round((bruto/12)*100)/100;
     provFer = Math.round((bruto*4/3/12)*100)/100;
     liquido = Math.round((bruto-inss-irrf+beneficios)*100)/100;
@@ -3883,6 +4084,12 @@ function _rhEvtAtualizarCampos() {
       + '<div><label style="font-size:9px;font-weight:900;color:#94a3b8;text-transform:uppercase;display:block;margin-bottom:3px">Data de Desligamento</label>'
       + '<input id="evtRscDesligamento" type="date" style="width:100%;padding:6px 10px;border:1px solid #fecdd3;border-radius:10px;font-size:11px;outline:none"></div>'
       + '</div>'
+      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">'
+      + '<div><label style="font-size:9px;font-weight:900;color:#94a3b8;text-transform:uppercase;display:block;margin-bottom:3px">Adiantamento 13º já pago (R$)</label>'
+      + '<input id="evtRscAdiant13" type="number" min="0" step="0.01" placeholder="0,00" style="width:100%;padding:6px 10px;border:1px solid #fecdd3;border-radius:10px;font-size:11px;outline:none"></div>'
+      + '<div><label style="font-size:9px;font-weight:900;color:#94a3b8;text-transform:uppercase;display:block;margin-bottom:3px">Data do pagamento do adiantamento</label>'
+      + '<input id="evtRscAdiant13Data" type="date" style="width:100%;padding:6px 10px;border:1px solid #fecdd3;border-radius:10px;font-size:11px;outline:none"></div>'
+      + '</div>'
       + '<button type="button" onclick="_rhEvtCalcRescisao()" '
       + 'style="width:100%;padding:7px;background:#be123c;color:#fff;border:none;border-radius:10px;font-size:11px;font-weight:900;cursor:pointer;text-transform:uppercase">'
       + '<i class="fas fa-calculator" style="margin-right:4px"></i>Estimar Rescisão</button>'
@@ -3915,12 +4122,17 @@ function _rhEvtCalcRescisao() {
   var col     = (colId && _rhCache.find(function(p) { return p.id === colId; })) || {};
   var admissao= col.dataAdmissao || '';
   if (!admissao) { alert('Colaborador sem data de admissão cadastrada.'); return; }
+  var adiant13     = parseFloat(document.getElementById('evtRscAdiant13')?.value) || 0;
+  var adiant13Data = document.getElementById('evtRscAdiant13Data')?.value || null;
   var params = {
-    dataAdmissao:    admissao,
-    dataDesligamento:document.getElementById('evtRscDesligamento')?.value || new Date().toISOString().slice(0,10),
-    tipoRescisao:    tipo,
-    salarioBase:     parseFloat(document.getElementById('evtRscSalario')?.value) || col.salarioBase || 0,
-    beneficios:      parseFloat(document.getElementById('evtRscBeneficios')?.value) || col.beneficios || 0
+    dataAdmissao:                admissao,
+    dataDesligamento:            document.getElementById('evtRscDesligamento')?.value || new Date().toISOString().slice(0,10),
+    tipoRescisao:                tipo,
+    salarioBase:                 parseFloat(document.getElementById('evtRscSalario')?.value) || col.salarioBase || 0,
+    beneficios:                  parseFloat(document.getElementById('evtRscBeneficios')?.value) || col.beneficios || 0,
+    adiantamento13Pago:          adiant13,
+    adiantamento13DataPagamento: adiant13Data || null,
+    idColaborador:               colId || null
   };
   if (!params.salarioBase) { alert('Informe o salário base.'); return; }
   var btn = document.querySelector('[onclick="_rhEvtCalcRescisao()"]');
@@ -4049,6 +4261,15 @@ function _rscOnColaborador() {
   if (col.beneficios)   document.getElementById('rscBeneficios').value = col.beneficios;
   // Data de desligamento: hoje
   document.getElementById('rscDesligamento').value = new Date().toISOString().slice(0, 10);
+  // Adiantamento 13º: pré-preenche se houver registro no colaborador (mesmo ano)
+  var anoAtual = new Date().getFullYear();
+  var adiant13 = col.adiantamento13 || {};
+  if (adiant13.ano && adiant13.ano == anoAtual && adiant13.valor) {
+    var fa = document.getElementById('rscAdiant13');
+    var fd = document.getElementById('rscAdiant13Data');
+    if (fa) fa.value = adiant13.valor;
+    if (fd && adiant13.dataPagamento) fd.value = adiant13.dataPagamento;
+  }
 }
 
 function _rscCalcular() {
@@ -4062,14 +4283,17 @@ function _rscCalcular() {
   if (!salario)             { Swal.fire('Atenção','Informe o salário base.','warning'); return; }
 
   var params = {
-    dataAdmissao:    admissao,
-    dataDesligamento:deslig,
-    tipoRescisao:    tipo,
-    salarioBase:     salario,
-    beneficios:      parseFloat(document.getElementById('rscBeneficios')?.value)||0,
-    outrasVerbas:    parseFloat(document.getElementById('rscOutrasVerbas')?.value)||0,
-    descontos:       parseFloat(document.getElementById('rscDescontos')?.value)||0,
-    observacoes:     document.getElementById('rscObs')?.value.trim()||''
+    dataAdmissao:                admissao,
+    dataDesligamento:            deslig,
+    tipoRescisao:                tipo,
+    salarioBase:                 salario,
+    beneficios:                  parseFloat(document.getElementById('rscBeneficios')?.value)||0,
+    outrasVerbas:                parseFloat(document.getElementById('rscOutrasVerbas')?.value)||0,
+    descontos:                   parseFloat(document.getElementById('rscDescontos')?.value)||0,
+    adiantamento13Pago:          parseFloat(document.getElementById('rscAdiant13')?.value)||0,
+    adiantamento13DataPagamento: document.getElementById('rscAdiant13Data')?.value || null,
+    observacoes:                 document.getElementById('rscObs')?.value.trim()||'',
+    idColaborador:               colId || null
   };
 
   showLoader(true);

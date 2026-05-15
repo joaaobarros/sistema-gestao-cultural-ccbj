@@ -290,13 +290,26 @@ var RHEngine = (function () {
       var tipoRsc = dados.tipoRescisao || dados.TipoDesligamento || null;
       if (colaborador && colaborador.dataAdmissao && colaborador.salarioBase
           && dados.dataEvento && tipoRsc) {
+        // Adiantamento do 13º: considera somente se for do mesmo ano do desligamento
+        var anoDeslig = (dados.dataEvento || '').slice(0, 4);
+        var adiant13  = colaborador.adiantamento13 || {};
+        var adiant13Pago = 0;
+        var adiant13Data = null;
+        if (adiant13.ano && String(adiant13.ano) === anoDeslig && adiant13.valor) {
+          adiant13Pago = parseFloat(adiant13.valor) || 0;
+          adiant13Data = adiant13.dataPagamento || null;
+        }
         var paramsCalculo = {
-          dataAdmissao:    colaborador.dataAdmissao,
-          dataDesligamento:dados.dataEvento,
-          tipoRescisao:    tipoRsc,
-          salarioBase:     colaborador.salarioBase,
-          beneficios:      colaborador.beneficios || 0,
-          observacoes:     dados.observacoes || ''
+          dataAdmissao:               colaborador.dataAdmissao,
+          dataDesligamento:           dados.dataEvento,
+          tipoRescisao:               tipoRsc,
+          salarioBase:                colaborador.salarioBase,
+          beneficios:                 colaborador.beneficios || 0,
+          observacoes:                dados.observacoes || '',
+          adiantamento13Pago:         adiant13Pago,
+          adiantamento13DataPagamento: adiant13Data,
+          // Ativa modo histórico: FGTS e férias vencidas calculados com trajetória real
+          idColaborador:              dados.idColaborador
         };
         rescisaoOficial = RescisaoEngine.calcular(paramsCalculo);
         var rscSaved    = RescisaoEngine.salvarOficial(rescisaoOficial, dados.idColaborador, email);

@@ -534,7 +534,12 @@ const GAS = {
     listarSimulacoesRescisao:    function(colId, cb, err)       { GAS._callCtrl('ctrl_rh_listar_simulacoes_rescisao',  [colId, GAS._sessao()],            cb, err); },
     // Rescisão — Oficial (gerada via registrarDesligamento)
     listarRescisoes:             function(colId, cb, err)       { GAS._callCtrl('ctrl_rh_listar_rescisoes',            [colId, GAS._sessao()],            cb, err); },
-    obterRescisao:               function(id, cb, err)          { GAS._callCtrl('ctrl_rh_obter_rescisao',              [id, GAS._sessao()],               cb, err); }
+    obterRescisao:               function(id, cb, err)          { GAS._callCtrl('ctrl_rh_obter_rescisao',              [id, GAS._sessao()],               cb, err); },
+    // Parâmetros fiscais — tabelas INSS, IRRF, FGTS, encargos
+    obterParamsFiscais:          function(cb, err)              { GAS._callCtrl('ctrl_rh_params_fiscais',              [GAS._sessao()],                   cb, err); },
+    salvarParamsFiscais:         function(campos, cb, err)      { GAS._callCtrl('ctrl_rh_salvar_params_fiscais',       [campos, GAS._sessao()],           cb, err); },
+    aplicarTabelaFiscalOficial:  function(ano, cb, err)         { GAS._callCtrl('ctrl_rh_aplicar_tabela_fiscal_oficial',[ano, GAS._sessao()],             cb, err); },
+    anosOficiais:                function(cb, err)              { GAS._callCtrl('ctrl_rh_anos_fiscais_oficiais',       [GAS._sessao()],                   cb, err); }
   },
 
   /**

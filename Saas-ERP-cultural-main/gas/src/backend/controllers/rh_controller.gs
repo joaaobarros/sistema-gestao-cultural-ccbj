@@ -714,6 +714,56 @@ function ctrl_rh_obter_rescisao(id, emailFallback) {
 }
 
 // ═══════════════════════════════════════════════════════════════════
+// PARÂMETROS FISCAIS — INSS, IRRF, FGTS, encargos, verbas rescisórias
+// Acesso: superadmin / admin / rh
+// ═══════════════════════════════════════════════════════════════════
+
+function ctrl_rh_params_fiscais(emailFallback) {
+  return GasResponse.wrap(function() {
+    var email = obterEmailUsuario(emailFallback || '');
+    var nivel = _ctrlRhNivel(email);
+    if (nivel !== 'superadmin' && nivel !== 'admin' && nivel !== 'rh')
+      throw new Error('Acesso restrito ao RH.');
+    return ParametrosFiscaisRH.obter();
+  }, 'ctrl_rh_params_fiscais');
+}
+
+function ctrl_rh_salvar_params_fiscais(campos, emailFallback) {
+  return GasResponse.wrap(function() {
+    if (!campos || typeof campos !== 'object')
+      throw new Error('Campos a alterar são obrigatórios.');
+    var email = obterEmailUsuario(emailFallback || '');
+    var nivel = _ctrlRhNivel(email);
+    if (nivel !== 'superadmin' && nivel !== 'admin')
+      throw new Error('Edição de parâmetros fiscais requer perfil admin ou superadmin.');
+    _ctrlRhAudit('RH_PARAMS_FISCAIS_EDITADOS', email, { campos: Object.keys(campos) });
+    return ParametrosFiscaisRH.salvar(campos, email);
+  }, 'ctrl_rh_salvar_params_fiscais');
+}
+
+function ctrl_rh_aplicar_tabela_fiscal_oficial(ano, emailFallback) {
+  return GasResponse.wrap(function() {
+    if (!ano) throw new Error('Ano é obrigatório.');
+    var email = obterEmailUsuario(emailFallback || '');
+    var nivel = _ctrlRhNivel(email);
+    if (nivel !== 'superadmin' && nivel !== 'admin')
+      throw new Error('Aplicação de tabela oficial requer perfil admin ou superadmin.');
+    _ctrlRhAudit('RH_TABELA_FISCAL_OFICIAL_APLICADA', email, { ano: ano });
+    return ParametrosFiscaisRH.aplicarTabelaOficial(parseInt(ano), email);
+  }, 'ctrl_rh_aplicar_tabela_fiscal_oficial');
+}
+
+function ctrl_rh_anos_fiscais_oficiais(emailFallback) {
+  return GasResponse.wrap(function() {
+    var email = obterEmailUsuario(emailFallback || '');
+    var nivel = _ctrlRhNivel(email);
+    if (nivel !== 'superadmin' && nivel !== 'admin' && nivel !== 'rh')
+      throw new Error('Acesso restrito ao RH.');
+    return ParametrosFiscaisRH.listarAnosOficiais();
+  }, 'ctrl_rh_anos_fiscais_oficiais');
+}
+
+// ═══════════════════════════════════════════════════════════════════
 // MEU NÍVEL — retorna o nível do usuário atual para UX frontend
 // ═══════════════════════════════════════════════════════════════════
 
