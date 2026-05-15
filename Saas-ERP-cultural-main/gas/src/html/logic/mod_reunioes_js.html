@@ -227,7 +227,7 @@ function _reu_abrirModalNovaReuniao(id) {
 
   _reuRenderizarPautaForm();
   _reuRenderizarChipsParticipantes();
-  document.getElementById('modal-nova-reuniao').classList.remove('hidden');
+  _reuAbrirModal('modal-nova-reuniao');
 }
 
 function _reuPreencherFormReuniao(r) {
@@ -361,7 +361,7 @@ function _reu_abrirSeletorEnvolvidos() {
 function _reuAbrirSeletorUsuarios(selecionados) {
   _reuState.encSelecionados = selecionados ? selecionados.slice() : [];
   _reuRenderizarSeletorUsuarios('');
-  document.getElementById('modal-seletor-participantes').classList.remove('hidden');
+  _reuAbrirModal('modal-seletor-participantes');
 }
 
 function _reu_filtrarUsuarios(q) {
@@ -400,8 +400,31 @@ function _reuToggleUsuarioSeletor(email) {
   _reuRenderizarSeletorUsuarios((document.getElementById('reu-busca-participantes') || {}).value || '');
 }
 
-// Override de fechar modal para propagar seleção
-var _reu_fecharModal_orig = null;
+// ── Modal Stack Manager ───────────────────────────────────────────────────────
+// Top-level modals are mutually exclusive; sub-modals (seletor) stack on top.
+
+var _REU_MODAIS_TOP_LEVEL = [
+  'modal-nova-reuniao',
+  'modal-novo-enc',
+  'modal-detalhe-enc',
+  'modal-ia-ata'
+];
+
+function _reuAbrirModal(id) {
+  if (_REU_MODAIS_TOP_LEVEL.indexOf(id) !== -1) {
+    _REU_MODAIS_TOP_LEVEL.forEach(function(mid) {
+      if (mid !== id) {
+        var el = document.getElementById(mid);
+        if (el) el.classList.add('hidden');
+      }
+    });
+    var seletor = document.getElementById('modal-seletor-participantes');
+    if (seletor) seletor.classList.add('hidden');
+  }
+  var modal = document.getElementById(id);
+  if (modal) modal.classList.remove('hidden');
+}
+
 function _reu_fecharModal(modalId) {
   if (modalId === 'modal-seletor-participantes') {
     if (_reuState.seletorAlvo === 'participantes') {
@@ -548,7 +571,7 @@ function _reu_abrirModalEncAoVivo() {
   _reuEncFormReuniaoId = _reuState.reuniaoAtual.id;
   _reuEncFormEnvolvidos = [];
   _reuLimparFormEnc();
-  document.getElementById('modal-novo-enc').classList.remove('hidden');
+  _reuAbrirModal('modal-novo-enc');
 }
 
 // ── Timer ─────────────────────────────────────────────────────────────────────
@@ -835,7 +858,7 @@ function _reu_abrirModalNovoEnc() {
   _reuEncFormReuniaoId = _reuState.ataReuniaoId;
   _reuEncFormEnvolvidos = [];
   _reuLimparFormEnc();
-  document.getElementById('modal-novo-enc').classList.remove('hidden');
+  _reuAbrirModal('modal-novo-enc');
 }
 
 function _reuLimparFormEnc() {
@@ -1102,7 +1125,7 @@ function _reuAbrirDetalheEnc(id) {
     if (gerarBtn) gerarBtn.querySelector('button').disabled = false;
   }
 
-  document.getElementById('modal-detalhe-enc').classList.remove('hidden');
+  _reuAbrirModal('modal-detalhe-enc');
 }
 
 function _reuRenderizarComentariosEnc(enc) {
@@ -1165,7 +1188,7 @@ function _reu_gerarTarefa() {
 var _reuIASugestao = null;
 
 function _reu_assistenteIA() {
-  document.getElementById('modal-ia-ata').classList.remove('hidden');
+  _reuAbrirModal('modal-ia-ata');
 }
 
 function _reu_enviarParaIA() {

@@ -57,6 +57,7 @@ const _DATA_FILES = [
   'funcionarios.json', 'escalas.json', 'avaliacoes.json', 'ferias.json',
   'rh_cargos.json', 'rh_historico.json', 'rh_avaliacoes.json',
   'rh_ponto.json', 'rh_documentos.json', 'rh_folha.json', 'rh_perfil_social.json',
+  'rh_escalas.json', 'rh_escalas_trocas.json', 'rh_escalas_logs.json',
   // Financeiro
   'contratacoes.json', 'pagamentos.json',
   // Pessoal / Processos

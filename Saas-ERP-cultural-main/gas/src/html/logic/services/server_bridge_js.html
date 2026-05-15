@@ -538,6 +538,34 @@ const GAS = {
   },
 
   /**
+   * BLOCO: Escalas e Agendas Operacionais (escalas_controller.gs → EscalasEngine)
+   */
+  escalas: {
+    listar:              function(filtros, cb, err)          { GAS._callCtrl('ctrl_escalas_listar',               [filtros, GAS._sessao()],            cb, err); },
+    obter:               function(id, cb, err)               { GAS._callCtrl('ctrl_escalas_obter',                [id, GAS._sessao()],                 cb, err); },
+    minha:               function(mes, cb, err)              { GAS._callCtrl('ctrl_escalas_minha',                [mes, GAS._sessao()],                cb, err); },
+    criar:               function(dados, cb, err)            { GAS._callCtrl('ctrl_escalas_criar',                [dados, GAS._sessao()],              cb, err); },
+    atualizar:           function(id, dados, cb, err)        { GAS._callCtrl('ctrl_escalas_atualizar',            [id, dados, GAS._sessao()],          cb, err); },
+    publicar:            function(id, cb, err)               { GAS._callCtrl('ctrl_escalas_publicar',             [id, GAS._sessao()],                 cb, err); },
+    cancelar:            function(id, motivo, cb, err)       { GAS._callCtrl('ctrl_escalas_cancelar',             [id, motivo, GAS._sessao()],         cb, err); },
+    arquivar:            function(id, cb, err)               { GAS._callCtrl('ctrl_escalas_arquivar',             [id, GAS._sessao()],                 cb, err); },
+    excluir:             function(id, cb, err)               { GAS._callCtrl('ctrl_escalas_excluir',              [id, GAS._sessao()],                 cb, err); },
+    adicionarTurno:      function(idEsc, turno, cb, err)     { GAS._callCtrl('ctrl_escalas_adicionar_turno',      [idEsc, turno, GAS._sessao()],       cb, err); },
+    atualizarTurno:      function(idEsc, idT, d, cb, err)    { GAS._callCtrl('ctrl_escalas_atualizar_turno',      [idEsc, idT, d, GAS._sessao()],      cb, err); },
+    excluirTurno:        function(idEsc, idT, cb, err)       { GAS._callCtrl('ctrl_escalas_excluir_turno',        [idEsc, idT, GAS._sessao()],         cb, err); },
+    listarTrocas:        function(filtros, cb, err)          { GAS._callCtrl('ctrl_escalas_listar_trocas',        [filtros, GAS._sessao()],            cb, err); },
+    solicitarTroca:      function(dados, cb, err)            { GAS._callCtrl('ctrl_escalas_solicitar_troca',      [dados, GAS._sessao()],              cb, err); },
+    responderTroca:      function(id, aceitar, motivo, cb, err) { GAS._callCtrl('ctrl_escalas_responder_troca',   [id, aceitar, motivo, GAS._sessao()], cb, err); },
+    aprovarTroca:        function(id, aprovar, motivo, cb, err) { GAS._callCtrl('ctrl_escalas_aprovar_troca',     [id, aprovar, motivo, GAS._sessao()], cb, err); },
+    cancelarTroca:       function(id, cb, err)               { GAS._callCtrl('ctrl_escalas_cancelar_troca',       [id, GAS._sessao()],                 cb, err); },
+    importarColabore:    function(csv, opcoes, cb, err)      { GAS._callCtrl('ctrl_escalas_importar_colabore',    [csv, opcoes, GAS._sessao()],        cb, err); },
+    exportar:            function(id, fmt, cb, err)          { GAS._callCtrl('ctrl_escalas_exportar',             [id, fmt, GAS._sessao()],            cb, err); },
+    listarLogs:          function(cb, err)                   { GAS._callCtrl('ctrl_escalas_listar_logs',          [GAS._sessao()],                     cb, err); },
+    sincronizarCalendar: function(id, cb, err)               { GAS._callCtrl('ctrl_escalas_sincronizar_calendar', [id, GAS._sessao()],                 cb, err); },
+    verificarConflito:   function(dados, cb, err)            { GAS._callCtrl('ctrl_escalas_verificar_conflito',   [dados, GAS._sessao()],              cb, err); }
+  },
+
+  /**
    * BLOCO: Escuta Institucional — núcleo oficial (escuta_controller.gs → mod_escuta.gs)
    */
   escuta: {
