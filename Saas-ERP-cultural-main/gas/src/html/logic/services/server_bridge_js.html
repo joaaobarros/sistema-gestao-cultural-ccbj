@@ -213,6 +213,16 @@ const GAS = {
       var emailFallback = (window.__EMAIL_INICIAL__ && window.__EMAIL_INICIAL__.indexOf('@') >= 0)
         ? window.__EMAIL_INICIAL__ : '';
       GAS._callCtrl('ctrl_admin_salvar_sistema_config', [cfg, emailFallback], cb, err);
+    },
+    /**
+     * Consulta eventos de auditoria estruturada (AuditoriaStore).
+     * Retorna { eventos, stats, modulosAtivos }.
+     * @param {Object} filtros — { categoria, modulo, usuario, tipo, resultado, busca, de, ate, limite }
+     */
+    auditoriaV2: function(filtros, cb, err) {
+      var emailFallback = (window.__EMAIL_INICIAL__ && window.__EMAIL_INICIAL__.indexOf('@') >= 0)
+        ? window.__EMAIL_INICIAL__ : '';
+      GAS._callCtrl('ctrl_admin_auditoria_v2', [filtros || {}, emailFallback], cb, err);
     }
   },
 

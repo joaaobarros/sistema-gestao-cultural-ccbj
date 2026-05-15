@@ -21,7 +21,7 @@
         Gestão de Módulos
       </h2>
       <p class="text-slate-500 text-sm mt-1 ml-[52px]">
-        Ative ou desative módulos do sistema. Alterações têm efeito imediato.
+        Ative ou desative módulos do sistema. Clique em Salvar para aplicar as alterações.
       </p>
     </div>
     <div class="flex gap-2 shrink-0 items-center flex-wrap justify-end">
@@ -41,6 +41,10 @@
       <button onclick="_modAtualizarLista()"
         class="flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-all">
         <i class="fas fa-sync-alt text-xs"></i> Atualizar
+      </button>
+      <button id="mod-btn-salvar-header" onclick="_modSalvarLote()" disabled
+        class="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-400 font-bold text-xs rounded-xl cursor-not-allowed">
+        <i class="fas fa-save text-xs"></i> Salvar
       </button>
       <button onclick="_modConfirmarReset()"
         class="flex items-center gap-2 px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 font-bold text-xs rounded-xl transition-all border border-red-200">

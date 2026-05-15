@@ -42,26 +42,120 @@ var _p2S = {
   get isAdmin()     { return AppState && AppState.usuario ? (!!AppState.usuario.isAdmin || !!AppState.usuario.isSuperadmin) : false; }
 };
 
+// Labels de todos os módulos existentes no sistema
 var _P2_MODULOS_LABELS = {
-  espacos:'Espaços & Agendamento',
-  reservas:'Aprovações',
-  estrategia:'Estratégia'
+  agenda:       'Agenda de Espaços',
+  espacos:      'Espaços',
+  reservas:     'Reservas & Aprovações',
+  estrategia:   'Estratégia',
+  comunicacao:  'Comunicação',
+  tarefas:      'Tarefas',
+  processos:    'Processos',
+  contratos:    'Contratos',
+  financeiro:   'Financeiro',
+  almoxarifado: 'Almoxarifado',
+  balcao:       'Balcão',
+  rh:           'RH / Depto Pessoal',
+  eficiencia:   'Eficiência',
+  contratacoes: 'Contratações',
+  relatorios:   'Relatórios',
+  escuta:       'Escuta Institucional',
+  pessoal:      'Pessoal',
+  acoes:        'Ações Institucionais'
 };
 
-// Módulos ativos no escopo atual do sistema (ESPAÇOS, APROVAÇÕES, ESTRATÉGIA)
-// Acesso ao módulo "sistema" (admin/auditoria) é controlado pela lista Administradores, não por esta grade.
-var _P2_MODULOS_ORDEM = ['espacos','reservas','estrategia'];
+// Todos os módulos gerenciáveis de permissão — sincronizado com _P2_MODULOS no backend.
+// Divididos em grupos para melhor organização visual.
+var _P2_MODULOS_GRUPOS = [
+  { label: 'Espaços & Agenda',   ids: ['agenda','espacos','reservas'] },
+  { label: 'Gestão & Processos', ids: ['tarefas','processos','contratos','acoes'] },
+  { label: 'Comunicação',        ids: ['comunicacao','estrategia','balcao'] },
+  { label: 'Recursos',           ids: ['almoxarifado'] },
+  { label: 'Financeiro & RH',    ids: ['financeiro','contratacoes','rh','pessoal','eficiencia'] },
+  { label: 'Análise',            ids: ['relatorios','escuta'] }
+];
 
-// Permissões base para os 3 módulos ativos do sistema
+// Lista plana derivada dos grupos — usada em funções de consolidação
+var _P2_MODULOS_ORDEM = (function() {
+  var lista = [];
+  _P2_MODULOS_GRUPOS.forEach(function(g) { g.ids.forEach(function(id) { lista.push(id); }); });
+  return lista;
+}());
+
+// Matriz base local — espelho do _P2_BASE em mod_permissoes_v2.gs.
+// Usada para preview local sem roundtrip ao backend.
 var _P2_BASE_LOCAL = {
-  superadmin:          null,
-  admin:               {espacos:{v:1,e:1,x:1}, reservas:{v:1,e:1,x:1}, estrategia:{v:1,e:1,x:1}},
-  gestor:              {espacos:{v:1,e:1,x:0}, reservas:{v:1,e:1,x:0}, estrategia:{v:1,e:1,x:0}},
-  tecnico:             {espacos:{v:1,e:1,x:0}, reservas:{v:1,e:0,x:0}, estrategia:{v:1,e:0,x:0}},
-  rh:                  {espacos:{v:1,e:0,x:0}, reservas:{v:0,e:0,x:0}, estrategia:{v:1,e:0,x:0}},
-  comunicacao:         {espacos:{v:1,e:0,x:0}, reservas:{v:1,e:0,x:0}, estrategia:{v:1,e:1,x:0}},
-  visitante_controlado:{espacos:{v:1,e:0,x:0}, reservas:{v:0,e:0,x:0}, estrategia:{v:1,e:0,x:0}},
-  visitante:           {espacos:{v:1,e:0,x:0}, reservas:{v:0,e:0,x:0}, estrategia:{v:0,e:0,x:0}}
+  superadmin: null,
+
+  admin: {
+    agenda:{v:1,e:1,x:1},       espacos:{v:1,e:1,x:1},       reservas:{v:1,e:1,x:1},
+    tarefas:{v:1,e:1,x:1},      processos:{v:1,e:1,x:1},     contratos:{v:1,e:1,x:0},
+    acoes:{v:1,e:1,x:1},        comunicacao:{v:1,e:1,x:1},   estrategia:{v:1,e:1,x:1},
+    balcao:{v:1,e:1,x:0},       almoxarifado:{v:1,e:1,x:0},
+    financeiro:{v:1,e:0,x:0},   contratacoes:{v:0,e:0,x:0},  rh:{v:0,e:0,x:0},
+    pessoal:{v:1,e:1,x:0},      eficiencia:{v:1,e:0,x:0},
+    relatorios:{v:1,e:0,x:0},   escuta:{v:1,e:0,x:0}
+  },
+
+  gestor: {
+    agenda:{v:1,e:1,x:0},       espacos:{v:1,e:0,x:0},       reservas:{v:1,e:1,x:0},
+    tarefas:{v:1,e:1,x:0},      processos:{v:1,e:1,x:0},     contratos:{v:1,e:1,x:0},
+    acoes:{v:1,e:1,x:0},        comunicacao:{v:1,e:0,x:0},   estrategia:{v:1,e:1,x:0},
+    balcao:{v:1,e:0,x:0},       almoxarifado:{v:0,e:0,x:0},
+    financeiro:{v:0,e:0,x:0},   contratacoes:{v:0,e:0,x:0},  rh:{v:0,e:0,x:0},
+    pessoal:{v:1,e:0,x:0},      eficiencia:{v:1,e:0,x:0},
+    relatorios:{v:1,e:0,x:0},   escuta:{v:1,e:0,x:0}
+  },
+
+  tecnico: {
+    agenda:{v:1,e:1,x:0},       espacos:{v:1,e:1,x:0},       reservas:{v:1,e:1,x:0},
+    tarefas:{v:1,e:1,x:0},      processos:{v:0,e:0,x:0},     contratos:{v:0,e:0,x:0},
+    acoes:{v:1,e:0,x:0},        comunicacao:{v:1,e:0,x:0},   estrategia:{v:1,e:0,x:0},
+    balcao:{v:1,e:1,x:0},       almoxarifado:{v:1,e:1,x:0},
+    financeiro:{v:0,e:0,x:0},   contratacoes:{v:0,e:0,x:0},  rh:{v:0,e:0,x:0},
+    pessoal:{v:1,e:0,x:0},      eficiencia:{v:0,e:0,x:0},
+    relatorios:{v:0,e:0,x:0},   escuta:{v:0,e:0,x:0}
+  },
+
+  rh: {
+    agenda:{v:1,e:0,x:0},       espacos:{v:1,e:0,x:0},       reservas:{v:0,e:0,x:0},
+    tarefas:{v:1,e:1,x:0},      processos:{v:0,e:0,x:0},     contratos:{v:0,e:0,x:0},
+    acoes:{v:1,e:0,x:0},        comunicacao:{v:1,e:0,x:0},   estrategia:{v:1,e:0,x:0},
+    balcao:{v:0,e:0,x:0},       almoxarifado:{v:0,e:0,x:0},
+    financeiro:{v:1,e:0,x:0},   contratacoes:{v:1,e:1,x:0},  rh:{v:1,e:1,x:0},
+    pessoal:{v:1,e:1,x:0},      eficiencia:{v:1,e:0,x:0},
+    relatorios:{v:1,e:0,x:0},   escuta:{v:1,e:0,x:0}
+  },
+
+  comunicacao: {
+    agenda:{v:1,e:0,x:0},       espacos:{v:1,e:0,x:0},       reservas:{v:1,e:0,x:0},
+    tarefas:{v:1,e:1,x:0},      processos:{v:1,e:1,x:0},     contratos:{v:0,e:0,x:0},
+    acoes:{v:1,e:1,x:0},        comunicacao:{v:1,e:1,x:0},   estrategia:{v:1,e:1,x:0},
+    balcao:{v:0,e:0,x:0},       almoxarifado:{v:0,e:0,x:0},
+    financeiro:{v:0,e:0,x:0},   contratacoes:{v:0,e:0,x:0},  rh:{v:0,e:0,x:0},
+    pessoal:{v:0,e:0,x:0},      eficiencia:{v:0,e:0,x:0},
+    relatorios:{v:0,e:0,x:0},   escuta:{v:1,e:0,x:0}
+  },
+
+  visitante_controlado: {
+    agenda:{v:1,e:0,x:0},       espacos:{v:1,e:0,x:0},       reservas:{v:0,e:0,x:0},
+    tarefas:{v:0,e:0,x:0},      processos:{v:0,e:0,x:0},     contratos:{v:0,e:0,x:0},
+    acoes:{v:0,e:0,x:0},        comunicacao:{v:1,e:0,x:0},   estrategia:{v:1,e:0,x:0},
+    balcao:{v:0,e:0,x:0},       almoxarifado:{v:0,e:0,x:0},
+    financeiro:{v:0,e:0,x:0},   contratacoes:{v:0,e:0,x:0},  rh:{v:0,e:0,x:0},
+    pessoal:{v:0,e:0,x:0},      eficiencia:{v:0,e:0,x:0},
+    relatorios:{v:1,e:0,x:0},   escuta:{v:0,e:0,x:0}
+  },
+
+  visitante: {
+    agenda:{v:1,e:0,x:0},       espacos:{v:0,e:0,x:0},       reservas:{v:0,e:0,x:0},
+    tarefas:{v:0,e:0,x:0},      processos:{v:0,e:0,x:0},     contratos:{v:0,e:0,x:0},
+    acoes:{v:0,e:0,x:0},        comunicacao:{v:0,e:0,x:0},   estrategia:{v:0,e:0,x:0},
+    balcao:{v:0,e:0,x:0},       almoxarifado:{v:0,e:0,x:0},
+    financeiro:{v:0,e:0,x:0},   contratacoes:{v:0,e:0,x:0},  rh:{v:0,e:0,x:0},
+    pessoal:{v:0,e:0,x:0},      eficiencia:{v:0,e:0,x:0},
+    relatorios:{v:0,e:0,x:0},   escuta:{v:0,e:0,x:0}
+  }
 };
 
 function _p2baseLocal(perfil, mod) {
@@ -381,18 +475,27 @@ function p2RenderizarAutomaticas(auto) {
 
 function p2RenderizarManuais(manuais) {
   var tbody = _p2El('p2-manual-tbody');
+  if (!tbody) return;
   var blocked = !_p2S.isAdmin || (_p2S.editando && _p2S.editando.perfil_base === 'superadmin' && !_p2S.isSA);
 
-  tbody.innerHTML = _P2_MODULOS_ORDEM.map(function(m) {
-    var mn = manuais[m] || {};
-    var lbl = _P2_MODULOS_LABELS[m] || m;
-    return '<tr class="p2-mod-row border-b border-slate-50">' +
-      '<td class="py-2 px-4 text-xs font-bold text-slate-700 whitespace-nowrap">' + lbl + '</td>' +
-      '<td class="py-2 px-3 text-center">' + _p2ToggleBtn(m, 'visualizar', mn.visualizar, blocked) + '</td>' +
-      '<td class="py-2 px-3 text-center">' + _p2ToggleBtn(m, 'editar',     mn.editar,     blocked) + '</td>' +
-      '<td class="py-2 px-3 text-center">' + _p2ToggleBtn(m, 'excluir',    mn.excluir,    blocked) + '</td>' +
-    '</tr>';
-  }).join('');
+  var html = '';
+  _P2_MODULOS_GRUPOS.forEach(function(grupo) {
+    // Header do grupo
+    html += '<tr class="bg-slate-50">'
+      + '<td colspan="4" class="py-1.5 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">'
+      + grupo.label + '</td></tr>';
+    grupo.ids.forEach(function(m) {
+      var mn  = manuais[m] || {};
+      var lbl = _P2_MODULOS_LABELS[m] || m;
+      html += '<tr class="p2-mod-row border-b border-slate-50">'
+        + '<td class="py-1.5 px-4 text-xs font-semibold text-slate-700 whitespace-nowrap pl-6">' + lbl + '</td>'
+        + '<td class="py-1.5 px-3 text-center">' + _p2ToggleBtn(m, 'visualizar', mn.visualizar, blocked) + '</td>'
+        + '<td class="py-1.5 px-3 text-center">' + _p2ToggleBtn(m, 'editar',     mn.editar,     blocked) + '</td>'
+        + '<td class="py-1.5 px-3 text-center">' + _p2ToggleBtn(m, 'excluir',    mn.excluir,    blocked) + '</td>'
+      + '</tr>';
+    });
+  });
+  tbody.innerHTML = html;
 }
 
 function _p2ToggleBtn(mod, acao, state, disabled) {
@@ -470,18 +573,27 @@ function _p2ConsolidarLocal(perfil, auto, manuais) {
 
 function p2RenderizarFinais(finais) {
   var tbody = _p2El('p2-finais-tbody');
-  tbody.innerHTML = _P2_MODULOS_ORDEM.map(function(m) {
-    var f   = finais[m] || {v:false,e:false,x:false,exp:[]};
-    var lbl = _P2_MODULOS_LABELS[m] || m;
-    var anyOn = f.v || f.e || f.x;
-    return '<tr class="p2-mod-row border-b border-slate-50' + (anyOn ? '' : ' opacity-40') + '">' +
-      '<td class="py-2 px-4 text-xs font-bold text-slate-700 whitespace-nowrap">' + lbl + '</td>' +
-      '<td class="py-2 px-3 text-center">' + _p2DotRead(f.v||f.visualizar) + '</td>' +
-      '<td class="py-2 px-3 text-center">' + _p2DotRead(f.e||f.editar)     + '</td>' +
-      '<td class="py-2 px-3 text-center">' + _p2DotRead(f.x||f.excluir)    + '</td>' +
-      '<td class="py-2 px-4 text-[9px] text-slate-400 font-medium">' + _p2esc((f.exp||[]).slice(0,3).join(' · ')) + '</td>' +
-    '</tr>';
-  }).join('');
+  if (!tbody) return;
+
+  var html = '';
+  _P2_MODULOS_GRUPOS.forEach(function(grupo) {
+    html += '<tr class="bg-slate-50">'
+      + '<td colspan="5" class="py-1.5 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">'
+      + grupo.label + '</td></tr>';
+    grupo.ids.forEach(function(m) {
+      var f   = finais[m] || {v:false,e:false,x:false,visualizar:false,editar:false,excluir:false,exp:[]};
+      var lbl = _P2_MODULOS_LABELS[m] || m;
+      var anyOn = f.v || f.e || f.x || f.visualizar || f.editar || f.excluir;
+      html += '<tr class="p2-mod-row border-b border-slate-50' + (anyOn ? '' : ' opacity-35') + '">'
+        + '<td class="py-1.5 px-4 text-xs font-semibold text-slate-700 whitespace-nowrap pl-6">' + lbl + '</td>'
+        + '<td class="py-1.5 px-3 text-center">' + _p2DotRead(f.v||f.visualizar) + '</td>'
+        + '<td class="py-1.5 px-3 text-center">' + _p2DotRead(f.e||f.editar)     + '</td>'
+        + '<td class="py-1.5 px-3 text-center">' + _p2DotRead(f.x||f.excluir)    + '</td>'
+        + '<td class="py-1.5 px-4 text-[9px] text-slate-400 font-medium">' + _p2esc((f.exp||[]).slice(0,3).join(' · ')) + '</td>'
+      + '</tr>';
+    });
+  });
+  tbody.innerHTML = html;
 }
 
 // ── onChange perfil ──────────────────────────────────────────

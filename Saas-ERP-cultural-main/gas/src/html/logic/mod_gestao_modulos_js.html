@@ -28,8 +28,6 @@ var _modState = {
 var _modOriginal = {};
 // Mudanças locais ainda não salvas: { moduleId: { ativo?, apenasSuperadmin? } }
 var _modPendentes = {};
-// Auto-save
-var _modSaveTimer = null;
 var _modSaving    = false;
 
 // ══════════════════════════════════════════════════════════════════
@@ -58,7 +56,7 @@ function _modAtualizarLista() {
       confirmButtonColor: '#dc2626',
       cancelButtonColor: '#6b7280'
     }).then(function(r) {
-      if (r.isConfirmed) { _modPendentes = {}; _modCarregarDoBanco(); }
+      if (r.isConfirmed) { _modPendentes = {}; _modAtualizarBarraSalvar(); _modCarregarDoBanco(); }
     });
     return;
   }
@@ -104,7 +102,6 @@ function _modToggleAtivo(moduleId) {
   _modMarcarPendente(moduleId, 'ativo', mod.ativo);
   _modAtualizarStats();
   _modRenderizar();
-  _modAgendarAutoSave();
 }
 
 function _modToggleSuperadminOnly(moduleId) {
@@ -113,7 +110,6 @@ function _modToggleSuperadminOnly(moduleId) {
   mod.apenasSuperadmin = !mod.apenasSuperadmin;
   _modMarcarPendente(moduleId, 'apenasSuperadmin', mod.apenasSuperadmin);
   _modRenderizar();
-  _modAgendarAutoSave();
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -140,22 +136,27 @@ function _modAtualizarBarraSalvar() {
   var n = Object.keys(_modPendentes).length;
   var barra = document.getElementById('mod-barra-salvar');
   var texto = document.getElementById('mod-barra-texto');
+  var btnHeader = document.getElementById('mod-btn-salvar-header');
+
   if (barra) barra.classList.toggle('hidden', n === 0 && !_modSaving);
   if (texto && !_modSaving) texto.textContent = n + ' alteraç' + (n === 1 ? 'ão' : 'ões') + ' pendente' + (n === 1 ? '' : 's');
+
+  if (btnHeader) {
+    var temPendentes = n > 0 && !_modSaving;
+    btnHeader.disabled = !temPendentes;
+    btnHeader.className = temPendentes
+      ? 'flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl transition-all shadow-sm'
+      : 'flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-400 font-bold text-xs rounded-xl cursor-not-allowed';
+    if (!_modSaving) {
+      btnHeader.innerHTML = '<i class="fas fa-save text-xs"></i> Salvar' + (n > 0 ? ' (' + n + ')' : '');
+    }
+  }
 }
 
 // ══════════════════════════════════════════════════════════════════
-// BLOCO: Salvamento em lote (manual e auto-save)
+// BLOCO: Salvamento em lote (explícito — sem auto-save)
 // ══════════════════════════════════════════════════════════════════
 
-function _modAgendarAutoSave() {
-  clearTimeout(_modSaveTimer);
-  _modSaveTimer = setTimeout(function() {
-    if (Object.keys(_modPendentes).length > 0) _modExecutarSave(true);
-  }, 1500);
-}
-
-// silencioso=true: auto-save (sem Swal de sucesso); silencioso=false: botão manual
 function _modExecutarSave(silencioso) {
   var ids = Object.keys(_modPendentes);
   if (ids.length === 0) return;
@@ -173,16 +174,19 @@ function _modExecutarSave(silencioso) {
     alteracoes.push(alt);
   });
 
-  var btn   = document.getElementById('mod-btn-salvar-lote');
-  var texto = document.getElementById('mod-barra-texto');
-  var barra = document.getElementById('mod-barra-salvar');
-  if (btn)   { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin text-xs"></i> Salvando...'; }
+  var btn       = document.getElementById('mod-btn-salvar-lote');
+  var btnHeader = document.getElementById('mod-btn-salvar-header');
+  var texto     = document.getElementById('mod-barra-texto');
+  var barra     = document.getElementById('mod-barra-salvar');
+  if (btn)       { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin text-xs"></i> Salvando...'; }
+  if (btnHeader) { btnHeader.disabled = true; btnHeader.innerHTML = '<i class="fas fa-spinner fa-spin text-xs"></i> Salvando...'; }
   if (texto) texto.textContent = 'Salvando...';
   if (barra) barra.classList.remove('hidden');
 
   GAS.modulos.salvarLote(alteracoes, function(res) {
     _modSaving = false;
-    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save text-xs"></i> Salvar alterações'; }
+    if (btn)       { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save text-xs"></i> Salvar alterações'; }
+    if (btnHeader) { btnHeader.disabled = false; }
     if (!res || !res.ok) {
       _modAtualizarBarraSalvar();
       if (!silencioso) Swal.fire({ icon:'error', title:'Erro', text:(res && res.msg)||'Falha ao salvar.', confirmButtonColor:'#7c3aed' });
@@ -212,20 +216,18 @@ function _modExecutarSave(silencioso) {
     if (!silencioso) Swal.fire({ icon:'success', title:'Alterações salvas', timer:1800, showConfirmButton:false });
   }, function(e) {
     _modSaving = false;
-    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save text-xs"></i> Salvar alterações'; }
+    if (btn)       { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save text-xs"></i> Salvar alterações'; }
+    if (btnHeader) { btnHeader.disabled = false; }
     _modAtualizarBarraSalvar();
     if (!silencioso) Swal.fire({ icon:'error', title:'Erro de conexão', text:String(e), confirmButtonColor:'#7c3aed' });
   });
 }
 
 function _modSalvarLote() {
-  clearTimeout(_modSaveTimer);
   _modExecutarSave(false);
 }
 
 function _modDescartarPendentes() {
-  clearTimeout(_modSaveTimer);
-  _modSaveTimer = null;
   _modState.modulos.forEach(function(m) {
     var orig = _modOriginal[m.moduleId];
     if (orig) {

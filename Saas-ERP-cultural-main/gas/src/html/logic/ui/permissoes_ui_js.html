@@ -30,6 +30,19 @@ function configurarInterfacePorPermissao() {
     if (btnPermissoes) btnPermissoes.classList.remove('hidden');
     if (btnAuditoria)  btnAuditoria.classList.remove('hidden');
     if (modSistema)    modSistema.classList.remove('hidden');
+
+    // Expand the inner Sistema container (#mod-sistema) so buttons are immediately visible.
+    // Reads localStorage to decide: if user explicitly collapsed it before, respect that.
+    // Otherwise (first load or previously expanded) — expand it.
+    var innerSistema = document.getElementById('mod-sistema');
+    var iconSistema  = document.getElementById('icon-mod-sistema');
+    var _savedSidebar = null;
+    try { _savedSidebar = JSON.parse(localStorage.getItem('sidebar_modules_v3') || 'null'); } catch(e) {}
+    var _sistemaExpanded = !_savedSidebar || _savedSidebar['mod-sistema'] !== false;
+    if (_sistemaExpanded && innerSistema) {
+      innerSistema.classList.remove('hidden');
+      if (iconSistema) iconSistema.className = 'fas fa-chevron-up text-[8px] text-slate-600';
+    }
   } else {
     if (modSistema)   modSistema.classList.add('hidden');
   }

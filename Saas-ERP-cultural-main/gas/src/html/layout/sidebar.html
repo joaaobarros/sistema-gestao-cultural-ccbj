@@ -269,15 +269,15 @@
           <i id="icon-mod-sistema" class="fas fa-chevron-down text-[8px] text-slate-600"></i>
         </button>
         <div id="mod-sistema" class="space-y-0.5 pl-2 hidden">
-          <button id="btn-aba-gestao" data-aba="aba-gestao-admin" class="tab-btn nav-item w-full hidden">
+          <button id="btn-aba-gestao" data-aba="aba-gestao-admin" data-requer-permissao="sistema:visualizar" class="tab-btn nav-item w-full hidden">
             <i class="fas fa-cog w-5 text-center text-xs"></i>
             <span class="text-xs font-semibold">Configurações</span>
           </button>
-          <button id="btn-aba-permissoes" data-aba="aba-permissoes-v2" class="tab-btn nav-item w-full hidden">
+          <button id="btn-aba-permissoes" data-aba="aba-permissoes-v2" data-requer-permissao="sistema:visualizar" class="tab-btn nav-item w-full hidden">
             <i class="fas fa-user-lock w-5 text-center text-xs"></i>
             <span class="text-xs font-semibold">Permissões</span>
           </button>
-          <button id="btn-aba-auditoria" data-aba="aba-auditoria" class="tab-btn nav-item w-full hidden">
+          <button id="btn-aba-auditoria" data-aba="aba-auditoria" data-requer-permissao="sistema:visualizar" class="tab-btn nav-item w-full hidden">
             <i class="fas fa-shield-alt w-5 text-center text-xs"></i>
             <span class="text-xs font-semibold">Auditoria</span>
           </button>
@@ -409,9 +409,10 @@
     try {
       var estado = JSON.parse(localStorage.getItem(STORE_KEY) || 'null');
       if (estado) {
-        // Respeitar escolha salva pelo usuário
+        // Respeitar escolha salva pelo usuário para todos os grupos.
+        // mod-sistema: _setGrupo altera apenas o inner #mod-sistema div;
+        // o outer #modulo-sistema é controlado por configurarInterfacePorPermissao.
         Object.keys(estado).forEach(function(id) {
-          if (id === 'mod-sistema') return; // controlado por permissoes_ui_js
           _setGrupo(id, !!estado[id]);
         });
         return;

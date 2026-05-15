@@ -2,6 +2,8 @@
 // mod_permissoes_v2.gs — Sistema híbrido de permissões (v2)
 // ═══════════════════════════════════════════════════════════════
 
+// Lista exportada — usada pelo frontend para exibir todos os módulos na grade de permissões.
+// Manter sincronizado com os módulos registrados em mod_modulos_registry.gs.
 var _P2_MODULOS = [
   'agenda','estrategia','comunicacao','espacos',
   'reservas','contratos','financeiro','tarefas',
@@ -9,6 +11,32 @@ var _P2_MODULOS = [
   'eficiencia','contratacoes','relatorios','escuta','pessoal',
   'acoes'
 ];
+
+// ── Cache de permissões (CacheService, TTL 5 min) ────────────
+// Resolve o problema de leitura repetida do Drive a cada chamada.
+var _P2_CACHE_TTL    = 300;
+var _P2_CACHE_PREFIX = 'perm_v2_';
+
+function _p2CacheObter(email) {
+  try {
+    var raw = CacheService.getScriptCache().get(_P2_CACHE_PREFIX + email);
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) { return null; }
+}
+
+function _p2CacheSalvar(email, perm) {
+  try {
+    var raw = JSON.stringify(perm);
+    // CacheService limita a 100 KB por entrada; trunca silenciosamente se exceder
+    if (raw.length < 98000) {
+      CacheService.getScriptCache().put(_P2_CACHE_PREFIX + email, raw, _P2_CACHE_TTL);
+    }
+  } catch (e) {}
+}
+
+function _p2CacheInvalidar(email) {
+  try { CacheService.getScriptCache().remove(_P2_CACHE_PREFIX + email); } catch (e) {}
+}
 
 var _P2_SENSIVEIS     = ['rh','contratacoes','financeiro'];
 var _P2_VC_MODS       = ['espacos','comunicacao','relatorios','estrategia'];
@@ -185,18 +213,27 @@ function obterPermissoesUsuarioV2(email) {
   }
   email = String(email).toLowerCase().trim();
 
+  // Cache hit — evita leitura do Drive a cada chamada
+  var cached = _p2CacheObter(email);
+  if (cached) return cached;
+
   var lista = readJSON('permissoes_v2.json');
+  var encontrado = null;
   for (var i = 0; i < lista.length; i++) {
-    if (String(lista[i].email || '').toLowerCase() === email) return lista[i];
+    if (String(lista[i].email || '').toLowerCase() === email) { encontrado = lista[i]; break; }
+  }
+
+  if (encontrado) {
+    _p2CacheSalvar(email, encontrado);
+    return encontrado;
   }
 
   var perfil_base = _p2obterMapaAdmins()[email] || 'visitante_controlado';
-
   var origem = { cargo: '', funcoes: [], setores: [], donos_espaco: [] };
   var auto   = calcularPermissoesAutomaticas(origem, perfil_base);
   var finais = _p2consolidar(perfil_base, auto, {});
 
-  return {
+  var resultado = {
     email:                  email,
     perfil_base:            perfil_base,
     origem:                 origem,
@@ -205,6 +242,8 @@ function obterPermissoesUsuarioV2(email) {
     permissoes_finais:      finais,
     atualizadoEm:           null
   };
+  _p2CacheSalvar(email, resultado);
+  return resultado;
 }
 
 function salvarPermissoesUsuarioV2(dados) {
@@ -275,7 +314,25 @@ function salvarPermissoesUsuarioV2(dados) {
     return lista;
   });
 
-  // Auditoria assíncrona — não bloqueia retorno
+  // Invalida cache do usuário alvo para forçar releitura com novas permissões
+  _p2CacheInvalidar(emailAlvo);
+
+  // Auditoria estruturada no AuditoriaStore + auditoria específica de permissões
+  try {
+    AuditoriaStore.registrar({
+      tipo: permsAlvoAnt.perfil_base !== dados.perfil_base ? 'ROLE_UPDATED' : 'PERMISSION_GRANTED',
+      modulo: 'permissoes', acao: 'salvar_permissoes',
+      entidadeId: emailAlvo, entidadeTipo: 'usuario',
+      usuario: emailEditor, resultado: 'sucesso',
+      mensagem: 'Permissões atualizadas: ' + emailAlvo + ' por ' + emailEditor
+        + (permsAlvoAnt.perfil_base !== dados.perfil_base
+          ? ' | perfil: ' + permsAlvoAnt.perfil_base + ' → ' + dados.perfil_base
+          : ''),
+      antes:  { perfil_base: permsAlvoAnt.perfil_base },
+      depois: { perfil_base: dados.perfil_base }
+    });
+  } catch(e) {}
+
   try { _p2registrarAuditoria({ editor: emailEditor, alvo: emailAlvo,
     antes: permsAlvoAnt, depois: registro, timestamp: new Date().toISOString() }); } catch(e) {}
 

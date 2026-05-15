@@ -219,7 +219,29 @@ function ctrl_admin_relatorios_codip() {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// LOGS E AUDITORIA
+// AUDITORIA OPERACIONAL V2 (AuditoriaStore — JSON estruturado no Drive)
+// ═══════════════════════════════════════════════════════════════════
+
+/**
+ * Consulta eventos estruturados do AuditoriaStore com filtros avançados.
+ * Exige perfil admin ou superadmin.
+ *
+ * @param {Object} filtros — { categoria, modulo, usuario, tipo, resultado, busca, de, ate, limite }
+ * @param {string} emailFallback
+ */
+function ctrl_admin_auditoria_v2(filtros, emailFallback) {
+  return GasResponse.wrap(function () {
+    var email = obterEmailUsuario(emailFallback || '');
+    if (!PermissoesService.isAdmin(email)) throw new Error('Acesso negado — requer perfil admin ou superior');
+    return {
+      eventos:       AuditoriaStore.consultar(filtros || {}),
+      stats:         AuditoriaStore.obterEstatisticas(),
+      modulosAtivos: AuditoriaStore.obterModulosAtivos()
+    };
+  }, 'ctrl_admin_auditoria_v2');
+}
+
+// LOGS LEGADO (aba Logs + LogAcessos da planilha)
 // ═══════════════════════════════════════════════════════════════════
 
 /**
