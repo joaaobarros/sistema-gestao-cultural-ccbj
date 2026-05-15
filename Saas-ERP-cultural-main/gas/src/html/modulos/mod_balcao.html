@@ -86,11 +86,17 @@
 .sobrecarga-bar.alto    { background:linear-gradient(to right, #f59e0b, #fbbf24); }
 
 /* ── Modal de detalhe ── */
+/*
+ * display:none como padrão — evita conflito com Tailwind .hidden
+ * (mesma especificidade 0,1,0; este <style> é carregado depois do CDN Tailwind)
+ * :not(.hidden) tem especificidade 0,2,0 e garante display:flex no overlay ativo.
+ */
 .balcao-modal-overlay {
   position:fixed; inset:0; background:rgba(0,0,0,.45);
-  z-index:200; display:flex; align-items:center; justify-content:center;
-  padding:16px;
+  z-index:200; align-items:center; justify-content:center;
+  padding:16px; display:none;
 }
+.balcao-modal-overlay:not(.hidden) { display:flex; }
 .balcao-modal {
   background:#fff; border-radius:20px; width:100%; max-width:720px;
   max-height:90vh; overflow-y:auto; box-shadow:0 20px 60px rgba(0,0,0,.2);
@@ -875,7 +881,8 @@ window._balcao = {
 
   nova: function() {
     document.getElementById('balcao-form-overlay').classList.remove('hidden');
-    document.getElementById('bForm-titulo').focus();
+    document.body.style.overflow = 'hidden';
+    setTimeout(function() { var t = document.getElementById('bForm-titulo'); if (t) t.focus(); }, 60);
   },
 
   salvarNova: function() {
@@ -921,6 +928,7 @@ window._balcao = {
     if (!overlay || !body) return;
     body.innerHTML = _renderDetalhe(p);
     overlay.classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
   },
 
   carregarEntregas: function(idProcesso) {
@@ -1000,29 +1008,37 @@ window._balcao = {
 
 // ── Autocomplete de usuários ──────────────────────────────────────────────────
 
+var _bAutoTimer = null;
+
 function _balcaoAutocompletar(input) {
   var lista = document.getElementById('bForm-responsavel-list');
   if (!lista) return;
   var q = input.value.toLowerCase().trim();
   if (!q || q.length < 2) { lista.classList.add('hidden'); return; }
 
-  var usuarios = (window.AppState && AppState.usuarios) ? AppState.usuarios : [];
-  var matches = usuarios.filter(function(u) {
-    return (u.email || '').toLowerCase().includes(q) ||
-           (u.nome  || '').toLowerCase().includes(q);
-  }).slice(0, 8);
+  clearTimeout(_bAutoTimer);
+  _bAutoTimer = setTimeout(function() {
+    var usuarios = (window.AppState && AppState.usuarios) ? AppState.usuarios : [];
+    var matches = usuarios.filter(function(u) {
+      return (u.email || '').toLowerCase().indexOf(q) !== -1 ||
+             (u.nome  || '').toLowerCase().indexOf(q) !== -1;
+    }).slice(0, 8);
 
-  if (!matches.length) { lista.classList.add('hidden'); return; }
+    if (!matches.length) { lista.classList.add('hidden'); return; }
 
-  lista.innerHTML = matches.map(function(u) {
-    return '<div class="px-3 py-2 hover:bg-indigo-50 cursor-pointer" onclick="_balcaoSelecionarUsuario(\'' + u.email + '\',\'' + (u.nome || u.email) + '\')">' +
-           '<span class="font-semibold text-slate-700">' + _esc(u.nome || u.email.split('@')[0]) + '</span>' +
-           '<span class="text-slate-400 ml-2">' + _esc(u.email) + '</span></div>';
-  }).join('');
-  lista.classList.remove('hidden');
+    lista.innerHTML = matches.map(function(u) {
+      var nome = u.nome || u.email.split('@')[0];
+      return '<div class="flex items-center gap-2 px-3 py-2 hover:bg-indigo-50 cursor-pointer" onclick="_balcaoSelecionarUsuario(\'' + _esc(u.email) + '\')">' +
+             '<div style="width:24px;height:24px;border-radius:50%;background:' + _corAvatar(u.email) + ';display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#fff;flex-shrink:0">' + _iniciais(u.email) + '</div>' +
+             '<div><div class="text-xs font-semibold text-slate-700">' + _esc(nome) + '</div>' +
+             '<div class="text-[10px] text-slate-400">' + _esc(u.email) + '</div></div>' +
+             '</div>';
+    }).join('');
+    lista.classList.remove('hidden');
+  }, 200);
 }
 
-function _balcaoSelecionarUsuario(email, nome) {
+function _balcaoSelecionarUsuario(email) {
   var input = document.getElementById('bForm-responsavel');
   var lista = document.getElementById('bForm-responsavel-list');
   if (input) input.value = email;
@@ -1031,15 +1047,42 @@ function _balcaoSelecionarUsuario(email, nome) {
 
 // ── Fechar overlays ───────────────────────────────────────────────────────────
 
+var _BALCAO_OVERLAYS = ['balcao-modal-overlay', 'balcao-form-overlay'];
+
+function _fecharOverlayBalcao(id) {
+  var el = document.getElementById(id);
+  if (el) el.classList.add('hidden');
+  var algumAberto = _BALCAO_OVERLAYS.some(function(oid) {
+    var m = document.getElementById(oid);
+    return m && !m.classList.contains('hidden');
+  });
+  if (!algumAberto) document.body.style.overflow = '';
+}
+
 function _balcaoFecharModal(event) {
   if (event && event.target !== document.getElementById('balcao-modal-overlay')) return;
-  document.getElementById('balcao-modal-overlay').classList.add('hidden');
+  _fecharOverlayBalcao('balcao-modal-overlay');
 }
 
 function _balcaoFecharForm(event) {
   if (event && event.target !== document.getElementById('balcao-form-overlay')) return;
-  document.getElementById('balcao-form-overlay').classList.add('hidden');
+  _fecharOverlayBalcao('balcao-form-overlay');
 }
+
+// Expõe ao escopo global — necessário para onclick inline no HTML e no HTML gerado dinamicamente
+window._balcaoFecharModal      = _balcaoFecharModal;
+window._balcaoFecharForm       = _balcaoFecharForm;
+window._balcaoAutocompletar    = _balcaoAutocompletar;
+window._balcaoSelecionarUsuario = _balcaoSelecionarUsuario;
+
+// ESC fecha o overlay mais ao topo (form > modal)
+document.addEventListener('keydown', function(e) {
+  if (e.key !== 'Escape') return;
+  var form  = document.getElementById('balcao-form-overlay');
+  var modal = document.getElementById('balcao-modal-overlay');
+  if (form  && !form.classList.contains('hidden'))  { _fecharOverlayBalcao('balcao-form-overlay');  return; }
+  if (modal && !modal.classList.contains('hidden')) { _fecharOverlayBalcao('balcao-modal-overlay'); }
+});
 
 // ── Inicialização quando a aba é aberta ───────────────────────────────────────
 
