@@ -28,13 +28,16 @@ var Logger = (function () {
       try { texto += ' | ' + JSON.stringify(dados); } catch (_) {}
     }
 
-    // Grava na aba Logs via registrarLog (utils.gs)
-    try {
-      var email = '';
-      try { email = Session.getActiveUser().getEmail() || ''; } catch (_) {}
-      registrarLog(email, modulo, texto);
-    } catch (e) {
-      console.warn('[Logger] registrarLog indisponível:', e.message);
+    // INFO → apenas console (SpreadsheetApp.appendRow tem custo por chamada).
+    // WARN e ERROR → console + aba Logs (auditoria persistente).
+    if (nivel !== NIVEIS.INFO) {
+      try {
+        var email = '';
+        try { email = Session.getActiveUser().getEmail() || ''; } catch (_) {}
+        registrarLog(email, modulo, texto);
+      } catch (e) {
+        console.warn('[Logger] registrarLog indisponível:', e.message);
+      }
     }
 
     // Espelha no console do GAS para Stackdriver / Execution Log

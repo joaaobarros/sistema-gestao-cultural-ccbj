@@ -50,9 +50,31 @@ function _loginLimpar() {
 // BLOCO: Controle do overlay de login
 // ════════════════════════════════════════════════════════════════
 
+// Timeout global da fase de bootstrap — cancelado quando auth resolve
+var _loginAuthTimeout = null;
+
+/**
+ * Transiciona o overlay de estado de carregamento → formulário de login.
+ * Chamado somente quando sabe-se que o usuário PRECISA autenticar.
+ */
 function _loginMostrar() {
-  var el = document.getElementById('loginOverlay');
-  if (el) el.style.display = 'flex';
+  var loading = document.getElementById('loginLoadingState');
+  var form    = document.getElementById('loginFormState');
+  var overlay = document.getElementById('loginOverlay');
+  // display:contents torna loginFormState transparente para o layout flex do overlay
+  if (loading) loading.style.display = 'none';
+  if (form)    form.style.display    = 'contents';
+  if (overlay) overlay.style.display = 'flex';
+}
+
+/**
+ * Atualiza o texto exibido na tela de carregamento.
+ */
+function _loginSetLoadingTexto(texto, subtexto) {
+  var el  = document.getElementById('loginLoadingTexto');
+  var sub = document.getElementById('loginLoadingSubtexto');
+  if (el  && texto    !== undefined) el.textContent  = texto;
+  if (sub && subtexto !== undefined) sub.textContent = subtexto;
 }
 
 function _loginOcultar(cb) {
@@ -103,6 +125,7 @@ function _loginToggleSenha() {
 // ════════════════════════════════════════════════════════════════
 
 function _loginAplicarSessao(token, email, nome) {
+  clearTimeout(_loginAuthTimeout);
   _loginSalvarSessao(token, email, nome);
   if (typeof AppState !== 'undefined') {
     AppState.usuario._sessao = token;
@@ -234,20 +257,30 @@ function _loginInicializarGSI(clientId) {
  * _loginInicializar()
  * Substitui a chamada direta a inicializarApp() no bootstrap.
  * Verifica sessão salva → valida no servidor → ou exibe login.
+ *
+ * SEGURANÇA: o overlay começa VISÍVEL (auth-gate).
+ * O app só é liberado após autenticação confirmada via _loginAplicarSessao(),
+ * que chama _loginOcultar() → inicializarApp().
+ *
+ * Fail-safe: timeout de 15s exibe o formulário se o backend não responder.
  */
 function _loginInicializar() {
   var sessao = _loginCarregarSessao();
 
+  // Fail-safe: se o backend não responder em 15s exibe formulário de login
+  _loginAuthTimeout = setTimeout(function() {
+    console.warn('[Auth] Timeout na verificação de sessão — exibindo formulário.');
+    _loginExibir();
+  }, 15000);
+
   if (sessao && sessao.token) {
+    _loginSetLoadingTexto('Validando sessão...', 'Identificando usuário');
     google.script.run
       .withSuccessHandler(function(res) {
         if (res && res.ok) {
-          if (typeof AppState !== 'undefined') {
-            AppState.usuario._sessao = sessao.token;
-            AppState.usuario.email   = sessao.email;
-            AppState.usuario.nome    = sessao.nome || '';
-          }
-          if (typeof inicializarApp === 'function') inicializarApp();
+          // Usar _loginAplicarSessao para garantir que o overlay
+          // seja fechado ANTES de inicializarApp() — sem race condition.
+          _loginAplicarSessao(sessao.token, sessao.email, sessao.nome || '');
         } else {
           _loginLimpar();
           _loginTentarAutoLogin();
@@ -259,6 +292,7 @@ function _loginInicializar() {
       })
       .validarSessaoGAS(sessao.token);
   } else {
+    _loginSetLoadingTexto('Identificando usuário...', 'Verificando domínio institucional');
     _loginTentarAutoLogin();
   }
 }
@@ -269,6 +303,7 @@ function _loginInicializar() {
  * Usuários externos vão para _loginExibir() normalmente.
  */
 function _loginTentarAutoLogin() {
+  _loginSetLoadingTexto('Verificando conta institucional...', 'Domínio @idm.org.br detectado');
   google.script.run
     .withSuccessHandler(function(res) {
       if (res && res.ok && res.email) {
@@ -291,6 +326,7 @@ function _loginTentarAutoLogin() {
 }
 
 function _loginExibir() {
+  clearTimeout(_loginAuthTimeout);
   _loginMostrar();
   // Buscar client_id GSI do servidor (configurável via PropertiesService)
   google.script.run

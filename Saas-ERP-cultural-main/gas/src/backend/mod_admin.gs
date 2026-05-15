@@ -482,7 +482,7 @@ function registrarLog(
     };
 
     abaLogs.appendRow([
-      new Date(),
+      new Date().toISOString(),
       sanitizarTexto(String(usuario)),
       sanitizarTexto(String(acao || "")).toUpperCase(),
       sanitizarTexto(String(tipo || "")).toUpperCase(),
@@ -526,7 +526,7 @@ function registrarAcesso(emailUsuario, nivelAcesso) {
     cache.put(chaveAcesso, "1", 300);
     const nomeUsuario = emailUsuario.split("@")[0];
     aba.appendRow([
-      new Date(),
+      new Date().toISOString(),
       emailUsuario,
       nomeUsuario,
       nivelAcesso || "usuário",
