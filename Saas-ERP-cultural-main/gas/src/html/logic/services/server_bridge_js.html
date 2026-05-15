@@ -337,14 +337,26 @@ const GAS = {
 
   /**
    * BLOCO: Tarefas — oficial (tarefas_controller.gs)
+   * Permissões server-side: admin/gestor veem todas; demais veem somente as suas.
+   * Delegação: restrita a gestor/admin ou responsável atual/criador.
    */
   tarefas: {
-    listar:              function(cb, err)                     { GAS._callCtrl('ctrl_tarefas_listar',               [GAS._sessao()],                      cb, err); },
-    salvar:              function(dados, cb, err)              { GAS._callCtrl('ctrl_tarefas_salvar',               [dados, GAS._sessao()],                cb, err); },
-    excluir:             function(id, cb, err)                 { GAS._callCtrl('ctrl_tarefas_excluir',              [id, GAS._sessao()],                   cb, err); },
-    listarPorFuncao:     function(funcao, cb, err)             { GAS._callCtrl('ctrl_tarefas_listar_por_funcao',    [funcao, GAS._sessao()],               cb, err); },
-    atribuirExecutores:  function(id, emails, cb, err)         { GAS._callCtrl('ctrl_tarefas_atribuir_executores',  [id, emails, GAS._sessao()],           cb, err); },
-    responderComoFuncao: function(id, msg, autor, cb, err)     { GAS._callCtrl('ctrl_tarefas_responder_como_funcao',[id, msg, autor, GAS._sessao()],       cb, err); }
+    // Leitura
+    listar:              function(cb, err)                          { GAS._callCtrl('ctrl_tarefas_listar',               [GAS._sessao()],                            cb, err); },
+    obter:               function(id, cb, err)                      { GAS._callCtrl('ctrl_tarefas_obter',                [id, GAS._sessao()],                         cb, err); },
+    minhaFila:           function(cb, err)                          { GAS._callCtrl('ctrl_tarefas_minha_fila',           [GAS._sessao()],                            cb, err); },
+    obterMetricas:       function(cb, err)                          { GAS._callCtrl('ctrl_tarefas_obter_metricas',        [GAS._sessao()],                            cb, err); },
+    listarPorFuncao:     function(funcao, cb, err)                  { GAS._callCtrl('ctrl_tarefas_listar_por_funcao',    [funcao, GAS._sessao()],                     cb, err); },
+    // Escrita
+    criar:               function(dados, cb, err)                   { GAS._callCtrl('ctrl_tarefas_criar',                [dados, GAS._sessao()],                      cb, err); },
+    salvar:              function(dados, cb, err)                   { GAS._callCtrl('ctrl_tarefas_salvar',               [dados, GAS._sessao()],                      cb, err); },
+    mudarStatus:         function(id, status, comentario, cb, err)  { GAS._callCtrl('ctrl_tarefas_mudar_status',         [id, status, comentario, GAS._sessao()],     cb, err); },
+    delegar:             function(id, para, comentario, cb, err)    { GAS._callCtrl('ctrl_tarefas_delegar',              [id, para, comentario, GAS._sessao()],       cb, err); },
+    comentar:            function(id, texto, cb, err)               { GAS._callCtrl('ctrl_tarefas_comentar',             [id, texto, GAS._sessao()],                  cb, err); },
+    excluir:             function(id, cb, err)                      { GAS._callCtrl('ctrl_tarefas_excluir',              [id, GAS._sessao()],                         cb, err); },
+    salvarOrdemKanban:   function(ordens, cb, err)                  { GAS._callCtrl('ctrl_tarefas_salvar_ordem_kanban',  [ordens, GAS._sessao()],                     cb, err); },
+    atribuirExecutores:  function(id, emails, cb, err)              { GAS._callCtrl('ctrl_tarefas_atribuir_executores',  [id, emails, GAS._sessao()],                 cb, err); },
+    responderComoFuncao: function(id, msg, autor, cb, err)          { GAS._callCtrl('ctrl_tarefas_responder_como_funcao',[id, msg, autor, GAS._sessao()],             cb, err); }
   },
 
   /**
