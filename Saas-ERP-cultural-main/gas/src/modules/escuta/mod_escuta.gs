@@ -201,6 +201,11 @@ function _escutaSheetToArray(sh) {
     return data.slice(1).map(function(row) {
       var obj = {};
       headers.forEach(function(h, i) { obj[h] = row[i]; });
+      // Normaliza nomes de colunas históricos (setup.gs vs mod_escuta.gs)
+      // EscutaRespostas: hashUsuario → emailHash, respondidoEm → timestamp
+      // EscutaEspontanea: hashUsuario → emailHash, registradoEm → timestamp
+      if (obj.emailHash === undefined && obj.hashUsuario !== undefined) obj.emailHash = obj.hashUsuario;
+      if (obj.timestamp === undefined) obj.timestamp = obj.respondidoEm || obj.registradoEm || '';
       return obj;
     });
   } catch(e) {
@@ -1697,9 +1702,11 @@ function obterParticipacaoEscuta() {
 // CARGA INICIAL — CONSOLIDADA COM CACHE
 // ═══════════════════════════════════════════════════════════════
 
-function obterDadosEscuta() {
+function obterDadosEscuta(sessaoOuEmail) {
   try {
-    var email = obterEmailUsuario('');
+    var email = typeof _resolverEmailOuVazio === 'function'
+      ? _resolverEmailOuVazio(sessaoOuEmail || '')
+      : (obterEmailUsuario(sessaoOuEmail || '') || '');
 
     // Pré-carrega todas as abas no cache de execução de uma só vez
     var sheetsParaCarregar = [
@@ -1737,7 +1744,7 @@ function obterDadosEscuta() {
     // Perfil do RH (fonte oficial) — fallback para perfil analítico se não encontrado
     var perfilRH = null;
     try {
-      var funcionarios = lerJSON('funcionarios.json') || [];
+      var funcionarios = readJSON('funcionarios.json') || [];
       var funcEncontrado = funcionarios.find(function(f) {
         return (f.email || '').toLowerCase() === (email || '').toLowerCase();
       });
@@ -1768,6 +1775,7 @@ function obterDadosEscuta() {
       participacao: participacao.ok ? participacao : { totalRespostas: 0, totalEspontaneas: 0, historico: [], pesquisas: [] }
     };
   } catch(e) {
+    console.error('[Escuta] obterDadosEscuta falhou: ' + e.message + ' | stack: ' + (e.stack || ''));
     return { ok: false, msg: e.message };
   }
 }
