@@ -23,6 +23,7 @@
  */
 var BtnGuard = (function() {
   var _locks = {};
+  var _gasCounter = 0;
 
   function _applyLoading(btn, label) {
     if (!btn) return;
@@ -87,17 +88,68 @@ var BtnGuard = (function() {
 
     /**
      * Wrapper específico para chamadas GAS — garante unlock no success E no failure.
-     * O onError padrão usa _handleServerError caso nenhum seja fornecido.
+     * Suporta duas convenções de chamada:
      *
-     * @param {string|null} btnId    — ID do botão
-     * @param {string}      lockId   — chave única
-     * @param {string}      label    — texto durante loading
-     * @param {Function}    gasFn(successCb, errorCb) — função que chama GAS.*
-     * @param {Function}    onSuccess(data) — callback de sucesso
-     * @param {Function}    [onError(err)]  — callback de erro (opcional)
+     * Convenção A (legada — gasFn manual):
+     *   BtnGuard.gas(btnId, lockId, label, function(ok, fail){ GAS.ns.fn(args, ok, fail); }, onSuccess, onError)
+     *
+     * Convenção B (nova — referência direta ao método GAS):
+     *   BtnGuard.gas(btnId, GAS.ns.fn, [arg1, arg2], { onSuccess, onError, lockId?, label? })
+     *   O método GAS recebe (...args, successCb, errorCb) automaticamente.
+     *
+     * A convenção é detectada pelo tipo do 2º argumento:
+     *   string  → Convenção A   |   function → Convenção B
      */
-    gas: function(btnId, lockId, label, gasFn, onSuccess, onError) {
+    gas: function(btnId, lockIdOrGasFnRef, labelOrArgs, gasFnOrOpts, onSuccess, onError) {
       var self = this;
+
+      // ── Convenção B: gas(btnId, gasFnRef, args, opts) ───────────────────────
+      if (typeof lockIdOrGasFnRef === 'function') {
+        var gasFnRef = lockIdOrGasFnRef;
+        var args     = Array.isArray(labelOrArgs) ? labelOrArgs
+                       : (labelOrArgs != null ? [labelOrArgs] : []);
+        var opts     = (gasFnOrOpts && typeof gasFnOrOpts === 'object') ? gasFnOrOpts : {};
+        var lockId   = opts.lockId || (btnId ? ('gas-btn-' + btnId) : ('gas-' + (++_gasCounter)));
+        var label    = opts.label  || 'Aguarde...';
+
+        self.wrap(btnId, lockId, label, function(done) {
+          var ok = function(data) {
+            done();
+            if (typeof opts.onSuccess === 'function') opts.onSuccess(data);
+          };
+          var fail = function(err) {
+            done();
+            if (typeof opts.onError === 'function') {
+              opts.onError(err);
+            } else if (typeof _handleServerError === 'function') {
+              _handleServerError(err);
+            } else {
+              console.error('[BtnGuard.gas]', err);
+            }
+          };
+          try {
+            gasFnRef.apply(null, args.concat([ok, fail]));
+          } catch(e) {
+            done();
+            console.error('[BtnGuard.gas] falha ao invocar gasFnRef:', e);
+            throw e;
+          }
+        });
+        return;
+      }
+
+      // ── Convenção A: gas(btnId, lockId, label, gasFn, onSuccess, onError) ───
+      var lockId  = lockIdOrGasFnRef;
+      var label   = labelOrArgs;
+      var gasFn   = gasFnOrOpts;
+
+      if (typeof gasFn !== 'function') {
+        console.error('[BtnGuard.gas] gasFn não é uma função. Verifique os argumentos.', {
+          btnId: btnId, lockId: lockId, label: label, gasFn: gasFn
+        });
+        return;
+      }
+
       self.wrap(btnId, lockId, label, function(done) {
         var ok = function(data) {
           done();

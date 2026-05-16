@@ -71,7 +71,7 @@ var _CATALOGO_TIPOS_PADRAO = [
     camposExtras: [
       { id: 'nome_profissional', label: 'Nome do Profissional',  tipo: 'text',   obrigatorio: true },
       { id: 'area_atuacao',      label: 'Área de Atuação',       tipo: 'text',   obrigatorio: true },
-      { id: 'modalidade',        label: 'Modalidade',            tipo: 'select', opcoes: ['MEI', 'PJ', 'PF', 'CLT'], obrigatorio: true },
+      { id: 'modalidade',        label: 'Modalidade',            tipo: 'select', opcoes: ['PF', 'PJ', 'MEI', 'ME', 'CLT'], obrigatorio: true },
       { id: 'valor_total',       label: 'Valor Total (R$)',       tipo: 'currency', obrigatorio: true }
     ],
     documentosExigidos: ['RG/CPF ou CNPJ', 'Proposta Comercial', 'Contrato'],

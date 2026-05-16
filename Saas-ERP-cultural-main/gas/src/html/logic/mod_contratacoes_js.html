@@ -43,7 +43,11 @@ function _cttFiltrar() {
   var lista = _cttCache.filter(function(ct) {
     if (busca && !String(ct.fornecedor||'').toLowerCase().includes(busca) &&
                  !String(ct.objeto||'').toLowerCase().includes(busca)) return false;
-    if (tipo && ct.tipo !== tipo) return false;
+    if (tipo) {
+      var _PJ_TIPOS = ['PJ', 'MEI', 'ME'];
+      if (tipo === '_PJ') { if (_PJ_TIPOS.indexOf(ct.tipo) === -1) return false; }
+      else if (ct.tipo !== tipo) return false;
+    }
     if (st   && ct.status !== st) return false;
     return true;
   });
@@ -104,7 +108,12 @@ function abrirModalContratacao(id) {
       + '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px">'
       + '<div><label style="display:block;font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">Tipo</label>'
       + '<select id="cttTipo" style="width:100%;padding:9px 13px;font-size:12px;border:1.5px solid #e2e8f0;border-radius:12px;outline:none">'
-      + ['PF','PJ','MEI'].map(function(t){ return '<option'+(dado.tipo===t?' selected':'')+'>'+t+'</option>'; }).join('')
+      + [
+          { v:'PF',  l:'PF — Pessoa Física' },
+          { v:'PJ',  l:'PJ — Empresa Genérica' },
+          { v:'MEI', l:'MEI — Microempreendedor Individual' },
+          { v:'ME',  l:'ME — Microempresa' }
+        ].map(function(o){ return '<option value="'+o.v+'"'+(dado.tipo===o.v?' selected':'')+'>'+o.l+'</option>'; }).join('')
       + '</select></div>'
       + '<div><label style="display:block;font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">Modalidade</label>'
       + '<select id="cttModalidade" style="width:100%;padding:9px 13px;font-size:12px;border:1.5px solid #e2e8f0;border-radius:12px;outline:none">'

@@ -111,7 +111,7 @@ function _padmPreencherFiltroTipo() {
 
 function _padmCarregarCatalogo(cb) {
   if (_padmState.catalogoTipos.length) { if (cb) cb(); return; }
-  BtnGuard.gas(null, GAS.processosAdm.catalogoTipos, [AppState.email], {
+  BtnGuard.gas(null, GAS.processosAdm.catalogoTipos, [], {
     onSuccess: function(data) {
       _padmState.catalogoTipos = data || [];
       if (cb) cb();
@@ -314,7 +314,7 @@ function _padmCarregarDashboard() {
   var cardsEl = document.getElementById('padm-dash-cards');
   if (cardsEl) cardsEl.innerHTML = '<div class="col-span-4 text-center py-4 text-gray-400 text-sm"><i class="fas fa-spinner fa-spin mr-1"></i>Carregando…</div>';
 
-  BtnGuard.gas(null, GAS.processosAdm.dashboardInstitucional, [AppState.email], {
+  BtnGuard.gas(null, GAS.processosAdm.dashboardInstitucional, [], {
     onSuccess: function(data) {
       _padmPreencherDashboard(data);
     },
@@ -405,7 +405,7 @@ function padmSelecionarProcesso(id) {
     conteudoEl.innerHTML = '<div class="flex-1 flex items-center justify-center"><i class="fas fa-spinner fa-spin text-indigo-400 text-2xl"></i></div>';
   }
 
-  BtnGuard.gas(null, GAS.processosAdm.dashboard, [id, AppState.email], {
+  BtnGuard.gas(null, GAS.processosAdm.dashboard, [id], {
     onSuccess: function(data) {
       _padmState.dashboardAtivo = data;
       _padmState.processoAtivo  = data.processo;
@@ -616,7 +616,7 @@ function padmAvancarEtapa() {
   var obs = prompt('Observações sobre o avanço (opcional):') || '';
 
   var btn = document.getElementById('padm-btn-avancar');
-  BtnGuard.gas(btn, GAS.processosAdm.avancarEtapa, [proc.id, obs, AppState.email], {
+  BtnGuard.gas(btn, GAS.processosAdm.avancarEtapa, [proc.id, obs], {
     onSuccess: function() {
       Toast.show('success', 'Etapa avançada com sucesso');
       padmSelecionarProcesso(proc.id);
@@ -635,7 +635,7 @@ function padmReservarOrcamento() {
   if (!confirm('Reservar orçamento para este processo? Isso vai comprometer o saldo da rubrica.')) return;
 
   var btn = document.getElementById('padm-btn-reservar-orc');
-  BtnGuard.gas(btn, GAS.processosAdm.reservarOrcamento, [_padmState.processoAtivo.id, AppState.email], {
+  BtnGuard.gas(btn, GAS.processosAdm.reservarOrcamento, [_padmState.processoAtivo.id], {
     onSuccess: function() {
       Toast.show('success', 'Orçamento reservado com sucesso');
       padmSelecionarProcesso(_padmState.processoAtivo.id);
@@ -697,7 +697,7 @@ function padmComentarTimeline() {
   var texto = ((input && input.value) || '').trim();
   if (!texto) { Toast.show('warning', 'Digite um comentário'); return; }
 
-  BtnGuard.gas(null, GAS.processosAdm.comentar, [_padmState.processoAtivo.id, texto, AppState.email], {
+  BtnGuard.gas(null, GAS.processosAdm.comentar, [_padmState.processoAtivo.id, texto], {
     onSuccess: function() {
       if (input) input.value = '';
       padmSelecionarProcesso(_padmState.processoAtivo.id);
@@ -796,7 +796,7 @@ function padmGerarDemandaComunicacao() {
   if (!_padmState.processoAtivo) return;
   if (!confirm('Gerar demanda de comunicação vinculada a este processo?')) return;
 
-  BtnGuard.gas(null, GAS.processosAdm.vincularComunicacao, [_padmState.processoAtivo.id, null, AppState.email], {
+  BtnGuard.gas(null, GAS.processosAdm.vincularComunicacao, [_padmState.processoAtivo.id, null], {
     onSuccess: function() {
       Toast.show('success', 'Demanda de comunicação gerada');
       padmSelecionarProcesso(_padmState.processoAtivo.id);
@@ -883,7 +883,7 @@ function padmConfirmarStatus() {
   if (!novoStatus) { Toast.show('warning', 'Selecione um status'); return; }
 
   var btn = document.querySelector('#padm-modal-status button.bg-indigo-600');
-  BtnGuard.gas(btn, GAS.processosAdm.mudarStatus, [_padmState.processoAtivo.id, novoStatus, motivo, AppState.email], {
+  BtnGuard.gas(btn, GAS.processosAdm.mudarStatus, [_padmState.processoAtivo.id, novoStatus, motivo], {
     onSuccess: function() {
       padmFecharModalStatus();
       Toast.show('success', 'Status atualizado');
@@ -1033,7 +1033,7 @@ function padmBuscarAcoes(q) {
   if (!q || q.length < 2) { dropdown.classList.add('hidden'); return; }
 
   _padmState._acaoTimer = setTimeout(function() {
-    BtnGuard.gas(null, GAS.processosAdm.buscarAcoes, [q, AppState.email], {
+    BtnGuard.gas(null, GAS.processosAdm.buscarAcoes, [q], {
       onSuccess: function(resultados) {
         if (!resultados.length) {
           dropdown.innerHTML = '<div class="p-2 text-xs text-gray-400 text-center">Nenhuma ação encontrada</div>';
@@ -1072,7 +1072,7 @@ function padmBuscarRubricas(q) {
   if (!q || q.length < 2) { dropdown.classList.add('hidden'); return; }
 
   _padmState._rubricaTimer = setTimeout(function() {
-    BtnGuard.gas(null, GAS.processosAdm.buscarRubricas, [q, AppState.email], {
+    BtnGuard.gas(null, GAS.processosAdm.buscarRubricas, [q], {
       onSuccess: function(rubricas) {
         if (!rubricas.length) {
           dropdown.innerHTML = '<div class="p-2 text-xs text-gray-400 text-center">Nenhuma rubrica encontrada</div>';
@@ -1111,7 +1111,7 @@ function padmVerificarSaldo() {
 
   if (!rubricaId) { if (saldoEl) saldoEl.classList.add('hidden'); return; }
 
-  BtnGuard.gas(null, GAS.processosAdm.verificarOrcamento, [rubricaId, valor, AppState.email], {
+  BtnGuard.gas(null, GAS.processosAdm.verificarOrcamento, [rubricaId, valor], {
     onSuccess: function(data) {
       if (saldoEl) {
         saldoEl.classList.remove('hidden');
@@ -1163,7 +1163,7 @@ function padmSalvarProcesso() {
   };
 
   var btn = document.getElementById('padm-btn-criar-proc');
-  BtnGuard.gas(btn, GAS.processosAdm.criar, [dados, AppState.email], {
+  BtnGuard.gas(btn, GAS.processosAdm.criar, [dados], {
     onSuccess: function(data) {
       padmFecharModalCriar();
       Toast.show('success', 'Processo criado com sucesso');
@@ -1200,7 +1200,7 @@ function padmCriarTarefaVinculada() {
   };
 
   var btn = document.querySelector('#padm-modal-tarefa button.bg-blue-600');
-  BtnGuard.gas(btn, GAS.processosAdm.criarTarefaVinculada, [_padmState.processoAtivo.id, dados, AppState.email], {
+  BtnGuard.gas(btn, GAS.processosAdm.criarTarefaVinculada, [_padmState.processoAtivo.id, dados], {
     onSuccess: function() {
       padmFecharModalTarefa();
       Toast.show('success', 'Tarefa criada e vinculada ao processo');
@@ -1248,7 +1248,7 @@ function padmBuscarParaVinculo(q) {
     var fn = tipo === 'acao' ? GAS.processosAdm.buscarAcoes : tipo === 'rubrica' ? GAS.processosAdm.buscarRubricas : null;
     if (!fn) return;
 
-    BtnGuard.gas(null, fn, [q, AppState.email], {
+    BtnGuard.gas(null, fn, [q], {
       onSuccess: function(resultados) {
         if (!resultados.length) {
           dropdown.innerHTML = '<div class="p-2 text-xs text-gray-400 text-center">Sem resultados</div>';
@@ -1287,10 +1287,10 @@ function padmConfirmarVinculo() {
   var btn    = document.querySelector('#padm-modal-vincular button.bg-indigo-600');
 
   var fn, args;
-  if (tipo === 'acao')    { fn = GAS.processosAdm.vincularAcao;    args = [procId, idVal, AppState.email]; }
-  else if (tipo === 'rubrica') { fn = GAS.processosAdm.vincularRubrica; args = [procId, idVal, nomeVal, AppState.email]; }
-  else if (tipo === 'tarefa')  { fn = GAS.processosAdm.vincularTarefa;  args = [procId, idVal, AppState.email]; }
-  else if (tipo === 'contrato'){ fn = GAS.processosAdm.vincularContrato; args = [procId, idVal, valor, AppState.email]; }
+  if (tipo === 'acao')    { fn = GAS.processosAdm.vincularAcao;    args = [procId, idVal]; }
+  else if (tipo === 'rubrica') { fn = GAS.processosAdm.vincularRubrica; args = [procId, idVal, nomeVal]; }
+  else if (tipo === 'tarefa')  { fn = GAS.processosAdm.vincularTarefa;  args = [procId, idVal]; }
+  else if (tipo === 'contrato'){ fn = GAS.processosAdm.vincularContrato; args = [procId, { id: idVal, valor: valor }]; }
   else { Toast.show('warning', 'Tipo não suportado'); return; }
 
   BtnGuard.gas(btn, fn, args, {
@@ -1330,7 +1330,7 @@ function padmAdicionarDocumento() {
   };
 
   var btn = document.querySelector('#padm-modal-doc button.bg-gray-700');
-  BtnGuard.gas(btn, GAS.processosAdm.adicionarDocumento, [_padmState.processoAtivo.id, doc, AppState.email], {
+  BtnGuard.gas(btn, GAS.processosAdm.adicionarDocumento, [_padmState.processoAtivo.id, doc], {
     onSuccess: function() {
       padmFecharModalDoc();
       Toast.show('success', 'Documento adicionado');
