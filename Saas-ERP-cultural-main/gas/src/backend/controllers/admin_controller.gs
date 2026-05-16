@@ -15,9 +15,12 @@
  *   - RECE (Agenda Reservada CCBJ)
  *
  * @depends shared/response.gs (GasResponse),
- *          backend/mod_admin.gs,
- *          backend/mod_metrics.gs,
- *          core/auth_session.gs,
+ *          backend/mod_admin.gs (obterEmailUsuario, verificarPermissao, registrarLog,
+ *                                obterLogs, obterLogAcessos, registrarAcesso,
+ *                                obterSistemaConfigAdmin, salvarSistemaConfigAdmin,
+ *                                excluirRegistroPorID),
+ *          modules/admin/boot_service.gs (BootService),
+ *          modules/admin/user_profile_service.gs (UserProfileService),
  *          modules/admin/config_service.gs (ConfigService),
  *          modules/admin/rollback_service.gs (RollbackService),
  *          modules/relatorios/codip_service.gs (CodipService),
@@ -36,7 +39,7 @@
  */
 function ctrl_admin_dados_iniciais(emailFallback, sessaoId) {
   return GasResponse.wrap(function () {
-    return obterDadosIniciais(emailFallback || '', sessaoId || '');
+    return BootService.obter(emailFallback || '', sessaoId || '');
   }, 'ctrl_admin_dados_iniciais');
 }
 
@@ -46,8 +49,7 @@ function ctrl_admin_dados_iniciais(emailFallback, sessaoId) {
  */
 function ctrl_admin_perfil(emailFallback) {
   return GasResponse.wrap(function () {
-    var email = obterEmailUsuario(emailFallback || '');
-    return obterPerfilUsuario(email);
+    return UserProfileService.obterPerfil(emailFallback || '');
   }, 'ctrl_admin_perfil');
 }
 
@@ -56,7 +58,7 @@ function ctrl_admin_perfil(emailFallback) {
  */
 function ctrl_admin_emails_sistema() {
   return GasResponse.wrap(function () {
-    return obterEmailsSistema();
+    return UserProfileService.obterEmailsSistema();
   }, 'ctrl_admin_emails_sistema');
 }
 
@@ -67,7 +69,7 @@ function ctrl_admin_emails_sistema() {
 function ctrl_admin_obter_setor(emailAlvo) {
   return GasResponse.wrap(function () {
     if (!emailAlvo) throw new Error('E-mail é obrigatório');
-    return obterSetorUsuario(emailAlvo);
+    return UserProfileService.obterSetor(emailAlvo);
   }, 'ctrl_admin_obter_setor');
 }
 
@@ -81,7 +83,7 @@ function ctrl_admin_salvar_setor(emailAlvo, setor, emailSolicitante) {
   return GasResponse.wrap(function () {
     if (!emailAlvo) throw new Error('E-mail alvo é obrigatório');
     if (!setor)     throw new Error('Setor é obrigatório');
-    return salvarSetorUsuario(emailAlvo, setor, emailSolicitante || '');
+    return UserProfileService.salvarSetor(emailAlvo, setor, emailSolicitante || '');
   }, 'ctrl_admin_salvar_setor');
 }
 

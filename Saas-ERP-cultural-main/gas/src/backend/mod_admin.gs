@@ -50,27 +50,7 @@ function obterEmailUsuario(emailClienteFallback, sessaoId) {
   }
 }
 
-function obterPerfilUsuario(emailFallback) {
-  try {
-    const email = obterEmailUsuario(emailFallback || "");
-    let nome = email.split("@")[0];
-    let foto = null;
-    try {
-      const url =
-        "https://people.googleapis.com/v1/people/me?personFields=names,photos";
-      const res = UrlFetchApp.fetch(url, {
-        headers: { Authorization: "Bearer " + ScriptApp.getOAuthToken() },
-        muteHttpExceptions: true,
-      });
-      const data = JSON.parse(res.getContentText());
-      nome = data.names?.[0]?.displayName || nome;
-      foto = data.photos?.[0]?.url || null;
-    } catch (e) {}
-    return { email, nome, foto };
-  } catch (e) {
-    throw new Error(e.message);
-  }
-}
+function obterPerfilUsuario(emailFallback)  { return UserProfileService.obterPerfil(emailFallback); }
 
 function obterUrlLogout() {
   try {
@@ -84,44 +64,7 @@ function obterUrlLogout() {
   }
 }
 
-function obterEmailsSistema() {
-  try {
-    const emails = new Set();
-    const abaAdmins = _getSheet("Administradores");
-    if (abaAdmins && abaAdmins.getLastRow() > 1) {
-      abaAdmins
-        .getRange(2, 1, abaAdmins.getLastRow() - 1, 1)
-        .getValues()
-        .forEach((r) => {
-          if (r[0] && String(r[0]).includes("@"))
-            emails.add(String(r[0]).trim().toLowerCase());
-        });
-    }
-    const abaLog = _getSheet("LogAcessos");
-    if (abaLog && abaLog.getLastRow() > 1) {
-      abaLog
-        .getRange(2, 1, abaLog.getLastRow() - 1, 2)
-        .getValues()
-        .forEach((r) => {
-          if (r[1] && String(r[1]).includes("@"))
-            emails.add(String(r[1]).trim().toLowerCase());
-        });
-    }
-    const abaRes = _getSheet("Reservas");
-    if (abaRes && abaRes.getLastRow() > 1) {
-      abaRes
-        .getRange(2, 9, abaRes.getLastRow() - 1, 1)
-        .getValues()
-        .forEach((r) => {
-          if (r[0] && String(r[0]).includes("@"))
-            emails.add(String(r[0]).trim().toLowerCase());
-        });
-    }
-    return Array.from(emails).sort();
-  } catch (e) {
-    return [];
-  }
-}
+function obterEmailsSistema()              { return UserProfileService.obterEmailsSistema(); }
 
 function resolverNomePorEmail(email) {
   try {
@@ -197,249 +140,13 @@ function verificarDonoOuAdmin(emailDono, emailAtual) {
  * Entrypoint principal do boot do frontend.
  * Identidade resolvida via Session.getActiveUser() (Workspace domain).
  */
-/**
- * ========================================
- * BLOCO: Setor de usuário — leitura e escrita
- * ========================================
- * @description obterSetorUsuario: lê o setor do usuário buscando primeiro na coluna 3 da
- *              aba Administradores, depois em PreferenciasUsuarios (chave "setor_usuario").
- *              salvarSetorUsuario: admin pode definir setor para qualquer usuário.
- *              Usuário pode definir próprio setor somente se não tiver um configurado.
- * @sideEffects Lê/Escreve em Administradores (col 3) ou PreferenciasUsuarios
- */
-function obterSetorUsuario(email) {
-  if (!email || !email.includes('@')) return '';
+// SETOR — delega a UserProfileService
+function obterSetorUsuario(email)                              { return UserProfileService.obterSetor(email); }
+function salvarSetorUsuario(emailAlvo, setor, emailSolicitante){ return UserProfileService.salvarSetor(emailAlvo, setor, emailSolicitante); }
 
-  const emailNorm = String(email).trim().toLowerCase();
-
-  try {
-    const abaAdmins = _getSheet('Administradores');
-    if (abaAdmins && abaAdmins.getLastRow() > 1) {
-      const numCols = abaAdmins.getLastColumn();
-      if (numCols >= 3) {
-        const dados = abaAdmins.getRange(2, 1, abaAdmins.getLastRow() - 1, 3).getValues();
-        const linha = dados.find(r => String(r[0]).trim().toLowerCase() === emailNorm);
-        if (linha && String(linha[2] || '').trim()) return String(linha[2]).trim();
-      }
-    }
-  } catch (e) {}
-
-  try {
-    const abaPrefs = _getSheet('PreferenciasUsuarios');
-    if (abaPrefs && abaPrefs.getLastRow() > 1) {
-      const dados = abaPrefs.getDataRange().getValues();
-      for (let i = 1; i < dados.length; i++) {
-        if (String(dados[i][0]).trim().toLowerCase() === emailNorm &&
-            String(dados[i][1]).trim() === 'setor_usuario') {
-          try { return JSON.parse(String(dados[i][2])) || ''; } catch(e) { return String(dados[i][2]) || ''; }
-        }
-      }
-    }
-  } catch (e) {}
-
-  return '';
-}
-
-function salvarSetorUsuario(emailAlvo, setor, emailSolicitante) {
-  if (!emailSolicitante || !emailSolicitante.includes('@'))
-    throw new Error('Email do solicitante inválido.');
-  if (!emailAlvo || !emailAlvo.includes('@'))
-    throw new Error('Email do usuário inválido.');
-
-  const emailAlvoNorm = String(emailAlvo).trim().toLowerCase();
-  const emailSolNorm  = String(emailSolicitante).trim().toLowerCase();
-  const setorNorm     = String(setor || '').trim();
-
-  const ehAdmin = (() => {
-    try {
-      const abaAdmins = _getSheet('Administradores');
-      if (!abaAdmins || abaAdmins.getLastRow() < 2) return false;
-      const dados = abaAdmins.getRange(2, 1, abaAdmins.getLastRow() - 1, 2).getValues();
-      const info = dados.find(r => String(r[0]).trim().toLowerCase() === emailSolNorm);
-      return info ? ['admin','superadmin'].includes(String(info[1]).toLowerCase()) : false;
-    } catch(e) { return false; }
-  })();
-
-  if (!ehAdmin && emailAlvoNorm !== emailSolNorm)
-    throw new Error('Sem permissão para alterar setor de outro usuário.');
-
-  // Tenta salvar na coluna 3 de Administradores primeiro
-  try {
-    const abaAdmins = _getSheet('Administradores');
-    if (abaAdmins && abaAdmins.getLastRow() > 1) {
-      const numCols = abaAdmins.getLastColumn();
-      const dados = abaAdmins.getRange(2, 1, abaAdmins.getLastRow() - 1, Math.max(2, numCols)).getValues();
-      for (let i = 0; i < dados.length; i++) {
-        if (String(dados[i][0]).trim().toLowerCase() === emailAlvoNorm) {
-          abaAdmins.getRange(i + 2, 3).setValue(setorNorm);
-          registrarLog('SETOR_USUARIO', 'USUARIO', emailAlvo, 'Setor: ' + setorNorm, '', setorNorm, emailSolicitante);
-          return true;
-        }
-      }
-    }
-  } catch (e) {}
-
-  // Fallback: PreferenciasUsuarios
-  const abaPrefs = _getSheet('PreferenciasUsuarios');
-  if (!abaPrefs) throw new Error('Não foi possível salvar o setor do usuário.');
-  const dadosPrefs = abaPrefs.getDataRange().getValues();
-  for (let i = 1; i < dadosPrefs.length; i++) {
-    if (String(dadosPrefs[i][0]).trim().toLowerCase() === emailAlvoNorm &&
-        String(dadosPrefs[i][1]).trim() === 'setor_usuario') {
-      abaPrefs.getRange(i + 1, 3).setValue(JSON.stringify(setorNorm));
-      abaPrefs.getRange(i + 1, 4).setValue(new Date());
-      registrarLog('SETOR_USUARIO', 'USUARIO', emailAlvo, 'Setor: ' + setorNorm, '', setorNorm, emailSolicitante);
-      return true;
-    }
-  }
-  abaPrefs.appendRow([emailAlvo, 'setor_usuario', JSON.stringify(setorNorm), new Date()]);
-  registrarLog('SETOR_USUARIO', 'USUARIO', emailAlvo, 'Setor: ' + setorNorm, '', setorNorm, emailSolicitante);
-  return true;
-}
-
-function obterDadosIniciais(emailClienteFallback, sessaoId) {
-  try {
-    const emailUsuario = obterEmailUsuario(emailClienteFallback || "", sessaoId || "");
-    const cache    = CacheService.getScriptCache();
-    const cacheKey = "dados_iniciais_" + emailUsuario.replace(/[^a-z0-9]/g, "_");
-    const cacheExist = cache.get(cacheKey);
-
-    if (cacheExist) {
-      const dadosCache = JSON.parse(cacheExist);
-      dadosCache.usuarioEmail = emailUsuario;
-      return dadosCache;
-    }
-
-    const abaAdmins = _getSheet("Administradores");
-    let listaAdminsCompleta = [];
-    let nivelAcesso = "usuário";
-    let indiceAdmins = {};
-
-    if (abaAdmins && abaAdmins.getLastRow() > 1) {
-      listaAdminsCompleta = abaAdmins
-        .getRange(2, 1, abaAdmins.getLastRow() - 1, 2)
-        .getValues();
-      indiceAdmins = criarIndiceAdmins(listaAdminsCompleta);
-      const adminInfo = indiceAdmins[emailUsuario];
-      if (adminInfo) nivelAcesso = adminInfo.nivel;
-    }
-
-    registrarAcesso(emailUsuario, nivelAcesso);
-
-    const configSheet = _getSheet("Configuracoes");
-    let salasFull = [];
-    let indiceSalas = {};
-    const mapaSalasObj = {};
-
-    const mapaFlagsEspacos = {};
-    if (configSheet && configSheet.getLastRow() > 1) {
-      const nCols = Math.max(13, configSheet.getLastColumn());
-      salasFull = configSheet
-        .getRange(2, 1, configSheet.getLastRow() - 1, Math.min(nCols, 13))
-        .getValues();
-      indiceSalas = criarIndiceSalas(salasFull);
-      salasFull.forEach((s) => {
-        const id = String(s[0]).trim();
-        const nome = String(s[1]).trim();
-        if (id && nome) {
-          mapaSalasObj[id] = nome;
-          mapaFlagsEspacos[id] = {
-            possuiChaves:  s.length > 5 ? String(s[5]).toLowerCase() === 'true' : false,
-            aceitaReserva: s.length > 8 ? String(s[8]).toLowerCase() !== 'false' : true,
-          };
-        }
-      });
-    }
-
-    const itensSheet = _getSheet("Itens");
-    let listaItens = [];
-    let indiceItens = {};
-    if (itensSheet && itensSheet.getLastRow() > 1) {
-      listaItens = itensSheet
-        .getRange(2, 1, itensSheet.getLastRow() - 1, 6)
-        .getValues();
-      indiceItens = criarIndiceItens(listaItens);
-    }
-
-    const setoresSheet = _getSheet("Listas");
-    let setores = [];
-    if (setoresSheet && setoresSheet.getLastRow() > 1) {
-      setores = setoresSheet
-        .getRange(2, 1, setoresSheet.getLastRow() - 1, 1)
-        .getValues()
-        .map((s) => s[0]);
-    }
-
-    const mapaNomes = {};
-    listaAdminsCompleta.forEach((a) => {
-      const em = String(a[0] || "").trim();
-      if (em && validarEmail(em)) {
-        try {
-          mapaNomes[em] = resolverNomePorEmail(em);
-        } catch (e) {
-          mapaNomes[em] = em.split("@")[0];
-        }
-      }
-    });
-
-    const setorUsuario = obterSetorUsuario(emailUsuario);
-
-    // Mapa email → setor para auto-preenchimento no formulário de responsáveis
-    const mapaSetoresAdmin = {};
-    try {
-      if (abaAdmins && abaAdmins.getLastRow() > 1 && abaAdmins.getLastColumn() >= 3) {
-        abaAdmins.getRange(2, 1, abaAdmins.getLastRow() - 1, 3).getValues().forEach(function(r) {
-          const em = String(r[0] || '').trim().toLowerCase();
-          if (em && r[2]) mapaSetoresAdmin[em] = String(r[2]).trim();
-        });
-      }
-    } catch(e) {}
-
-    const resultado = {
-      usuarioEmail: emailUsuario,
-      isAdmin: nivelAcesso === "admin" || nivelAcesso === "superadmin",
-      isSuperadmin: nivelAcesso === "superadmin",
-      isComunicacao:
-        nivelAcesso === "comunicação" || nivelAcesso === "comunicacao",
-      isHabilitador: nivelAcesso === "habilitador",
-      setorUsuario,
-      mapaSetoresAdmin,
-      mapaFlagsEspacos,
-      salas: salasFull,
-      mapaSalas: mapaSalasObj,
-      setores,
-      administradores: listaAdminsCompleta,
-      listaItens,
-      mapaNomes,
-      _indiceAdmins: indiceAdmins,
-      _indiceSalas: indiceSalas,
-      _indiceItens: indiceItens,
-      sistemaConfig: getSistemaConfig(),
-      timestamp: new Date().getTime(),
-    };
-
-    cache.put(cacheKey, JSON.stringify(resultado), 60);
-    Logger.info('admin', 'obterDadosIniciais: dados enviados', { email: emailUsuario });
-    return resultado;
-  } catch (e) {
-    Logger.error('admin', 'Erro em obterDadosIniciais', e.message);
-    throw new Error("Erro ao carregar dados: " + e.message);
-  }
-}
-
-function limparCacheUsuario(emailUsuario) {
-  // Cache armazenado em ScriptCache (não UserCache) — usar a mesma instância para limpar.
-  const cache = CacheService.getScriptCache();
-  if (emailUsuario && String(emailUsuario).includes("@")) {
-    const chave =
-      "dados_iniciais_" +
-      emailUsuario
-        .trim()
-        .toLowerCase()
-        .replace(/[^a-z0-9]/g, "_");
-    cache.remove(chave);
-  }
-}
+// BOOT — delega a BootService
+function obterDadosIniciais(emailClienteFallback, sessaoId) { return BootService.obter(emailClienteFallback, sessaoId); }
+function limparCacheUsuario(emailUsuario)                    { return BootService.limparCache(emailUsuario); }
 
 // ==============================
 // LOGS
@@ -704,35 +411,9 @@ function listarSolicitacoesCadastroExterno(emailAdmin) { return CadastroExternoS
 function aprovarCadastroExterno(id, emailAdmin)         { return CadastroExternoService.aprovar(id, emailAdmin); }
 function recusarCadastroExterno(id, emailAdmin, motivo) { return CadastroExternoService.recusar(id, emailAdmin, motivo); }
 
-function salvarPreferencia(chave, valor) {
-  var email = obterEmailUsuario('');
-  if (!email || !chave) return;
-  var aba = _getSheet('PreferenciasUsuarios');
-  if (!aba) return;
-  var dados = aba.getLastRow() > 1 ? aba.getDataRange().getValues() : [[]];
-  for (var i = 1; i < dados.length; i++) {
-    if (String(dados[i][0]).toLowerCase() === email.toLowerCase() && dados[i][1] === chave) {
-      aba.getRange(i + 1, 3).setValue(valor);
-      aba.getRange(i + 1, 4).setValue(new Date().toISOString());
-      return;
-    }
-  }
-  aba.appendRow([email, chave, valor, new Date().toISOString()]);
-}
-
-function obterPreferencia(chave) {
-  var email = obterEmailUsuario('');
-  if (!email || !chave) return null;
-  var aba = _getSheet('PreferenciasUsuarios');
-  if (!aba || aba.getLastRow() < 2) return null;
-  var dados = aba.getDataRange().getValues();
-  for (var i = 1; i < dados.length; i++) {
-    if (String(dados[i][0]).toLowerCase() === email.toLowerCase() && dados[i][1] === chave) {
-      return String(dados[i][2] || '') || null;
-    }
-  }
-  return null;
-}
+// PREFERÊNCIAS — delegam a UserProfileService
+function salvarPreferencia(chave, valor) { return UserProfileService.salvarPreferencia(chave, valor); }
+function obterPreferencia(chave)         { return UserProfileService.obterPreferencia(chave); }
 /**
  * Controller para salvar configurações globais do sistema via painel admin.
  * Requer nível superadmin.
