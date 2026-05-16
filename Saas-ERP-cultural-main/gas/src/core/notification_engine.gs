@@ -228,6 +228,31 @@ var NotificationEngine = (function() {
       );
     },
 
+    // ── Alerta de Solicitação Interna ─────────────────────────────────────────
+
+    enviarAlertaSolicitacao: function(alerta) {
+      if (!alerta.destinatario || !alerta.destinatario.includes('@')) return false;
+
+      var assuntos = {
+        nova_solicitacao:  '[CCBJ] Nova Solicitação Aguarda Análise — {protocolo}',
+        inativa:           '[CCBJ] Solicitação sem movimentação: {protocolo}',
+        prazo_vencido:     '[CCBJ] Prazo vencido — Solicitação {protocolo}',
+        saldo_insuficiente:'[CCBJ] Saldo insuficiente — Solicitação {protocolo}'
+      };
+      var corpos = {
+        nova_solicitacao:  'A solicitação {protocolo} — "{titulo}" está aguardando análise.\n\nResponsável: {destinatario}\n\nAcesse o sistema para analisar.\n\n— Sistema CCBJ',
+        inativa:           'A solicitação {protocolo} — "{titulo}" está sem movimentação há mais de 3 dias.\n\nAcesse o sistema para verificar.\n\n— Sistema CCBJ',
+        prazo_vencido:     'A data de necessidade da solicitação {protocolo} — "{titulo}" já venceu.\n\nAcesse o sistema para providenciar.\n\n— Sistema CCBJ',
+        saldo_insuficiente:'A solicitação {protocolo} possui saldo orçamentário insuficiente.\n\nAcesse o sistema para verificar a rubrica vinculada.\n\n— Sistema CCBJ'
+      };
+
+      var tipo   = alerta.tipo || 'inativa';
+      var assunto = _interpolar(assuntos[tipo] || assuntos.inativa, alerta);
+      var corpo   = _interpolar(corpos[tipo]   || corpos.inativa,  alerta);
+
+      return _enviarEmail(alerta.destinatario, assunto, corpo);
+    },
+
     // ── Verificação diária completa ───────────────────────────────────────────
 
     verificarTodosAlertasDiario: function() {
@@ -328,6 +353,20 @@ var NotificationEngine = (function() {
         });
       } catch(e) {
         resultado.erros.push('reunioes: ' + e.message);
+      }
+
+      // ── Solicitações internas com pendências ──────────────────────────────────
+      try {
+        var pendenciasSol = SolicitacaoEngine.detectarPendencias();
+        pendenciasSol.forEach(function(p) {
+          try {
+            if (NotificationEngine.enviarAlertaSolicitacao(p)) resultado.emailsEnviados++;
+          } catch(e) {
+            resultado.erros.push('solicitacao/' + p.solicitacaoId + ': ' + e.message);
+          }
+        });
+      } catch(e) {
+        resultado.erros.push('solicitacoes: ' + e.message);
       }
 
       Logger.info('[NotificationEngine.verificarTodosAlertasDiario] Resultado: ' + JSON.stringify({

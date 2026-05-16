@@ -495,35 +495,35 @@ const MODULOS = {
     pasta: 'CCBJ — Escuta Institucional',
     prop:  PROP.ESCUTA,
     abas: {
+      // Ordem das colunas DEVE ser idêntica à de _escutaInicializarCabecalhos (mod_escuta.gs)
+      // — código usa posição absoluta (getRange col N) além do nome
       'EscutaConfig': [
-        'chave', 'valor', 'descricao', 'atualizadoEm'
+        'chave', 'valor', 'atualizadoEm'
       ],
       'EscutaPerguntas': [
-        'id', 'texto', 'dimensao', 'tipo', 'tipoTempo', 'peso',
-        'elegibilidade', 'prioridade', 'ativo', 'criadoEm'
+        'id', 'ativa', 'texto', 'peso'
       ],
       'EscutaRespostas': [
-        'id', 'perguntaId', 'hashUsuario', 'email', 'resposta',
-        'dimensao', 'tipo', 'tipoTempo', 'respondidoEm', 'turno',
+        'id', 'perguntaId', 'emailHash', 'email', 'resposta',
+        'dimensao', 'tipo', 'tipoTempo', 'timestamp', 'turno',
         'progressoTurno', 'periodo', 'setor', 'anonimo', 'sourcePesquisaId'
       ],
       'EscutaEspontanea': [
-        'id', 'hashUsuario', 'email', 'categoria', 'texto',
-        'sentimento', 'anonimo', 'registradoEm', 'setor'
+        'id', 'emailHash', 'email', 'categoria', 'texto',
+        'sentimento', 'anonimo', 'timestamp', 'setor'
       ],
       'EscutaPesquisas': [
         'id', 'titulo', 'perguntas', 'criadoPor', 'periodoInicio',
-        'periodoFim', 'status', 'prioridade', 'padrao', 'elegibilidade',
-        'regras_saturacao', 'criadoEm'
+        'periodoFim', 'status', 'prioridade', 'criadoEm', 'direcionamento',
+        'padrao', 'elegibilidade', 'regras_saturacao'
       ],
       'EscutaTemplates': [
-        'id', 'titulo', 'perguntas', 'categoria', 'descricao',
-        'publico', 'criadoEm', 'criadoPor'
+        'id', 'titulo', 'descricao', 'perguntas', 'tema', 'criadoPor', 'criadoEm'
       ],
       'EscutaAlertas': [
-        'id', 'tipo', 'dimensao', 'nivel', 'mensagem',
-        'periodo', 'criadoEm', 'dados', 'status',
-        'resolvidoPor', 'acaoTomada', 'resolvidoEm'
+        'id', 'tipo', 'dimensao', 'nivel', 'descricao',
+        'dados', 'timestamp', 'status',
+        'responsavel', 'acao', 'resolvidoEm'
       ],
       'EscutaPerfis': [
         'email', 'genero', 'raca', 'orientacaoSexual', 'faixaSalarial',
@@ -537,7 +537,7 @@ const MODULOS = {
         'criadoEm', 'concluidoEm'
       ],
       'LogsEscuta': [
-        'timestamp', 'acao', 'autor', 'alvo', 'modulo', 'detalhes'
+        'timestamp', 'email', 'acao', 'dados'
       ],
     }
   },

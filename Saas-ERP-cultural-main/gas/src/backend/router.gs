@@ -45,6 +45,10 @@ function obterMapaSalas() {
   return mapa;
 }
 
+function _escapeHtml(str) {
+  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
 function _notificarCancelamentoMesmoDia({ sala, nome, inicio, fim, emailAtual }) {
   try {
     const abaAdmins = _getSheet("Administradores");
@@ -81,8 +85,64 @@ function _notificarCancelamentoMesmoDia({ sala, nome, inicio, fim, emailAtual })
  *              doPost: chama recusarSolicitacao
  */
 function doGet(e) {
-  const acao = e && e.parameter && e.parameter.acao;
-  const id   = e && e.parameter && e.parameter.id;
+  const acao  = e && e.parameter && e.parameter.acao;
+  const id    = e && e.parameter && e.parameter.id;
+  const secao = e && e.parameter && e.parameter.secao;
+
+  // ── Formulário externo de Cessão de Pauta ──────────────────────────────────
+  if (secao === 'pauta') {
+    const tmplPauta = HtmlService.createTemplateFromFile('pauta_form');
+    tmplPauta.appUrl = getBaseUrl();
+    return tmplPauta.evaluate()
+      .setTitle('Solicitação de Pauta — ' + (getOrgConfig().nomeCompleto || 'CCBJ'))
+      .addMetaTag('viewport', 'width=device-width, initial-scale=1')
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  }
+
+  // ── Consulta pública de pauta por protocolo ────────────────────────────────
+  if (secao === 'pauta_status') {
+    const protocolo = e.parameter.protocolo || '';
+    const emailSol  = e.parameter.email     || '';
+    let dadosPauta  = null;
+    let erro        = '';
+    try {
+      if (protocolo) {
+        dadosPauta = PautaExternaEngine.consultarPublico(protocolo, emailSol);
+      }
+    } catch(err) { erro = err.message; }
+
+    const statusLabel = dadosPauta ? (dadosPauta.statusLabel || dadosPauta.status) : '';
+    const corStatus   = {
+      'Recebida': '#f59e0b', 'Em Análise': '#3b82f6', 'Aguard. Ajuste': '#f97316',
+      'Aprovada': '#22c55e', 'Parcialmente Aprovada': '#84cc16',
+      'Indeferida': '#ef4444', 'Cancelada': '#6b7280', 'Concluída': '#10b981'
+    }[statusLabel] || '#6b7280';
+
+    return HtmlService.createHtmlOutput(
+      '<!DOCTYPE html><html><head><meta charset="UTF-8">' +
+      '<meta name="viewport" content="width=device-width,initial-scale=1">' +
+      '<title>Acompanhamento de Pauta</title>' +
+      '<style>body{font-family:sans-serif;max-width:600px;margin:40px auto;padding:20px;color:#1e293b}' +
+      'h1{color:#7c3aed;font-size:1.5rem}h2{font-size:1.1rem;color:#334155}' +
+      '.card{background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:20px;margin-top:16px}' +
+      '.badge{display:inline-block;padding:4px 12px;border-radius:9999px;font-size:.8rem;font-weight:700;color:#fff}' +
+      'form input{width:100%;padding:10px;border:1.5px solid #e2e8f0;border-radius:8px;margin-top:6px;font-size:14px}' +
+      'form button{background:#7c3aed;color:#fff;padding:10px 24px;border:none;border-radius:8px;cursor:pointer;font-size:14px;margin-top:10px}</style></head>' +
+      '<body><h1>Centro Cultural Bom Jardim</h1><h2>Acompanhamento de Pauta</h2>' +
+      (erro ? '<div class="card" style="border-color:#fca5a5;background:#fef2f2"><p style="color:#dc2626">⚠️ ' + _escapeHtml(erro) + '</p></div>' : '') +
+      (!dadosPauta && !erro ? '<form method="GET"><input type="hidden" name="secao" value="pauta_status">' +
+        '<label>Protocolo:</label><input name="protocolo" placeholder="PAUTA-2024-0001" required>' +
+        '<label style="margin-top:10px;display:block">E-mail do solicitante:</label><input name="email" type="email" required>' +
+        '<button type="submit">Consultar</button></form>' : '') +
+      (dadosPauta ? '<div class="card"><p><strong>Protocolo:</strong> ' + _escapeHtml(dadosPauta.protocolo) + '</p>' +
+        '<p><strong>Proposta:</strong> ' + _escapeHtml(dadosPauta.proposta) + '</p>' +
+        '<p><strong>Status:</strong> <span class="badge" style="background:' + corStatus + '">' + _escapeHtml(statusLabel) + '</span></p>' +
+        (dadosPauta.parecer ? '<p><strong>Parecer:</strong> ' + _escapeHtml(dadosPauta.parecer) + '</p>' : '') +
+        '<p style="color:#94a3b8;font-size:.8rem">Recebida em: ' + (dadosPauta.criadoEm ? new Date(dadosPauta.criadoEm).toLocaleDateString('pt-BR') : '-') + '</p>' +
+        '</div>' : '') +
+      '</body></html>'
+    );
+  }
 
   // Fluxo de aprovação/recusa por email (links enviados por notificação)
   if (acao && id) {

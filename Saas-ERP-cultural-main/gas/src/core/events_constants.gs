@@ -186,6 +186,34 @@ var SystemEventTypes = Object.freeze({
   // ────────────────────────────────────────────
   NOTIFICACAO_EMAIL_ENVIADA:   'NOTIFICACAO_EMAIL_ENVIADA',
   NOTIFICACAO_ALERTA_EMITIDO:  'NOTIFICACAO_ALERTA_EMITIDO',
-  NOTIFICACAO_FALHA:           'NOTIFICACAO_FALHA'
+  NOTIFICACAO_FALHA:           'NOTIFICACAO_FALHA',
+
+  // ────────────────────────────────────────────
+  // SOLICITAÇÕES INTERNAS
+  // ────────────────────────────────────────────
+  SOLICITACAO_CRIADA:          'SOLICITACAO_CRIADA',
+  SOLICITACAO_STATUS_CHANGED:  'SOLICITACAO_STATUS_CHANGED',
+  SOLICITACAO_APROVADA:        'SOLICITACAO_APROVADA',
+  SOLICITACAO_DEVOLVIDA:       'SOLICITACAO_DEVOLVIDA',
+  SOLICITACAO_CANCELADA:       'SOLICITACAO_CANCELADA',
+  SOLICITACAO_CONCLUIDA:       'SOLICITACAO_CONCLUIDA',
+
+  // ────────────────────────────────────────────
+  // PAUTA EXTERNA (CESSÃO DE PAUTA)
+  // ────────────────────────────────────────────
+  PAUTA_RECEBIDA:              'PAUTA_RECEBIDA',
+  PAUTA_STATUS_CHANGED:        'PAUTA_STATUS_CHANGED',
+  PAUTA_APROVADA:              'PAUTA_APROVADA',
+  PAUTA_INDEFERIDA:            'PAUTA_INDEFERIDA',
+  PAUTA_AJUSTE_SOLICITADO:     'PAUTA_AJUSTE_SOLICITADO',
+  PAUTA_CANCELADA:             'PAUTA_CANCELADA',
+  PAUTA_CONCLUIDA:             'PAUTA_CONCLUIDA',
+
+  // ────────────────────────────────────────────
+  // CATÁLOGO INSTITUCIONAL
+  // ────────────────────────────────────────────
+  CATALOGO_ITEM_CRIADO:        'CATALOGO_ITEM_CRIADO',
+  CATALOGO_ITEM_ATUALIZADO:    'CATALOGO_ITEM_ATUALIZADO',
+  CATALOGO_ITEM_DESATIVADO:    'CATALOGO_ITEM_DESATIVADO'
 
 });
