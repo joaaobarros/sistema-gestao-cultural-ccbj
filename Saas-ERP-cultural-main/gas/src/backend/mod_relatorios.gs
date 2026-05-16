@@ -174,24 +174,7 @@ function gerarDocumentoDrive(conteudo) {
   };
 }
 
-function mapearGraficosIA(secoes, graficos) {
-  try {
-    const prompt = `
-Associe gráficos às seções de um relatório.
-SEÇÕES:
-${JSON.stringify(secoes.map((s, i) => ({ i, titulo: s.titulo })))}
-GRÁFICOS:
-${JSON.stringify(graficos.map((g, i) => ({ i, titulo: g.titulo || "Gráfico" })))}
-Responda SOMENTE JSON no formato:
-{"0": [0], "1": [1], "2": []}
-`;
-    const resposta = chamarIA(prompt);
-    return JSON.parse(resposta);
-  } catch (e) {
-    Logger.warn('relatorios', 'IA falhou, usando fallback local');
-    return mapearGraficosPorSecao(secoes, graficos);
-  }
-}
+function mapearGraficosIA(secoes, graficos) { return IAService.mapearGraficos(secoes, graficos); }
 
 // ==============================
 // VERSIONAMENTO / COMPARAÇÃO — delegadores
@@ -265,43 +248,7 @@ function _montarLinhaCodip(idReserva, dados) {
   ];
 }
 
-function reescreverDescricaoAcaoIA(texto, setor) {
-  const s = String(setor || "").toLowerCase();
-  let foco = "";
-  if (
-    /ação cultural|acao cultural|difus|apresentação|contação de histórias/.test(
-      s,
-    )
-  )
-    foco = "com foco em Difusão e Fruição Cultural";
-  else if (/narte|cidadania|direitos|campanha|articulação comunitária/.test(s))
-    foco = "com foco em Cidadania Cultural e Direitos Humanos";
-  else if (/escola|formação|formacao|curso/.test(s))
-    foco = "com foco em Formação e Conhecimento em Arte e Cultura";
-
-  const prompt = `Reescreva o texto abaixo para uso em relatório institucional ${foco}.
-
-REGRAS:
-- Escrita impessoal, sem uso de primeira pessoa ou sujeito institucional
-- Proibição de verbos no presente (ex: "é", "visa", "promove", "busca", "oferece")
-- Priorizar estrutura nominal (substantivos, locuções nominais)
-- Ausência de marcação temporal explícita
-- Descrição atemporal, concisa e técnica
-- Foco em proposta conceitual, abordagem, relação com o público e linguagem
-- Estrutura preferencialmente nominal ou abstrata, sem indicação de agente
-- Substituição de verbos por substantivos ou advérbios sempre que possível
-- Conversão de ações em qualificações nominais, com uso de particípio passado quando necessário
-- Eliminação de conectivos explicativos e redundâncias
-- Parágrafo único, contínuo, sem tópicos
-- Máximo de 600 caracteres
-- Não utilizar markdown na resposta
-- Responder apenas com o texto reescrito, sem aspas ou comentários
-
-TEXTO ORIGINAL:
-${String(texto || "").trim()}`;
-
-  return chamarIA(prompt);
-}
+function reescreverDescricaoAcaoIA(texto, setor) { return IAService.reescreverDescricaoAcao(texto, setor); }
 
 /**
  * Retorna métricas agregadas do CODIP para o painel de indicadores.

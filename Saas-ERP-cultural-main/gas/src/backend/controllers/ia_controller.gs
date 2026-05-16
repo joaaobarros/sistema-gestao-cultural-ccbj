@@ -11,12 +11,11 @@
  *
  * LIMITES DE RESPONSABILIDADE:
  *   - Este controller é o adapter entre o frontend e os serviços de IA.
- *   - Os serviços reais estão em backend/mod_metrics.gs (Gemini API).
+ *   - Os serviços reais estão em core/services/ia_service.gs (IAService).
  *   - Toda chamada de IA registra na auditoria para rastreabilidade.
  *
  * @depends shared/response.gs (GasResponse),
- *          backend/mod_metrics.gs (perguntarIA, gerarRelatorioIA, analisarDashboardIA,
- *                                   sugerirReservaIAComDados),
+ *          core/services/ia_service.gs (IAService),
  *          core/utils.gs (obterEmailUsuario)
  */
 
@@ -26,62 +25,38 @@
  */
 function ctrl_ia_perguntar(pergunta) {
   return GasResponse.wrap(function() {
-    return perguntarIA(pergunta);
+    return IAService.perguntar(pergunta);
   });
 }
 
-/**
- * Gera relatório analítico baseado em filtros via IA.
- * @param {Object} filtros
- */
 function ctrl_ia_gerar_relatorio(filtros) {
   return GasResponse.wrap(function() {
-    return gerarRelatorioIA(filtros);
+    return IAService.gerarRelatorio(filtros);
   });
 }
 
-/**
- * Analisa dados de dashboard e retorna insights via IA.
- * @param {Object} metricas
- */
 function ctrl_ia_analisar_dashboard(metricas) {
   return GasResponse.wrap(function() {
-    return analisarDashboardIA(metricas);
+    return IAService.analisarDashboard(metricas);
   });
 }
 
-/**
- * Sugere reserva com base em descrição textual — integração IA + reservas.
- * @param {string} descricao
- */
 function ctrl_ia_sugerir_reserva(descricao) {
   return GasResponse.wrap(function() {
-    return sugerirReservaIAComDados(descricao);
+    return IAService.sugerirReservaComDados(descricao);
   });
 }
 
-/**
- * Chamada genérica de IA com prompt e contexto.
- * Migra GAS.ia.chamar → ctrl_ia_chamar.
- * @param {string} prompt
- * @param {Object} ctx
- */
 function ctrl_ia_chamar(prompt, ctx) {
   return GasResponse.wrap(function() {
     if (!prompt) throw new Error('Prompt é obrigatório.');
-    return chamarIA(prompt, ctx || {});
+    return IAService.chamar(prompt);
   }, 'ctrl_ia_chamar');
 }
 
-/**
- * Reescreve descrição de ação via IA.
- * Migra GAS.ia.reescreverDescricao → ctrl_ia_reescrever.
- * @param {string} texto
- * @param {string} setor
- */
 function ctrl_ia_reescrever(texto, setor) {
   return GasResponse.wrap(function() {
     if (!texto) throw new Error('Texto é obrigatório.');
-    return reescreverDescricaoAcaoIA(texto, setor || '');
+    return IAService.reescreverDescricaoAcao(texto, setor || '');
   }, 'ctrl_ia_reescrever');
 }
