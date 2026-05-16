@@ -16,7 +16,7 @@
  *   PermissoesService.obterPerfil(email)                     // → 'admin' | 'gestor' | …
  *   PermissoesService.isAdmin(email)                         // → boolean
  *
- * @depends mod_permissoes_v2.gs (obterPermissoesUsuarioV2, podeAcessarModulo, podeEditar, podeExcluir)
+ * @depends modules/auth/permissoes_v2_engine.gs (PermissoesV2Engine)
  */
 
 var PermissoesService = (function () {
@@ -28,7 +28,7 @@ var PermissoesService = (function () {
   function pode(email, modulo, acao) {
     if (!email || !modulo) return false;
     try {
-      var perms = obterPermissoesUsuarioV2(email);
+      var perms = PermissoesV2Engine.obterPermissoes(email);
       if (!perms || !perms.permissoes_finais) return false;
       var mod = perms.permissoes_finais[modulo];
       if (!mod) return false;
@@ -42,7 +42,7 @@ var PermissoesService = (function () {
   function obterPerfil(email) {
     if (!email) return 'visitante_controlado';
     try {
-      var perms = obterPermissoesUsuarioV2(email);
+      var perms = PermissoesV2Engine.obterPermissoes(email);
       return (perms && perms.perfil_base) || 'visitante_controlado';
     } catch(e) {
       return 'visitante_controlado';
@@ -59,7 +59,7 @@ var PermissoesService = (function () {
   }
 
   function obter(email) {
-    try { return obterPermissoesUsuarioV2(email); } catch(e) { return null; }
+    try { return PermissoesV2Engine.obterPermissoes(email); } catch(e) { return null; }
   }
 
   function validarAcesso(email, modulo) {

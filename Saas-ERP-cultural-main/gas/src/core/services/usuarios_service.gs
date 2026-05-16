@@ -14,7 +14,9 @@
  *   UsuariosService.listar()                // todos os usuários do sistema
  *   UsuariosService.sincronizar()           // sincroniza LogAcessos + Reservas + Admins
  *
- * @depends mod_admin.gs, mod_permissoes_v2.gs, auth_session.gs
+ * @depends mod_admin.gs (obterEmailUsuario),
+ *          modules/auth/permissoes_v2_engine.gs (PermissoesV2Engine),
+ *          core/services/permissoes_service.gs (PermissoesService)
  */
 
 var UsuariosService = (function () {
@@ -41,8 +43,7 @@ var UsuariosService = (function () {
    */
   function listar() {
     try {
-      if (typeof obterUsuariosSistema === 'function') return obterUsuariosSistema();
-      return [];
+      return PermissoesV2Engine.obterUsuarios();
     } catch(e) {
       console.warn('[UsuariosService.listar] ' + e.message);
       return [];
@@ -54,7 +55,7 @@ var UsuariosService = (function () {
    */
   function sincronizar() {
     try {
-      if (typeof sincronizarUsuariosSistema === 'function') return sincronizarUsuariosSistema();
+      return PermissoesV2Engine.sincronizarUsuarios();
     } catch(e) {
       Logger.error('usuarios_service', 'sincronizar', e.message);
     }

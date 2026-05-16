@@ -6,12 +6,10 @@
  * REGRA ARQUITETURAL:
  *   - A bridge aponta APENAS para funções ctrl_permissoes_*.
  *   - Todo retorno é GasResponse: { ok, data, error, metadata }.
- *   - O motor real é PermissoesService → mod_permissoes_v2.gs.
- *   - Nunca chamar funções de mod_permissoes_v2.gs diretamente fora deste controller.
  *
  * @depends shared/response.gs (GasResponse),
- *          backend/mod_permissoes_v2.gs,
- *          core/services/permissoes_service.gs
+ *          modules/auth/permissoes_v2_engine.gs (PermissoesV2Engine),
+ *          core/services/permissoes_service.gs (PermissoesService)
  */
 
 // ═══════════════════════════════════════════════════════════════
@@ -25,7 +23,7 @@
  */
 function ctrl_permissoes_listar(emailFallback) {
   return GasResponse.wrap(function() {
-    return listarPermissoesV2(emailFallback || '');
+    return PermissoesV2Engine.listar(emailFallback || '');
   });
 }
 
@@ -35,7 +33,7 @@ function ctrl_permissoes_listar(emailFallback) {
  */
 function ctrl_permissoes_obter(email) {
   return GasResponse.wrap(function() {
-    return obterPermissoesUsuarioV2(email || '');
+    return PermissoesV2Engine.obterPermissoes(email || '');
   });
 }
 
@@ -44,19 +42,18 @@ function ctrl_permissoes_obter(email) {
  */
 function ctrl_permissoes_usuarios() {
   return GasResponse.wrap(function() {
-    return obterUsuariosSistema();
+    return PermissoesV2Engine.obterUsuarios();
   });
 }
 
 /**
  * Calcula permissões automáticas a partir de origem e perfil_base.
- * Chamada pelo painel de edição antes de salvar (preview client-side).
  * @param {Object} origem — { cargo, funcoes, setores, donos_espaco }
  * @param {string} perfil — perfil_base do usuário
  */
 function ctrl_permissoes_calcular_auto(origem, perfil) {
   return GasResponse.wrap(function() {
-    return calcularPermissoesAutomaticas(origem || {}, perfil || 'visitante_controlado');
+    return PermissoesV2Engine.calcularAutomaticas(origem || {}, perfil || 'visitante_controlado');
   });
 }
 
@@ -70,7 +67,7 @@ function ctrl_permissoes_calcular_auto(origem, perfil) {
  */
 function ctrl_permissoes_salvar(dados) {
   return GasResponse.wrap(function() {
-    return salvarPermissoesUsuarioV2(dados);
+    return PermissoesV2Engine.salvarPermissoes(dados);
   });
 }
 
@@ -79,7 +76,7 @@ function ctrl_permissoes_salvar(dados) {
  */
 function ctrl_permissoes_sincronizar() {
   return GasResponse.wrap(function() {
-    return sincronizarUsuariosSistema();
+    return PermissoesV2Engine.sincronizarUsuarios();
   });
 }
 
@@ -92,6 +89,6 @@ function ctrl_permissoes_sincronizar() {
  */
 function ctrl_permissoes_auditoria() {
   return GasResponse.wrap(function() {
-    return obterAuditoriaPermissoes();
+    return PermissoesV2Engine.obterAuditoria();
   });
 }
