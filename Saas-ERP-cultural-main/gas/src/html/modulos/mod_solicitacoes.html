@@ -144,18 +144,37 @@
         <div class="grid grid-cols-3 gap-3">
           <div>
             <label class="text-xs font-semibold text-gray-600 mb-1 block">Setor Solicitante</label>
-            <input id="sol-setor-sol" type="text" placeholder="Ex: programação"
-              class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400">
+            <select id="sol-setor-sol" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400">
+              <option value="">Selecione o setor…</option>
+              <option value="administrativo">Administrativo</option>
+              <option value="comunicacao">Comunicação</option>
+              <option value="direcao">Direção</option>
+              <option value="financeiro">Financeiro</option>
+              <option value="infraestrutura">Infraestrutura</option>
+              <option value="producao">Produção</option>
+              <option value="programacao">Programação</option>
+              <option value="rh">RH / Pessoal</option>
+            </select>
           </div>
           <div>
             <label class="text-xs font-semibold text-gray-600 mb-1 block">Setor Executor</label>
-            <input id="sol-setor-exec" type="text" placeholder="Ex: financeiro"
-              class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400">
+            <select id="sol-setor-exec" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400">
+              <option value="">Selecione o setor…</option>
+              <option value="administrativo">Administrativo</option>
+              <option value="comunicacao">Comunicação</option>
+              <option value="direcao">Direção</option>
+              <option value="financeiro">Financeiro</option>
+              <option value="infraestrutura">Infraestrutura</option>
+              <option value="producao">Produção</option>
+              <option value="programacao">Programação</option>
+              <option value="rh">RH / Pessoal</option>
+            </select>
           </div>
           <div>
-            <label class="text-xs font-semibold text-gray-600 mb-1 block">Aprovador (email)</label>
-            <input id="sol-aprovador" type="email" placeholder="gestor@ccbj.org"
-              class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400">
+            <label class="text-xs font-semibold text-gray-600 mb-1 block">Aprovador *</label>
+            <select id="sol-aprovador" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400">
+              <option value="">Carregando usuários…</option>
+            </select>
           </div>
         </div>
 
@@ -164,19 +183,22 @@
           <p class="text-xs font-bold text-amber-700 mb-2 uppercase tracking-wide">Vínculo Financeiro</p>
           <div class="grid grid-cols-3 gap-2">
             <div>
-              <label class="text-xs text-gray-600 mb-1 block">Contrato ID</label>
-              <input id="sol-contrato" type="text" placeholder="(opcional)"
-                class="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none">
+              <label class="text-xs text-gray-600 mb-1 block">Contrato</label>
+              <select id="sol-contrato" onchange="solContratoChange(this.value)" class="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-amber-400">
+                <option value="">— nenhum —</option>
+              </select>
             </div>
             <div>
-              <label class="text-xs text-gray-600 mb-1 block">Meta ID</label>
-              <input id="sol-meta" type="text" placeholder="(opcional)"
-                class="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none">
+              <label class="text-xs text-gray-600 mb-1 block">Meta</label>
+              <select id="sol-meta" onchange="solMetaChange(this.value)" class="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-amber-400" disabled>
+                <option value="">— selecione o contrato —</option>
+              </select>
             </div>
             <div>
               <label class="text-xs text-gray-600 mb-1 block">Rubrica</label>
-              <input id="sol-rubrica" type="text" placeholder="(opcional)"
-                class="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none">
+              <select id="sol-rubrica" class="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-amber-400" disabled>
+                <option value="">— selecione a meta —</option>
+              </select>
             </div>
           </div>
         </div>
@@ -190,8 +212,9 @@
           </div>
           <div>
             <label class="text-xs font-semibold text-gray-600 mb-1 block">Local de Entrega</label>
-            <input id="sol-local" type="text" placeholder="Ex: Sala de ensaios"
-              class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400">
+            <select id="sol-local" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400">
+              <option value="">Carregando espaços…</option>
+            </select>
           </div>
         </div>
 

@@ -1,19 +1,147 @@
 <script>
 // @file mod_solicitacoes_js.html
-// @dependencies GAS.sol, GAS.catalogo (server_bridge_js), AppState
+// @dependencies GAS.sol, GAS.catalogo, GAS.contratos, GAS.rh, GAS.chaves (server_bridge_js), AppState
 
 // ── Estado ────────────────────────────────────────────────────────────────────
 var _solCache         = [];
 var _solCacheFiltered = [];
 var _solAtual         = null;
 var _solItens         = [];
+var _solEditandoId    = null;  // id da solicitação em edição; null = modo criar
 var _solCatalogo      = [];
+var _solContratos     = [];   // [{id, nome, metas:[{id, nome, rubricas:[{id, nome}]}]}]
+var _solUsuarios      = [];   // [{email, nome}]
+var _solEspacos       = [];   // [{id, nome}]
 
 // ── Bootstrap ─────────────────────────────────────────────────────────────────
 
 function solInit() {
   solCarregar();
   solCarregarCatalogo();
+  _solCarregarCatalogosRelacionais();
+}
+
+function _solCarregarCatalogosRelacionais() {
+  // Contratos → metas → rubricas
+  GAS.contratos.obterDados(
+    function(dados) {
+      _solContratos = (dados && dados.contratos) || dados || [];
+      _solPopularSelectContratos();
+    },
+    function() {}
+  );
+
+  // Usuários para aprovador
+  GAS.rh.usuariosAutocomplete(
+    function(lista) {
+      _solUsuarios = lista || [];
+      _solPopularSelectAprovador();
+    },
+    function() {
+      // fallback: tentar via auth
+      GAS.auth.listarUsuarios('',
+        function(lista) {
+          _solUsuarios = (lista || []).map(function(u) {
+            return { email: u.email || u, nome: u.nome || u.email || u };
+          });
+          _solPopularSelectAprovador();
+        },
+        function() {}
+      );
+    }
+  );
+
+  // Espaços
+  GAS.chaves.listarEspacosCompletos('',
+    function(lista) {
+      _solEspacos = lista || [];
+      _solPopularSelectEspacos();
+    },
+    function() {}
+  );
+}
+
+function _solPopularSelectContratos() {
+  var sel = document.getElementById('sol-contrato');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">— nenhum —</option>' +
+    _solContratos.map(function(c) {
+      return '<option value="' + _esc(c.id) + '">' + _esc(c.nome || c.id) + '</option>';
+    }).join('');
+}
+
+function _solPopularSelectAprovador() {
+  var sel = document.getElementById('sol-aprovador');
+  if (!sel) return;
+  var atual = sel.value;
+  sel.innerHTML = '<option value="">Selecione o aprovador…</option>' +
+    _solUsuarios.map(function(u) {
+      var label = u.nome ? u.nome + ' (' + u.email + ')' : u.email;
+      return '<option value="' + _esc(u.email) + '"' +
+        (atual === u.email ? ' selected' : '') + '>' + _esc(label) + '</option>';
+    }).join('');
+}
+
+function _solPopularSelectEspacos() {
+  var sel = document.getElementById('sol-local');
+  if (!sel) return;
+  var atual = sel.value;
+  sel.innerHTML = '<option value="">— nenhum / externo —</option>' +
+    _solEspacos.map(function(e) {
+      var nome = e.nome || e.apelido || e.id;
+      return '<option value="' + _esc(nome) + '"' +
+        (atual === nome ? ' selected' : '') + '>' + _esc(nome) + '</option>';
+    }).join('');
+}
+
+// Cascata: contrato → preencher metas
+function solContratoChange(contratoId) {
+  var selMeta  = document.getElementById('sol-meta');
+  var selRub   = document.getElementById('sol-rubrica');
+  if (!selMeta || !selRub) return;
+
+  selRub.innerHTML = '<option value="">— selecione a meta —</option>';
+  selRub.disabled  = true;
+
+  if (!contratoId) {
+    selMeta.innerHTML = '<option value="">— selecione o contrato —</option>';
+    selMeta.disabled  = true;
+    return;
+  }
+
+  var contrato = _solContratos.find(function(c) { return c.id === contratoId; });
+  var metas    = (contrato && contrato.metas) || [];
+
+  selMeta.innerHTML = '<option value="">— selecione a meta —</option>' +
+    metas.map(function(m) {
+      return '<option value="' + _esc(m.id) + '">' + _esc(m.nome || m.id) + '</option>';
+    }).join('');
+  selMeta.disabled = metas.length === 0;
+}
+
+// Cascata: meta → preencher rubricas
+function solMetaChange(metaId) {
+  var selCon = document.getElementById('sol-contrato');
+  var selRub = document.getElementById('sol-rubrica');
+  if (!selRub) return;
+
+  if (!metaId) {
+    selRub.innerHTML = '<option value="">— selecione a meta —</option>';
+    selRub.disabled  = true;
+    return;
+  }
+
+  var contratoId = selCon ? selCon.value : '';
+  var contrato   = _solContratos.find(function(c) { return c.id === contratoId; });
+  var metas      = (contrato && contrato.metas) || [];
+  var meta       = metas.find(function(m) { return m.id === metaId; });
+  var rubricas   = (meta && meta.rubricas) || [];
+
+  selRub.innerHTML = '<option value="">— selecione a rubrica —</option>' +
+    rubricas.map(function(r) {
+      return '<option value="' + _esc(r.id) + '">' + _esc(r.nome || r.id) + '</option>';
+    }).join('');
+  selRub.disabled = rubricas.length === 0;
 }
 
 function solCarregar() {
@@ -167,8 +295,9 @@ function _solRenderizarDetalhe(sol) {
     (sol.contratoId || sol.metaId || sol.rubricaId || sol.valorTotal ? '<div class="bg-amber-50 border border-amber-100 rounded-xl p-3 mb-4">' +
       '<p class="text-xs font-bold text-amber-700 mb-2 uppercase">Financeiro</p>' +
       '<div class="grid grid-cols-2 gap-2 text-xs">' +
-        (sol.contratoId ? _solMetaDado('Contrato', sol.contratoId) : '') +
-        (sol.rubricaId  ? _solMetaDado('Rubrica',  sol.rubricaId)  : '') +
+        (sol.contratoId ? _solMetaDado('Contrato', sol.contratoNome || sol.contratoId) : '') +
+        (sol.metaId     ? _solMetaDado('Meta',     sol.metaNome     || sol.metaId)     : '') +
+        (sol.rubricaId  ? _solMetaDado('Rubrica',  sol.rubricaNome  || sol.rubricaId)  : '') +
         (sol.valorTotal ? _solMetaDado('Valor Total', _solFmtMoeda(sol.valorTotal)) : '') +
       '</div>' +
       '<button onclick="solVerificarSaldo(\'' + sol.id + '\')" class="mt-2 text-xs text-amber-700 hover:underline font-semibold">' +
@@ -216,19 +345,64 @@ function _solMetaDado(label, valor) {
 // ── Modal Criar/Editar ────────────────────────────────────────────────────────
 
 function solAbrirModalCriar() {
+  _solEditandoId = null;
   _solItens = [];
   document.getElementById('sol-modal-titulo').textContent = 'Nova Solicitação';
   ['sol-tipo','sol-prioridade','sol-titulo','sol-descricao','sol-setor-sol','sol-setor-exec',
-   'sol-aprovador','sol-contrato','sol-meta','sol-rubrica','sol-data-needed','sol-local','sol-obs'].forEach(function(id) {
+   'sol-aprovador','sol-contrato','sol-data-needed','sol-local','sol-obs'].forEach(function(id) {
     var el = document.getElementById(id);
     if (el) el.value = id === 'sol-prioridade' ? 'media' : '';
   });
+  // Resetar cascata financeira
+  solContratoChange('');
   _solRenderizarItens();
   document.getElementById('sol-modal').classList.remove('hidden');
 }
 
 function solFecharModal() {
+  _solEditandoId = null;
   document.getElementById('sol-modal').classList.add('hidden');
+}
+
+function solAbrirModalEditar(id) {
+  var sol = _solCache.find(function(s) { return s.id === id; });
+  if (!sol) return;
+  _solEditandoId = id;
+  _solItens = (sol.itens || []).map(function(i) { return JSON.parse(JSON.stringify(i)); });
+
+  document.getElementById('sol-modal-titulo').textContent = 'Editar Solicitação';
+
+  var campos = {
+    'sol-tipo':        sol.tipo                  || '',
+    'sol-prioridade':  sol.prioridade             || 'media',
+    'sol-titulo':      sol.titulo                 || '',
+    'sol-descricao':   sol.descricao              || '',
+    'sol-setor-sol':   sol.setorSolicitante       || '',
+    'sol-setor-exec':  sol.setorExecutor          || '',
+    'sol-aprovador':   sol.responsavelAprovacao   || '',
+    'sol-data-needed': sol.dataNeeded             || '',
+    'sol-local':       sol.localEntrega           || '',
+    'sol-obs':         sol.observacoesGerais      || ''
+  };
+  Object.keys(campos).forEach(function(elId) {
+    var el = document.getElementById(elId);
+    if (el) el.value = campos[elId];
+  });
+
+  // Cascata financeira: contrato → metas → rubricas
+  var selContrato = document.getElementById('sol-contrato');
+  if (selContrato) selContrato.value = sol.contratoId || '';
+  solContratoChange(sol.contratoId || '');
+  if (sol.metaId) {
+    var selMeta = document.getElementById('sol-meta');
+    if (selMeta) selMeta.value = sol.metaId;
+    solMetaChange(sol.metaId);
+    var selRub = document.getElementById('sol-rubrica');
+    if (selRub) selRub.value = sol.rubricaId || '';
+  }
+
+  _solRenderizarItens();
+  document.getElementById('sol-modal').classList.remove('hidden');
 }
 
 function solAdicionarItem() {
@@ -313,19 +487,35 @@ function _solAtualizarTotal() {
 }
 
 function _solColetarDadosModal() {
+  var contratoId = document.getElementById('sol-contrato').value;
+  var metaId     = document.getElementById('sol-meta').value;
+  var rubricaId  = document.getElementById('sol-rubrica').value;
+
+  // Resolve nomes a partir do cache de contratos
+  var contrato  = _solContratos.find(function(c) { return c.id === contratoId; });
+  var metas     = (contrato && contrato.metas) || [];
+  var meta      = metas.find(function(m) { return m.id === metaId; });
+  var rubricas  = (meta && meta.rubricas) || [];
+  var rubrica   = rubricas.find(function(r) { return r.id === rubricaId; });
+
+  var localSel = document.getElementById('sol-local');
+
   return {
     tipo:                 document.getElementById('sol-tipo').value,
     titulo:               document.getElementById('sol-titulo').value.trim(),
     descricao:            document.getElementById('sol-descricao').value.trim(),
     prioridade:           document.getElementById('sol-prioridade').value,
-    setorSolicitante:     document.getElementById('sol-setor-sol').value.trim(),
-    setorExecutor:        document.getElementById('sol-setor-exec').value.trim(),
-    responsavelAprovacao: document.getElementById('sol-aprovador').value.trim(),
-    contratoId:           document.getElementById('sol-contrato').value.trim(),
-    metaId:               document.getElementById('sol-meta').value.trim(),
-    rubricaId:            document.getElementById('sol-rubrica').value.trim(),
+    setorSolicitante:     document.getElementById('sol-setor-sol').value,
+    setorExecutor:        document.getElementById('sol-setor-exec').value,
+    responsavelAprovacao: document.getElementById('sol-aprovador').value,
+    contratoId:           contratoId,
+    contratoNome:         (contrato && contrato.nome) || '',
+    metaId:               metaId,
+    metaNome:             (meta && meta.nome) || '',
+    rubricaId:            rubricaId,
+    rubricaNome:          (rubrica && rubrica.nome) || '',
     dataNeeded:           document.getElementById('sol-data-needed').value,
-    localEntrega:         document.getElementById('sol-local').value.trim(),
+    localEntrega:         localSel ? localSel.value : '',
     observacoesGerais:    document.getElementById('sol-obs').value.trim(),
     itens:                _solItens
   };
@@ -338,36 +528,55 @@ function solSalvarRascunho() {
   if (!dados.titulo) { alert('Informe o título da solicitação.'); return; }
   if (!dados.tipo)   { alert('Selecione o tipo de solicitação.'); return; }
 
-  GAS.sol.criar(dados,
-    function(r) {
-      if (!r.ok) { alert('Erro: ' + (r.error && r.error.message)); return; }
-      solFecharModal();
-      solCarregar();
-    },
-    function(e) { alert('Erro: ' + e.message); }
-  );
+  var cb = function(r) {
+    if (!r.ok) { alert('Erro: ' + (r.error && r.error.message)); return; }
+    solFecharModal();
+    solCarregar();
+  };
+  var cbErr = function(e) { alert('Erro: ' + e.message); };
+
+  if (_solEditandoId) {
+    GAS.sol.editar(_solEditandoId, dados, cb, cbErr);
+  } else {
+    GAS.sol.criar(dados, cb, cbErr);
+  }
 }
 
 function solEnviarSolicitacao() {
   var dados = _solColetarDadosModal();
-  if (!dados.titulo)       { alert('Informe o título.'); return; }
-  if (!dados.tipo)         { alert('Selecione o tipo.'); return; }
-  if (!_solItens.length)   { alert('Adicione pelo menos um item.'); return; }
+  if (!dados.titulo)     { alert('Informe o título.'); return; }
+  if (!dados.tipo)       { alert('Selecione o tipo.'); return; }
+  if (!_solItens.length) { alert('Adicione pelo menos um item.'); return; }
 
-  GAS.sol.criar(dados,
-    function(r) {
-      if (!r.ok) { alert('Erro: ' + (r.error && r.error.message)); return; }
-      GAS.sol.enviar(r.data.id,
-        function(r2) {
-          if (!r2.ok) { alert('Criado, mas erro ao enviar: ' + (r2.error && r2.error.message)); return; }
-          solFecharModal();
-          solCarregar();
-        },
-        function(e) { alert('Erro ao enviar: ' + e.message); }
-      );
-    },
-    function(e) { alert('Erro: ' + e.message); }
-  );
+  var cbEnviar = function(idParaEnviar) {
+    GAS.sol.enviar(idParaEnviar,
+      function(r2) {
+        if (!r2.ok) { alert('Salvo, mas erro ao enviar: ' + (r2.error && r2.error.message)); return; }
+        solFecharModal();
+        solCarregar();
+      },
+      function(e) { alert('Erro ao enviar: ' + e.message); }
+    );
+  };
+
+  if (_solEditandoId) {
+    var editId = _solEditandoId;
+    GAS.sol.editar(editId, dados,
+      function(r) {
+        if (!r.ok) { alert('Erro: ' + (r.error && r.error.message)); return; }
+        cbEnviar(editId);
+      },
+      function(e) { alert('Erro: ' + e.message); }
+    );
+  } else {
+    GAS.sol.criar(dados,
+      function(r) {
+        if (!r.ok) { alert('Erro: ' + (r.error && r.error.message)); return; }
+        cbEnviar(r.data.id);
+      },
+      function(e) { alert('Erro: ' + e.message); }
+    );
+  }
 }
 
 function solEnviarParaAnalise(id) {
