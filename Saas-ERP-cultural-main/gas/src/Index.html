@@ -35,8 +35,10 @@ ORDEM DE CARREGAMENTO DOS SCRIPTS:
   15. mod_permissoes_v2_js      — temPermissao(), carregarPermissoes(), aplicarPermissoesUI()
   16. integracao_reserva_comunicacao_js — integração reserva ↔ comunicação
   17. mod_gestao_modulos_js     — toggle módulos (lazy via _onShow_aba_gestao-modulos)
-  18. auth_login_js             — overlay de login, GSI, sessão localStorage
-  19. bootstrap_js              — DOMContentLoaded, event listeners (SEMPRE POR ÚLTIMO)
+  18. mod_solicitacoes_js       — CRUD de solicitações institucionais, catálogo, disponibilidade
+  19. mod_pauta_externa_js      — gestão interna de pautas externas, ações, timeline
+  20. auth_login_js             — overlay de login, GSI, sessão localStorage
+  21. bootstrap_js              — DOMContentLoaded, event listeners (SEMPRE POR ÚLTIMO)
 
 MÓDULOS HTML (incluídos no <main>, auto-registram _onShow_aba_xxx para lazy load):
   - mod_tarefas, mod_processos, mod_almoxarifado, mod_balcao, mod_rh
@@ -254,6 +256,9 @@ MÓDULOS INLINE (carregados após bootstrap):
     <?!= include('html/modulos/mod_processos_institucionais'); ?>
     <?!= include('html/logic/mod_processos_inst_js'); ?>
 
+    <?!= include('html/modulos/mod_solicitacoes'); ?>
+    <?!= include('html/modulos/mod_pauta_externa'); ?>
+
     <?!= include('html/modulos/mod_permissoes_v2'); ?>
     <?!= include('html/modulos/mod_gestao_modulos'); ?>
     <?!= include('html/modulos/mod_acoes'); ?>
@@ -317,6 +322,12 @@ MÓDULOS INLINE (carregados após bootstrap):
 
 <!-- HABILITAÇÃO DIÁRIA (check-in operacional de espaços) -->
 <?!= include('html/logic/mod_hab_diaria_js'); ?>
+
+<!-- SOLICITAÇÕES INSTITUCIONAIS -->
+<?!= include('html/logic/mod_solicitacoes_js'); ?>
+
+<!-- CESSÃO DE PAUTA EXTERNA -->
+<?!= include('html/logic/mod_pauta_externa_js'); ?>
 
 <!-- AUTH LOGIN -->
 <?!= include('html/logic/auth_login_js'); ?>

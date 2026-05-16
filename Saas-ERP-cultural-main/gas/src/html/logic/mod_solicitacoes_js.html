@@ -1,10 +1,13 @@
 <script>
+// @file mod_solicitacoes_js.html
+// @dependencies GAS.sol, GAS.catalogo (server_bridge_js), AppState
+
 // ── Estado ────────────────────────────────────────────────────────────────────
-var _solCache        = [];
+var _solCache         = [];
 var _solCacheFiltered = [];
-var _solAtual        = null;
-var _solItens        = [];
-var _solCatalogo     = [];
+var _solAtual         = null;
+var _solItens         = [];
+var _solCatalogo      = [];
 
 // ── Bootstrap ─────────────────────────────────────────────────────────────────
 
@@ -22,23 +25,23 @@ function solCarregar() {
     tipo:   document.getElementById('sol-filtro-tipo')   ? document.getElementById('sol-filtro-tipo').value   : ''
   };
 
-  google.script.run
-    .withSuccessHandler(function(r) {
+  GAS.sol.listar(filtros,
+    function(r) {
       if (!r.ok) { _solErro(r.error && r.error.message); return; }
-      _solCache = r.data || [];
+      _solCache         = r.data || [];
       _solCacheFiltered = _solCache.slice();
       _solRenderizarLista();
       _solRenderizarStats();
-    })
-    .withFailureHandler(function(e) { _solErro(e.message); })
-    .ctrl_sol_listar(filtros, AppState.usuario ? AppState.usuario.email : '');
+    },
+    function(e) { _solErro(e.message); }
+  );
 }
 
 function solCarregarCatalogo() {
-  google.script.run
-    .withSuccessHandler(function(r) { if (r.ok) _solCatalogo = r.data || []; })
-    .withFailureHandler(function() {})
-    .ctrl_catalogo_listar({}, AppState.usuario ? AppState.usuario.email : '');
+  GAS.catalogo.listar({},
+    function(r) { if (r.ok) _solCatalogo = r.data || []; },
+    function()  {}
+  );
 }
 
 // ── Filtros ───────────────────────────────────────────────────────────────────
@@ -107,6 +110,17 @@ function _solRenderizarStats() {
     return '<div class="flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold cursor-pointer hover:opacity-80" style="background:' + item[3] + ';color:' + item[2] + '">' +
       '<span>' + item[0] + ':</span><span class="text-sm">' + item[1] + '</span></div>';
   }).join('');
+
+  // Atualiza badge na sidebar
+  var badge = document.getElementById('badgeSolicitacoesPendentes');
+  if (badge) {
+    if (pendentes > 0) {
+      badge.textContent = pendentes;
+      badge.classList.remove('hidden');
+    } else {
+      badge.classList.add('hidden');
+    }
+  }
 }
 
 // ── Detalhe ───────────────────────────────────────────────────────────────────
@@ -123,15 +137,15 @@ function _solRenderizarDetalhe(sol) {
   var det = document.getElementById('sol-detalhe');
   if (!det) return;
 
-  var corStatus = _solCorStatus(sol.status);
-  var isAprovador = AppState.usuario && (AppState.usuario.isAdmin || AppState.usuario.isSuperadmin || AppState.usuario.isGestor || sol.responsavelAprovacao === AppState.usuario.email);
+  var corStatus   = _solCorStatus(sol.status);
+  var email       = AppState.usuario && AppState.usuario.email;
+  var isAprovador = AppState.usuario && (AppState.usuario.isAdmin || AppState.usuario.isSuperadmin || AppState.usuario.isGestor || sol.responsavelAprovacao === email);
   var podeAprovar = isAprovador && (sol.status === 'solicitada' || sol.status === 'em_analise');
-  var podeEditar  = (sol.status === 'rascunho' || sol.status === 'aguardando_ajuste') && (sol.solicitante === (AppState.usuario && AppState.usuario.email));
+  var podeEditar  = (sol.status === 'rascunho' || sol.status === 'aguardando_ajuste') && sol.solicitante === email;
 
   det.innerHTML =
     '<div class="p-5 h-full overflow-y-auto">' +
 
-    // Header detalhe
     '<div class="flex items-start justify-between gap-3 mb-4">' +
       '<div>' +
         '<p class="text-xs text-gray-400 font-mono">' + _esc(sol.protocolo) + '</p>' +
@@ -141,7 +155,6 @@ function _solRenderizarDetalhe(sol) {
       '<span class="text-xs font-bold px-3 py-1 rounded-full" style="' + corStatus.style + '">' + corStatus.label + '</span>' +
     '</div>' +
 
-    // Metadados
     '<div class="grid grid-cols-2 gap-3 text-sm mb-4">' +
       _solMetaDado('Prioridade', _solPriorLabel(sol.prioridade)) +
       _solMetaDado('Solicitante', sol.solicitante || '-') +
@@ -151,20 +164,17 @@ function _solRenderizarDetalhe(sol) {
       _solMetaDado('Data Necessidade', _solFmtData(sol.dataNeeded) || '-') +
     '</div>' +
 
-    // Financeiro
     (sol.contratoId || sol.metaId || sol.rubricaId || sol.valorTotal ? '<div class="bg-amber-50 border border-amber-100 rounded-xl p-3 mb-4">' +
       '<p class="text-xs font-bold text-amber-700 mb-2 uppercase">Financeiro</p>' +
       '<div class="grid grid-cols-2 gap-2 text-xs">' +
         (sol.contratoId ? _solMetaDado('Contrato', sol.contratoId) : '') +
         (sol.rubricaId  ? _solMetaDado('Rubrica',  sol.rubricaId)  : '') +
         (sol.valorTotal ? _solMetaDado('Valor Total', _solFmtMoeda(sol.valorTotal)) : '') +
-        (sol.saldoVerificado !== undefined ? _solMetaDado('Saldo Disp.', sol.saldoDisponivel === false ? '⚠️ Insuficiente' : (sol.saldoRubrica !== null ? _solFmtMoeda(sol.saldoRubrica) : '-')) : '') +
       '</div>' +
       '<button onclick="solVerificarSaldo(\'' + sol.id + '\')" class="mt-2 text-xs text-amber-700 hover:underline font-semibold">' +
         '<i class="fas fa-search-dollar mr-1"></i>Verificar saldo agora</button>' +
     '</div>' : '') +
 
-    // Itens
     (sol.itens && sol.itens.length ? '<div class="mb-4">' +
       '<p class="text-xs font-bold text-gray-600 uppercase mb-2">Itens</p>' +
       '<div class="space-y-1">' +
@@ -177,7 +187,6 @@ function _solRenderizarDetalhe(sol) {
       '</div>' +
     '</div>' : '') +
 
-    // Ações
     '<div class="flex flex-wrap gap-2 mb-4">' +
       (podeEditar ? '<button onclick="solAbrirModalEditar(\'' + sol.id + '\')" class="text-xs px-3 py-1.5 border border-gray-300 rounded-lg hover:bg-gray-50 font-medium"><i class="fas fa-pen mr-1"></i>Editar</button>' : '') +
       (sol.status === 'rascunho' ? '<button onclick="solEnviarParaAnalise(\'' + sol.id + '\')" class="text-xs px-3 py-1.5 bg-violet-600 text-white rounded-lg hover:bg-violet-700 font-medium"><i class="fas fa-paper-plane mr-1"></i>Enviar</button>' : '') +
@@ -185,7 +194,6 @@ function _solRenderizarDetalhe(sol) {
       (sol.status !== 'cancelada' && sol.status !== 'concluida' ? '<button onclick="solCancelar(\'' + sol.id + '\')" class="text-xs px-3 py-1.5 border border-red-200 text-red-600 rounded-lg hover:bg-red-50 font-medium"><i class="fas fa-times mr-1"></i>Cancelar</button>' : '') +
     '</div>' +
 
-    // Timeline
     '<div>' +
       '<p class="text-xs font-bold text-gray-600 uppercase mb-2">Timeline</p>' +
       '<div class="space-y-2">' +
@@ -205,12 +213,13 @@ function _solMetaDado(label, valor) {
   return '<div><p class="text-xs text-gray-400">' + label + '</p><p class="font-medium text-gray-700 truncate">' + _esc(String(valor)) + '</p></div>';
 }
 
-// ── Ações ─────────────────────────────────────────────────────────────────────
+// ── Modal Criar/Editar ────────────────────────────────────────────────────────
 
 function solAbrirModalCriar() {
   _solItens = [];
   document.getElementById('sol-modal-titulo').textContent = 'Nova Solicitação';
-  ['sol-tipo','sol-prioridade','sol-titulo','sol-descricao','sol-setor-sol','sol-setor-exec','sol-aprovador','sol-contrato','sol-meta','sol-rubrica','sol-data-needed','sol-local','sol-obs'].forEach(function(id) {
+  ['sol-tipo','sol-prioridade','sol-titulo','sol-descricao','sol-setor-sol','sol-setor-exec',
+   'sol-aprovador','sol-contrato','sol-meta','sol-rubrica','sol-data-needed','sol-local','sol-obs'].forEach(function(id) {
     var el = document.getElementById(id);
     if (el) el.value = id === 'sol-prioridade' ? 'media' : '';
   });
@@ -263,31 +272,35 @@ function _solRenderizarItens() {
   _solAtualizarTotal();
 }
 
-function solItemChange(idx, campo, val)   { if (_solItens[idx]) _solItens[idx][campo] = val; }
+function solItemChange(idx, campo, val)  { if (_solItens[idx]) _solItens[idx][campo] = val; }
+
 function solItemQtdChange(idx, val) {
   if (!_solItens[idx]) return;
   _solItens[idx].quantidade = parseFloat(val) || 1;
   _solItens[idx].valorTotal = _solItens[idx].quantidade * _solItens[idx].valorUnitario;
   _solRenderizarItens();
 }
+
 function solItemVlrChange(idx, val) {
   if (!_solItens[idx]) return;
   _solItens[idx].valorUnitario = parseFloat(val) || 0;
-  _solItens[idx].valorTotal = _solItens[idx].quantidade * _solItens[idx].valorUnitario;
+  _solItens[idx].valorTotal    = _solItens[idx].quantidade * _solItens[idx].valorUnitario;
   _solRenderizarItens();
 }
+
 function solItemCatalogoChange(idx, catId) {
   if (!_solItens[idx]) return;
   _solItens[idx].catalogoId = catId;
   var cat = _solCatalogo.find(function(c) { return c.id === catId; });
   if (cat) {
-    _solItens[idx].nome = cat.nome;
+    _solItens[idx].nome         = cat.nome;
     _solItens[idx].valorUnitario = cat.valorUnitario || 0;
-    _solItens[idx].unidade = cat.unidade || 'un';
-    _solItens[idx].valorTotal = _solItens[idx].quantidade * _solItens[idx].valorUnitario;
+    _solItens[idx].unidade      = cat.unidade || 'un';
+    _solItens[idx].valorTotal   = _solItens[idx].quantidade * _solItens[idx].valorUnitario;
   }
   _solRenderizarItens();
 }
+
 function solRemoverItem(idx) {
   _solItens.splice(idx, 1);
   _solRenderizarItens();
@@ -318,108 +331,109 @@ function _solColetarDadosModal() {
   };
 }
 
+// ── Ações ─────────────────────────────────────────────────────────────────────
+
 function solSalvarRascunho() {
   var dados = _solColetarDadosModal();
   if (!dados.titulo) { alert('Informe o título da solicitação.'); return; }
   if (!dados.tipo)   { alert('Selecione o tipo de solicitação.'); return; }
 
-  google.script.run
-    .withSuccessHandler(function(r) {
+  GAS.sol.criar(dados,
+    function(r) {
       if (!r.ok) { alert('Erro: ' + (r.error && r.error.message)); return; }
       solFecharModal();
       solCarregar();
-    })
-    .withFailureHandler(function(e) { alert('Erro: ' + e.message); })
-    .ctrl_sol_criar(dados, AppState.usuario ? AppState.usuario.email : '');
+    },
+    function(e) { alert('Erro: ' + e.message); }
+  );
 }
 
 function solEnviarSolicitacao() {
   var dados = _solColetarDadosModal();
-  if (!dados.titulo) { alert('Informe o título.'); return; }
-  if (!dados.tipo)   { alert('Selecione o tipo.'); return; }
-  if (!_solItens.length) { alert('Adicione pelo menos um item.'); return; }
+  if (!dados.titulo)       { alert('Informe o título.'); return; }
+  if (!dados.tipo)         { alert('Selecione o tipo.'); return; }
+  if (!_solItens.length)   { alert('Adicione pelo menos um item.'); return; }
 
-  // Cria como rascunho e logo em seguida envia
-  google.script.run
-    .withSuccessHandler(function(r) {
+  GAS.sol.criar(dados,
+    function(r) {
       if (!r.ok) { alert('Erro: ' + (r.error && r.error.message)); return; }
-      google.script.run
-        .withSuccessHandler(function(r2) {
+      GAS.sol.enviar(r.data.id,
+        function(r2) {
           if (!r2.ok) { alert('Criado, mas erro ao enviar: ' + (r2.error && r2.error.message)); return; }
           solFecharModal();
           solCarregar();
-        })
-        .withFailureHandler(function(e) { alert('Erro ao enviar: ' + e.message); })
-        .ctrl_sol_enviar(r.data.id, AppState.usuario ? AppState.usuario.email : '');
-    })
-    .withFailureHandler(function(e) { alert('Erro: ' + e.message); })
-    .ctrl_sol_criar(dados, AppState.usuario ? AppState.usuario.email : '');
+        },
+        function(e) { alert('Erro ao enviar: ' + e.message); }
+      );
+    },
+    function(e) { alert('Erro: ' + e.message); }
+  );
 }
 
 function solEnviarParaAnalise(id) {
   if (!confirm('Enviar solicitação para análise?')) return;
-  google.script.run
-    .withSuccessHandler(function(r) {
+  GAS.sol.enviar(id,
+    function(r) {
       if (!r.ok) { alert('Erro: ' + (r.error && r.error.message)); return; }
       _solAtual = r.data;
       solCarregar();
-    })
-    .withFailureHandler(function(e) { alert('Erro: ' + e.message); })
-    .ctrl_sol_enviar(id, AppState.usuario ? AppState.usuario.email : '');
+    },
+    function(e) { alert('Erro: ' + e.message); }
+  );
 }
 
 function solAbrirModalAprovacao(id) {
-  document.getElementById('sol-aprov-id').value = id;
+  document.getElementById('sol-aprov-id').value     = id;
   document.getElementById('sol-aprov-parecer').value = '';
   document.getElementById('sol-modal-aprov').classList.remove('hidden');
 }
 
 function solAprovar(id, parecer) {
-  google.script.run
-    .withSuccessHandler(function(r) {
+  GAS.sol.aprovar(id, parecer,
+    function(r) {
       if (!r.ok) { alert('Erro: ' + (r.error && r.error.message)); return; }
       document.getElementById('sol-modal-aprov').classList.add('hidden');
       solCarregar();
-    })
-    .withFailureHandler(function(e) { alert('Erro: ' + e.message); })
-    .ctrl_sol_aprovar(id, parecer, AppState.usuario ? AppState.usuario.email : '');
+    },
+    function(e) { alert('Erro: ' + e.message); }
+  );
 }
 
 function solDevolver(id) {
   var motivo = prompt('Motivo da devolução:');
   if (!motivo) return;
   document.getElementById('sol-modal-aprov').classList.add('hidden');
-  google.script.run
-    .withSuccessHandler(function(r) {
+  GAS.sol.devolver(id, motivo,
+    function(r) {
       if (!r.ok) { alert('Erro: ' + (r.error && r.error.message)); return; }
       solCarregar();
-    })
-    .withFailureHandler(function(e) { alert('Erro: ' + e.message); })
-    .ctrl_sol_devolver(id, motivo, AppState.usuario ? AppState.usuario.email : '');
+    },
+    function(e) { alert('Erro: ' + e.message); }
+  );
 }
 
 function solCancelar(id) {
   if (!confirm('Cancelar esta solicitação?')) return;
-  google.script.run
-    .withSuccessHandler(function(r) {
+  GAS.sol.mudarStatus(id, 'cancelada', 'Cancelada pelo usuário',
+    function(r) {
       if (!r.ok) { alert('Erro: ' + (r.error && r.error.message)); return; }
       _solAtual = null;
       solCarregar();
-    })
-    .withFailureHandler(function(e) { alert('Erro: ' + e.message); })
-    .ctrl_sol_mudar_status(id, 'cancelada', 'Cancelada pelo usuário', AppState.usuario ? AppState.usuario.email : '');
+    },
+    function(e) { alert('Erro: ' + e.message); }
+  );
 }
 
 function solVerificarSaldo(id) {
-  google.script.run
-    .withSuccessHandler(function(r) {
+  GAS.sol.verificarSaldo({ id: id },
+    function(r) {
       if (!r.ok) { alert('Erro ao verificar saldo: ' + (r.error && r.error.message)); return; }
       var d = r.data;
       alert(d.mensagem + '\n\nDisponível: ' + (d.disponivel === null ? 'N/A' : d.disponivel ? 'Sim' : 'Não'));
       solCarregar();
-    })
-    .withFailureHandler(function(e) { alert('Erro: ' + e.message); })
-    .ctrl_sol_verificar_saldo(id, AppState.usuario ? AppState.usuario.email : '');
+    },
+    function(e) { alert('Erro: ' + e.message); }
+  );
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -456,7 +470,7 @@ function _solFmtDataHora(iso) {
   if (!iso) return '';
   try {
     var d = new Date(iso);
-    return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'});
+    return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' });
   } catch(e) { return iso; }
 }
 

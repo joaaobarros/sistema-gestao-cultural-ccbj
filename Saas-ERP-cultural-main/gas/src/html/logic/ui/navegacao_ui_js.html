@@ -125,7 +125,9 @@ function mostrarAba(idAba) {
       'aba-gestao-modulos':    'Gestão de Módulos',
       'aba-acoes':             'Ações Institucionais',
       'aba-habilitacoes':      'Credenciamento',
-      'aba-reunioes':          'Reuniões & Atas'
+      'aba-reunioes':          'Reuniões & Atas',
+      'aba-solicitacoes':      'Solicitações Institucionais',
+      'aba-pauta-externa':     'Cessão de Pauta'
     };
 
     const titulo = document.getElementById('tituloAba');
@@ -206,6 +208,24 @@ function mostrarAba(idAba) {
     if (typeof carregarSolicitacoes    === 'function') carregarSolicitacoes();
     if (typeof carregarCadastrosExternos === 'function') carregarCadastrosExternos();
     if (typeof carregarChavesPendentes === 'function') carregarChavesPendentes();
+  }
+
+  if (idAba === 'aba-solicitacoes') {
+    if (typeof solInit === 'function' && !window._solJaIniciado) {
+      window._solJaIniciado = true;
+      solInit();
+    } else if (typeof solCarregar === 'function') {
+      solCarregar();
+    }
+  }
+
+  if (idAba === 'aba-pauta-externa') {
+    if (typeof pautaInit === 'function' && !window._pautaJaIniciado) {
+      window._pautaJaIniciado = true;
+      pautaInit();
+    } else if (typeof pautaCarregar === 'function') {
+      pautaCarregar();
+    }
   }
 
   if (typeof EventBus !== 'undefined') {
@@ -289,7 +309,11 @@ var _abaParaModuloId = {
   'aba-reunioes':         'reunioes',
   // Sistema (núcleo): mapeados para que aplicarEstadoModulos possa aplicar
   // o flag apenasSuperadmin do registry sem precisar de data-requer-permissao hardcoded.
-  'aba-gestao-modulos':   'gestao_modulos'
+  'aba-gestao-modulos':   'gestao_modulos',
+
+  // Novos módulos — workflow institucional
+  'aba-solicitacoes':     'solicitacoes',
+  'aba-pauta-externa':    'pauta_externa'
 };
 
 /**

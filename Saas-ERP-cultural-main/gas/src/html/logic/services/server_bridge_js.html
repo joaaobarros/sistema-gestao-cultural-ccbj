@@ -882,6 +882,52 @@ const GAS = {
         GAS._callCtrl('ctrl_reunioes_pauta_historico', [reuniaoId, pautaId, s || GAS._sessao()], cb, err);
       }
     }
+  },
+
+  // ── Solicitações Institucionais ─────────────────────────────────────────────
+  sol: {
+    criar:             function(dados, cb, err)          { GAS._callCtrl('ctrl_sol_criar',            [dados, GAS._sessao()],              cb, err); },
+    editar:            function(id, dados, cb, err)      { GAS._callCtrl('ctrl_sol_editar',           [id, dados, GAS._sessao()],          cb, err); },
+    obter:             function(id, cb, err)             { GAS._callCtrl('ctrl_sol_obter',            [id, GAS._sessao()],                 cb, err); },
+    listar:            function(filtros, cb, err)        { GAS._callCtrl('ctrl_sol_listar',           [filtros, GAS._sessao()],            cb, err); },
+    enviar:            function(id, cb, err)             { GAS._callCtrl('ctrl_sol_enviar',           [id, GAS._sessao()],                 cb, err); },
+    aprovar:           function(id, parecer, cb, err)   { GAS._callCtrl('ctrl_sol_aprovar',          [id, parecer, GAS._sessao()],        cb, err); },
+    aprovarParcial:    function(id, parecer, cb, err)   { GAS._callCtrl('ctrl_sol_aprovar_parcial',  [id, parecer, GAS._sessao()],        cb, err); },
+    devolver:          function(id, motivo, cb, err)    { GAS._callCtrl('ctrl_sol_devolver',         [id, motivo, GAS._sessao()],         cb, err); },
+    mudarStatus:       function(id, novo, obs, cb, err) { GAS._callCtrl('ctrl_sol_mudar_status',     [id, novo, obs, GAS._sessao()],      cb, err); },
+    metricas:          function(filtros, cb, err)       { GAS._callCtrl('ctrl_sol_metricas',         [filtros, GAS._sessao()],            cb, err); },
+    dashboard:         function(cb, err)                { GAS._callCtrl('ctrl_sol_dashboard',        [GAS._sessao()],                     cb, err); },
+    timeline:          function(id, cb, err)            { GAS._callCtrl('ctrl_sol_timeline',         [id, GAS._sessao()],                 cb, err); },
+    verificarSaldo:    function(dados, cb, err)         { GAS._callCtrl('ctrl_sol_verificar_saldo',  [dados, GAS._sessao()],              cb, err); },
+    verificarDisp:     function(dados, cb, err)         { GAS._callCtrl('ctrl_sol_verificar_disponibilidade', [dados, GAS._sessao()],    cb, err); },
+    vincularProcesso:  function(id, pid, cb, err)       { GAS._callCtrl('ctrl_sol_vincular_processo',[id, pid, GAS._sessao()],           cb, err); }
+  },
+
+  // ── Catálogo Institucional ──────────────────────────────────────────────────
+  catalogo: {
+    listar:             function(filtros, cb, err)       { GAS._callCtrl('ctrl_catalogo_listar',               [filtros, GAS._sessao()],    cb, err); },
+    criar:              function(dados, cb, err)         { GAS._callCtrl('ctrl_catalogo_criar',                [dados, GAS._sessao()],      cb, err); },
+    editar:             function(id, dados, cb, err)     { GAS._callCtrl('ctrl_catalogo_editar',               [id, dados, GAS._sessao()],  cb, err); },
+    verificarDisp:      function(itemId, p, cb, err)    { GAS._callCtrl('ctrl_catalogo_verificar_disponibilidade', [itemId, p, GAS._sessao()], cb, err); },
+    inicializarPadrao:  function(cb, err)                { GAS._callCtrl('ctrl_catalogo_inicializar_padrao',   [GAS._sessao()],             cb, err); },
+    sugerirAlternativas: function(itemId, p, cb, err)   { GAS._callCtrl('ctrl_catalogo_sugerir_alternativas', [itemId, p, GAS._sessao()],  cb, err); }
+  },
+
+  // ── Cessão de Pauta Externa ─────────────────────────────────────────────────
+  pautaExterna: {
+    listar:           function(filtros, cb, err)         { GAS._callCtrl('ctrl_pauta_listar',            [filtros, GAS._sessao()],       cb, err); },
+    obter:            function(id, cb, err)              { GAS._callCtrl('ctrl_pauta_obter',             [id, GAS._sessao()],            cb, err); },
+    dashboard:        function(cb, err)                  { GAS._callCtrl('ctrl_pauta_dashboard',         [GAS._sessao()],                cb, err); },
+    iniciarAnalise:   function(id, obs, cb, err)         { GAS._callCtrl('ctrl_pauta_iniciar_analise',   [id, obs, GAS._sessao()],       cb, err); },
+    aprovar:          function(id, parecer, cb, err)     { GAS._callCtrl('ctrl_pauta_aprovar',           [id, parecer, GAS._sessao()],   cb, err); },
+    indeferir:        function(id, motivo, cb, err)      { GAS._callCtrl('ctrl_pauta_indeferir',         [id, motivo, GAS._sessao()],    cb, err); },
+    solicitarAjuste:  function(id, orientacoes, cb, err) { GAS._callCtrl('ctrl_pauta_solicitar_ajuste',  [id, orientacoes, GAS._sessao()], cb, err); },
+    mudarStatus:      function(id, novo, obs, cb, err)   { GAS._callCtrl('ctrl_pauta_mudar_status',      [id, novo, obs, GAS._sessao()], cb, err); },
+    observacaoInterna: function(id, obs, cb, err)        { GAS._callCtrl('ctrl_pauta_observacao_interna',[id, obs, GAS._sessao()],      cb, err); },
+    vincularProcesso:  function(id, pid, cb, err)        { GAS._callCtrl('ctrl_pauta_vincular_processo', [id, pid, GAS._sessao()],      cb, err); },
+    // público — sem autenticação
+    receber:          function(dados, cb, err)            { GAS._call('ctrl_pauta_receber',               [dados],                        cb, err); },
+    consultarPublico: function(protocolo, email, cb, err){ GAS._call('ctrl_pauta_consultar_publico',     [protocolo, email],              cb, err); }
   }
 
 };

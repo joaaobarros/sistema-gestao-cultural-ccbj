@@ -236,6 +236,35 @@ var _MOD_DEFAULTS = [
     rotas: ['aba-processos-institucionais'],
     menus: [],
     dependencias: ['tarefas', 'reunioes'], status_operacional: 'beta'
+  },
+
+  // SOLICITAÇÕES / PAUTA EXTERNA — ativáveis
+  {
+    moduleId: 'solicitacoes', nome: 'Solicitações Institucionais', categoria: 'operacional',
+    descricao: 'Formulários internos de solicitação: bolsistas, professores, serviços, transporte, alimentação, estrutura técnica, equipamentos, compras e mais',
+    versao: '1.0',
+    ativo: false, nucleo: false, apenasSuperadmin: false,
+    rotas: ['aba-solicitacoes'],
+    menus: [{ grupo: 'mod-operacional', btn: 'aba-solicitacoes' }],
+    dependencias: ['tarefas'], status_operacional: 'beta'
+  },
+  {
+    moduleId: 'pauta_externa', nome: 'Cessão de Pauta', categoria: 'programacao',
+    descricao: 'Gestão de solicitações externas de cessão de espaço — fluxo público sem login, FSM de análise e notificações automáticas ao solicitante',
+    versao: '1.0',
+    ativo: false, nucleo: false, apenasSuperadmin: false,
+    rotas: ['aba-pauta-externa'],
+    menus: [{ grupo: 'mod-programacao', btn: 'aba-pauta-externa' }],
+    dependencias: ['agenda_geral'], status_operacional: 'beta'
+  },
+  {
+    moduleId: 'catalogo', nome: 'Catálogo Institucional', categoria: 'operacional',
+    descricao: 'Catálogo configurável de itens e serviços com controle de disponibilidade física e orçamentária',
+    versao: '1.0',
+    ativo: false, nucleo: false, apenasSuperadmin: false,
+    rotas: [],
+    menus: [],
+    dependencias: ['solicitacoes'], status_operacional: 'beta'
   }
 ];
 
