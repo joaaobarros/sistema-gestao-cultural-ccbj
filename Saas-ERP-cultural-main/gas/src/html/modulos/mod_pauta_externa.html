@@ -1,0 +1,87 @@
+<!-- mod_pauta_externa.html — Gestão interna de Pautas Externas -->
+<div id="aba-pauta-externa" class="aba-conteudo hidden">
+
+  <!-- ── Header ───────────────────────────────────────────────────────────── -->
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+    <div class="flex items-center gap-2">
+      <i class="fas fa-calendar-alt text-teal-500 text-xl"></i>
+      <h2 class="text-lg font-bold text-gray-800">Cessão de Pauta</h2>
+      <span id="pauta-badge-total" class="ml-1 bg-teal-100 text-teal-700 text-xs font-semibold px-2 py-0.5 rounded-full hidden">0</span>
+    </div>
+    <div class="flex items-center gap-2 flex-wrap">
+      <input type="text" id="pauta-busca" placeholder="Buscar protocolo ou solicitante…"
+        class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400 w-56"
+        oninput="pautaFiltrarLista()">
+      <select id="pauta-filtro-status" onchange="pautaFiltrarLista()"
+        class="border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400">
+        <option value="">Todos os status</option>
+        <option value="recebida">Recebida</option>
+        <option value="em_analise">Em Análise</option>
+        <option value="aguardando_ajuste">Aguard. Ajuste</option>
+        <option value="parcialmente_aprovada">Parc. Aprovada</option>
+        <option value="aprovada">Aprovada</option>
+        <option value="indeferida">Indeferida</option>
+        <option value="cancelada">Cancelada</option>
+        <option value="concluida">Concluída</option>
+      </select>
+      <button onclick="pautaCopiarLink()"
+        class="text-teal-700 border border-teal-300 bg-teal-50 hover:bg-teal-100 text-sm font-medium px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition"
+        title="Copiar link do formulário externo">
+        <i class="fas fa-link text-xs"></i> Link do Formulário
+      </button>
+      <button onclick="pautaCarregar()" class="text-gray-500 hover:text-gray-700 p-1.5 rounded-lg hover:bg-gray-100 transition" title="Atualizar">
+        <i class="fas fa-sync-alt text-sm"></i>
+      </button>
+    </div>
+  </div>
+
+  <!-- ── Stats bar ─────────────────────────────────────────────────────────── -->
+  <div id="pauta-stats-bar" class="flex flex-wrap gap-2 mb-4"></div>
+
+  <!-- ── Layout: lista + detalhe ────────────────────────────────────────────── -->
+  <div class="flex flex-col lg:flex-row gap-4" style="min-height:500px">
+
+    <!-- Lista -->
+    <div class="w-full lg:w-80 xl:w-96 flex-shrink-0">
+      <div id="pauta-lista" class="space-y-2 overflow-y-auto pr-1" style="max-height:70vh">
+        <div class="text-center text-gray-400 py-10">
+          <i class="fas fa-spinner fa-spin text-2xl mb-2 text-teal-300"></i>
+          <p class="text-sm">Carregando pautas…</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Detalhe -->
+    <div class="flex-1 min-w-0">
+      <div id="pauta-detalhe" class="bg-white rounded-2xl border border-gray-200 shadow-sm h-full flex items-center justify-center text-gray-400">
+        <div class="text-center py-16">
+          <i class="fas fa-calendar-alt text-5xl text-teal-100 mb-4"></i>
+          <p class="text-sm">Selecione uma pauta para ver os detalhes</p>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── Modal Ação (aprovar / indeferir / ajuste) ──────────────────────────── -->
+  <div id="pauta-modal-acao" class="fixed inset-0 z-50 hidden bg-black/40 flex items-center justify-center px-4">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+      <h3 id="pauta-modal-acao-titulo" class="font-bold text-gray-800 mb-4">Ação</h3>
+      <input type="hidden" id="pauta-acao-id">
+      <input type="hidden" id="pauta-acao-tipo">
+      <label class="text-xs font-semibold text-gray-600 mb-1 block">Parecer / Motivo *</label>
+      <textarea id="pauta-acao-texto" rows="4"
+        class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400 resize-none mb-3"
+        placeholder="Registre o parecer, motivo ou orientações…"></textarea>
+      <div class="flex gap-2 justify-end">
+        <button onclick="document.getElementById('pauta-modal-acao').classList.add('hidden')"
+          class="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">Cancelar</button>
+        <button onclick="pautaExecutarAcao()"
+          class="px-4 py-2 text-sm bg-teal-600 hover:bg-teal-700 text-white rounded-lg font-medium">
+          Confirmar
+        </button>
+      </div>
+    </div>
+  </div>
+
+</div>

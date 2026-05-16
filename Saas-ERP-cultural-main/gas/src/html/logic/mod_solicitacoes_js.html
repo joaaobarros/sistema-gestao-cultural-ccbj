@@ -1,0 +1,471 @@
+<script>
+// ── Estado ────────────────────────────────────────────────────────────────────
+var _solCache        = [];
+var _solCacheFiltered = [];
+var _solAtual        = null;
+var _solItens        = [];
+var _solCatalogo     = [];
+
+// ── Bootstrap ─────────────────────────────────────────────────────────────────
+
+function solInit() {
+  solCarregar();
+  solCarregarCatalogo();
+}
+
+function solCarregar() {
+  var lista = document.getElementById('sol-lista');
+  if (lista) lista.innerHTML = '<div class="text-center py-8 text-violet-300"><i class="fas fa-spinner fa-spin text-2xl"></i></div>';
+
+  var filtros = {
+    status: document.getElementById('sol-filtro-status') ? document.getElementById('sol-filtro-status').value : '',
+    tipo:   document.getElementById('sol-filtro-tipo')   ? document.getElementById('sol-filtro-tipo').value   : ''
+  };
+
+  google.script.run
+    .withSuccessHandler(function(r) {
+      if (!r.ok) { _solErro(r.error && r.error.message); return; }
+      _solCache = r.data || [];
+      _solCacheFiltered = _solCache.slice();
+      _solRenderizarLista();
+      _solRenderizarStats();
+    })
+    .withFailureHandler(function(e) { _solErro(e.message); })
+    .ctrl_sol_listar(filtros, AppState.usuario ? AppState.usuario.email : '');
+}
+
+function solCarregarCatalogo() {
+  google.script.run
+    .withSuccessHandler(function(r) { if (r.ok) _solCatalogo = r.data || []; })
+    .withFailureHandler(function() {})
+    .ctrl_catalogo_listar({}, AppState.usuario ? AppState.usuario.email : '');
+}
+
+// ── Filtros ───────────────────────────────────────────────────────────────────
+
+function solFiltrarLista() {
+  var busca  = (document.getElementById('sol-busca')         ? document.getElementById('sol-busca').value         : '').toLowerCase();
+  var status = (document.getElementById('sol-filtro-status') ? document.getElementById('sol-filtro-status').value : '');
+  var tipo   = (document.getElementById('sol-filtro-tipo')   ? document.getElementById('sol-filtro-tipo').value   : '');
+
+  _solCacheFiltered = _solCache.filter(function(s) {
+    var matchBusca  = !busca  || (s.titulo || '').toLowerCase().indexOf(busca) !== -1 || (s.protocolo || '').toLowerCase().indexOf(busca) !== -1;
+    var matchStatus = !status || s.status === status;
+    var matchTipo   = !tipo   || s.tipo === tipo;
+    return matchBusca && matchStatus && matchTipo;
+  });
+  _solRenderizarLista();
+}
+
+// ── Renderização ──────────────────────────────────────────────────────────────
+
+function _solRenderizarLista() {
+  var lista = document.getElementById('sol-lista');
+  if (!lista) return;
+
+  if (!_solCacheFiltered.length) {
+    lista.innerHTML = '<div class="text-center text-gray-400 py-10 text-sm">Nenhuma solicitação encontrada.</div>';
+    return;
+  }
+
+  lista.innerHTML = _solCacheFiltered.map(function(sol) {
+    var corStatus = _solCorStatus(sol.status);
+    var isAtiva   = _solAtual && _solAtual.id === sol.id;
+    return '<div onclick="solSelecionarSolicitacao(\'' + sol.id + '\')" class="cursor-pointer rounded-xl border p-3 hover:shadow-sm transition ' +
+      (isAtiva ? 'border-violet-300 bg-violet-50' : 'border-gray-200 bg-white hover:border-violet-200') + '">' +
+      '<div class="flex items-start justify-between gap-2">' +
+        '<div class="flex-1 min-w-0">' +
+          '<p class="text-xs text-gray-400 font-mono">' + _esc(sol.protocolo || '-') + '</p>' +
+          '<p class="font-semibold text-gray-800 text-sm truncate">' + _esc(sol.titulo || 'Sem título') + '</p>' +
+          '<p class="text-xs text-gray-500 mt-0.5">' + _esc(sol.tipoLabel || sol.tipo || '') + '</p>' +
+        '</div>' +
+        '<span class="text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0" style="' + corStatus.style + '">' + corStatus.label + '</span>' +
+      '</div>' +
+      '<div class="flex items-center justify-between mt-2">' +
+        '<span class="text-xs text-gray-400">' + _solFmtData(sol.criadoEm) + '</span>' +
+        (sol.valorTotal ? '<span class="text-xs font-semibold text-violet-700">' + _solFmtMoeda(sol.valorTotal) + '</span>' : '') +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function _solRenderizarStats() {
+  var bar = document.getElementById('sol-stats-bar');
+  if (!bar) return;
+
+  var total     = _solCache.length;
+  var pendentes = _solCache.filter(function(s) { return s.status === 'solicitada' || s.status === 'em_analise'; }).length;
+  var aprovadas = _solCache.filter(function(s) { return s.status === 'aprovada' || s.status === 'em_execucao'; }).length;
+  var concluidas = _solCache.filter(function(s) { return s.status === 'concluida'; }).length;
+
+  bar.innerHTML = [
+    ['Total', total, '#6366f1', '#e0e7ff'],
+    ['Pendentes', pendentes, '#d97706', '#fef3c7'],
+    ['Em Execução', aprovadas, '#059669', '#d1fae5'],
+    ['Concluídas', concluidas, '#7c3aed', '#ede9fe']
+  ].map(function(item) {
+    return '<div class="flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold cursor-pointer hover:opacity-80" style="background:' + item[3] + ';color:' + item[2] + '">' +
+      '<span>' + item[0] + ':</span><span class="text-sm">' + item[1] + '</span></div>';
+  }).join('');
+}
+
+// ── Detalhe ───────────────────────────────────────────────────────────────────
+
+function solSelecionarSolicitacao(id) {
+  var sol = _solCache.find(function(s) { return s.id === id; });
+  if (!sol) return;
+  _solAtual = sol;
+  _solRenderizarLista();
+  _solRenderizarDetalhe(sol);
+}
+
+function _solRenderizarDetalhe(sol) {
+  var det = document.getElementById('sol-detalhe');
+  if (!det) return;
+
+  var corStatus = _solCorStatus(sol.status);
+  var isAprovador = AppState.usuario && (AppState.usuario.isAdmin || AppState.usuario.isSuperadmin || AppState.usuario.isGestor || sol.responsavelAprovacao === AppState.usuario.email);
+  var podeAprovar = isAprovador && (sol.status === 'solicitada' || sol.status === 'em_analise');
+  var podeEditar  = (sol.status === 'rascunho' || sol.status === 'aguardando_ajuste') && (sol.solicitante === (AppState.usuario && AppState.usuario.email));
+
+  det.innerHTML =
+    '<div class="p-5 h-full overflow-y-auto">' +
+
+    // Header detalhe
+    '<div class="flex items-start justify-between gap-3 mb-4">' +
+      '<div>' +
+        '<p class="text-xs text-gray-400 font-mono">' + _esc(sol.protocolo) + '</p>' +
+        '<h3 class="text-lg font-bold text-gray-800">' + _esc(sol.titulo) + '</h3>' +
+        '<p class="text-sm text-gray-500 mt-0.5">' + _esc(sol.tipoLabel || sol.tipo) + '</p>' +
+      '</div>' +
+      '<span class="text-xs font-bold px-3 py-1 rounded-full" style="' + corStatus.style + '">' + corStatus.label + '</span>' +
+    '</div>' +
+
+    // Metadados
+    '<div class="grid grid-cols-2 gap-3 text-sm mb-4">' +
+      _solMetaDado('Prioridade', _solPriorLabel(sol.prioridade)) +
+      _solMetaDado('Solicitante', sol.solicitante || '-') +
+      _solMetaDado('Setor Sol.', sol.setorSolicitante || '-') +
+      _solMetaDado('Setor Exec.', sol.setorExecutor || '-') +
+      _solMetaDado('Aprovador', sol.responsavelAprovacao || '-') +
+      _solMetaDado('Data Necessidade', _solFmtData(sol.dataNeeded) || '-') +
+    '</div>' +
+
+    // Financeiro
+    (sol.contratoId || sol.metaId || sol.rubricaId || sol.valorTotal ? '<div class="bg-amber-50 border border-amber-100 rounded-xl p-3 mb-4">' +
+      '<p class="text-xs font-bold text-amber-700 mb-2 uppercase">Financeiro</p>' +
+      '<div class="grid grid-cols-2 gap-2 text-xs">' +
+        (sol.contratoId ? _solMetaDado('Contrato', sol.contratoId) : '') +
+        (sol.rubricaId  ? _solMetaDado('Rubrica',  sol.rubricaId)  : '') +
+        (sol.valorTotal ? _solMetaDado('Valor Total', _solFmtMoeda(sol.valorTotal)) : '') +
+        (sol.saldoVerificado !== undefined ? _solMetaDado('Saldo Disp.', sol.saldoDisponivel === false ? '⚠️ Insuficiente' : (sol.saldoRubrica !== null ? _solFmtMoeda(sol.saldoRubrica) : '-')) : '') +
+      '</div>' +
+      '<button onclick="solVerificarSaldo(\'' + sol.id + '\')" class="mt-2 text-xs text-amber-700 hover:underline font-semibold">' +
+        '<i class="fas fa-search-dollar mr-1"></i>Verificar saldo agora</button>' +
+    '</div>' : '') +
+
+    // Itens
+    (sol.itens && sol.itens.length ? '<div class="mb-4">' +
+      '<p class="text-xs font-bold text-gray-600 uppercase mb-2">Itens</p>' +
+      '<div class="space-y-1">' +
+        sol.itens.map(function(item) {
+          return '<div class="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2 text-sm">' +
+            '<span>' + _esc(item.nome) + (item.quantidade > 1 ? ' × ' + item.quantidade : '') + '</span>' +
+            '<span class="font-semibold">' + _solFmtMoeda(item.valorTotal || 0) + '</span>' +
+          '</div>';
+        }).join('') +
+      '</div>' +
+    '</div>' : '') +
+
+    // Ações
+    '<div class="flex flex-wrap gap-2 mb-4">' +
+      (podeEditar ? '<button onclick="solAbrirModalEditar(\'' + sol.id + '\')" class="text-xs px-3 py-1.5 border border-gray-300 rounded-lg hover:bg-gray-50 font-medium"><i class="fas fa-pen mr-1"></i>Editar</button>' : '') +
+      (sol.status === 'rascunho' ? '<button onclick="solEnviarParaAnalise(\'' + sol.id + '\')" class="text-xs px-3 py-1.5 bg-violet-600 text-white rounded-lg hover:bg-violet-700 font-medium"><i class="fas fa-paper-plane mr-1"></i>Enviar</button>' : '') +
+      (podeAprovar ? '<button onclick="solAbrirModalAprovacao(\'' + sol.id + '\')" class="text-xs px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium"><i class="fas fa-check mr-1"></i>Aprovar / Devolver</button>' : '') +
+      (sol.status !== 'cancelada' && sol.status !== 'concluida' ? '<button onclick="solCancelar(\'' + sol.id + '\')" class="text-xs px-3 py-1.5 border border-red-200 text-red-600 rounded-lg hover:bg-red-50 font-medium"><i class="fas fa-times mr-1"></i>Cancelar</button>' : '') +
+    '</div>' +
+
+    // Timeline
+    '<div>' +
+      '<p class="text-xs font-bold text-gray-600 uppercase mb-2">Timeline</p>' +
+      '<div class="space-y-2">' +
+        (sol.timeline || []).slice(-10).reverse().map(function(ev) {
+          return '<div class="flex gap-2 text-xs">' +
+            '<span class="text-gray-400 flex-shrink-0">' + _solFmtDataHora(ev.timestamp) + '</span>' +
+            '<span class="text-gray-600">' + _esc(ev.descricao) + '</span>' +
+          '</div>';
+        }).join('') +
+      '</div>' +
+    '</div>' +
+
+    '</div>';
+}
+
+function _solMetaDado(label, valor) {
+  return '<div><p class="text-xs text-gray-400">' + label + '</p><p class="font-medium text-gray-700 truncate">' + _esc(String(valor)) + '</p></div>';
+}
+
+// ── Ações ─────────────────────────────────────────────────────────────────────
+
+function solAbrirModalCriar() {
+  _solItens = [];
+  document.getElementById('sol-modal-titulo').textContent = 'Nova Solicitação';
+  ['sol-tipo','sol-prioridade','sol-titulo','sol-descricao','sol-setor-sol','sol-setor-exec','sol-aprovador','sol-contrato','sol-meta','sol-rubrica','sol-data-needed','sol-local','sol-obs'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.value = id === 'sol-prioridade' ? 'media' : '';
+  });
+  _solRenderizarItens();
+  document.getElementById('sol-modal').classList.remove('hidden');
+}
+
+function solFecharModal() {
+  document.getElementById('sol-modal').classList.add('hidden');
+}
+
+function solAdicionarItem() {
+  _solItens.push({ nome: '', quantidade: 1, valorUnitario: 0, valorTotal: 0, unidade: 'un', observacoes: '', dataInicio: '', dataFim: '', catalogoId: '' });
+  _solRenderizarItens();
+}
+
+function _solRenderizarItens() {
+  var container = document.getElementById('sol-itens-container');
+  if (!container) return;
+
+  if (!_solItens.length) {
+    container.innerHTML = '<div class="text-center text-gray-400 text-xs py-3 border border-dashed border-gray-200 rounded-lg">Nenhum item adicionado.</div>';
+    _solAtualizarTotal();
+    return;
+  }
+
+  container.innerHTML = _solItens.map(function(item, idx) {
+    var optscat = '<option value="">— sem vínculo —</option>' + _solCatalogo.map(function(c) {
+      return '<option value="' + c.id + '"' + (item.catalogoId === c.id ? ' selected' : '') + '>' + _esc(c.nome) + '</option>';
+    }).join('');
+    return '<div class="border border-gray-200 rounded-xl p-3 bg-gray-50 relative">' +
+      '<button onclick="solRemoverItem(' + idx + ')" class="absolute top-2 right-2 text-red-400 hover:text-red-600 text-xs"><i class="fas fa-trash"></i></button>' +
+      '<div class="grid grid-cols-2 gap-2">' +
+        '<div><label class="text-xs text-gray-500">Catálogo</label>' +
+          '<select onchange="solItemCatalogoChange(' + idx + ',this.value)" class="w-full border border-gray-200 rounded-lg px-2 py-1 text-xs mt-0.5">' + optscat + '</select></div>' +
+        '<div><label class="text-xs text-gray-500">Descrição *</label>' +
+          '<input value="' + _esc(item.nome) + '" oninput="solItemChange(' + idx + ',\'nome\',this.value)" class="w-full border border-gray-200 rounded-lg px-2 py-1 text-xs mt-0.5" placeholder="Nome do item"></div>' +
+        '<div><label class="text-xs text-gray-500">Qtd</label>' +
+          '<input type="number" min="1" value="' + item.quantidade + '" oninput="solItemQtdChange(' + idx + ',this.value)" class="w-full border border-gray-200 rounded-lg px-2 py-1 text-xs mt-0.5"></div>' +
+        '<div><label class="text-xs text-gray-500">Valor Unit. R$</label>' +
+          '<input type="number" min="0" step="0.01" value="' + item.valorUnitario + '" oninput="solItemVlrChange(' + idx + ',this.value)" class="w-full border border-gray-200 rounded-lg px-2 py-1 text-xs mt-0.5"></div>' +
+        '<div><label class="text-xs text-gray-500">Data Início</label>' +
+          '<input type="date" value="' + (item.dataInicio || '') + '" oninput="solItemChange(' + idx + ',\'dataInicio\',this.value)" class="w-full border border-gray-200 rounded-lg px-2 py-1 text-xs mt-0.5"></div>' +
+        '<div><label class="text-xs text-gray-500">Data Fim</label>' +
+          '<input type="date" value="' + (item.dataFim || '') + '" oninput="solItemChange(' + idx + ',\'dataFim\',this.value)" class="w-full border border-gray-200 rounded-lg px-2 py-1 text-xs mt-0.5"></div>' +
+      '</div>' +
+      '<p class="text-right text-xs font-bold text-violet-700 mt-1.5">Subtotal: ' + _solFmtMoeda(item.valorTotal) + '</p>' +
+    '</div>';
+  }).join('');
+  _solAtualizarTotal();
+}
+
+function solItemChange(idx, campo, val)   { if (_solItens[idx]) _solItens[idx][campo] = val; }
+function solItemQtdChange(idx, val) {
+  if (!_solItens[idx]) return;
+  _solItens[idx].quantidade = parseFloat(val) || 1;
+  _solItens[idx].valorTotal = _solItens[idx].quantidade * _solItens[idx].valorUnitario;
+  _solRenderizarItens();
+}
+function solItemVlrChange(idx, val) {
+  if (!_solItens[idx]) return;
+  _solItens[idx].valorUnitario = parseFloat(val) || 0;
+  _solItens[idx].valorTotal = _solItens[idx].quantidade * _solItens[idx].valorUnitario;
+  _solRenderizarItens();
+}
+function solItemCatalogoChange(idx, catId) {
+  if (!_solItens[idx]) return;
+  _solItens[idx].catalogoId = catId;
+  var cat = _solCatalogo.find(function(c) { return c.id === catId; });
+  if (cat) {
+    _solItens[idx].nome = cat.nome;
+    _solItens[idx].valorUnitario = cat.valorUnitario || 0;
+    _solItens[idx].unidade = cat.unidade || 'un';
+    _solItens[idx].valorTotal = _solItens[idx].quantidade * _solItens[idx].valorUnitario;
+  }
+  _solRenderizarItens();
+}
+function solRemoverItem(idx) {
+  _solItens.splice(idx, 1);
+  _solRenderizarItens();
+}
+
+function _solAtualizarTotal() {
+  var total = _solItens.reduce(function(acc, i) { return acc + (i.valorTotal || 0); }, 0);
+  var el = document.getElementById('sol-valor-total');
+  if (el) el.textContent = _solFmtMoeda(total);
+}
+
+function _solColetarDadosModal() {
+  return {
+    tipo:                 document.getElementById('sol-tipo').value,
+    titulo:               document.getElementById('sol-titulo').value.trim(),
+    descricao:            document.getElementById('sol-descricao').value.trim(),
+    prioridade:           document.getElementById('sol-prioridade').value,
+    setorSolicitante:     document.getElementById('sol-setor-sol').value.trim(),
+    setorExecutor:        document.getElementById('sol-setor-exec').value.trim(),
+    responsavelAprovacao: document.getElementById('sol-aprovador').value.trim(),
+    contratoId:           document.getElementById('sol-contrato').value.trim(),
+    metaId:               document.getElementById('sol-meta').value.trim(),
+    rubricaId:            document.getElementById('sol-rubrica').value.trim(),
+    dataNeeded:           document.getElementById('sol-data-needed').value,
+    localEntrega:         document.getElementById('sol-local').value.trim(),
+    observacoesGerais:    document.getElementById('sol-obs').value.trim(),
+    itens:                _solItens
+  };
+}
+
+function solSalvarRascunho() {
+  var dados = _solColetarDadosModal();
+  if (!dados.titulo) { alert('Informe o título da solicitação.'); return; }
+  if (!dados.tipo)   { alert('Selecione o tipo de solicitação.'); return; }
+
+  google.script.run
+    .withSuccessHandler(function(r) {
+      if (!r.ok) { alert('Erro: ' + (r.error && r.error.message)); return; }
+      solFecharModal();
+      solCarregar();
+    })
+    .withFailureHandler(function(e) { alert('Erro: ' + e.message); })
+    .ctrl_sol_criar(dados, AppState.usuario ? AppState.usuario.email : '');
+}
+
+function solEnviarSolicitacao() {
+  var dados = _solColetarDadosModal();
+  if (!dados.titulo) { alert('Informe o título.'); return; }
+  if (!dados.tipo)   { alert('Selecione o tipo.'); return; }
+  if (!_solItens.length) { alert('Adicione pelo menos um item.'); return; }
+
+  // Cria como rascunho e logo em seguida envia
+  google.script.run
+    .withSuccessHandler(function(r) {
+      if (!r.ok) { alert('Erro: ' + (r.error && r.error.message)); return; }
+      google.script.run
+        .withSuccessHandler(function(r2) {
+          if (!r2.ok) { alert('Criado, mas erro ao enviar: ' + (r2.error && r2.error.message)); return; }
+          solFecharModal();
+          solCarregar();
+        })
+        .withFailureHandler(function(e) { alert('Erro ao enviar: ' + e.message); })
+        .ctrl_sol_enviar(r.data.id, AppState.usuario ? AppState.usuario.email : '');
+    })
+    .withFailureHandler(function(e) { alert('Erro: ' + e.message); })
+    .ctrl_sol_criar(dados, AppState.usuario ? AppState.usuario.email : '');
+}
+
+function solEnviarParaAnalise(id) {
+  if (!confirm('Enviar solicitação para análise?')) return;
+  google.script.run
+    .withSuccessHandler(function(r) {
+      if (!r.ok) { alert('Erro: ' + (r.error && r.error.message)); return; }
+      _solAtual = r.data;
+      solCarregar();
+    })
+    .withFailureHandler(function(e) { alert('Erro: ' + e.message); })
+    .ctrl_sol_enviar(id, AppState.usuario ? AppState.usuario.email : '');
+}
+
+function solAbrirModalAprovacao(id) {
+  document.getElementById('sol-aprov-id').value = id;
+  document.getElementById('sol-aprov-parecer').value = '';
+  document.getElementById('sol-modal-aprov').classList.remove('hidden');
+}
+
+function solAprovar(id, parecer) {
+  google.script.run
+    .withSuccessHandler(function(r) {
+      if (!r.ok) { alert('Erro: ' + (r.error && r.error.message)); return; }
+      document.getElementById('sol-modal-aprov').classList.add('hidden');
+      solCarregar();
+    })
+    .withFailureHandler(function(e) { alert('Erro: ' + e.message); })
+    .ctrl_sol_aprovar(id, parecer, AppState.usuario ? AppState.usuario.email : '');
+}
+
+function solDevolver(id) {
+  var motivo = prompt('Motivo da devolução:');
+  if (!motivo) return;
+  document.getElementById('sol-modal-aprov').classList.add('hidden');
+  google.script.run
+    .withSuccessHandler(function(r) {
+      if (!r.ok) { alert('Erro: ' + (r.error && r.error.message)); return; }
+      solCarregar();
+    })
+    .withFailureHandler(function(e) { alert('Erro: ' + e.message); })
+    .ctrl_sol_devolver(id, motivo, AppState.usuario ? AppState.usuario.email : '');
+}
+
+function solCancelar(id) {
+  if (!confirm('Cancelar esta solicitação?')) return;
+  google.script.run
+    .withSuccessHandler(function(r) {
+      if (!r.ok) { alert('Erro: ' + (r.error && r.error.message)); return; }
+      _solAtual = null;
+      solCarregar();
+    })
+    .withFailureHandler(function(e) { alert('Erro: ' + e.message); })
+    .ctrl_sol_mudar_status(id, 'cancelada', 'Cancelada pelo usuário', AppState.usuario ? AppState.usuario.email : '');
+}
+
+function solVerificarSaldo(id) {
+  google.script.run
+    .withSuccessHandler(function(r) {
+      if (!r.ok) { alert('Erro ao verificar saldo: ' + (r.error && r.error.message)); return; }
+      var d = r.data;
+      alert(d.mensagem + '\n\nDisponível: ' + (d.disponivel === null ? 'N/A' : d.disponivel ? 'Sim' : 'Não'));
+      solCarregar();
+    })
+    .withFailureHandler(function(e) { alert('Erro: ' + e.message); })
+    .ctrl_sol_verificar_saldo(id, AppState.usuario ? AppState.usuario.email : '');
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function _solCorStatus(status) {
+  var map = {
+    rascunho:              { label:'Rascunho',       style:'background:#f1f5f9;color:#475569' },
+    solicitada:            { label:'Solicitada',      style:'background:#fef3c7;color:#92400e' },
+    em_analise:            { label:'Em Análise',      style:'background:#dbeafe;color:#1d4ed8' },
+    aguardando_ajuste:     { label:'Aguard. Ajuste',  style:'background:#fde68a;color:#b45309' },
+    aprovada:              { label:'Aprovada',        style:'background:#d1fae5;color:#065f46' },
+    parcialmente_aprovada: { label:'Parc. Aprovada',  style:'background:#bbf7d0;color:#065f46' },
+    em_execucao:           { label:'Em Execução',     style:'background:#e0f2fe;color:#075985' },
+    concluida:             { label:'Concluída',       style:'background:#d1fae5;color:#166534' },
+    cancelada:             { label:'Cancelada',       style:'background:#fee2e2;color:#991b1b' }
+  };
+  return map[status] || { label: status, style: 'background:#f1f5f9;color:#475569' };
+}
+
+function _solPriorLabel(p) {
+  return { baixa:'Baixa', media:'Média', alta:'Alta', critica:'Crítica' }[p] || p;
+}
+
+function _solFmtMoeda(v) {
+  return 'R$ ' + parseFloat(v || 0).toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+}
+
+function _solFmtData(iso) {
+  if (!iso) return '-';
+  try { return new Date(iso).toLocaleDateString('pt-BR'); } catch(e) { return iso; }
+}
+
+function _solFmtDataHora(iso) {
+  if (!iso) return '';
+  try {
+    var d = new Date(iso);
+    return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'});
+  } catch(e) { return iso; }
+}
+
+function _esc(str) {
+  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function _solErro(msg) {
+  var lista = document.getElementById('sol-lista');
+  if (lista) lista.innerHTML = '<div class="text-center text-red-400 py-8 text-sm"><i class="fas fa-triangle-exclamation mb-2"></i><p>' + _esc(msg || 'Erro') + '</p></div>';
+}
+</script>
