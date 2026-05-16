@@ -772,8 +772,14 @@ const GAS = {
     transicao: function(id, novoStatus, contexto, cb, err, s) {
       GAS._callCtrl('ctrl_reunioes_transicao', [id, novoStatus, contexto, s || GAS._sessao()], cb, err);
     },
-    excluir: function(id, cb, err, s) {
-      GAS._callCtrl('ctrl_reunioes_excluir', [id, s || GAS._sessao()], cb, err);
+    excluir: function(id, motivo, cb, err, s) {
+      GAS._callCtrl('ctrl_reunioes_excluir', [{ id: id, motivo: motivo || '' }, s || GAS._sessao()], cb, err);
+    },
+    restaurar: function(id, cb, err, s) {
+      GAS._callCtrl('ctrl_reunioes_restaurar', [{ id: id }, s || GAS._sessao()], cb, err);
+    },
+    listarExcluidas: function(cb, err, s) {
+      GAS._callCtrl('ctrl_reunioes_listar_excluidas', [s || GAS._sessao()], cb, err);
     },
 
     // ── Ata ─────────────────────────────────────────────────────────────────

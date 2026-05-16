@@ -127,18 +127,69 @@ function ctrl_reunioes_transicao(id, novoStatus, contexto, emailFallback) {
   }
 }
 
-/** Exclui uma reunião (apenas admin/superadmin). */
-function ctrl_reunioes_excluir(id, emailFallback) {
+/**
+ * Exclui uma reunião com soft delete + validação de permissão.
+ * Admin pode excluir qualquer reunião. Gestor/demais: apenas planejada/agendada.
+ * @param {Object} params — { id, motivo }
+ */
+function ctrl_reunioes_excluir(params, emailFallback) {
+  try {
+    var ctx = _ctrlReunioesObterContexto(emailFallback);
+    var p = params || {};
+    var id = p.id || params;  // suporta chamada legada com id direto
+    var motivo = p.motivo || '';
+    if (!id) return GasResponse.error('ID da reunião é obrigatório.', 'VALIDACAO');
+
+    var NIVEIS_PODEM_EXCLUIR = ['superadmin', 'admin', 'gestor'];
+    if (NIVEIS_PODEM_EXCLUIR.indexOf(ctx.nivel) === -1) {
+      // Usuário comum só pode excluir reunião que criou, se planejada
+      var reuniao = ReunioesRepository.obterReuniaoPorId(id);
+      if (!reuniao) return GasResponse.error('Reunião não encontrada.', 'NOT_FOUND');
+      if (reuniao.criadoPor !== ctx.email && reuniao.organizador !== ctx.email) {
+        return GasResponse.error('Sem permissão para excluir esta reunião.', 'FORBIDDEN');
+      }
+    }
+
+    var resultado = ReunioesEngine.excluirReuniao(id, ctx.email, motivo, ctx.nivel);
+    return GasResponse.ok(resultado);
+  } catch(e) {
+    Logger.error('[ctrl_reunioes_excluir] ' + e.message);
+    return GasResponse.error(e.message);
+  }
+}
+
+/** Restaura uma reunião excluída (apenas superadmin/admin). */
+function ctrl_reunioes_restaurar(params, emailFallback) {
   try {
     var ctx = _ctrlReunioesObterContexto(emailFallback);
     var NIVEIS_ADMIN = ['superadmin', 'admin'];
     if (NIVEIS_ADMIN.indexOf(ctx.nivel) === -1) {
-      return GasResponse.error('Somente administradores podem excluir reuniões.', 'FORBIDDEN');
+      return GasResponse.error('Somente administradores podem restaurar reuniões excluídas.', 'FORBIDDEN');
     }
-    ReunioesRepository.excluirReuniao(id);
-    return GasResponse.ok({ excluido: true });
+    var p = params || {};
+    var id = p.id || params;
+    if (!id) return GasResponse.error('ID da reunião é obrigatório.', 'VALIDACAO');
+
+    var reuniao = ReunioesEngine.restaurarReuniao(id, ctx.email);
+    return GasResponse.ok(reuniao);
   } catch(e) {
-    Logger.error('[ctrl_reunioes_excluir] ' + e.message);
+    Logger.error('[ctrl_reunioes_restaurar] ' + e.message);
+    return GasResponse.error(e.message);
+  }
+}
+
+/** Lista reuniões excluídas (apenas admin). */
+function ctrl_reunioes_listar_excluidas(emailFallback) {
+  try {
+    var ctx = _ctrlReunioesObterContexto(emailFallback);
+    var NIVEIS_ADMIN = ['superadmin', 'admin'];
+    if (NIVEIS_ADMIN.indexOf(ctx.nivel) === -1) {
+      return GasResponse.error('Acesso restrito a administradores.', 'FORBIDDEN');
+    }
+    var excluidas = ReunioesRepository.listarExcluidas();
+    return GasResponse.ok({ reunioes: excluidas, total: excluidas.length });
+  } catch(e) {
+    Logger.error('[ctrl_reunioes_listar_excluidas] ' + e.message);
     return GasResponse.error(e.message);
   }
 }

@@ -54,11 +54,12 @@ var ReunioesRepository = (function() {
     // --- Reuniões ---
 
     listarReunioes: function() {
-      return _lerReunioes();
+      // Por padrão, exclui soft-deleted
+      return _lerReunioes().filter(function(r) { return !r.deletedAt; });
     },
 
     listarReunioesParaUsuario: function(email, nivel) {
-      var todas = _lerReunioes();
+      var todas = _lerReunioes().filter(function(r) { return !r.deletedAt; });
       // Superadmin/admin/gestor veem todas as reuniões
       if (_NIVEIS_AMPLOS.indexOf(nivel) !== -1) return todas;
       // Demais: apenas reuniões onde o usuário é participante ou organizador
@@ -66,6 +67,7 @@ var ReunioesRepository = (function() {
     },
 
     obterReuniaoPorId: function(id) {
+      // Retorna mesmo se deletada (para auditoria e restauração)
       return _lerReunioes().find(function(r) { return r.id === id; }) || null;
     },
 
@@ -81,13 +83,44 @@ var ReunioesRepository = (function() {
       return reuniao;
     },
 
-    excluirReuniao: function(id) {
-      _escreverReunioes(_lerReunioes().filter(function(r) { return r.id !== id; }));
+    // ── Soft delete ──────────────────────────────────────────────────────────
+
+    excluirReuniao: function(id, emailAdmin, motivo) {
+      var lista = _lerReunioes();
+      var idx = -1;
+      for (var i = 0; i < lista.length; i++) {
+        if (lista[i].id === id) { idx = i; break; }
+      }
+      if (idx === -1) return { ok: false, erro: 'Reunião não encontrada.' };
+      lista[idx].deletedAt  = new Date().toISOString();
+      lista[idx].deletedBy  = emailAdmin;
+      lista[idx].deletedMotivo = motivo || '';
+      _escreverReunioes(lista);
       return { ok: true };
     },
 
+    restaurarReuniao: function(id, emailAdmin) {
+      var lista = _lerReunioes();
+      var idx = -1;
+      for (var i = 0; i < lista.length; i++) {
+        if (lista[i].id === id) { idx = i; break; }
+      }
+      if (idx === -1) return { ok: false, erro: 'Reunião não encontrada.' };
+      delete lista[idx].deletedAt;
+      delete lista[idx].deletedBy;
+      delete lista[idx].deletedMotivo;
+      lista[idx].restauradaPor  = emailAdmin;
+      lista[idx].restauradaEm   = new Date().toISOString();
+      _escreverReunioes(lista);
+      return { ok: true, reuniao: lista[idx] };
+    },
+
+    listarExcluidas: function() {
+      return _lerReunioes().filter(function(r) { return !!r.deletedAt; });
+    },
+
     listarPorStatus: function(status) {
-      return _lerReunioes().filter(function(r) { return r.status === status; });
+      return _lerReunioes().filter(function(r) { return !r.deletedAt && r.status === status; });
     },
 
     listarProximas: function(diasHorizonte) {
@@ -96,6 +129,7 @@ var ReunioesRepository = (function() {
       var hoje = new Date();
       hoje.setHours(0, 0, 0, 0);
       return _lerReunioes().filter(function(r) {
+        if (r.deletedAt) return false;
         if (r.status === 'cancelada' || r.status === 'arquivada') return false;
         var d = new Date(r.data);
         return d >= hoje && d <= limite;
@@ -103,7 +137,7 @@ var ReunioesRepository = (function() {
     },
 
     listarReunioesPorSerie: function(serieId) {
-      return _lerReunioes().filter(function(r) { return r.serieId === serieId; });
+      return _lerReunioes().filter(function(r) { return !r.deletedAt && r.serieId === serieId; });
     },
 
     // --- Encaminhamentos ---
@@ -197,7 +231,7 @@ var ReunioesRepository = (function() {
     },
 
     calcularMetricasReunioes: function() {
-      var todas = _lerReunioes();
+      var todas = _lerReunioes().filter(function(r) { return !r.deletedAt; });
       var por_status = {};
       var semExecucao = 0;
       todas.forEach(function(r) {

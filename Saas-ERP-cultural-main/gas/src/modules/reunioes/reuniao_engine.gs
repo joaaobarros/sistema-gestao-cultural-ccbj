@@ -533,6 +533,92 @@ var ReunioesEngine = (function() {
     return { encaminhamento: enc, tarefa: tarefa };
   }
 
+  // ── Exclusão segura (soft delete) ────────────────────────────────────────
+
+  function excluirReuniao(id, emailAdmin, motivo, nivel) {
+    var nivelAdmin = ['superadmin', 'admin'];
+    var podeExcluirQualquer = nivelAdmin.indexOf(nivel) !== -1;
+
+    var reuniao = ReunioesRepository.obterReuniaoPorId(id);
+    if (!reuniao) throw new Error('Reunião não encontrada: ' + id);
+    if (reuniao.deletedAt) throw new Error('Reunião já está excluída.');
+
+    // Usuário comum só pode excluir reuniões planejadas/agendadas que criou
+    if (!podeExcluirQualquer) {
+      var statusPermitidos = ['planejada', 'agendada'];
+      if (statusPermitidos.indexOf(reuniao.status) === -1) {
+        throw new Error('Apenas administradores podem excluir reuniões com status "' + reuniao.status + '".');
+      }
+    }
+
+    // Verificar se há encaminhamentos ativos vinculados
+    var encsVinculados = ReunioesRepository.listarEncaminhamentosPorReuniao(id);
+    var encsAtivos = encsVinculados.filter(function(e) {
+      return e.status !== 'concluido' && e.status !== 'cancelado';
+    });
+
+    // Marcar encaminhamentos com flag de reunião excluída (não deletar)
+    encsVinculados.forEach(function(enc) {
+      enc.reuniaoExcluida = true;
+      enc.atualizadoEm = _agora();
+      ReunioesRepository.salvarEncaminhamento(enc);
+    });
+
+    // Registrar histórico antes de excluir
+    _registrarHistoricoReuniao(reuniao, 'excluida', emailAdmin, motivo || '');
+    ReunioesRepository.salvarReuniao(reuniao);
+
+    var resultado = ReunioesRepository.excluirReuniao(id, emailAdmin, motivo || '');
+
+    try {
+      AuditoriaService.registrarMutacaoCritica('reuniao', id, reuniao.status, 'excluida', emailAdmin);
+      SystemEvents.emit('REUNIAO_EXCLUIDA', {
+        entidade: 'reuniao', entidade_id: id, usuario: emailAdmin,
+        payload: {
+          titulo: reuniao.titulo,
+          motivo: motivo || '',
+          encsAfetados: encsVinculados.length,
+          encsAtivosAfetados: encsAtivos.length
+        }
+      });
+    } catch(e) { Logger.warn('[ReunioesEngine.excluirReuniao] ' + e.message); }
+
+    return {
+      ok: true,
+      reuniaoId: id,
+      titulo: reuniao.titulo,
+      encsAfetados: encsVinculados.length,
+      encsAtivosAfetados: encsAtivos.length
+    };
+  }
+
+  function restaurarReuniao(id, emailAdmin) {
+    var reuniao = ReunioesRepository.obterReuniaoPorId(id);
+    if (!reuniao) throw new Error('Reunião não encontrada: ' + id);
+    if (!reuniao.deletedAt) throw new Error('Reunião não está excluída.');
+
+    // Remover flag de reunião excluída dos encaminhamentos
+    var encsVinculados = ReunioesRepository.listarEncaminhamentosPorReuniao(id);
+    encsVinculados.forEach(function(enc) {
+      if (enc.reuniaoExcluida) {
+        delete enc.reuniaoExcluida;
+        enc.atualizadoEm = _agora();
+        ReunioesRepository.salvarEncaminhamento(enc);
+      }
+    });
+
+    var resultado = ReunioesRepository.restaurarReuniao(id, emailAdmin);
+
+    try {
+      SystemEvents.emit('REUNIAO_RESTAURADA', {
+        entidade: 'reuniao', entidade_id: id, usuario: emailAdmin,
+        payload: { titulo: reuniao.titulo }
+      });
+    } catch(e) { Logger.warn('[ReunioesEngine.restaurarReuniao] ' + e.message); }
+
+    return resultado.reuniao;
+  }
+
   // ── Verificação de atrasos (trigger diário) ───────────────────────────────
 
   function verificarAtrasos(email) {
@@ -597,6 +683,10 @@ var ReunioesEngine = (function() {
     aplicarTransicaoEncaminhamento:      aplicarTransicaoEncaminhamento,
     adicionarComentario:                 adicionarComentario,
     gerarTarefaDeEncaminhamento:         gerarTarefaDeEncaminhamento,
+
+    // Exclusão segura
+    excluirReuniao:             excluirReuniao,
+    restaurarReuniao:           restaurarReuniao,
 
     // Operações de sistema
     verificarAtrasos:           verificarAtrasos,

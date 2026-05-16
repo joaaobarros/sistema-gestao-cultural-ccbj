@@ -32,6 +32,143 @@ var _reuState = {
 // Debounce para autocomplete de participantes
 var _reuDebounceTimer = null;
 
+// ── Lock universal contra duplo clique ───────────────────────────────────────
+// Garante idempotência em todos os botões de ação crítica.
+var _reunBtn = (function() {
+  var locks = {};
+  return {
+    lock: function(id) { locks[id] = true; },
+    unlock: function(id) { delete locks[id]; },
+    isLocked: function(id) { return !!locks[id]; },
+    /**
+     * Executa fn() com proteção contra duplo clique.
+     * @param {string}   btnId — id do elemento botão (para feedback visual)
+     * @param {string}   lockId — chave única da operação
+     * @param {string}   labelCarregando — texto exibido durante loading
+     * @param {Function} fn — função a executar (deve retornar Promise ou chamar done() ao final)
+     */
+    wrap: function(btnId, lockId, labelCarregando, fn) {
+      if (locks[lockId]) return;
+      locks[lockId] = true;
+      var btn = btnId ? document.getElementById(btnId) : null;
+      var originalHTML = btn ? btn.innerHTML : '';
+      var originalDisabled = btn ? btn.disabled : false;
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>' + (labelCarregando || 'Aguarde...');
+      }
+      function done() {
+        delete locks[lockId];
+        if (btn) {
+          btn.disabled = originalDisabled;
+          btn.innerHTML = originalHTML;
+        }
+      }
+      try {
+        fn(done);
+      } catch(e) {
+        done();
+        throw e;
+      }
+    }
+  };
+})();
+
+// ── Autosave de rascunho da ata ───────────────────────────────────────────────
+var _reuAutosaveTimer = null;
+
+function _reunAutosave(reuniaoId, conteudo) {
+  try {
+    if (!reuniaoId) return;
+    var key = 'reun_draft_' + reuniaoId;
+    localStorage.setItem(key, JSON.stringify({ conteudo: conteudo, ts: Date.now() }));
+  } catch(e) { /* localStorage pode não estar disponível */ }
+}
+
+function _reunRecuperarRascunho(reuniaoId) {
+  try {
+    if (!reuniaoId) return null;
+    var key = 'reun_draft_' + reuniaoId;
+    var raw = localStorage.getItem(key);
+    if (!raw) return null;
+    var draft = JSON.parse(raw);
+    // Rascunho expira em 24h
+    if (Date.now() - draft.ts > 24 * 3600 * 1000) {
+      localStorage.removeItem(key);
+      return null;
+    }
+    return draft;
+  } catch(e) { return null; }
+}
+
+function _reunLimparRascunho(reuniaoId) {
+  try {
+    if (!reuniaoId) return;
+    localStorage.removeItem('reun_draft_' + reuniaoId);
+  } catch(e) {}
+}
+
+function _reuIniciarAutosave(reuniaoId) {
+  if (_reuAutosaveTimer) clearInterval(_reuAutosaveTimer);
+  _reuAutosaveTimer = setInterval(function() {
+    if (!reuniaoId) return;
+    var abertura    = (document.getElementById('reu-ata-abertura')     || {}).value || '';
+    var encerramento = (document.getElementById('reu-ata-encerramento') || {}).value || '';
+    _reunAutosave(reuniaoId, {
+      abertura:     abertura,
+      encerramento: encerramento,
+      deliberacoes: _reuDeliberacoes
+    });
+    // Mostrar indicador visual discreto
+    var indicador = document.getElementById('reu-autosave-indicador');
+    if (indicador) {
+      var spanTexto = indicador.querySelector('span');
+      var msg = 'Rascunho salvo às ' + new Date().toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' });
+      if (spanTexto) spanTexto.textContent = msg; else indicador.textContent = msg;
+      indicador.classList.remove('hidden');
+      setTimeout(function() { indicador.classList.add('hidden'); }, 3000);
+    }
+  }, 30000);
+}
+
+// ── Toast de feedback ────────────────────────────────────────────────────────
+
+function _reuToast(tipo, mensagem, duracao) {
+  if (typeof Swal !== 'undefined' && Swal.fire) {
+    Swal.fire({
+      icon: tipo,
+      title: mensagem,
+      toast: true,
+      position: 'top-end',
+      timer: duracao || 3000,
+      timerProgressBar: true,
+      showConfirmButton: false
+    });
+  } else {
+    if (tipo === 'error') console.error('[Reuniões]', mensagem);
+    // Fallback discreto sem alert() bloqueante
+  }
+}
+
+function _reuConfirmar(titulo, texto, iconeTipo, callbackConfirmar) {
+  if (typeof Swal !== 'undefined' && Swal.fire) {
+    Swal.fire({
+      title: titulo,
+      text: texto || '',
+      icon: iconeTipo || 'warning',
+      showCancelButton: true,
+      confirmButtonColor: iconeTipo === 'error' ? '#dc2626' : '#7c3aed',
+      cancelButtonColor: '#94a3b8',
+      confirmButtonText: 'Confirmar',
+      cancelButtonText: 'Cancelar'
+    }).then(function(result) {
+      if (result.isConfirmed) callbackConfirmar();
+    });
+  } else {
+    if (confirm(titulo + (texto ? '\n' + texto : ''))) callbackConfirmar();
+  }
+}
+
 // Cores para avatares
 var _REU_CORES = ['#7c3aed','#2563eb','#059669','#d97706','#dc2626','#0891b2','#9333ea'];
 function _reuCor(email) {
@@ -155,6 +292,9 @@ function _reuRenderizarLista(filtradas) {
       '</div>' +
       '<div class="flex flex-col gap-1 shrink-0">' +
         '<button onclick="event.stopPropagation();_reuAbrirDetalheReuniao(\'' + r.id + '\')" class="btn-icon text-slate-400 hover:text-purple-500" title="Ver detalhes"><i class="fas fa-chevron-right text-xs"></i></button>' +
+        (_reuState.nivel === 'superadmin' || _reuState.nivel === 'admin'
+          ? '<button onclick="event.stopPropagation();_reuExcluirReuniao(\'' + r.id + '\')" class="btn-icon text-slate-300 hover:text-red-500" title="Excluir reunião"><i class="fas fa-trash text-xs"></i></button>'
+          : '') +
       '</div>' +
     '</div>';
   }).join('');
@@ -251,10 +391,12 @@ function _reuPreencherFormReuniao(r) {
 }
 
 function _reu_salvarReuniao() {
+  if (_reunBtn.isLocked('salvar-reuniao')) return;
+
   var titulo = (document.getElementById('reu-form-titulo') || {}).value || '';
   var data   = (document.getElementById('reu-form-data')   || {}).value || '';
-  if (!titulo.trim()) { alert('Informe o título da reunião.'); return; }
-  if (!data)          { alert('Informe a data da reunião.');   return; }
+  if (!titulo.trim()) { _reuToast('warning', 'Informe o título da reunião.'); return; }
+  if (!data)          { _reuToast('warning', 'Informe a data da reunião.');   return; }
 
   var dados = {
     titulo:      titulo.trim(),
@@ -271,15 +413,77 @@ function _reu_salvarReuniao() {
     pauta:       _reuFormPauta
   };
 
-  var fn = _reuEditandoId
-    ? function(cb, err, s) { GAS.reunioes.atualizar(_reuEditandoId, dados, cb, err, s); }
-    : function(cb, err, s) { GAS.reunioes.criar(dados, cb, err, s); };
+  _reunBtn.wrap('btn-salvar-reuniao', 'salvar-reuniao', 'Salvando...', function(done) {
+    var fn = _reuEditandoId
+      ? function(cb, err, s) { GAS.reunioes.atualizar(_reuEditandoId, dados, cb, err, s); }
+      : function(cb, err, s) { GAS.reunioes.criar(dados, cb, err, s); };
 
-  fn(function(r) {
-    _reu_fecharModal('modal-nova-reuniao');
-    _reuState.carregado = false;
-    _reuCarregarDados();
-  }, function(e) { alert('Erro: ' + (e.message || e)); }, GAS._sessao());
+    fn(function(r) {
+      done();
+      _reu_fecharModal('modal-nova-reuniao');
+      _reuState.carregado = false;
+      _reuCarregarDados();
+      _reuToast('success', _reuEditandoId ? 'Reunião atualizada!' : 'Reunião criada com sucesso!');
+    }, function(e) {
+      done();
+      _reuToast('error', 'Erro: ' + (e.message || e));
+    }, GAS._sessao());
+  });
+}
+
+// ── Exclusão de reunião com confirmação ──────────────────────────────────────
+
+function _reuExcluirReuniao(id) {
+  var r = _reuState.reunioes.find(function(x) { return x.id === id; });
+  var tituloR = r ? r.titulo : id;
+  var temEncs = _reuState.encaminhamentos.filter(function(e) { return e.reuniaoId === id; }).length;
+
+  var texto = 'Esta ação marcará a reunião "' + tituloR + '" como excluída.' +
+    (temEncs > 0 ? '\n\nAtenção: ' + temEncs + ' encaminhamento(s) vinculado(s) serão marcados (mas não deletados).' : '') +
+    '\n\nInforme o motivo da exclusão:';
+
+  if (typeof Swal !== 'undefined' && Swal.fire) {
+    Swal.fire({
+      title: 'Excluir reunião?',
+      html: '<p class="text-sm text-slate-600 mb-3">' + texto.replace(/\n/g, '<br>') + '</p>' +
+            '<textarea id="swal-motivo-exclusao" class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" rows="2" placeholder="Motivo (obrigatório)..."></textarea>',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#dc2626',
+      cancelButtonColor: '#94a3b8',
+      confirmButtonText: '<i class="fas fa-trash mr-1"></i>Excluir',
+      cancelButtonText: 'Cancelar',
+      preConfirm: function() {
+        var motivo = document.getElementById('swal-motivo-exclusao').value.trim();
+        if (!motivo) {
+          Swal.showValidationMessage('O motivo da exclusão é obrigatório.');
+          return false;
+        }
+        return motivo;
+      }
+    }).then(function(result) {
+      if (!result.isConfirmed) return;
+      var motivo = result.value;
+      GAS.reunioes.excluir(id, motivo, function(res) {
+        // Remover da lista local
+        _reuState.reunioes = _reuState.reunioes.filter(function(x) { return x.id !== id; });
+        _reuRenderizarLista();
+        _reuToast('success', 'Reunião "' + tituloR + '" excluída. ' + (res.encsAfetados > 0 ? res.encsAfetados + ' encaminhamento(s) marcados.' : ''));
+      }, function(e) {
+        _reuToast('error', 'Erro ao excluir: ' + (e.message || e));
+      }, GAS._sessao());
+    });
+  } else {
+    var motivo = prompt(texto);
+    if (motivo === null || motivo.trim() === '') return;
+    GAS.reunioes.excluir(id, motivo.trim(), function(res) {
+      _reuState.reunioes = _reuState.reunioes.filter(function(x) { return x.id !== id; });
+      _reuRenderizarLista();
+      _reuToast('success', 'Reunião excluída.');
+    }, function(e) {
+      _reuToast('error', 'Erro ao excluir: ' + (e.message || e));
+    }, GAS._sessao());
+  }
 }
 
 // ── Pauta no form ─────────────────────────────────────────────────────────────
@@ -557,10 +761,17 @@ function _reuRenderizarPautaAoVivo(reuniao) {
 }
 
 function _reuMarcarPautaDiscutido(reuniaoId, itemId) {
+  var lockId = 'pauta-disc-' + itemId;
+  if (_reunBtn.isLocked(lockId)) return;
+  _reunBtn.lock(lockId);
   GAS.reunioes.atualizarPauta(reuniaoId, itemId, { status: 'discutido' }, function(r) {
+    _reunBtn.unlock(lockId);
     _reuState.reuniaoAtual = r;
     _reuRenderizarPautaAoVivo(r);
-  }, null, GAS._sessao());
+  }, function(e) {
+    _reunBtn.unlock(lockId);
+    _reuToast('error', 'Erro ao marcar item: ' + (e.message || e));
+  }, GAS._sessao());
 }
 
 function _reuRenderizarPresencaAoVivo(reuniao) {
@@ -588,17 +799,25 @@ function _reuTogglePresenca(email, presente) {
 
 function _reu_salvarPresenca() {
   if (!_reuState.reuniaoAtual) return;
+  if (_reunBtn.isLocked('salvar-presenca')) return;
+
   var todos = _reuState.reuniaoAtual.participantes || [];
   var presentes = todos.filter(function(e) {
     return _reuPresencaTemp.hasOwnProperty(e) ? _reuPresencaTemp[e] : true;
   });
   var ausentes = todos.filter(function(e) { return presentes.indexOf(e) === -1; });
 
-  GAS.reunioes.registrarPresenca(_reuState.reuniaoAtual.id, presentes, ausentes, function(r) {
-    _reuState.reuniaoAtual = r;
-    _reuPresencaTemp = {};
-    alert('Presença salva!');
-  }, null, GAS._sessao());
+  _reunBtn.wrap('btn-salvar-presenca', 'salvar-presenca', 'Salvando...', function(done) {
+    GAS.reunioes.registrarPresenca(_reuState.reuniaoAtual.id, presentes, ausentes, function(r) {
+      done();
+      _reuState.reuniaoAtual = r;
+      _reuPresencaTemp = {};
+      _reuToast('success', 'Presença salva!');
+    }, function(e) {
+      done();
+      _reuToast('error', 'Erro ao salvar presença: ' + (e.message || e));
+    }, GAS._sessao());
+  });
 }
 
 function _reuRenderizarEncAoVivo(encs) {
@@ -665,18 +884,31 @@ function _pad(n) { return n < 10 ? '0' + n : '' + n; }
 
 function _reu_encerrarReuniao() {
   if (!_reuState.reuniaoAtual) return;
-  if (!confirm('Encerrar a reunião e ir para a edição da ata?')) return;
-  clearInterval(_reuState.timer.intervaloId);
-  _reuState.timer = { rodando: false, inicio: null, acumulado: 0, intervaloId: null };
+  if (_reunBtn.isLocked('encerrar-reuniao')) return;
 
-  GAS.reunioes.transicao(_reuState.reuniaoAtual.id, 'finalizada', '', function(r) {
-    _reuState.reuniaoAtual = r;
-    // Ir para ata
-    _reu_mostrarVisao('ata');
-    var sel = document.getElementById('reu-select-ata');
-    if (sel) { sel.value = r.id; _reuCarregarAta(r.id); }
-    _reuCarregarDados();
-  }, null, GAS._sessao());
+  _reuConfirmar(
+    'Encerrar reunião?',
+    'A reunião será marcada como finalizada e você será redirecionado para a edição da ata.',
+    'question',
+    function() {
+      _reunBtn.lock('encerrar-reuniao');
+      clearInterval(_reuState.timer.intervaloId);
+      _reuState.timer = { rodando: false, inicio: null, acumulado: 0, intervaloId: null };
+
+      GAS.reunioes.transicao(_reuState.reuniaoAtual.id, 'finalizada', '', function(r) {
+        _reunBtn.unlock('encerrar-reuniao');
+        _reuState.reuniaoAtual = r;
+        _reu_mostrarVisao('ata');
+        var sel = document.getElementById('reu-select-ata');
+        if (sel) { sel.value = r.id; _reuCarregarAta(r.id); }
+        _reuCarregarDados();
+        _reuToast('success', 'Reunião encerrada. Edite a ata abaixo.');
+      }, function(e) {
+        _reunBtn.unlock('encerrar-reuniao');
+        _reuToast('error', 'Erro ao encerrar reunião: ' + (e.message || e));
+      }, GAS._sessao());
+    }
+  );
 }
 
 function _reuAtualizarBadgeAoVivo() {
@@ -730,12 +962,52 @@ function _reuCarregarAtaEditor(reuniao, encs) {
   _reuRenderizarChipsPresenca('reu-ata-presentes', ata.presentes || reuniao.participantes || [], 'green');
   _reuRenderizarChipsPresenca('reu-ata-ausentes',  ata.ausentes  || [], 'red');
 
-  // Textos
-  var a = document.getElementById('reu-ata-abertura');     if (a) a.value = ata.abertura    || '';
-  var e = document.getElementById('reu-ata-encerramento'); if (e) e.value = ata.encerramento || '';
+  // Textos — verificar se há rascunho local mais recente que a versão salva
+  var aberturaServidor     = ata.abertura    || '';
+  var encerramentoServidor = ata.encerramento || '';
+  var deliberacoesServidor = ata.deliberacoes || [];
 
-  // Deliberações
-  _reuRenderizarDeliberacoes(ata.deliberacoes || []);
+  // Só oferecer recuperação se a ata ainda for editável (rascunho ou não iniciada)
+  var ataSalvavel = reuniao.status === 'finalizada' || reuniao.status === 'ata_rascunho';
+  if (ataSalvavel) {
+    var draft = _reunRecuperarRascunho(reuniao.id);
+    if (draft && draft.conteudo && typeof Swal !== 'undefined' && Swal.fire) {
+      var draftTs = new Date(draft.ts).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
+      Swal.fire({
+        title: 'Rascunho local encontrado',
+        html: '<p class="text-sm text-slate-600">Existe um rascunho salvo localmente às <strong>' + draftTs + '</strong>.<br>Deseja recuperá-lo ou usar a versão do servidor?</p>',
+        icon: 'info',
+        showCancelButton: true,
+        confirmButtonColor: '#7c3aed',
+        cancelButtonColor: '#94a3b8',
+        confirmButtonText: '<i class="fas fa-history mr-1"></i>Recuperar rascunho',
+        cancelButtonText: 'Usar versão salva'
+      }).then(function(result) {
+        var c = result.isConfirmed ? draft.conteudo : null;
+        var elA = document.getElementById('reu-ata-abertura');
+        var elE = document.getElementById('reu-ata-encerramento');
+        if (elA) elA.value = (c && c.abertura    !== undefined) ? c.abertura    : aberturaServidor;
+        if (elE) elE.value = (c && c.encerramento !== undefined) ? c.encerramento : encerramentoServidor;
+        _reuRenderizarDeliberacoes((c && c.deliberacoes) ? c.deliberacoes : deliberacoesServidor);
+        if (!result.isConfirmed) _reunLimparRascunho(reuniao.id);
+      });
+    } else {
+      var elA = document.getElementById('reu-ata-abertura');
+      var elE = document.getElementById('reu-ata-encerramento');
+      if (elA) elA.value = aberturaServidor;
+      if (elE) elE.value = encerramentoServidor;
+      _reuRenderizarDeliberacoes(deliberacoesServidor);
+    }
+
+    // Iniciar autosave a cada 30 segundos
+    _reuIniciarAutosave(reuniao.id);
+  } else {
+    var elA = document.getElementById('reu-ata-abertura');
+    var elE = document.getElementById('reu-ata-encerramento');
+    if (elA) elA.value = aberturaServidor;
+    if (elE) elE.value = encerramentoServidor;
+    _reuRenderizarDeliberacoes(deliberacoesServidor);
+  }
 
   // Encaminhamentos
   _reuRenderizarEncAtaLista(encs || []);
@@ -837,32 +1109,65 @@ function _reu_adicionarDeliberacao() {
 
 function _reu_salvarAta(enviarAprovacao) {
   if (!_reuState.ataReuniaoId) return;
+  var lockId = enviarAprovacao ? 'enviar-ata-aprovacao' : 'salvar-ata-rascunho';
+  var btnId  = enviarAprovacao ? 'btn-ata-enviar' : 'btn-ata-salvar';
+  if (_reunBtn.isLocked(lockId)) return;
+
   var dadosAta = {
     abertura:      (document.getElementById('reu-ata-abertura')     || {}).value || '',
     encerramento:  (document.getElementById('reu-ata-encerramento') || {}).value || '',
     deliberacoes:  _reuDeliberacoes
   };
-  GAS.reunioes.salvarAta(_reuState.ataReuniaoId, dadosAta, function(r) {
-    _reuState.reuniaoAtual = r;
-    _reuRenderizarStatusAta(r);
-    alert(enviarAprovacao ? 'Ata enviada para aprovação.' : 'Rascunho salvo.');
-    if (enviarAprovacao && r.status !== 'ata_rascunho') {
-      GAS.reunioes.transicao(_reuState.ataReuniaoId, 'ata_rascunho', '', function(r2) {
-        _reuState.reuniaoAtual = r2;
-        _reuRenderizarStatusAta(r2);
-      }, null, GAS._sessao());
-    }
-  }, null, GAS._sessao());
+
+  _reunBtn.wrap(btnId, lockId, enviarAprovacao ? 'Enviando...' : 'Salvando...', function(done) {
+    GAS.reunioes.salvarAta(_reuState.ataReuniaoId, dadosAta, function(r) {
+      _reuState.reuniaoAtual = r;
+      _reuRenderizarStatusAta(r);
+      // Limpar rascunho local ao salvar com sucesso
+      _reunLimparRascunho(_reuState.ataReuniaoId);
+
+      if (enviarAprovacao && r.status !== 'ata_rascunho') {
+        GAS.reunioes.transicao(_reuState.ataReuniaoId, 'ata_rascunho', '', function(r2) {
+          done();
+          _reuState.reuniaoAtual = r2;
+          _reuRenderizarStatusAta(r2);
+          _reuToast('success', 'Ata enviada para aprovação!');
+        }, function(e) {
+          done();
+          _reuToast('error', 'Erro ao enviar para aprovação: ' + (e.message || e));
+        }, GAS._sessao());
+      } else {
+        done();
+        _reuToast('success', enviarAprovacao ? 'Ata enviada para aprovação!' : 'Rascunho salvo!');
+      }
+    }, function(e) {
+      done();
+      _reuToast('error', 'Erro ao salvar ata: ' + (e.message || e));
+    }, GAS._sessao());
+  });
 }
 
 function _reuAprovarAta(aprovado) {
   if (!_reuState.ataReuniaoId) return;
-  var msg = aprovado ? 'Confirmar aprovação da ata?' : 'Confirmar rejeição da ata?';
-  if (!confirm(msg)) return;
-  GAS.reunioes.aprovarAta(_reuState.ataReuniaoId, aprovado, function(r) {
-    _reuState.reuniaoAtual = r;
-    _reuRenderizarStatusAta(r);
-  }, null, GAS._sessao());
+  var lockId = 'aprovar-ata-' + _reuState.ataReuniaoId;
+  if (_reunBtn.isLocked(lockId)) return;
+
+  var titulo = aprovado ? 'Aprovar ata?' : 'Rejeitar ata?';
+  var texto  = aprovado ? 'Sua aprovação será registrada.' : 'Sua rejeição impedirá a publicação automática.';
+  var icon   = aprovado ? 'question' : 'warning';
+
+  _reuConfirmar(titulo, texto, icon, function() {
+    _reunBtn.lock(lockId);
+    GAS.reunioes.aprovarAta(_reuState.ataReuniaoId, aprovado, function(r) {
+      _reunBtn.unlock(lockId);
+      _reuState.reuniaoAtual = r;
+      _reuRenderizarStatusAta(r);
+      _reuToast('success', aprovado ? 'Aprovação registrada!' : 'Rejeição registrada.');
+    }, function(e) {
+      _reunBtn.unlock(lockId);
+      _reuToast('error', 'Erro: ' + (e.message || e));
+    }, GAS._sessao());
+  });
 }
 
 // Encaminhamentos na ata
@@ -906,7 +1211,10 @@ var _reuEncFormReuniaoId = null;
 var _reuEncFormEnvolvidos = [];
 
 function _reu_abrirModalNovoEnc() {
-  if (!_reuState.ataReuniaoId) { alert('Selecione uma reunião antes.'); return; }
+  if (!_reuState.ataReuniaoId) {
+    _reuToast('warning', 'Selecione uma reunião antes de criar encaminhamentos.');
+    return;
+  }
   _reuEncFormReuniaoId = _reuState.ataReuniaoId;
   _reuEncFormEnvolvidos = [];
   _reuLimparFormEnc();
@@ -939,14 +1247,17 @@ function _reuRenderizarChipsEnvolvidos() {
 }
 
 function _reu_salvarEncaminhamento() {
+  if (_reunBtn.isLocked('salvar-enc')) return;
+
   var titulo      = (document.getElementById('reu-enc-form-titulo')      || {}).value || '';
   var responsavel = (document.getElementById('reu-enc-form-responsavel') || {}).value || '';
   var prazo       = (document.getElementById('reu-enc-form-prazo')       || {}).value || '';
 
+  var alertaCampos = document.getElementById('reu-enc-alerta-campos');
   if (!titulo.trim() || !responsavel || !prazo) {
-    document.getElementById('reu-enc-alerta-campos').classList.remove('hidden');
+    if (alertaCampos) alertaCampos.classList.remove('hidden');
   } else {
-    document.getElementById('reu-enc-alerta-campos').classList.add('hidden');
+    if (alertaCampos) alertaCampos.classList.add('hidden');
   }
 
   var dados = {
@@ -959,13 +1270,20 @@ function _reu_salvarEncaminhamento() {
     modulo:      (document.getElementById('reu-enc-form-modulo')     || {}).value || null
   };
 
-  GAS.reunioes.criarEncaminhamento(_reuEncFormReuniaoId, dados, function(enc) {
-    _reu_fecharModal('modal-novo-enc');
-    _reuState.encaminhamentos.push(enc);
-    _reuRenderizarEncAtaLista(_reuState.encaminhamentos.filter(function(e) { return e.reuniaoId === _reuEncFormReuniaoId; }));
-    _reuRenderizarKanban();
-    _reuAtualizarBadgeAtrasados();
-  }, null, GAS._sessao());
+  _reunBtn.wrap('btn-salvar-enc', 'salvar-enc', 'Salvando...', function(done) {
+    GAS.reunioes.criarEncaminhamento(_reuEncFormReuniaoId, dados, function(enc) {
+      done();
+      _reu_fecharModal('modal-novo-enc');
+      _reuState.encaminhamentos.push(enc);
+      _reuRenderizarEncAtaLista(_reuState.encaminhamentos.filter(function(e) { return e.reuniaoId === _reuEncFormReuniaoId; }));
+      _reuRenderizarKanban();
+      _reuAtualizarBadgeAtrasados();
+      _reuToast('success', 'Encaminhamento criado!');
+    }, function(e) {
+      done();
+      _reuToast('error', 'Erro: ' + (e.message || e));
+    }, GAS._sessao());
+  });
 }
 
 // ── Kanban de Encaminhamentos ─────────────────────────────────────────────────
@@ -1210,29 +1528,83 @@ function _reu_enviarComentario() {
 
 function _reuTransicionarEnc(novoStatus) {
   if (!_reuState.encSelecId) return;
-  GAS.reunioes.transicaoEncaminhamento(_reuState.encSelecId, novoStatus, '', function(enc) {
-    var idx = _reuState.encaminhamentos.findIndex(function(e) { return e.id === enc.id; });
-    if (idx !== -1) _reuState.encaminhamentos[idx] = enc;
-    _reu_fecharModal('modal-detalhe-enc');
-    _reuRenderizarKanban();
-    _reuAtualizarBadgeAtrasados();
-    if (_reuState.ataReuniaoId) {
-      _reuRenderizarEncAtaLista(_reuState.encaminhamentos.filter(function(e) { return e.reuniaoId === _reuState.ataReuniaoId; }));
-    }
-  }, null, GAS._sessao());
+  var lockId = 'transicionar-enc-' + _reuState.encSelecId;
+  if (_reunBtn.isLocked(lockId)) return;
+
+  function _executarTransicao() {
+    _reunBtn.lock(lockId);
+    GAS.reunioes.transicaoEncaminhamento(_reuState.encSelecId, novoStatus, '', function(enc) {
+      _reunBtn.unlock(lockId);
+      var idx = _reuState.encaminhamentos.findIndex(function(e) { return e.id === enc.id; });
+      if (idx !== -1) _reuState.encaminhamentos[idx] = enc;
+      _reu_fecharModal('modal-detalhe-enc');
+      _reuRenderizarKanban();
+      _reuAtualizarBadgeAtrasados();
+      if (_reuState.ataReuniaoId) {
+        _reuRenderizarEncAtaLista(_reuState.encaminhamentos.filter(function(e) { return e.reuniaoId === _reuState.ataReuniaoId; }));
+      }
+      var labelsTrans = {
+        em_andamento: 'Encaminhamento iniciado.',
+        aguardando_terceiros: 'Aguardando terceiros.',
+        concluido: 'Encaminhamento concluído!',
+        cancelado: 'Encaminhamento cancelado.',
+        pendente: 'Encaminhamento retornado ao pendente.'
+      };
+      _reuToast(novoStatus === 'concluido' ? 'success' : (novoStatus === 'cancelado' ? 'warning' : 'info'),
+        labelsTrans[novoStatus] || 'Status atualizado.');
+    }, function(e) {
+      _reunBtn.unlock(lockId);
+      _reuToast('error', 'Erro ao atualizar status: ' + (e.message || e));
+    }, GAS._sessao());
+  }
+
+  // Ações destrutivas exigem confirmação explícita
+  if (novoStatus === 'cancelado') {
+    _reuConfirmar(
+      'Cancelar encaminhamento?',
+      'Esta ação marcará o encaminhamento como cancelado. O histórico será preservado.',
+      'warning',
+      _executarTransicao
+    );
+  } else if (novoStatus === 'concluido') {
+    _reuConfirmar(
+      'Marcar como concluído?',
+      'Confirme que o encaminhamento foi completamente executado.',
+      'question',
+      _executarTransicao
+    );
+  } else {
+    _executarTransicao();
+  }
 }
 
 function _reu_gerarTarefa() {
   if (!_reuState.encSelecId) return;
-  if (!confirm('Gerar tarefa no sistema a partir deste encaminhamento?')) return;
-  GAS.reunioes.gerarTarefa(_reuState.encSelecId, function(r) {
-    var enc = r.encaminhamento;
-    var idx = _reuState.encaminhamentos.findIndex(function(e) { return e.id === enc.id; });
-    if (idx !== -1) _reuState.encaminhamentos[idx] = enc;
-    var tarefaEl = document.getElementById('modal-enc-tarefa-vinculada');
-    if (tarefaEl) { tarefaEl.textContent = 'Tarefa criada: ' + enc.tarefaId; tarefaEl.classList.remove('hidden'); }
-    alert('Tarefa ' + r.tarefa.id + ' criada com sucesso!');
-  }, null, GAS._sessao());
+  var lockId = 'gerar-tarefa-' + _reuState.encSelecId;
+  if (_reunBtn.isLocked(lockId)) return;
+
+  _reuConfirmar(
+    'Gerar tarefa vinculada?',
+    'Uma tarefa será criada no sistema a partir deste encaminhamento e ficará vinculada a ele.',
+    'question',
+    function() {
+      _reunBtn.lock(lockId);
+      GAS.reunioes.gerarTarefa(_reuState.encSelecId, function(r) {
+        _reunBtn.unlock(lockId);
+        var enc = r.encaminhamento;
+        var idx = _reuState.encaminhamentos.findIndex(function(e) { return e.id === enc.id; });
+        if (idx !== -1) _reuState.encaminhamentos[idx] = enc;
+        var tarefaEl = document.getElementById('modal-enc-tarefa-vinculada');
+        if (tarefaEl) { tarefaEl.textContent = 'Tarefa vinculada: ' + enc.tarefaId; tarefaEl.classList.remove('hidden'); }
+        var gerarBtn = document.getElementById('modal-enc-gerar-tarefa');
+        if (gerarBtn) { var btn = gerarBtn.querySelector('button'); if (btn) btn.disabled = true; }
+        _reuToast('success', 'Tarefa ' + (r.tarefa ? r.tarefa.id : '') + ' criada com sucesso!');
+      }, function(e) {
+        _reunBtn.unlock(lockId);
+        _reuToast('error', 'Erro ao gerar tarefa: ' + (e.message || e));
+      }, GAS._sessao());
+    }
+  );
 }
 
 // ── Assistente IA ─────────────────────────────────────────────────────────────
@@ -1246,9 +1618,10 @@ function _reu_assistenteIA() {
 function _reu_enviarParaIA() {
   var input = document.getElementById('reu-ia-input');
   var texto = (input || {}).value || '';
-  if (!texto.trim()) { alert('Insira o texto das notas da reunião.'); return; }
+  if (!texto.trim()) { _reuToast('warning', 'Insira o texto das notas da reunião.'); return; }
+  if (_reunBtn.isLocked('enviar-ia-ata')) return;
 
-  var prompt = 'Você está ajudando a organizar uma ata de reunião institucional. ' +
+  var promptTexto = 'Você está ajudando a organizar uma ata de reunião institucional. ' +
     'A partir das notas abaixo, identifique e estruture:\n' +
     '1. Deliberações e decisões tomadas\n' +
     '2. Encaminhamentos (O QUÊ deve ser feito, QUEM é o responsável, QUANDO é o prazo)\n' +
@@ -1256,13 +1629,37 @@ function _reu_enviarParaIA() {
     'IMPORTANTE: Não invente informações. Se prazo ou responsável não estiver claro, indique como "a definir".\n\n' +
     'Notas:\n' + texto;
 
-  GAS.ia.processar(prompt, function(resp) {
-    _reuIASugestao = resp;
-    var conteudo = document.getElementById('reu-ia-conteudo');
-    var resultado = document.getElementById('reu-ia-resultado');
-    if (conteudo) conteudo.textContent = resp || '(sem resposta)';
-    if (resultado) resultado.classList.remove('hidden');
-  }, function(e) { alert('Erro na IA: ' + (e.message || e)); }, GAS._sessao());
+  // Mostrar estado de carregamento
+  var resultado = document.getElementById('reu-ia-resultado');
+  var conteudo  = document.getElementById('reu-ia-conteudo');
+  if (conteudo)  conteudo.textContent = '';
+  if (resultado) resultado.classList.add('hidden');
+
+  _reunBtn.wrap('btn-enviar-ia', 'enviar-ia-ata', 'Analisando...', function(done) {
+    // CORREÇÃO CRÍTICA: GAS.ia.processar não existe. Usar GAS.ia.chamar(prompt, ctx, cb, err).
+    GAS.ia.chamar(promptTexto, {
+      modulo: 'reunioes',
+      contexto: 'assistente_ata',
+      reuniaoId: _reuState.ataReuniaoId || (_reuState.reuniaoAtual && _reuState.reuniaoAtual.id) || null
+    }, function(resp) {
+      done();
+      // resp pode ser string direta ou objeto {texto, resposta, content}
+      var textoResposta = typeof resp === 'string'
+        ? resp
+        : (resp && (resp.resposta || resp.texto || resp.content || resp.resultado || JSON.stringify(resp)));
+      _reuIASugestao = textoResposta;
+      if (conteudo)  { conteudo.textContent = textoResposta || '(sem resposta da IA)'; }
+      if (resultado) { resultado.classList.remove('hidden'); }
+    }, function(e) {
+      done();
+      var msgErro = e && (e.message || (typeof e === 'string' ? e : JSON.stringify(e))) || 'Erro desconhecido';
+      _reuToast('error', 'Erro na IA: ' + msgErro);
+      // Mostrar erro no painel para contexto adicional
+      if (conteudo)  { conteudo.textContent = 'Erro: ' + msgErro; }
+      if (resultado) { resultado.classList.remove('hidden'); }
+    });
+    // Nota: GAS.ia.chamar não usa sessão como 4º argumento — sessão é gerenciada internamente
+  });
 }
 
 function _reu_aplicarSugestaoIA() {
@@ -1273,7 +1670,7 @@ function _reu_aplicarSugestaoIA() {
     textarea.value = atual ? atual + '\n\n[IA]\n' + _reuIASugestao : '[IA]\n' + _reuIASugestao;
   }
   _reu_fecharModal('modal-ia-ata');
-  alert('Sugestão aplicada na ata. Revise antes de salvar.');
+  _reuToast('success', 'Sugestão da IA aplicada. Revise o conteúdo antes de salvar.');
 }
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
