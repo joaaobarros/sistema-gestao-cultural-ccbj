@@ -19,7 +19,8 @@
  *          backend/mod_metrics.gs,
  *          core/auth_session.gs,
  *          modules/admin/config_service.gs (ConfigService),
- *          modules/admin/rollback_service.gs (RollbackService)
+ *          modules/admin/rollback_service.gs (RollbackService),
+ *          modules/relatorios/codip_service.gs (CodipService)
  */
 
 // ═══════════════════════════════════════════════════════════════════
@@ -207,7 +208,7 @@ function ctrl_admin_grafico_reservas() {
  */
 function ctrl_admin_metricas_codip() {
   return GasResponse.wrap(function () {
-    return obterMetricasCODIP();
+    return CodipService.obterMetricas();
   }, 'ctrl_admin_metricas_codip');
 }
 
@@ -216,7 +217,7 @@ function ctrl_admin_metricas_codip() {
  */
 function ctrl_admin_relatorios_codip() {
   return GasResponse.wrap(function () {
-    return obterRelatoriosCODIP();
+    return CodipService.obterRelatorios();
   }, 'ctrl_admin_relatorios_codip');
 }
 

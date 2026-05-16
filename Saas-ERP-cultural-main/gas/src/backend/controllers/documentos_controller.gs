@@ -9,7 +9,7 @@
  *   - O motor real é backend/mod_relatorios.gs.
  *
  * @depends shared/response.gs (GasResponse),
- *          backend/mod_relatorios.gs (gerarDocumentoDrive),
+ *          modules/relatorios/documento_service.gs (DocumentoService),
  *          core/utils.gs (obterEmailUsuario),
  *          core/services/auditoria_service.gs (AuditoriaService),
  *          core/events_constants.gs (SystemEventTypes)
@@ -29,7 +29,7 @@ function ctrl_doc_gerar_drive(conteudo, emailFallback) {
     var email = obterEmailUsuario(emailFallback || '');
     if (!email) throw new Error('Usuário não identificado.');
     if (!conteudo || !conteudo.secoes) throw new Error('Conteúdo com seções é obrigatório.');
-    var resultado = gerarDocumentoDrive(conteudo);
+    var resultado = DocumentoService.gerar(conteudo);
     AuditoriaService.registrar(
       SystemEventTypes.DOCUMENT_GENERATED,
       'documentos',

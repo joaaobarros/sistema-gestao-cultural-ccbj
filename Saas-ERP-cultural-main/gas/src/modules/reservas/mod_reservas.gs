@@ -1623,7 +1623,3 @@ const ReservaService = {
   },
 };
 
-// Fallback: evita ReferenceError em produção caso _salvarCamposCODIP não esteja implementada
-function _salvarCamposCODIP() {
-  return true;
-}
