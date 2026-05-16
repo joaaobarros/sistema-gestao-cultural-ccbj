@@ -10,7 +10,8 @@
  *
  * @depends shared/response.gs (GasResponse),
  *          action_engine/action_engine.gs,
- *          core/utils.gs (obterEmailUsuario)
+ *          core/utils.gs (obterEmailUsuario),
+ *          modules/reservas/admin_solicitacoes_service.gs (AdminSolicitacoesService)
  */
 
 // ═══════════════════════════════════════════════════════════════
@@ -323,7 +324,7 @@ function ctrl_acoes_listar_todas(emailFallback) {
   return GasResponse.wrap(function() {
     var email = obterEmailUsuario(emailFallback || '');
     if (!email) throw new Error('Usuário não identificado.');
-    return listarTodasSolicitacoes(email);
+    return AdminSolicitacoesService.listarTodas(email);
   });
 }
 
@@ -335,7 +336,7 @@ function ctrl_acoes_listar_pendentes(emailFallback) {
   return GasResponse.wrap(function() {
     var email = obterEmailUsuario(emailFallback || '');
     if (!email) throw new Error('Usuário não identificado.');
-    return listarSolicitacoesPendentes(email);
+    return AdminSolicitacoesService.listarPendentes(email);
   });
 }
 
@@ -348,7 +349,7 @@ function ctrl_acoes_aprovar(id, emailFallback) {
   return GasResponse.wrap(function() {
     var email = obterEmailUsuario(emailFallback || '');
     if (!id) throw new Error('ID da solicitação é obrigatório.');
-    aprovarSolicitacao(id, email);
+    AdminSolicitacoesService.aprovar(id, email);
     return { ok: true };
   });
 }
@@ -364,7 +365,7 @@ function ctrl_acoes_recusar(id, justificativa, emailFallback) {
     var email = obterEmailUsuario(emailFallback || '');
     if (!id) throw new Error('ID da solicitação é obrigatório.');
     if (!justificativa) throw new Error('Justificativa é obrigatória.');
-    recusarSolicitacao(id, justificativa, email);
+    AdminSolicitacoesService.recusar(id, justificativa, email);
     return { ok: true };
   });
 }

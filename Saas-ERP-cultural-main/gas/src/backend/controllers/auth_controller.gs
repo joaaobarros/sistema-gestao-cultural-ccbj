@@ -16,10 +16,10 @@
  *
  * @depends shared/response.gs (GasResponse),
  *          modules/auth/auth_engine.gs (AuthEngine),
+ *          modules/auth/cadastro_externo_service.gs (CadastroExternoService),
  *          core/auth_session.gs (iniciarSessaoGAS, renovarSessaoGAS,
  *                                encerrarSessaoGAS, obterInfoAutenticacao,
- *                                solicitarCadastroExterno, listarSolicitacoesCadastroExterno,
- *                                aprovarCadastroExterno, recusarCadastroExterno)
+ *                                solicitarCadastroExterno)
  */
 
 // ═══════════════════════════════════════════════════════════════════
@@ -139,7 +139,7 @@ function ctrl_auth_solicitar_cadastro(nome, email, senha) {
 function ctrl_auth_listar_pendentes(emailAdmin) {
   return GasResponse.wrap(function() {
     if (!emailAdmin) throw new Error('Admin não identificado.');
-    return listarSolicitacoesCadastroExterno(emailAdmin);
+    return CadastroExternoService.listar(emailAdmin);
   }, 'ctrl_auth_listar_pendentes');
 }
 
@@ -152,7 +152,7 @@ function ctrl_auth_aprovar_cadastro(id, emailAdmin) {
   return GasResponse.wrap(function() {
     if (!id)         throw new Error('ID da solicitação é obrigatório.');
     if (!emailAdmin) throw new Error('Admin não identificado.');
-    return aprovarCadastroExterno(id, emailAdmin);
+    return CadastroExternoService.aprovar(id, emailAdmin);
   }, 'ctrl_auth_aprovar_cadastro');
 }
 
@@ -166,7 +166,7 @@ function ctrl_auth_recusar_cadastro(id, emailAdmin, motivo) {
   return GasResponse.wrap(function() {
     if (!id)         throw new Error('ID da solicitação é obrigatório.');
     if (!emailAdmin) throw new Error('Admin não identificado.');
-    return recusarCadastroExterno(id, emailAdmin, motivo || '');
+    return CadastroExternoService.recusar(id, emailAdmin, motivo || '');
   }, 'ctrl_auth_recusar_cadastro');
 }
 
