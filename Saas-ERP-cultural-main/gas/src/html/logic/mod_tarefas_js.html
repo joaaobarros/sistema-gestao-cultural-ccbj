@@ -1,0 +1,1167 @@
+<!--
+@file logic/mod_tarefas_js.html
+@type logic
+@description Lógica de frontend do módulo de Tarefas — lista, kanban, dashboard,
+             criação, delegação, histórico e integração com reuniões/processos.
+@responsibility Estado, renderização e chamadas GAS.tarefas para #aba-tarefas.
+@dependencies GAS.tarefas, BtnGuard, showLoader, escaparHTML, temPermissao, AppState
+-->
+<script>
+// ══ ESTADO ════════════════════════════════════════════════════════════════════
+var _trk = {
+  tarefas:   [],
+  metricas:  null,
+  vista:     'lista',
+  filtros:   { busca: '', status: '', prioridade: '', modulo: '' },
+  _dragId:   null,
+  _dragOrig: null
+};
+
+// Cache de usuários para autocomplete (carregado via GAS.rh.usuariosAutocomplete)
+var _trkUsuariosCache = [];
+// Cache de ações para autocomplete (carregado via GAS.acoes.paraAutocomplete)
+var _trkAcoesCache = [];
+
+// ══ CONSTANTES UI ════════════════════════════════════════════════════════════
+
+var _TRK_STATUS_COR = {
+  backlog:              { bg: '#f8fafc', txt: '#64748b',  borda: '#cbd5e1' },
+  solicitada:           { bg: '#eff6ff', txt: '#1d4ed8',  borda: '#bfdbfe' },
+  em_analise:           { bg: '#f5f3ff', txt: '#6d28d9',  borda: '#ddd6fe' },
+  aguardando_doc:       { bg: '#fffbeb', txt: '#92400e',  borda: '#fde68a' },
+  em_execucao:          { bg: '#eef2ff', txt: '#4338ca',  borda: '#c7d2fe' },
+  aguardando_aprovacao: { bg: '#fff7ed', txt: '#c2410c',  borda: '#fed7aa' },
+  concluida:            { bg: '#ecfdf5', txt: '#065f46',  borda: '#a7f3d0' },
+  cancelada:            { bg: '#fef2f2', txt: '#991b1b',  borda: '#fecaca' },
+  bloqueada:            { bg: '#fff1f2', txt: '#be123c',  borda: '#fda4af' }
+};
+
+var _TRK_STATUS_LABEL = {
+  backlog:'Backlog', solicitada:'Solicitada', em_analise:'Em Análise',
+  aguardando_doc:'Aguard. Documento', em_execucao:'Em Execução',
+  aguardando_aprovacao:'Aguard. Aprovação', concluida:'Concluída',
+  cancelada:'Cancelada', bloqueada:'Bloqueada'
+};
+
+var _TRK_PRI_COR = { critica:'#ef4444', alta:'#f97316', media:'#f59e0b', baixa:'#94a3b8' };
+var _TRK_PRI_LABEL = { critica:'Crítica', alta:'Alta', media:'Média', baixa:'Baixa' };
+
+var _TRK_MOD_ICON = {
+  manual:'fa-hand-paper', reservas:'fa-calendar-check', contratos:'fa-file-signature',
+  chaves:'fa-key', rh:'fa-users', comunicacao:'fa-bullhorn',
+  almoxarifado:'fa-boxes', financeiro:'fa-dollar-sign', manutencao:'fa-tools'
+};
+
+// FSM replicado no frontend para validação antes do backend
+var _TRK_TRANSICOES = {
+  backlog:['solicitada','cancelada'], solicitada:['em_analise','backlog','cancelada'],
+  em_analise:['em_execucao','aguardando_doc','bloqueada','cancelada'],
+  aguardando_doc:['em_analise','em_execucao','cancelada'],
+  em_execucao:['aguardando_aprovacao','concluida','bloqueada','cancelada'],
+  aguardando_aprovacao:['concluida','em_execucao','cancelada'],
+  bloqueada:['em_analise','em_execucao','cancelada'],
+  concluida:[], cancelada:[]
+};
+
+var _TRK_KANBAN_COLUNAS = [
+  { status:'backlog',              label:'Backlog',         cor:'#94a3b8' },
+  { status:'solicitada',           label:'Solicitada',      cor:'#3b82f6' },
+  { status:'em_analise',           label:'Em Análise',      cor:'#8b5cf6' },
+  { status:'aguardando_doc',       label:'Aguard. Doc.',    cor:'#f59e0b' },
+  { status:'em_execucao',          label:'Em Execução',     cor:'#6366f1' },
+  { status:'aguardando_aprovacao', label:'Aguard. Aprov.',  cor:'#f97316' },
+  { status:'concluida',            label:'Concluída',       cor:'#10b981' },
+  { status:'bloqueada',            label:'Bloqueada',       cor:'#f43f5e' }
+];
+
+// ══ NORMALIZAÇÃO (compatibilidade schema antigo → novo) ═══════════════════════
+
+function _trkNormSt(s) {
+  var m = { 'Aberta':'solicitada','Em Andamento':'em_execucao','Concluída':'concluida','Cancelada':'cancelada','Em andamento':'em_execucao' };
+  return m[s] || s || 'solicitada';
+}
+
+function _trkNormPri(p) {
+  var m = { 'Alta':'alta','Média':'media','Baixa':'baixa','Crítica':'critica' };
+  return m[p] || (p||'').toLowerCase() || 'media';
+}
+
+function _trkNorm(t) {
+  return {
+    id: t.id, titulo: t.titulo||'', descricao: t.descricao||'',
+    tipo: t.tipo||'operacional', prioridade: _trkNormPri(t.prioridade),
+    status: _trkNormSt(t.status), modulo: t.modulo||'manual',
+    responsavel: t.responsavel||'', responsavelNome: t.responsavelNome||t.responsavel||'',
+    executores: t.executores||[], setor: t.setor||'', funcao: t.funcao||'',
+    prazo: t.prazo||'', criadoEm: t.criadoEm||'', criadoPor: t.criadoPor||'',
+    atualizadoEm: t.atualizadoEm||'', iniciadoEm: t.iniciadoEm||'',
+    concluidoEm: t.concluidoEm||'', duracaoReal: t.duracaoReal||0,
+    sla: t.sla||72, slaViolado: !!t.slaViolado, ordem: t.ordem||0,
+    idOrigem: t.idOrigem||'', refOrigem: t.refOrigem||'', processo: t.processo||'',
+    tarefaPai: t.tarefaPai||'',
+    idAcao: t.idAcao||'', acaoNome: t.acaoNome||'',
+    historico: t.historico||[], comentarios: t.comentarios||[], tags: t.tags||[]
+  };
+}
+
+// ══ CORE ═════════════════════════════════════════════════════════════════════
+
+function carregarTarefas() {
+  _trkSetLoading(true);
+  // Carrega usuários para autocomplete se ainda não tiver
+  if (!_trkUsuariosCache.length) {
+    GAS.rh.usuariosAutocomplete(function(lista) {
+      _trkUsuariosCache = lista || [];
+    }, function() {});
+  }
+  // Carrega ações para autocomplete se ainda não tiver
+  if (!_trkAcoesCache.length) {
+    GAS.acoes.paraAutocomplete('', function(lista) {
+      _trkAcoesCache = lista || [];
+    }, function() {});
+  }
+  GAS.tarefas.listar(function(lista) {
+    _trk.tarefas = (lista||[]).map(_trkNorm);
+    _trkRenderizar();
+    _trkCarregarMetricas();
+    _trkSetLoading(false);
+  }, function(e) {
+    _trkSetLoading(false);
+    _trkMsgErro(document.getElementById('trkListaContainer'), 'Erro ao carregar tarefas: ' + (e&&e.message||''));
+  });
+}
+
+// ── Helpers de autocomplete ────────────────────────────────────────────────────
+
+/**
+ * Renderiza dropdown de usuários para campos de responsável/delegação.
+ * Filtra _trkUsuariosCache pelo termo digitado; ao selecionar seta email no campo
+ * principal e nome no campo de display (se fornecido).
+ */
+/**
+ * Renderiza dropdown de usuários. _inputEl e _onSelect são armazenados no dropEl
+ * para uso direto em _trkSelecionarUsuario sem depender de escopo do DOM.
+ */
+function _trkAutocompletarUsuario(inputEl, dropEl, onSelect) {
+  var q = (inputEl.value || '').toLowerCase().trim();
+  if (!q || q.length < 2) { dropEl.innerHTML = ''; dropEl.style.display = 'none'; return; }
+  var matches = _trkUsuariosCache.filter(function(u) {
+    return (u.email || '').toLowerCase().indexOf(q) !== -1 ||
+           (u.nome  || '').toLowerCase().indexOf(q) !== -1;
+  }).slice(0, 8);
+  if (!matches.length) { dropEl.innerHTML = ''; dropEl.style.display = 'none'; return; }
+  dropEl.style.cssText = 'position:absolute;top:100%;left:0;right:0;background:white;border:1.5px solid #c7d2fe;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.12);z-index:9999;overflow:hidden;margin-top:4px';
+  dropEl.innerHTML = matches.map(function(u, i) {
+    var ini = (u.nome||u.email||'?').charAt(0).toUpperCase();
+    var cor = ['#6366f1','#10b981','#f59e0b','#3b82f6','#ec4899','#14b8a6'][i % 6];
+    return '<div onclick="_trkSelecionarUsuario(this)" data-email="' + escaparHTML(u.email||'') + '" data-nome="' + escaparHTML(u.nome||'') + '"'
+      + ' style="display:flex;align-items:center;gap:10px;padding:9px 14px;cursor:pointer;transition:background .1s" onmouseenter="this.style.background=\'#f8fafc\'" onmouseleave="this.style.background=\'white\'">'
+      + '<div style="width:28px;height:28px;border-radius:99px;background:' + cor + ';color:white;font-weight:900;font-size:11px;display:flex;align-items:center;justify-content:center;flex-shrink:0">' + escaparHTML(ini) + '</div>'
+      + '<div><div style="font-size:11px;font-weight:700;color:#334155">' + escaparHTML(u.nome||u.email) + '</div>'
+      + '<div style="font-size:10px;color:#94a3b8">' + escaparHTML(u.email||'') + '</div></div></div>';
+  }).join('');
+  dropEl.style.display = 'block';
+  // Guarda referências no próprio dropEl para acesso em _trkSelecionarUsuario
+  dropEl._inputEl  = inputEl;
+  dropEl._onSelect = onSelect || null;
+}
+
+function _trkSelecionarUsuario(el) {
+  var email = el.getAttribute('data-email') || '';
+  var nome  = el.getAttribute('data-nome')  || email;
+  var drop  = el.parentElement;
+  // Preenche o input de nome diretamente via referência armazenada
+  if (drop._inputEl)  drop._inputEl.value = nome;
+  // Dispara callback para preencher campo de email (hidden ou visível)
+  if (drop._onSelect) drop._onSelect(email, nome);
+  drop.innerHTML = ''; drop.style.display = 'none';
+}
+
+/**
+ * Renderiza dropdown de ações para o campo de vínculo com ação.
+ */
+function _trkAutocompletarAcao(inputEl, dropEl, hiddenIdEl) {
+  var q = (inputEl.value || '').toLowerCase().trim();
+  if (!q || q.length < 2) { dropEl.innerHTML = ''; dropEl.style.display = 'none'; return; }
+  // Busca local primeiro; se não houver resultado busca no backend
+  var matches = _trkAcoesCache.filter(function(a) {
+    return (a.nome || '').toLowerCase().indexOf(q) !== -1 ||
+           (a.tipo || '').toLowerCase().indexOf(q) !== -1;
+  }).slice(0, 8);
+  var renderDropAcao = function(lista) {
+    if (!lista.length) { dropEl.innerHTML = ''; dropEl.style.display = 'none'; return; }
+    dropEl.style.cssText = 'position:absolute;top:100%;left:0;right:0;background:white;border:1.5px solid #a7f3d0;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.12);z-index:9999;overflow:hidden;margin-top:4px';
+    dropEl.innerHTML = lista.map(function(a) {
+      return '<div onclick="_trkSelecionarAcao(this)" data-id="' + escaparHTML(a.id||'') + '" data-nome="' + escaparHTML(a.nome||'') + '"'
+        + ' style="display:flex;align-items:center;gap:10px;padding:9px 14px;cursor:pointer;transition:background .1s" onmouseenter="this.style.background=\'#f0fdf4\'" onmouseleave="this.style.background=\'white\'">'
+        + '<div style="width:28px;height:28px;border-radius:99px;background:#10b981;color:white;font-weight:900;font-size:11px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="fas fa-bolt" style="font-size:10px"></i></div>'
+        + '<div><div style="font-size:11px;font-weight:700;color:#334155">' + escaparHTML(a.nome||'') + '</div>'
+        + '<div style="font-size:10px;color:#94a3b8">' + escaparHTML(a.tipo||'') + ' · ' + escaparHTML(a.status||'') + '</div></div></div>';
+    }).join('');
+    dropEl.style.display = 'block';
+    dropEl._hiddenEl = hiddenIdEl;
+    dropEl._inputEl  = inputEl;
+  };
+  if (matches.length) {
+    renderDropAcao(matches);
+  } else {
+    GAS.acoes.paraAutocomplete(q, function(lista) {
+      _trkAcoesCache = _trkAcoesCache.concat((lista||[]).filter(function(a) {
+        return !_trkAcoesCache.find(function(x){ return x.id === a.id; });
+      }));
+      renderDropAcao(lista || []);
+    }, function() {});
+  }
+}
+
+function _trkSelecionarAcao(el) {
+  var id   = el.getAttribute('data-id')   || '';
+  var nome = el.getAttribute('data-nome') || '';
+  var drop = el.parentElement;
+  if (drop._inputEl)  drop._inputEl.value  = nome;
+  if (drop._hiddenEl) drop._hiddenEl.value = id;
+  drop.innerHTML = ''; drop.style.display = 'none';
+}
+
+function _trkAtualizar() {
+  _trk.metricas = null;
+  carregarTarefas();
+}
+
+function _trkCarregarMetricas() {
+  GAS.tarefas.obterMetricas(function(m) {
+    _trk.metricas = m;
+    _trkRenderizarStatsBar();
+    if (_trk.vista === 'dashboard') _trkRenderizarDashboard();
+  }, function() {});
+}
+
+function _trkSetLoading(on) {
+  var s = document.getElementById('trkListaContainer');
+  if (on && s) s.innerHTML = '<div class="p-10 text-center"><i class="fas fa-spinner animate-spin text-indigo-300 text-xl"></i></div>';
+}
+
+function _trkMsgErro(el, msg) {
+  if (el) el.innerHTML = '<div class="p-10 text-center text-red-400 text-xs"><i class="fas fa-exclamation-triangle mr-2"></i>' + escaparHTML(msg) + '</div>';
+}
+
+function _trkFiltrar() {
+  _trk.filtros.busca      = (document.getElementById('trkBusca')?.value||'').toLowerCase();
+  _trk.filtros.status     = document.getElementById('trkFiltroStatus')?.value||'';
+  _trk.filtros.prioridade = document.getElementById('trkFiltroPrioridade')?.value||'';
+  _trk.filtros.modulo     = document.getElementById('trkFiltroModulo')?.value||'';
+  _trkRenderizar();
+}
+
+function _trkRedefinirFiltros() {
+  ['trkBusca','trkFiltroStatus','trkFiltroPrioridade','trkFiltroModulo'].forEach(function(id){
+    var el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  _trk.filtros = { busca:'', status:'', prioridade:'', modulo:'' };
+  _trkRenderizar();
+}
+
+function _trkFiltradas() {
+  return _trk.tarefas.filter(function(t) {
+    if (_trk.filtros.busca && !t.titulo.toLowerCase().includes(_trk.filtros.busca) &&
+        !t.responsavel.toLowerCase().includes(_trk.filtros.busca) &&
+        !t.processo.toLowerCase().includes(_trk.filtros.busca)) return false;
+    if (_trk.filtros.status     && t.status     !== _trk.filtros.status)     return false;
+    if (_trk.filtros.prioridade && t.prioridade !== _trk.filtros.prioridade) return false;
+    if (_trk.filtros.modulo     && t.modulo     !== _trk.filtros.modulo)     return false;
+    return true;
+  });
+}
+
+function _trkRenderizar() {
+  var lista = _trkFiltradas();
+  if      (_trk.vista === 'lista')      _trkRenderizarLista(lista);
+  else if (_trk.vista === 'kanban')     _trkRenderizarKanban(lista);
+  else if (_trk.vista === 'timeline')   _trkRenderizarTimeline(lista);
+  else if (_trk.vista === 'calendario') _trkRenderizarCalendario(lista);
+  else if (_trk.vista === 'dashboard')  _trkRenderizarDashboard();
+}
+
+function _trkMudarVista(v) {
+  _trk.vista = v;
+  ['lista','kanban','timeline','calendario','dashboard'].forEach(function(n) {
+    var el = document.getElementById('trk-v-' + n);
+    if (el) el.classList.toggle('hidden', n !== v);
+    var btn = document.getElementById('trk-tab-' + n);
+    if (btn) btn.classList.toggle('trk-tab-ativo', n === v);
+  });
+  _trkRenderizar();
+}
+
+// ══ STATS BAR ════════════════════════════════════════════════════════════════
+
+function _trkRenderizarStatsBar() {
+  var el = document.getElementById('trkStatsBar');
+  if (!el) return;
+  var m   = _trk.metricas;
+  var g   = m && m.global;
+  var p   = m && m.pessoal;
+  var tot = _trk.tarefas.length;
+  var atr = _trk.tarefas.filter(function(t){ return t.prazo && t.status !== 'concluida' && t.status !== 'cancelada' && new Date(t.prazo) < new Date(); }).length;
+  var sla = _trk.tarefas.filter(function(t){ return t.slaViolado; }).length;
+  var min = _trk.tarefas.filter(function(t){ var u = AppState.usuario.email; return t.responsavel === u || (t.executores||[]).indexOf(u) !== -1; }).length;
+
+  function card(icon, label, val, cor, sub) {
+    return '<div class="trk-stat-card flex items-center gap-3">'
+      + '<div style="width:38px;height:38px;border-radius:12px;background:' + cor + '20;display:flex;align-items:center;justify-content:center">'
+      + '<i class="fas ' + icon + '" style="color:' + cor + ';font-size:15px"></i></div>'
+      + '<div><div class="text-xl font-black text-slate-800">' + val + '</div>'
+      + '<div class="text-[10px] text-slate-400 font-semibold">' + label + '</div>'
+      + (sub ? '<div class="text-[9px] text-slate-300 mt-0.5">' + sub + '</div>' : '')
+      + '</div></div>';
+  }
+
+  el.innerHTML = card('fa-layer-group','Total de tarefas', tot, '#6366f1', g ? 'Visão global' : 'Minhas tarefas')
+    + card('fa-user-check','Minhas tarefas', min, '#8b5cf6', '')
+    + card('fa-clock','Atrasadas', atr, atr > 0 ? '#ef4444' : '#10b981', atr > 0 ? 'Requerem atenção' : 'Tudo em dia')
+    + card('fa-exclamation-triangle','SLA violado', sla, sla > 0 ? '#f97316' : '#10b981', sla > 0 ? 'Fora do prazo de SLA' : 'Dentro do SLA');
+}
+
+// ══ VISÃO: LISTA ══════════════════════════════════════════════════════════════
+
+function _trkRenderizarLista(lista) {
+  var el = document.getElementById('trkListaContainer');
+  if (!el) return;
+
+  if (!lista.length) {
+    el.innerHTML = '<div class="p-12 text-center">'
+      + '<i class="fas fa-layer-group text-slate-200 text-4xl mb-3"></i>'
+      + '<p class="text-slate-400 font-bold text-sm">' + (_trk.tarefas.length ? 'Nenhuma tarefa com esses filtros.' : 'Nenhuma tarefa cadastrada.') + '</p>'
+      + (temPermissao('tarefas','editar') ? '<button onclick="abrirModalTarefa()" class="mt-4 bg-indigo-600 text-white text-xs font-black px-4 py-2 rounded-xl">+ Nova Tarefa</button>' : '')
+      + '</div>';
+    return;
+  }
+
+  var hoje = new Date(); hoje.setHours(0,0,0,0);
+
+  function _statusBadge(t) {
+    var c = _TRK_STATUS_COR[t.status] || _TRK_STATUS_COR.solicitada;
+    return '<span style="font-size:9px;font-weight:900;padding:3px 8px;border-radius:99px;background:' + c.bg + ';color:' + c.txt + ';border:1px solid ' + c.borda + '">'
+      + (_TRK_STATUS_LABEL[t.status]||t.status) + '</span>';
+  }
+
+  function _priBadge(t) {
+    var cor = _TRK_PRI_COR[t.prioridade]||'#94a3b8';
+    return '<span style="width:8px;height:8px;border-radius:99px;background:' + cor + ';display:inline-block;margin-right:4px"></span>'
+      + '<span style="font-size:10px;font-weight:700;color:' + cor + '">' + (_TRK_PRI_LABEL[t.prioridade]||t.prioridade) + '</span>';
+  }
+
+  function _prazoStr(t) {
+    if (!t.prazo) return '<span class="text-slate-300">—</span>';
+    var d = new Date(t.prazo); var atrasada = d < hoje && t.status !== 'concluida' && t.status !== 'cancelada';
+    var s = d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'});
+    return '<span style="font-size:10px;font-weight:700;color:' + (atrasada?'#ef4444':'#64748b') + '">'
+      + (atrasada?'<i class="fas fa-exclamation-triangle mr-1" style="font-size:8px"></i>':'') + s + '</span>';
+  }
+
+  function _modIcon(m) {
+    var ic = _TRK_MOD_ICON[m] || 'fa-circle';
+    return '<i class="fas ' + ic + '" style="color:#94a3b8;font-size:9px" title="' + escaparHTML(m) + '"></i>';
+  }
+
+  var html = '<table class="w-full text-sm"><thead>'
+    + '<tr style="border-bottom:1.5px solid #f1f5f9;background:#f8fafc">'
+    + '<th class="px-4 py-3 text-left" style="font-size:9px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;width:28px"></th>'
+    + '<th class="px-2 py-3 text-left" style="font-size:9px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em">Título</th>'
+    + '<th class="px-3 py-3 text-left" style="font-size:9px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em">Status</th>'
+    + '<th class="px-3 py-3 text-left" style="font-size:9px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em">Prioridade</th>'
+    + '<th class="px-3 py-3 text-left" style="font-size:9px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em">Responsável</th>'
+    + '<th class="px-3 py-3 text-left" style="font-size:9px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em">Prazo</th>'
+    + '<th class="px-3 py-3 text-left" style="font-size:9px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em"></th>'
+    + '</tr></thead><tbody>';
+
+  lista.forEach(function(t) {
+    var atrasada = t.prazo && new Date(t.prazo) < hoje && t.status !== 'concluida' && t.status !== 'cancelada';
+    html += '<tr style="border-bottom:1px solid #f8fafc;transition:background .1s" '
+      + 'onmouseover="this.style.background=\'#fafafe\'" onmouseout="this.style.background=\'\'">'
+      + '<td class="px-4 py-3">' + _modIcon(t.modulo) + '</td>'
+      + '<td class="px-2 py-3"><div class="flex items-center gap-1.5">'
+      + (t.slaViolado ? '<i class="fas fa-fire" style="color:#ef4444;font-size:8px" title="SLA violado"></i>' : '')
+      + '<span style="font-size:12px;font-weight:600;color:' + (atrasada?'#dc2626':'#1e293b') + ';cursor:pointer" onclick="_trkAbrirDetalhe(\'' + t.id + '\')">'
+      + escaparHTML(t.titulo) + '</span>'
+      + (t.processo ? '<span style="font-size:9px;color:#94a3b8;font-weight:500"> · ' + escaparHTML(t.processo) + '</span>' : '')
+      + '</div></td>'
+      + '<td class="px-3 py-3">' + _statusBadge(t) + '</td>'
+      + '<td class="px-3 py-3">' + _priBadge(t) + '</td>'
+      + '<td class="px-3 py-3" style="font-size:11px;color:#64748b">' + escaparHTML(t.responsavelNome||t.responsavel||'—') + '</td>'
+      + '<td class="px-3 py-3">' + _prazoStr(t) + '</td>'
+      + '<td class="px-3 py-3 whitespace-nowrap">'
+      + '<button onclick="_trkAbrirDetalhe(\'' + escaparHTML(t.id) + '\')" style="color:#6366f1;background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:8px" title="Ver detalhes"><i class="fas fa-expand-alt" style="font-size:11px"></i></button>'
+      + (temPermissao('tarefas','editar') ? '<button onclick="abrirModalTarefa(\'' + escaparHTML(t.id) + '\')" style="color:#94a3b8;background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:8px" title="Editar"><i class="fas fa-edit" style="font-size:11px"></i></button>' : '')
+      + (temPermissao('tarefas','excluir') ? '<button onclick="_trkExcluir(\'' + escaparHTML(t.id) + '\')" style="color:#fca5a5;background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:8px" title="Excluir"><i class="fas fa-trash" style="font-size:11px"></i></button>' : '')
+      + '</td></tr>';
+  });
+
+  el.innerHTML = html + '</tbody></table>';
+}
+
+// ══ VISÃO: KANBAN ═════════════════════════════════════════════════════════════
+
+function _trkRenderizarKanban(lista) {
+  var el = document.getElementById('trkKanbanContainer');
+  if (!el) return;
+
+  var porStatus = {};
+  _TRK_KANBAN_COLUNAS.forEach(function(c){ porStatus[c.status] = []; });
+  lista.forEach(function(t){ if (porStatus[t.status]) porStatus[t.status].push(t); });
+
+  var html = '<div style="display:flex;gap:12px;min-width:max-content;padding:4px 4px 16px">';
+
+  _TRK_KANBAN_COLUNAS.forEach(function(col) {
+    var cards  = (porStatus[col.status]||[]).sort(function(a,b){return (a.ordem||0)-(b.ordem||0);});
+    var statusCor = _TRK_STATUS_COR[col.status]||{bg:'#f8fafc',borda:'#e2e8f0'};
+
+    html += '<div style="width:256px;flex-shrink:0">'
+      + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">'
+      + '<div style="display:flex;align-items:center;gap:6px">'
+      + '<span style="width:8px;height:8px;border-radius:99px;background:' + col.cor + ';display:inline-block"></span>'
+      + '<span style="font-size:10px;font-weight:900;color:#334155;text-transform:uppercase;letter-spacing:.05em">' + col.label + '</span>'
+      + '</div>'
+      + '<span style="font-size:9px;font-weight:900;padding:2px 7px;border-radius:99px;background:' + statusCor.bg + ';color:' + statusCor.txt + '">' + cards.length + '</span>'
+      + '</div>'
+      + '<div class="trk-kanban-col" data-status="' + col.status + '" '
+      + 'style="min-height:200px;padding:8px;border-radius:16px;border:2px dashed #e2e8f0;background:' + statusCor.bg + ';transition:all .15s"'
+      + 'ondragover="event.preventDefault();this.classList.add(\'trk-col-drop-active\')"'
+      + 'ondragleave="this.classList.remove(\'trk-col-drop-active\')"'
+      + 'ondrop="_trkKanbanDrop(event,\'' + col.status + '\')">';
+
+    cards.forEach(function(t) {
+      html += _trkCardHtml(t);
+    });
+
+    html += (temPermissao('tarefas','editar')
+      ? '<button onclick="abrirModalTarefa(null,\'' + col.status + '\')" style="width:100%;padding:7px;border:none;background:none;color:#94a3b8;font-size:10px;font-weight:700;cursor:pointer;border-radius:10px;transition:all .15s" onmouseover="this.style.background=\'rgba(0,0,0,.04)\'" onmouseout="this.style.background=\'none\'">'
+      + '<i class="fas fa-plus mr-1"></i>Adicionar</button>' : '');
+    html += '</div></div>';
+  });
+
+  html += '</div>';
+  el.innerHTML = html;
+}
+
+function _trkCardHtml(t) {
+  var pri    = _TRK_PRI_COR[t.prioridade] || '#94a3b8';
+  var hoje   = new Date(); hoje.setHours(0,0,0,0);
+  var atras  = t.prazo && new Date(t.prazo) < hoje && t.status !== 'concluida' && t.status !== 'cancelada';
+  var prazoTxt = t.prazo ? new Date(t.prazo).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'}) : '';
+
+  return '<div class="trk-card" id="card-' + t.id + '" draggable="true" '
+    + 'style="border-left:3px solid ' + pri + '"'
+    + 'ondragstart="_trkKanbanDragStart(event,\'' + t.id + '\')"'
+    + 'ondragend="_trkKanbanDragEnd(event)">'
+    + '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">'
+    + '<span style="font-size:11px;font-weight:700;color:#1e293b;line-height:1.35;cursor:pointer" onclick="_trkAbrirDetalhe(\'' + t.id + '\')">'
+    + escaparHTML(t.titulo.length > 55 ? t.titulo.substring(0,55)+'…' : t.titulo) + '</span>'
+    + '<span style="font-size:8px;font-weight:900;color:' + pri + ';margin-left:6px;flex-shrink:0">' + (_TRK_PRI_LABEL[t.prioridade]||'').toUpperCase() + '</span>'
+    + '</div>'
+    + (t.processo ? '<div style="font-size:9px;color:#94a3b8;margin-bottom:6px"><i class="fas fa-project-diagram mr-1"></i>' + escaparHTML(t.processo) + '</div>' : '')
+    + '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">'
+    + '<div style="font-size:10px;color:#64748b"><i class="fas ' + (_TRK_MOD_ICON[t.modulo]||'fa-circle') + ' mr-1.5" style="font-size:8px"></i>' + escaparHTML(t.responsavelNome||t.responsavel||'Sem responsável') + '</div>'
+    + (prazoTxt ? '<span style="font-size:9px;font-weight:700;color:' + (atras?'#ef4444':'#94a3b8') + '">'
+      + (atras?'<i class="fas fa-exclamation-circle mr-0.5"></i>':'') + prazoTxt + '</span>' : '')
+    + '</div>'
+    + (t.slaViolado ? '<div style="font-size:8px;color:#ef4444;margin-top:4px;font-weight:700"><i class="fas fa-fire mr-1"></i>SLA violado</div>' : '')
+    + '</div>';
+}
+
+function _trkKanbanDragStart(e, id) {
+  _trk._dragId   = id;
+  var t = _trk.tarefas.find(function(x){return x.id===id;});
+  _trk._dragOrig = t ? t.status : null;
+  e.dataTransfer.setData('text/plain', id);
+  setTimeout(function(){ var c = document.getElementById('card-'+id); if(c) c.classList.add('trk-drag-source'); }, 0);
+}
+
+function _trkKanbanDragEnd(e) {
+  if (_trk._dragId) {
+    var c = document.getElementById('card-'+_trk._dragId);
+    if (c) c.classList.remove('trk-drag-source');
+  }
+  document.querySelectorAll('.trk-kanban-col').forEach(function(col){ col.classList.remove('trk-col-drop-active'); });
+}
+
+function _trkKanbanDrop(e, novoStatus) {
+  e.preventDefault();
+  document.querySelectorAll('.trk-kanban-col').forEach(function(c){ c.classList.remove('trk-col-drop-active'); });
+  var id = _trk._dragId || e.dataTransfer.getData('text/plain');
+  if (!id || !novoStatus) return;
+  var t = _trk.tarefas.find(function(x){return x.id===id;});
+  if (!t || t.status === novoStatus) return;
+
+  // Valida FSM antes de chamar backend
+  var ok = (_TRK_TRANSICOES[t.status]||[]).indexOf(novoStatus) !== -1;
+  if (!ok) {
+    var perms = _TRK_TRANSICOES[t.status]||[];
+    Swal.fire({ icon:'warning', title:'Transição inválida',
+      text:'De "'+(_TRK_STATUS_LABEL[t.status]||t.status)+'" só é permitido ir para: '+perms.map(function(s){return _TRK_STATUS_LABEL[s]||s;}).join(', ')||'(nenhum',
+      confirmButtonColor:'#6366f1', customClass:{popup:'rounded-3xl',confirmButton:'rounded-xl font-black text-sm'} });
+    return;
+  }
+
+  // Atualização otimista
+  var statusOrig = t.status;
+  t.status = novoStatus;
+  _trkRenderizarKanban(_trkFiltradas());
+
+  GAS.tarefas.mudarStatus(id, novoStatus, '', function() {
+    // sucesso, já renderizado
+  }, function(err) {
+    // Revertendo
+    t.status = statusOrig;
+    _trkRenderizarKanban(_trkFiltradas());
+    Swal.fire({ icon:'error', title:'Erro ao mover', text: err&&err.message||'Transição não permitida.',
+      confirmButtonColor:'#6366f1', customClass:{popup:'rounded-3xl',confirmButton:'rounded-xl font-black text-sm'} });
+  });
+}
+
+// ══ VISÃO: TIMELINE ════════════════════════════════════════════════════════════
+
+function _trkRenderizarTimeline(lista) {
+  var el = document.getElementById('trkTimelineContainer');
+  if (!el) return;
+
+  var comPrazo = lista.filter(function(t){ return !!t.prazo; });
+  if (!comPrazo.length) {
+    el.innerHTML = '<div class="p-10 text-center"><i class="fas fa-stream text-slate-200 text-4xl mb-3"></i><p class="text-slate-400 font-bold text-sm">Nenhuma tarefa com prazo definido.</p></div>';
+    return;
+  }
+
+  // Janela: 4 semanas (hoje - 1sem a hoje + 3sem)
+  var agora   = new Date(); agora.setHours(0,0,0,0);
+  var inicio  = new Date(agora); inicio.setDate(inicio.getDate() - 7);
+  var fim     = new Date(agora); fim.setDate(fim.getDate() + 21);
+  var totalMs = fim - inicio;
+
+  function pct(d) { return Math.max(0, Math.min(100, ((d - inicio) / totalMs) * 100)); }
+
+  var dias = [];
+  for (var d = new Date(inicio); d <= fim; d.setDate(d.getDate()+1)) {
+    dias.push(new Date(d));
+  }
+
+  // Cabeçalho de semanas
+  var semanas = [];
+  var cur = new Date(inicio);
+  while (cur <= fim) {
+    var fim7 = new Date(cur); fim7.setDate(fim7.getDate()+6);
+    semanas.push({ inicio: new Date(cur), fim: fim7 > fim ? new Date(fim) : new Date(fim7) });
+    cur.setDate(cur.getDate()+7);
+  }
+
+  var html = '<div style="margin-bottom:12px;display:flex;align-items:center;justify-content:space-between">'
+    + '<span style="font-size:11px;font-weight:900;color:#334155;text-transform:uppercase;letter-spacing:.05em">Timeline — Próximas 4 semanas</span>'
+    + '<span style="font-size:10px;color:#94a3b8">' + comPrazo.length + ' tarefa(s) com prazo</span></div>';
+
+  // Grade de semanas
+  html += '<div style="position:relative;height:22px;border-radius:8px;overflow:hidden;margin-bottom:4px;background:#f8fafc">';
+  semanas.forEach(function(sem, i) {
+    var left = pct(sem.inicio);
+    var width = pct(sem.fim) - left;
+    html += '<div style="position:absolute;left:' + left + '%;width:' + width + '%;height:100%;display:flex;align-items:center;padding:0 8px;border-right:1px solid #e2e8f0">'
+      + '<span style="font-size:9px;color:#94a3b8;font-weight:700;white-space:nowrap">Sem ' + (i+1) + ' — ' + sem.inicio.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'}) + '</span></div>';
+  });
+  // Linha "hoje"
+  html += '<div style="position:absolute;left:' + pct(agora) + '%;top:0;bottom:0;width:2px;background:#6366f1;opacity:.7"></div>';
+  html += '</div>';
+
+  // Barras de tarefas
+  html += '<div style="margin-top:8px">';
+  comPrazo.sort(function(a,b){ return new Date(a.prazo)-new Date(b.prazo); }).forEach(function(t) {
+    var prazoD  = new Date(t.prazo);
+    var criadoD = t.criadoEm ? new Date(t.criadoEm) : agora;
+    var left    = pct(criadoD < inicio ? inicio : criadoD);
+    var right   = pct(prazoD  > fim    ? fim    : prazoD);
+    var width   = Math.max(1, right - left);
+    var pri     = _TRK_PRI_COR[t.prioridade]||'#94a3b8';
+    var atras   = prazoD < agora && t.status !== 'concluida' && t.status !== 'cancelada';
+
+    html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">'
+      + '<div style="width:160px;flex-shrink:0;font-size:10px;font-weight:600;color:#334155;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer" onclick="_trkAbrirDetalhe(\'' + t.id + '\')" title="' + escaparHTML(t.titulo) + '">'
+      + escaparHTML(t.titulo.length>22?t.titulo.substring(0,22)+'…':t.titulo) + '</div>'
+      + '<div style="flex:1;position:relative;height:20px">'
+      + '<div style="position:absolute;left:' + left + '%;width:' + width + '%;height:14px;top:3px;border-radius:99px;background:' + pri + ';opacity:' + (atras?.6:1) + ';cursor:pointer" onclick="_trkAbrirDetalhe(\'' + t.id + '\')" title="' + escaparHTML(t.responsavel||'') + '"></div>'
+      + (atras ? '<div style="position:absolute;left:' + right + '%;top:3px;font-size:8px;color:#ef4444;white-space:nowrap">◀ atrasada</div>' : '')
+      + '</div></div>';
+  });
+  html += '</div>';
+
+  el.innerHTML = html;
+}
+
+// ══ VISÃO: CALENDÁRIO ══════════════════════════════════════════════════════════
+
+function _trkRenderizarCalendario(lista) {
+  var el = document.getElementById('trkCalendarioContainer');
+  if (!el) return;
+
+  var hoje = new Date(); hoje.setHours(0,0,0,0);
+  var mes  = hoje.getMonth(), ano = hoje.getFullYear();
+
+  // Agrupar por data
+  var porData = {};
+  lista.forEach(function(t) {
+    if (!t.prazo) return;
+    var d = t.prazo.substring(0,10);
+    if (!porData[d]) porData[d] = [];
+    porData[d].push(t);
+  });
+
+  var diasSemana = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+  var mesesPt    = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+
+  var primeiro = new Date(ano, mes, 1);
+  var ultimo   = new Date(ano, mes+1, 0);
+  var inicioGrade = new Date(primeiro); inicioGrade.setDate(1 - primeiro.getDay());
+
+  var html = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">'
+    + '<span style="font-size:13px;font-weight:900;color:#334155">' + mesesPt[mes] + ' ' + ano + '</span>'
+    + '<span style="font-size:10px;color:#94a3b8">Tarefas com prazo no mês</span></div>';
+
+  // Cabeçalho dias da semana
+  html += '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:4px">';
+  diasSemana.forEach(function(d){
+    html += '<div style="text-align:center;font-size:9px;font-weight:900;color:#94a3b8;text-transform:uppercase;padding:4px">' + d + '</div>';
+  });
+  html += '</div><div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px">';
+
+  for (var d = new Date(inicioGrade); d <= new Date(ano, mes+1, 6); d.setDate(d.getDate()+1)) {
+    // Usa data local (não UTC) para evitar desvio de fuso horário
+    var key = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+    var doCurMes = d.getMonth() === mes;
+    var eHoje    = d.getTime() === hoje.getTime();
+    var tarefasD = porData[key] || [];
+
+    html += '<div style="min-height:70px;border-radius:10px;padding:6px;background:' + (eHoje?'#eef2ff':doCurMes?'#f8fafc':'transparent') + ';border:1.5px solid ' + (eHoje?'#6366f1':doCurMes?'#f1f5f9':'transparent') + '">'
+      + '<div style="font-size:11px;font-weight:' + (eHoje?'900':'700') + ';color:' + (eHoje?'#4338ca':doCurMes?'#334155':'#cbd5e1') + ';margin-bottom:4px">' + d.getDate() + '</div>';
+
+    tarefasD.slice(0,3).forEach(function(t) {
+      var pri = _TRK_PRI_COR[t.prioridade]||'#94a3b8';
+      html += '<div style="font-size:8px;font-weight:700;color:white;background:' + pri + ';padding:1px 5px;border-radius:99px;margin-bottom:2px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" onclick="_trkAbrirDetalhe(\'' + t.id + '\')" title="' + escaparHTML(t.titulo) + '">'
+        + escaparHTML(t.titulo.length>14?t.titulo.substring(0,14)+'…':t.titulo) + '</div>';
+    });
+    if (tarefasD.length > 3) {
+      html += '<div style="font-size:8px;color:#94a3b8;font-weight:700">+' + (tarefasD.length-3) + ' mais</div>';
+    }
+
+    html += '</div>';
+  }
+  html += '</div>';
+  el.innerHTML = html;
+}
+
+// ══ VISÃO: DASHBOARD ═══════════════════════════════════════════════════════════
+
+function _trkRenderizarDashboard() {
+  var el = document.getElementById('trkDashboardContainer');
+  if (!el) return;
+  if (!_trk.metricas) {
+    el.innerHTML = '<div class="p-10 text-center"><i class="fas fa-spinner animate-spin text-indigo-300 text-xl"></i></div>';
+    _trkCarregarMetricas();
+    return;
+  }
+  var g = _trk.metricas.global;
+  var p = _trk.metricas.pessoal;
+
+  function barChart(titulo, dados, paleta) {
+    if (!dados) return '';
+    var vals = Object.values(dados);
+    var max  = Math.max.apply(null, vals) || 1;
+    var html = '<div style="background:white;border-radius:18px;border:1.5px solid #e2e8f0;padding:18px;margin-bottom:12px">'
+      + '<div style="font-size:10px;font-weight:900;color:#334155;text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px">' + titulo + '</div>';
+    Object.keys(dados).forEach(function(k, i) {
+      var v   = dados[k];
+      var pct = Math.round((v/max)*100);
+      var cor = paleta ? paleta[k] || '#6366f1' : '#6366f1';
+      var lbl = (_TRK_STATUS_LABEL[k]||_TRK_PRI_LABEL[k]||k);
+      html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">'
+        + '<span style="width:110px;font-size:10px;font-weight:600;color:#475569;flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + escaparHTML(lbl) + '</span>'
+        + '<div class="trk-bar" style="flex:1"><div class="trk-bar-fill" style="width:' + pct + '%;background:' + cor + '"></div></div>'
+        + '<span style="font-size:10px;font-weight:900;color:#334155;width:24px;text-align:right">' + v + '</span>'
+        + '</div>';
+    });
+    return html + '</div>';
+  }
+
+  function metricCard(icon, label, val, cor, sub) {
+    return '<div style="background:white;border-radius:18px;border:1.5px solid #e2e8f0;padding:16px 20px;display:flex;align-items:center;gap:12px">'
+      + '<div style="width:40px;height:40px;border-radius:12px;background:' + cor + '18;display:flex;align-items:center;justify-content:center;flex-shrink:0">'
+      + '<i class="fas ' + icon + '" style="color:' + cor + ';font-size:16px"></i></div>'
+      + '<div><div style="font-size:22px;font-weight:900;color:#1e293b;line-height:1">' + val + '</div>'
+      + '<div style="font-size:10px;font-weight:600;color:#94a3b8">' + label + '</div>'
+      + (sub ? '<div style="font-size:9px;color:#cbd5e1;margin-top:2px">' + sub + '</div>' : '')
+      + '</div></div>';
+  }
+
+  var statusPaleta = {};
+  Object.keys(_TRK_STATUS_COR).forEach(function(k){ statusPaleta[k] = _TRK_STATUS_COR[k].txt; });
+
+  var html = '';
+
+  // Visão pessoal
+  if (p) {
+    html += '<div style="margin-bottom:12px">'
+      + '<div style="font-size:11px;font-weight:900;color:#6366f1;text-transform:uppercase;letter-spacing:.07em;margin-bottom:10px"><i class="fas fa-user mr-1.5"></i>Minha Visão Pessoal</div>'
+      + '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-bottom:12px">'
+      + metricCard('fa-layer-group','Minhas tarefas', p.total, '#6366f1', '')
+      + metricCard('fa-check-circle','Concluídas', p.concluidas, '#10b981', '')
+      + metricCard('fa-clock','Atrasadas', p.atrasadas, p.atrasadas>0?'#ef4444':'#10b981', '')
+      + metricCard('fa-stopwatch','Tempo médio', (p.tempoMedioH||0)+'h', '#8b5cf6', 'por tarefa concluída')
+      + '</div>'
+      + barChart('Status das Minhas Tarefas', p.porStatus, statusPaleta)
+      + '</div>';
+  }
+
+  // Visão global (só para admin/gestor)
+  if (g) {
+    html += '<div style="margin-bottom:12px">'
+      + '<div style="font-size:11px;font-weight:900;color:#334155;text-transform:uppercase;letter-spacing:.07em;margin-bottom:10px"><i class="fas fa-building mr-1.5"></i>Visão Institucional</div>'
+      + '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-bottom:12px">'
+      + metricCard('fa-layer-group','Total',     g.total,       '#6366f1','')
+      + metricCard('fa-check','Concluídas',       g.concluidas,  '#10b981','')
+      + metricCard('fa-clock','Atrasadas',         g.atrasadas,   g.atrasadas>0?'#ef4444':'#10b981','')
+      + metricCard('fa-fire','SLA violado',        g.slaViolados, g.slaViolados>0?'#f97316':'#10b981','')
+      + '</div>'
+      + '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px">'
+      + barChart('Por Status', g.porStatus, statusPaleta)
+      + barChart('Por Módulo', g.porModulo, {})
+      + '</div>';
+
+    // Gargalos
+    if (g.gargalos && g.gargalos.length) {
+      html += '<div style="background:white;border-radius:18px;border:1.5px solid #fca5a5;padding:18px;margin-top:12px">'
+        + '<div style="font-size:10px;font-weight:900;color:#dc2626;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px"><i class="fas fa-exclamation-triangle mr-1.5"></i>Gargalos Operacionais</div>';
+      g.gargalos.forEach(function(gg) {
+        html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:#fef2f2;border-radius:10px;margin-bottom:6px">'
+          + '<span style="font-size:11px;font-weight:700;color:#991b1b">' + escaparHTML(gg.label||gg.status) + '</span>'
+          + '<span style="font-size:11px;font-weight:900;color:#ef4444">' + gg.quantidade + ' tarefas paradas</span></div>';
+      });
+      html += '</div>';
+    }
+
+    // Lista atrasadas
+    if (g.listaAtrasadas && g.listaAtrasadas.length) {
+      html += '<div style="background:white;border-radius:18px;border:1.5px solid #e2e8f0;padding:18px;margin-top:12px">'
+        + '<div style="font-size:10px;font-weight:900;color:#334155;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Tarefas mais atrasadas</div>';
+      g.listaAtrasadas.forEach(function(t) {
+        var d   = t.prazo ? new Date(t.prazo).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'2-digit'}) : '—';
+        var cor = _TRK_STATUS_COR[t.status]||{txt:'#475569'};
+        html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid #f8fafc">'
+          + '<span style="font-size:11px;font-weight:600;color:#334155;cursor:pointer" onclick="_trkAbrirDetalhe(\'' + t.id + '\')">' + escaparHTML(t.titulo) + '</span>'
+          + '<div style="display:flex;align-items:center;gap:8px">'
+          + '<span style="font-size:9px;font-weight:700;color:#ef4444">' + d + '</span>'
+          + '<span style="font-size:9px;font-weight:700;color:' + cor.txt + '">' + escaparHTML(t.responsavel||'—') + '</span>'
+          + '</div></div>';
+      });
+      html += '</div>';
+    }
+
+    html += '</div>';
+  }
+
+  if (!html) {
+    html = '<div class="p-10 text-center"><i class="fas fa-chart-bar text-slate-200 text-4xl mb-3"></i><p class="text-slate-400 font-bold text-sm">Carregando métricas...</p></div>';
+  }
+
+  el.innerHTML = html;
+}
+
+// ══ DETALHE DE TAREFA ═════════════════════════════════════════════════════════
+
+function _trkAbrirDetalhe(id) {
+  var t = _trk.tarefas.find(function(x){ return x.id===id; });
+  if (!t) { GAS.tarefas.obter(id, function(d){ if(d) _trkAbrirDetalhe(d.id); }, function(){}); return; }
+
+  var priCor  = _TRK_PRI_COR[t.prioridade]||'#94a3b8';
+  var stCor   = _TRK_STATUS_COR[t.status]||{bg:'#f8fafc',txt:'#475569',borda:'#e2e8f0'};
+  var hoje    = new Date(); hoje.setHours(0,0,0,0);
+  var atrasada= t.prazo && new Date(t.prazo) < hoje && t.status !== 'concluida' && t.status !== 'cancelada';
+
+  // Opções de status disponíveis (FSM)
+  var transicoes  = _TRK_TRANSICOES[t.status]||[];
+  var optsStatus  = transicoes.map(function(s){
+    return '<option value="' + s + '">' + (_TRK_STATUS_LABEL[s]||s) + '</option>';
+  }).join('');
+
+  // Histórico
+  var histHtml = '';
+  (t.historico||[]).slice().reverse().slice(0,8).forEach(function(h) {
+    var d = h.data ? new Date(h.data).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : '';
+    histHtml += '<div style="display:flex;gap:10px;margin-bottom:8px">'
+      + '<div style="width:6px;height:6px;border-radius:99px;background:#6366f1;margin-top:5px;flex-shrink:0"></div>'
+      + '<div><span style="font-size:10px;font-weight:700;color:#334155">' + escaparHTML(h.ator||'sistema') + '</span>'
+      + '<span style="font-size:10px;color:#94a3b8"> → ' + escaparHTML(h.campo||'status') + ': </span>'
+      + '<span style="font-size:10px;font-weight:700;color:#6366f1">' + escaparHTML(String(h.para||'')) + '</span>'
+      + (h.comentario ? '<div style="font-size:10px;color:#64748b;margin-top:1px;font-style:italic">' + escaparHTML(h.comentario) + '</div>' : '')
+      + '<div style="font-size:9px;color:#cbd5e1">' + d + '</div></div></div>';
+  });
+
+  // Comentários
+  var cmtHtml = '';
+  (t.comentarios||[]).slice().reverse().slice(0,5).forEach(function(c) {
+    var d = c.data ? new Date(c.data).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : '';
+    cmtHtml += '<div style="background:#f8fafc;border-radius:10px;padding:8px 12px;margin-bottom:6px">'
+      + '<div style="font-size:10px;font-weight:900;color:#334155">' + escaparHTML(c.autor||'sistema') + ' <span style="font-weight:400;color:#94a3b8;font-size:9px">' + d + '</span></div>'
+      + '<div style="font-size:11px;color:#475569;margin-top:2px">' + escaparHTML(c.texto||'') + '</div></div>';
+  });
+
+  var meuEmail    = AppState.usuario.email||'';
+  var isGestao    = AppState.usuario.isAdmin || AppState.usuario.isSuperadmin;
+  var podeDelegas = temPermissao('tarefas','editar') && (isGestao || t.responsavel===meuEmail || t.criadoPor===meuEmail);
+  var podeEditar  = temPermissao('tarefas','editar');
+
+  // Chips de vínculo bidirecional
+  var chipsVinculo = '';
+  if (t.tarefaPai) {
+    var tPai = _trk.tarefas.find(function(x){ return x.id === t.tarefaPai; });
+    chipsVinculo += '<span style="display:inline-flex;align-items:center;gap:5px;padding:3px 10px;background:#eef2ff;color:#4338ca;border-radius:99px;font-size:9px;font-weight:900;border:1px solid #c7d2fe;cursor:pointer" onclick="Swal.close();_trkAbrirDetalhe(\'' + t.tarefaPai + '\')">'
+      + '<i class="fas fa-sitemap"></i> Processo: ' + escaparHTML(tPai ? tPai.titulo : t.tarefaPai) + '</span>';
+  }
+  if (t.idAcao) {
+    chipsVinculo += '<span style="display:inline-flex;align-items:center;gap:5px;padding:3px 10px;background:#ecfdf5;color:#065f46;border-radius:99px;font-size:9px;font-weight:900;border:1px solid #a7f3d0">'
+      + '<i class="fas fa-bolt"></i> Ação: ' + escaparHTML(t.acaoNome || t.idAcao) + '</span>';
+  }
+
+  Swal.fire({
+    title: '',
+    width: Math.min(720, window.innerWidth - 32),
+    showConfirmButton: false,
+    showCloseButton: true,
+    customClass: { popup:'rounded-3xl', closeButton:'text-slate-400' },
+    html: '<div style="text-align:left;padding:0 4px 4px">'
+      // Cabeçalho
+      + '<div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:16px">'
+      + '<div style="flex:1">'
+      + '<div style="font-size:14px;font-weight:900;color:#1e293b;line-height:1.3;margin-bottom:6px">' + escaparHTML(t.titulo) + '</div>'
+      + '<div style="display:flex;flex-wrap:wrap;gap:6px">'
+      + '<span style="font-size:9px;font-weight:900;padding:3px 9px;border-radius:99px;background:' + stCor.bg + ';color:' + stCor.txt + ';border:1px solid ' + stCor.borda + '">' + (_TRK_STATUS_LABEL[t.status]||t.status) + '</span>'
+      + '<span style="font-size:9px;font-weight:900;padding:3px 9px;border-radius:99px;background:' + priCor + '18;color:' + priCor + '">' + (_TRK_PRI_LABEL[t.prioridade]||t.prioridade) + '</span>'
+      + '<span style="font-size:9px;font-weight:700;padding:3px 9px;border-radius:99px;background:#f1f5f9;color:#475569"><i class="fas ' + (_TRK_MOD_ICON[t.modulo]||'fa-circle') + ' mr-1"></i>' + escaparHTML(t.modulo) + '</span>'
+      + (t.slaViolado ? '<span style="font-size:9px;font-weight:900;padding:3px 9px;border-radius:99px;background:#fef2f2;color:#dc2626"><i class="fas fa-fire mr-1"></i>SLA violado</span>' : '')
+      + (atrasada     ? '<span style="font-size:9px;font-weight:900;padding:3px 9px;border-radius:99px;background:#fef2f2;color:#dc2626"><i class="fas fa-clock mr-1"></i>Atrasada</span>' : '')
+      + chipsVinculo
+      + '</div></div></div>'
+      // Info grid
+      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">'
+      + _trkInfoCell('Responsável', escaparHTML(t.responsavelNome||t.responsavel||'—'))
+      + _trkInfoCell('Prazo', t.prazo ? new Date(t.prazo).toLocaleDateString('pt-BR') : '—')
+      + _trkInfoCell('Criado por', escaparHTML(t.criadoPor||'—'))
+      + _trkInfoCell('Processo', escaparHTML(t.processo||t.refOrigem||'—'))
+      + _trkInfoCell('SLA', (t.sla||'—') + (t.sla?' h':''))
+      + _trkInfoCell('Tempo exec.', t.duracaoReal ? t.duracaoReal + ' h' : '—')
+      + '</div>'
+      // Descrição
+      + (t.descricao ? '<div style="background:#f8fafc;border-radius:12px;padding:10px 14px;font-size:11px;color:#475569;margin-bottom:16px">' + escaparHTML(t.descricao) + '</div>' : '')
+      // Ações de mudança de status
+      + (podeEditar && transicoes.length ? '<div style="background:#eef2ff;border-radius:12px;padding:10px 14px;margin-bottom:16px;display:flex;align-items:center;gap:8px">'
+        + '<span style="font-size:10px;font-weight:900;color:#4338ca;flex-shrink:0">Mover para:</span>'
+        + '<select id="trkDetSelect" style="flex:1;padding:6px 10px;border:1.5px solid #c7d2fe;border-radius:8px;font-size:11px;color:#334155;outline:none">'
+        + '<option value="">Selecionar...</option>' + optsStatus + '</select>'
+        + '<input id="trkDetComent" placeholder="Motivo (opcional)" style="flex:1;padding:6px 10px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:11px;outline:none">'
+        + '<button onclick="_trkDetalheConfirmarStatus(\'' + id + '\')" style="padding:6px 14px;background:#6366f1;color:white;border:none;border-radius:8px;font-size:10px;font-weight:900;cursor:pointer">Mover</button>'
+        + '</div>' : '')
+      // Delegação com autocomplete dinâmico
+      + (podeDelegas ? '<div style="background:#f5f3ff;border-radius:12px;padding:10px 14px;margin-bottom:16px">'
+        + '<div style="font-size:10px;font-weight:900;color:#6d28d9;margin-bottom:8px"><i class="fas fa-user-edit mr-1.5"></i>Delegar tarefa</div>'
+        + '<div style="display:flex;gap:8px;align-items:flex-start">'
+        + '<div style="flex:1;position:relative">'
+        + '<input id="trkDetDestNome" placeholder="Nome ou email do destinatário" style="width:100%;padding:6px 10px;border:1.5px solid #ddd6fe;border-radius:8px;font-size:11px;outline:none;box-sizing:border-box" autocomplete="off"'
+        + ' oninput="_trkAutocompletarUsuario(this,document.getElementById(\'trkDetDestDrop\'),function(email,nome){document.getElementById(\'trkDetDestEmail\').value=email;})">'
+        + '<div id="trkDetDestDrop" style="display:none"></div>'
+        + '<input type="hidden" id="trkDetDestEmail">'
+        + '</div>'
+        + '<input id="trkDetDelegCom" placeholder="Motivo (opcional)" style="flex:1;padding:6px 10px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:11px;outline:none">'
+        + '<button onclick="_trkDetalheConfirmarDelegar(\'' + id + '\')" style="padding:6px 14px;background:#7c3aed;color:white;border:none;border-radius:8px;font-size:10px;font-weight:900;cursor:pointer;white-space:nowrap">Delegar</button>'
+        + '</div></div>' : '')
+      // Comentário
+      + '<div style="display:flex;gap:8px;margin-bottom:16px">'
+      + '<input id="trkDetNovoCmt" placeholder="Adicionar comentário..." style="flex:1;padding:8px 12px;border:1.5px solid #e2e8f0;border-radius:10px;font-size:11px;outline:none">'
+      + '<button onclick="_trkDetalheAdicionarCmt(\'' + id + '\')" style="padding:8px 14px;background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:10px;font-size:10px;font-weight:900;color:#475569;cursor:pointer"><i class="fas fa-paper-plane"></i></button>'
+      + '</div>'
+      // Comentários
+      + (cmtHtml ? '<div style="margin-bottom:16px"><div style="font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Comentários</div>' + cmtHtml + '</div>' : '')
+      // Histórico
+      + (histHtml ? '<div><div style="font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px"><i class="fas fa-history mr-1.5"></i>Histórico</div>' + histHtml + '</div>' : '')
+      + '</div>'
+  });
+}
+
+function _trkInfoCell(label, val) {
+  return '<div style="background:#f8fafc;border-radius:10px;padding:8px 12px">'
+    + '<div style="font-size:9px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px">' + label + '</div>'
+    + '<div style="font-size:11px;font-weight:700;color:#334155">' + val + '</div></div>';
+}
+
+function _trkDetalheConfirmarStatus(id) {
+  var sel    = document.getElementById('trkDetSelect');
+  var coment = (document.getElementById('trkDetComent')||{}).value||'';
+  if (!sel || !sel.value) return;
+  var novoSt = sel.value;
+
+  showLoader(true);
+  GAS.tarefas.mudarStatus(id, novoSt, coment, function(tarefa) {
+    showLoader(false);
+    // Atualiza cache local
+    var idx = _trk.tarefas.findIndex(function(x){return x.id===id;});
+    if (idx !== -1) _trk.tarefas[idx] = _trkNorm(tarefa);
+    Swal.close();
+    _trkRenderizar();
+    _trkCarregarMetricas();
+  }, function(e) {
+    showLoader(false);
+    Swal.showValidationMessage && Swal.showValidationMessage(e&&e.message||'Erro ao mover tarefa.');
+    Swal.fire({icon:'error',title:'Erro',text:e&&e.message||'Não foi possível mover a tarefa.',confirmButtonColor:'#6366f1',customClass:{popup:'rounded-3xl',confirmButton:'rounded-xl font-black text-sm'}});
+  });
+}
+
+function _trkDetalheConfirmarDelegar(id) {
+  // Pega email (campo hidden preenchido pelo autocomplete) ou nome como fallback
+  var destEmail = (document.getElementById('trkDetDestEmail')||{}).value||'';
+  var destNome  = (document.getElementById('trkDetDestNome') ||{}).value||'';
+  var dest      = destEmail || destNome;
+  var coment    = (document.getElementById('trkDetDelegCom')||{}).value||'';
+  if (!dest.trim()) { alert('Informe o destinatário.'); return; }
+
+  showLoader(true);
+  GAS.tarefas.delegar(id, dest.trim(), coment, function(tarefa) {
+    showLoader(false);
+    var idx = _trk.tarefas.findIndex(function(x){return x.id===id;});
+    if (idx !== -1) _trk.tarefas[idx] = _trkNorm(tarefa);
+    Swal.close();
+    _trkRenderizar();
+  }, function(e) {
+    showLoader(false);
+    Swal.fire({icon:'error',title:'Erro',text:e&&e.message||'Não foi possível delegar.',confirmButtonColor:'#6366f1',customClass:{popup:'rounded-3xl',confirmButton:'rounded-xl font-black text-sm'}});
+  });
+}
+
+function _trkDetalheAdicionarCmt(id) {
+  var el  = document.getElementById('trkDetNovoCmt');
+  var txt = el ? el.value.trim() : '';
+  if (!txt) return;
+
+  showLoader(true);
+  GAS.tarefas.comentar(id, txt, function() {
+    showLoader(false);
+    if (el) el.value = '';
+    // Recarrega a tarefa para mostrar novo comentário
+    GAS.tarefas.obter(id, function(d) {
+      if (d) {
+        var idx = _trk.tarefas.findIndex(function(x){return x.id===id;});
+        if (idx !== -1) _trk.tarefas[idx] = _trkNorm(d);
+        _trkAbrirDetalhe(id);
+      }
+    }, function(){});
+  }, function(e) {
+    showLoader(false);
+    Swal.fire({icon:'error',title:'Erro',text:e&&e.message||'Não foi possível comentar.',confirmButtonColor:'#6366f1',customClass:{popup:'rounded-3xl',confirmButton:'rounded-xl font-black text-sm'}});
+  });
+}
+
+// ══ CRIAR / EDITAR TAREFA ════════════════════════════════════════════════════
+
+// Mantém nome original para compatibilidade com outros módulos
+// statusPre: status pré-selecionado (usado pelo botão "+" do Kanban)
+function abrirModalTarefa(id, statusPre) {
+  var dado = id ? (_trk.tarefas.find(function(t){return t.id===id;}) || {}) : {};
+  var statusInicial = dado.status || statusPre || 'solicitada';
+
+  var statusOpts = Object.keys(_TRK_STATUS_LABEL).map(function(s){
+    return '<option value="' + s + '"' + (statusInicial===s?' selected':'') + '>' + _TRK_STATUS_LABEL[s] + '</option>';
+  }).join('');
+
+  var LABEL = 'display:block;font-size:9px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px';
+  var INPUT = 'width:100%;padding:9px 12px;font-size:12px;border:1.5px solid #e2e8f0;border-radius:12px;outline:none;box-sizing:border-box';
+  var SELECT = 'width:100%;padding:9px 12px;font-size:12px;border:1.5px solid #e2e8f0;border-radius:12px;outline:none';
+
+  // Chips de vínculo existentes (editando)
+  var chipsVinculo = '';
+  if (dado.tarefaPai) {
+    var pai = _trk.tarefas.find(function(x){ return x.id === dado.tarefaPai; });
+    chipsVinculo += '<span style="display:inline-flex;align-items:center;gap:5px;padding:3px 10px;background:#eef2ff;color:#4338ca;border-radius:99px;font-size:9px;font-weight:900;border:1px solid #c7d2fe">'
+      + '<i class="fas fa-sitemap"></i> Processo: ' + escaparHTML(pai ? pai.titulo : dado.tarefaPai) + '</span>';
+  }
+  if (dado.idAcao && dado.acaoNome) {
+    chipsVinculo += '<span style="display:inline-flex;align-items:center;gap:5px;padding:3px 10px;background:#ecfdf5;color:#065f46;border-radius:99px;font-size:9px;font-weight:900;border:1px solid #a7f3d0">'
+      + '<i class="fas fa-bolt"></i> Ação: ' + escaparHTML(dado.acaoNome) + '</span>';
+  }
+
+  Swal.fire({
+    title: id ? 'Editar Tarefa' : 'Nova Tarefa',
+    width: Math.min(640, window.innerWidth - 32),
+    showCancelButton: true,
+    confirmButtonText: '<i class="fas fa-save mr-1"></i>Salvar',
+    cancelButtonText: 'Cancelar',
+    confirmButtonColor: '#6366f1',
+    customClass: { popup:'rounded-3xl', confirmButton:'rounded-xl font-black text-sm', cancelButton:'rounded-xl font-bold text-sm' },
+    html: '<div class="text-left" style="padding:0 8px 8px">'
+      // Chips de vínculo existentes
+      + (chipsVinculo ? '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">' + chipsVinculo + '</div>' : '')
+      // Título
+      + '<div style="margin-bottom:10px">'
+      + '<label style="' + LABEL + '">Título *</label>'
+      + '<input id="tarTitulo" style="' + INPUT + ';font-size:13px" value="' + escaparHTML(dado.titulo||'') + '" placeholder="Descrição da tarefa">'
+      + '</div>'
+      // Descrição
+      + '<div style="margin-bottom:10px">'
+      + '<label style="' + LABEL + '">Descrição</label>'
+      + '<textarea id="tarDesc" rows="2" style="' + INPUT + ';resize:none" placeholder="Detalhes da tarefa...">' + escaparHTML(dado.descricao||'') + '</textarea>'
+      + '</div>'
+      // Grade: prioridade + status
+      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">'
+      + '<div><label style="' + LABEL + '">Prioridade</label>'
+      + '<select id="tarPrioridade" style="' + SELECT + '">'
+      + ['critica','alta','media','baixa'].map(function(p){return '<option value="'+p+'"'+(dado.prioridade===p?' selected':'')+'>'+(_TRK_PRI_LABEL[p]||p)+'</option>';}).join('')
+      + '</select></div>'
+      + '<div><label style="' + LABEL + '">Status</label>'
+      + '<select id="tarStatus" style="' + SELECT + '">' + statusOpts + '</select></div>'
+      + '</div>'
+      // Responsável com autocomplete dinâmico
+      + '<div style="margin-bottom:10px">'
+      + '<label style="' + LABEL + '">Responsável</label>'
+      + '<div style="position:relative">'
+      + '<input id="tarRespNome" data-role="nome" style="' + INPUT + '" value="' + escaparHTML(dado.responsavelNome||dado.responsavel||'') + '" placeholder="Digite nome ou email para buscar..." autocomplete="off" oninput="_trkAutocompletarUsuario(this,document.getElementById(\'tarRespDrop\'),function(email,nome){document.getElementById(\'tarRespEmail\').value=email;})">'
+      + '<div id="tarRespDrop" style="display:none"></div>'
+      + '</div>'
+      + '<input type="hidden" id="tarRespEmail" data-role="email" value="' + escaparHTML(dado.responsavel||'') + '">'
+      + '</div>'
+      // Grade: prazo + módulo
+      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">'
+      + '<div><label style="' + LABEL + '">Prazo</label>'
+      + '<input id="tarPrazo" type="date" style="' + INPUT + '" value="' + escaparHTML(dado.prazo||'') + '">'
+      + '</div>'
+      + '<div><label style="' + LABEL + '">Módulo de origem</label>'
+      + '<select id="tarModulo" style="' + SELECT + '">'
+      + ['manual','reservas','contratos','chaves','rh','comunicacao','almoxarifado','financeiro','manutencao','acoes'].map(function(m){return '<option value="'+m+'"'+(dado.modulo===m?' selected':'')+'>'+m+'</option>';}).join('')
+      + '</select></div>'
+      + '</div>'
+      // Processo / Referência
+      + '<div style="margin-bottom:10px">'
+      + '<label style="' + LABEL + '">Processo / Referência</label>'
+      + '<input id="tarProcesso" style="' + INPUT + '" value="' + escaparHTML(dado.processo||dado.refOrigem||'') + '" placeholder="Ex: Evento X, Contrato Y">'
+      + '</div>'
+      // Vínculo com Ação Institucional (autocomplete)
+      + '<div style="margin-bottom:4px">'
+      + '<label style="' + LABEL + '"><i class="fas fa-bolt text-emerald-500 mr-1"></i>Vincular a Ação Institucional <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:9px">(opcional)</span></label>'
+      + '<div style="position:relative">'
+      + '<input id="tarAcaoNome" style="' + INPUT + '" value="' + escaparHTML(dado.acaoNome||'') + '" placeholder="Digite para buscar ações ativas..." autocomplete="off" oninput="_trkAutocompletarAcao(this,document.getElementById(\'tarAcaoDrop\'),document.getElementById(\'tarAcaoId\'))">'
+      + '<div id="tarAcaoDrop" style="display:none"></div>'
+      + '</div>'
+      + '<input type="hidden" id="tarAcaoId" value="' + escaparHTML(dado.idAcao||'') + '">'
+      + '</div>'
+      + '</div>',
+    didOpen: function() {
+      // Fecha dropdowns ao clicar fora
+      document.addEventListener('click', function _closeDrops(e) {
+        var drops = ['tarRespDrop','tarAcaoDrop'];
+        drops.forEach(function(dId) {
+          var d = document.getElementById(dId);
+          if (d && !d.contains(e.target)) { d.innerHTML = ''; d.style.display = 'none'; }
+        });
+      }, { once: false, capture: true });
+    },
+    preConfirm: function() {
+      var titulo = (document.getElementById('tarTitulo')?.value||'').trim();
+      if (!titulo) { Swal.showValidationMessage('Título é obrigatório'); return false; }
+
+      var respNome  = (document.getElementById('tarRespNome')?.value||'').trim();
+      var respEmail = (document.getElementById('tarRespEmail')?.value||'').trim();
+      // Se email não foi preenchido via autocomplete mas nome parece email, usa como email
+      if (!respEmail && respNome.indexOf('@') !== -1) respEmail = respNome;
+
+      var acaoId   = (document.getElementById('tarAcaoId')?.value||'').trim();
+      var acaoNome = (document.getElementById('tarAcaoNome')?.value||'').trim();
+
+      return {
+        id:              dado.id || null,
+        titulo:          titulo,
+        descricao:       document.getElementById('tarDesc')?.value.trim()     || '',
+        prioridade:      document.getElementById('tarPrioridade')?.value      || 'media',
+        status:          document.getElementById('tarStatus')?.value          || 'solicitada',
+        responsavel:     respEmail || respNome,
+        responsavelNome: respNome  || respEmail,
+        prazo:           document.getElementById('tarPrazo')?.value           || '',
+        modulo:          document.getElementById('tarModulo')?.value          || 'manual',
+        processo:        document.getElementById('tarProcesso')?.value.trim() || '',
+        idAcao:          acaoId,
+        acaoNome:        acaoNome
+      };
+    }
+  }).then(function(r) {
+    if (!r.isConfirmed) return;
+    var payload   = r.value;
+    var acaoIdNov = payload.idAcao;
+    delete payload.idAcao;
+    delete payload.acaoNome;
+
+    showLoader(true);
+    GAS.tarefas.salvar(payload, function(tarefa) {
+      // Se há vínculo com ação e mudou, chama vincularAcao separadamente
+      var acaoAnterior = dado.idAcao || '';
+      if (tarefa && tarefa.id && acaoIdNov !== acaoAnterior) {
+        GAS.tarefas.vincularAcao(tarefa.id, acaoIdNov, function(tarefaAtual) {
+          showLoader(false);
+          _trkAtualizarCache(tarefaAtual || tarefa);
+        }, function() {
+          showLoader(false);
+          _trkAtualizarCache(tarefa);
+        });
+      } else {
+        showLoader(false);
+        _trkAtualizarCache(tarefa);
+      }
+    }, function(e) {
+      showLoader(false);
+      Swal.fire({ icon:'error', title:'Erro', text: e&&e.message||'Não foi possível salvar.', confirmButtonColor:'#6366f1', customClass:{popup:'rounded-3xl',confirmButton:'rounded-xl font-black text-sm'} });
+    });
+  });
+}
+
+function _trkAtualizarCache(tarefa) {
+  if (tarefa && tarefa.id) {
+    var norm = _trkNorm(tarefa);
+    var idx  = _trk.tarefas.findIndex(function(x){return x.id===tarefa.id;});
+    if (idx === -1) _trk.tarefas.push(norm);
+    else _trk.tarefas[idx] = norm;
+  }
+  _trkRenderizar();
+  _trkCarregarMetricas();
+}
+
+// ══ EXCLUSÃO ═════════════════════════════════════════════════════════════════
+
+function _trkExcluir(id) {
+  Swal.fire({
+    title:'Excluir tarefa?', icon:'warning', showCancelButton:true,
+    confirmButtonColor:'#ef4444', confirmButtonText:'Excluir', cancelButtonText:'Cancelar',
+    customClass:{popup:'rounded-3xl',confirmButton:'rounded-xl font-black text-sm',cancelButton:'rounded-xl font-bold text-sm'}
+  }).then(function(r) {
+    if (!r.isConfirmed) return;
+    showLoader(true);
+    GAS.tarefas.excluir(id, function() {
+      showLoader(false);
+      _trk.tarefas = _trk.tarefas.filter(function(t){return t.id!==id;});
+      _trkRenderizar();
+      _trkCarregarMetricas();
+    }, function(e) {
+      showLoader(false);
+      Swal.fire({icon:'error',title:'Erro',text:e&&e.message||'Não foi possível excluir.',confirmButtonColor:'#6366f1',customClass:{popup:'rounded-3xl',confirmButton:'rounded-xl font-black text-sm'}});
+    });
+  });
+}
+
+// Alias para compatibilidade com código existente
+var _excluirTarefa = _trkExcluir;
+
+// ══ HOOK LAZY-LOAD ════════════════════════════════════════════════════════════
+
+window._onShow_aba_tarefas = function() {
+  if (!_trk.tarefas.length) carregarTarefas();
+  else { _trkRenderizarStatsBar(); _trkRenderizar(); }
+};
+</script>

@@ -280,8 +280,9 @@ const GAS = {
     excluirMeta:      function(id, email, cb, err)          { GAS._callCtrl('ctrl_contratos_excluir_meta',     [id, email||GAS._sessao()],      cb, err); },
     salvarRubrica:    function(dados, email, cb, err)       { GAS._callCtrl('ctrl_contratos_salvar_rubrica',   [dados, email||GAS._sessao()],   cb, err); },
     excluirRubrica:   function(id, email, cb, err)          { GAS._callCtrl('ctrl_contratos_excluir_rubrica',  [id, email||GAS._sessao()],      cb, err); },
-    salvarIndicador:  function(dados, email, cb, err)       { GAS._callCtrl('ctrl_contratos_salvar_indicador', [dados, email||GAS._sessao()],   cb, err); },
-    excluirIndicador: function(id, email, cb, err)          { GAS._callCtrl('ctrl_contratos_excluir_indicador',[id, email||GAS._sessao()],      cb, err); }
+    salvarIndicador:  function(dados, email, cb, err)       { GAS._callCtrl('ctrl_contratos_salvar_indicador',  [dados, email||GAS._sessao()],   cb, err); },
+    excluirIndicador: function(id, email, cb, err)          { GAS._callCtrl('ctrl_contratos_excluir_indicador', [id, email||GAS._sessao()],      cb, err); },
+    obterHistorico:   function(idRubrica, cb, err)          { GAS._callCtrl('ctrl_contratos_historico_rubrica', [idRubrica],                     cb, err); }
   },
 
   /**
@@ -314,6 +315,12 @@ const GAS = {
     },
     listarPendentes: function(email, cb, err) {
       GAS._callCtrl('ctrl_acoes_listar_pendentes', [email || GAS._sessao()], cb, err);
+    },
+    aprovar: function(id, cb, err) {
+      GAS._callCtrl('ctrl_acoes_aprovar', [id, GAS._sessao()], cb, err);
+    },
+    recusar: function(id, justificativa, cb, err) {
+      GAS._callCtrl('ctrl_acoes_recusar', [id, justificativa, GAS._sessao()], cb, err);
     },
     criar: function(tipo, subtipo, dados, usuario, justificativa, cb, err) {
       GAS._call('chat_criarSolicitacao', [tipo, subtipo, dados, usuario, justificativa], cb, err);
@@ -379,12 +386,74 @@ const GAS = {
   },
 
   /**
-   * BLOCO: Processos internos — oficial (tarefas_controller.gs)
+   * BLOCO: Processos internos legados — mantido para compatibilidade retroativa.
+   * NOVO: usar GAS.processosAdm para todas as operações.
    */
   processos: {
     listar:  function(cb, err)            { GAS._callCtrl('ctrl_processos_listar',  [GAS._sessao()],              cb, err); },
     salvar:  function(dados, cb, err)     { GAS._callCtrl('ctrl_processos_salvar',  [dados, GAS._sessao()],       cb, err); },
     excluir: function(id, cb, err)        { GAS._callCtrl('ctrl_processos_excluir', [id, GAS._sessao()],          cb, err); }
+  },
+
+  /**
+   * BLOCO: Processos Administrativo-Financeiros — engine transversal oficial.
+   * Absorve CIs + processos institucionais em fluxo único rastreável.
+   * @file backend/controllers/processos_inst_controller.gs
+   */
+  processosAdm: {
+    // ── Leitura ──────────────────────────────────────────────────────────────
+    listar:                 function(filtros, cb, err)             { GAS._callCtrl('ctrl_proc_listar',               [filtros || {}, GAS._sessao()],            cb, err); },
+    obter:                  function(id, cb, err)                  { GAS._callCtrl('ctrl_proc_obter',                [id, GAS._sessao()],                        cb, err); },
+    dashboard:              function(id, cb, err)                  { GAS._callCtrl('ctrl_proc_dashboard',            [id, GAS._sessao()],                        cb, err); },
+    timeline:               function(id, cb, err)                  { GAS._callCtrl('ctrl_proc_timeline',             [id, GAS._sessao()],                        cb, err); },
+    buscarPorVinculo:       function(tipo, entId, cb, err)         { GAS._callCtrl('ctrl_proc_buscar_por_vinculo',   [tipo, entId, GAS._sessao()],               cb, err); },
+
+    // ── Escrita — processo ────────────────────────────────────────────────────
+    criar:                  function(dados, cb, err)               { GAS._callCtrl('ctrl_proc_criar',                [dados, GAS._sessao()],                     cb, err); },
+    editar:                 function(id, campos, cb, err)          { GAS._callCtrl('ctrl_proc_editar',               [id, campos, GAS._sessao()],                cb, err); },
+    mudarStatus:            function(id, status, motivo, cb, err)  { GAS._callCtrl('ctrl_proc_mudar_status',         [id, status, motivo, GAS._sessao()],        cb, err); },
+    comentar:               function(id, texto, cb, err)           { GAS._callCtrl('ctrl_proc_comentar',             [id, texto, GAS._sessao()],                 cb, err); },
+
+    // ── Etapas ────────────────────────────────────────────────────────────────
+    avancarEtapa:           function(id, obs, cb, err)             { GAS._callCtrl('ctrl_proc_avancar_etapa',        [id, obs || '', GAS._sessao()],             cb, err); },
+    voltarEtapa:            function(id, motivo, cb, err)          { GAS._callCtrl('ctrl_proc_voltar_etapa',         [id, motivo || '', GAS._sessao()],          cb, err); },
+
+    // ── Vínculos ──────────────────────────────────────────────────────────────
+    criarTarefaVinculada:   function(procId, dados, cb, err)       { GAS._callCtrl('ctrl_proc_criar_tarefa_vinculada',[procId, dados, GAS._sessao()],            cb, err); },
+    vincularTarefa:         function(procId, tarefaId, cb, err)    { GAS._callCtrl('ctrl_proc_vincular_tarefa',      [procId, tarefaId, GAS._sessao()],          cb, err); },
+    vincularReserva:        function(procId, dados, cb, err)       { GAS._callCtrl('ctrl_proc_vincular_reserva',     [procId, dados, GAS._sessao()],             cb, err); },
+    vincularReuniao:        function(procId, reuniaoId, cb, err)   { GAS._callCtrl('ctrl_proc_vincular_reuniao',     [procId, reuniaoId, GAS._sessao()],         cb, err); },
+    vincularEncaminhamento: function(procId, dados, cb, err)       { GAS._callCtrl('ctrl_proc_vincular_encaminhamento',[procId, dados, GAS._sessao()],           cb, err); },
+    vincularContrato:       function(procId, dados, cb, err)       { GAS._callCtrl('ctrl_proc_vincular_contrato',    [procId, dados, GAS._sessao()],             cb, err); },
+    vincularContratacaoRH:  function(procId, dados, cb, err)       { GAS._callCtrl('ctrl_proc_vincular_contratacao_rh',[procId, dados, GAS._sessao()],          cb, err); },
+    vincularComunicacao:    function(procId, dados, cb, err)       { GAS._callCtrl('ctrl_proc_vincular_comunicacao', [procId, dados, GAS._sessao()],             cb, err); },
+    vincularAcao:           function(procId, acaoId, cb, err)      { GAS._callCtrl('ctrl_proc_vincular_acao',        [procId, acaoId, GAS._sessao()],            cb, err); },
+    vincularRubrica:        function(procId, rubId, nome, cb, err) { GAS._callCtrl('ctrl_proc_vincular_rubrica',     [procId, rubId, nome || '', GAS._sessao()], cb, err); },
+    adicionarDocumento:     function(procId, doc, cb, err)         { GAS._callCtrl('ctrl_proc_adicionar_documento',  [procId, doc, GAS._sessao()],               cb, err); },
+
+    // ── Pagamento ─────────────────────────────────────────────────────────────
+    registrarPagamento:     function(procId, valor, desc, cb, err) { GAS._callCtrl('ctrl_proc_registrar_pagamento',  [procId, valor, desc || '', GAS._sessao()], cb, err); },
+    syncTarefa:             function(procId, tarId, cb, err)       { GAS._callCtrl('ctrl_proc_sync_tarefa',          [procId, tarId, GAS._sessao()],             cb, err); },
+
+    // ── Catálogo de tipos ─────────────────────────────────────────────────────
+    catalogoTipos:          function(cb, err)                      { GAS._callCtrl('ctrl_proc_catalogo_tipos',       [GAS._sessao()],                            cb, err); },
+    obterEtapas:            function(tipoId, cb, err)              { GAS._callCtrl('ctrl_proc_obter_etapas',         [tipoId, GAS._sessao()],                    cb, err); },
+    salvarTipo:             function(tipo, cb, err)                { GAS._callCtrl('ctrl_proc_salvar_tipo',          [tipo, GAS._sessao()],                      cb, err); },
+
+    // ── Orçamento ─────────────────────────────────────────────────────────────
+    verificarOrcamento:     function(rubId, valor, cb, err)        { GAS._callCtrl('ctrl_proc_verificar_orcamento',  [rubId, valor, GAS._sessao()],              cb, err); },
+    reservarOrcamento:      function(procId, cb, err)              { GAS._callCtrl('ctrl_proc_reservar_orcamento',   [procId, GAS._sessao()],                    cb, err); },
+    liberarOrcamento:       function(procId, motivo, cb, err)      { GAS._callCtrl('ctrl_proc_liberar_orcamento',    [procId, motivo || '', GAS._sessao()],      cb, err); },
+    dashboardOrcamentario:  function(cb, err)                      { GAS._callCtrl('ctrl_proc_dashboard_orcamentario',[GAS._sessao()],                           cb, err); },
+
+    // ── Busca para autocomplete ───────────────────────────────────────────────
+    buscarAcoes:            function(busca, cb, err)               { GAS._callCtrl('ctrl_proc_buscar_acoes',         [busca || '', GAS._sessao()],               cb, err); },
+    buscarRubricas:         function(busca, cb, err)               { GAS._callCtrl('ctrl_proc_buscar_rubricas',      [busca || '', GAS._sessao()],               cb, err); },
+
+    // ── Dashboards transversais ───────────────────────────────────────────────
+    dashboardInstitucional: function(cb, err)                      { GAS._callCtrl('ctrl_proc_dashboard_institucional',[GAS._sessao()],                          cb, err); },
+    alertasGlobais:         function(cb, err)                      { GAS._callCtrl('ctrl_proc_alertas_globais',      [GAS._sessao()],                            cb, err); },
+    detectarAlertas:        function(cb, err)                      { GAS._callCtrl('ctrl_proc_detectar_alertas',     [GAS._sessao()],                            cb, err); }
   },
 
   /**

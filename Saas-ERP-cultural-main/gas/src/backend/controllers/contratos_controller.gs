@@ -37,6 +37,12 @@ function ctrl_contratos_memorias_rubrica(idRubrica) {
   });
 }
 
+function ctrl_contratos_historico_rubrica(idRubrica) {
+  return GasResponse.wrap(function() {
+    return obterHistoricoRubrica(idRubrica);
+  });
+}
+
 function ctrl_contratos_comparativo(idContrato, v1, v2) {
   return GasResponse.wrap(function() {
     return obterDashboardComparativoContrato(idContrato, v1, v2);

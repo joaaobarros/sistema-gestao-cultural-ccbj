@@ -18,23 +18,21 @@ function carregarSolicitacoes() {
       <p class="text-slate-400 text-[10px] mt-3 font-black uppercase tracking-widest">Carregando solicitações...</p>
     </div>`;
 
-  const fn = (AppState && AppState.usuario &&
-    (AppState.usuario.isAdmin || AppState.usuario.isSuperadmin || AppState.usuario.isHabilitador))
-    ? 'listarTodasSolicitacoes'
-    : 'listarSolicitacoesPendentes';
-
-  google.script.run
-    .withSuccessHandler(function(lista) {
-      _solicitacoesCache = lista || [];
-      _renderizarSolicitacoes();
-      _atualizarBadgeSolicitacoes();
-      _atualizarStatsSolicitacoes();
-    })
-    .withFailureHandler(function(err) {
-      if (container) container.innerHTML =
-        `<div class="p-10 text-center"><div class="w-12 h-12 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-3"><i class="fas fa-triangle-exclamation text-red-400"></i></div><p class="text-red-400 text-sm font-bold">${escaparHTML(err.message)}</p></div>`;
-    })
-    [fn](AppState && AppState.usuario ? AppState.usuario.email : '');
+  const ehGestor = AppState && AppState.usuario &&
+    (AppState.usuario.isAdmin || AppState.usuario.isSuperadmin || AppState.usuario.isHabilitador);
+  const email = AppState && AppState.usuario ? AppState.usuario.email : '';
+  const listarFn = ehGestor ? GAS.solicitacoes.listarTodas : GAS.solicitacoes.listarPendentes;
+  const onSucesso = function(lista) {
+    _solicitacoesCache = lista || [];
+    _renderizarSolicitacoes();
+    _atualizarBadgeSolicitacoes();
+    _atualizarStatsSolicitacoes();
+  };
+  const onErro = function(err) {
+    if (container) container.innerHTML =
+      `<div class="p-10 text-center"><div class="w-12 h-12 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-3"><i class="fas fa-triangle-exclamation text-red-400"></i></div><p class="text-red-400 text-sm font-bold">${escaparHTML(err.message || err)}</p></div>`;
+  };
+  listarFn(email, onSucesso, onErro);
 }
 
 function _atualizarStatsSolicitacoes() {
@@ -330,19 +328,19 @@ function _aprovarUI(id) {
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner animate-spin"></i>'; }
     if (typeof showLoader === 'function') showLoader(true);
 
-    google.script.run
-      .withSuccessHandler(function() {
+    GAS.solicitacoes.aprovar(id,
+      function() {
         if (typeof showLoader === 'function') showLoader(false);
         Swal.fire({ icon: 'success', title: 'Aprovado!', timer: 2000, showConfirmButton: false });
         carregarSolicitacoes();
         if (typeof atualizarAgendaAposMudanca === 'function') atualizarAgendaAposMudanca();
-      })
-      .withFailureHandler(function(err) {
+      },
+      function(err) {
         if (typeof showLoader === 'function') showLoader(false);
         if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-check text-[9px]"></i>Aprovar'; }
-        Swal.fire('Erro', err.message, 'error');
-      })
-      .aprovarSolicitacao(id, AppState.usuario.email);
+        Swal.fire('Erro', err.message || err, 'error');
+      }
+    );
   });
 }
 
@@ -368,17 +366,17 @@ function _recusarUI(id) {
 
     if (typeof showLoader === 'function') showLoader(true);
 
-    google.script.run
-      .withSuccessHandler(function() {
+    GAS.solicitacoes.recusar(id, result.value,
+      function() {
         if (typeof showLoader === 'function') showLoader(false);
         Swal.fire({ icon: 'success', title: 'Recusado.', timer: 2000, showConfirmButton: false });
         carregarSolicitacoes();
-      })
-      .withFailureHandler(function(err) {
+      },
+      function(err) {
         if (typeof showLoader === 'function') showLoader(false);
-        Swal.fire('Erro', err.message, 'error');
-      })
-      .recusarSolicitacao(id, result.value, AppState.usuario.email);
+        Swal.fire('Erro', err.message || err, 'error');
+      }
+    );
   });
 }
 

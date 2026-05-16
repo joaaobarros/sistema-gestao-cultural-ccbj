@@ -1,0 +1,1388 @@
+<!--
+@file logic/mod_gestao_contratos_js.html
+@type logic
+@description Lógica de frontend do módulo Gestão de Contratos — CRUD de contratos,
+             metas, rubricas, indicadores, memória de cálculo, histórico e auditoria.
+@responsibility Estado, renderização e chamadas GAS.contratos / GAS.admin para #aba-gestao-contratos.
+@dependencies GAS.contratos, GAS.admin, BtnGuard, showLoader, escaparHTML, AppState
+-->
+<script>
+// ══════════════════════════════════════════════════════
+// CONTRATOS — ESTADO GLOBAL
+// ══════════════════════════════════════════════════════
+
+var _ctrCache    = { contratos:[], metas:[], indicadores:[], rubricas:[] };
+var _ctrExpanded = {};   // { idContrato: true/false }
+var _ctrFiltro   = '';
+
+// ── Helpers ──────────────────────────────────────────
+function _fmtMoeda(v) {
+  const n = Number(v) || 0;
+  const partes = n.toFixed(2).split('.');
+  partes[0] = partes[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  return 'R$ ' + partes[0] + ',' + partes[1];
+}
+function _parseMoeda(valor) {
+  if (valor === null || valor === undefined || valor === '') return 0;
+  if (typeof valor === 'number') return isNaN(valor) ? 0 : valor;
+
+  var str = String(valor)
+    .replace(/R\$\s*/gi, '')
+    .replace(/\s/g, '')
+    .trim();
+
+  // Formato pt-BR: tem vírgula como decimal
+  if (str.includes(',')) {
+    str = str.replace(/\./g, '').replace(',', '.');
+  }
+
+  var n = parseFloat(str);
+  return isNaN(n) ? 0 : n;
+}
+function _fmtMoedaInput(v) {
+  const n = Number(v) || 0;
+  const partes = n.toFixed(2).split('.');
+  partes[0] = partes[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  return partes[0] + ',' + partes[1];
+}
+
+function _mascaraMoeda(el) {
+  if (el._maskApplied) return;
+  el._maskApplied = true;
+
+  el.addEventListener('input', function() {
+
+    var digitos = this.value.replace(/\D/g, '');
+
+    if (!digitos) {
+      this.value = '';
+      _memSyncEAtualizar();
+      return;
+    }
+
+    digitos = digitos.replace(/^0+/, '');
+    if (!digitos) digitos = '0';
+
+    while (digitos.length < 3) digitos = '0' + digitos;
+
+    var centavos = digitos.slice(-2);
+    var inteiros = digitos.slice(0, -2);
+
+    inteiros = inteiros.replace(/^0+/, '') || '0';
+    inteiros = inteiros.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+
+    this.value = inteiros + ',' + centavos;
+
+    _memSyncEAtualizar();
+  });
+
+  el.addEventListener('focus', function() {
+    this.select();
+  });
+}
+function _fmtDataBR(v) {
+  if (!v) return '';
+  try {
+    var d = (v instanceof Date) ? v : new Date(v);
+    if (isNaN(d.getTime())) return String(v);
+    return String(d.getDate()).padStart(2,'0')+'/'+
+           String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear();
+  } catch(e){ return String(v||''); }
+}
+function _parseDateBR(s) {
+  if (!s) return null;
+  var p = String(s).split('/');
+  if (p.length===3) return new Date(+p[2],+p[1]-1,+p[0]);
+  return new Date(s);
+}
+
+// ── Status automático por vigência ───────────────────
+function _statusAutoCtr(ctr) {
+  if (ctr.status === 'Suspenso') return 'Suspenso';
+  var hoje = new Date(); hoje.setHours(0,0,0,0);
+  if (ctr.vigFim) {
+    var fim = _parseDateBR(String(ctr.vigFim).includes('/')
+      ? ctr.vigFim : _fmtDataBR(ctr.vigFim));
+    if (fim && !isNaN(fim.getTime())) {
+      if (fim < hoje) return 'Encerrado';
+      var diff = (fim.getTime()-hoje.getTime())/(1000*60*60*24);
+      if (diff <= 60) return 'Vencendo';
+    }
+  }
+  return 'Ativo';
+}
+function _pilhaCtr(status) {
+  var m = {
+    'Ativo':    ['ctr-pill-ativo',    '●','Ativo'],
+    'Encerrado':['ctr-pill-encerrado','●','Encerrado'],
+    'Suspenso': ['ctr-pill-suspenso', '◐','Suspenso'],
+    'Vencendo': ['ctr-pill-vencendo', '▲','Vencendo'],
+  };
+  var d = m[status] || m['Ativo'];
+  return '<span class="ctr-status-pill '+d[0]+'">'+d[1]+' '+d[2]+'</span>';
+}
+
+// ── Totais ───────────────────────────────────────────
+function _totalRubricasMetaCtr(idMeta) {
+  return (_ctrCache.rubricas||[])
+    .filter(function(r){ return r.idMeta===idMeta; })
+    .reduce(function(s,r){ return s+Number(r.valor||0); },0);
+}
+function _totalMetasCtr(idContrato) {
+  return (_ctrCache.metas||[])
+    .filter(function(m){ return m.idContrato===idContrato; })
+    .reduce(function(s,m){ return s+_totalRubricasMetaCtr(m.id); },0);
+}
+
+// ══════════════════════════════════════════════════════
+// CARREGAR / RENDERIZAR
+// ══════════════════════════════════════════════════════
+
+
+
+function renderizarContratos() {
+  var container = document.getElementById('listaContratos');
+  if (!container) return;
+
+  var busca = _ctrFiltro.toLowerCase().trim();
+  var lista = (_ctrCache.contratos||[]).filter(function(c){
+    if (!busca) return true;
+    return String(c.nome||'').toLowerCase().includes(busca) ||
+           String(c.numero||'').toLowerCase().includes(busca) ||
+           String(c.fonteRecurso||'').toLowerCase().includes(busca);
+  });
+
+  if (!lista.length) {
+    container.innerHTML = '<div class="p-12 text-center"><i class="fas fa-file-contract text-slate-200 text-4xl mb-3"></i><p class="text-slate-400 font-bold text-sm">Nenhum contrato encontrado.</p></div>';
+    return;
+  }
+
+  container.innerHTML = lista.map(function(ctr){ return _renderCtrCard(ctr); }).join('');
+}
+
+function _renderCtrCard(ctr) {
+  var status     = _statusAutoCtr(ctr);
+  var total      = Number(ctr.valorTotal)||0;
+  var alocado    = _totalMetasCtr(ctr.id);
+  var saldo      = total - alocado;
+  var pct        = total>0 ? Math.min(100,Math.round(alocado/total*100)) : 0;
+  var barCor     = pct>=90?'#ef4444':pct>=70?'#f59e0b':'#6366f1';
+  var expandido  = _ctrExpanded[ctr.id]!==false; // default aberto
+  var metas      = (_ctrCache.metas||[]).filter(function(m){ return m.idContrato===ctr.id; });
+
+  var vigStr = '';
+  if (ctr.vigIni||ctr.vigFim)
+    vigStr = '<span class="text-[10px] text-slate-400 flex items-center gap-1"><i class="fas fa-calendar-alt text-indigo-300"></i>'
+      +(_fmtDataBR(ctr.vigIni)||'—')+' — '+(_fmtDataBR(ctr.vigFim)||'—')+'</span>';
+
+  var metasHtml = metas.length
+    ? metas.map(function(m){ return _renderMetaBlock(m, ctr.id); }).join('')
+    : '<div class="mx-3 mb-3 p-4 bg-slate-50 border border-dashed border-slate-200 rounded-2xl text-center text-[11px] text-slate-400 italic">Nenhuma meta cadastrada. Clique em <b>+ Meta</b> para adicionar.</div>';
+
+  return '<div class="ctr-card" id="ctr-card-'+escaparHTML(ctr.id)+'">'
+    // ── HEADER ──
+    +'<div class="ctr-card-header" onclick="_ctrToggle(\''+escaparHTML(ctr.id)+'\')">'
+    +'<div class="flex-1 min-w-0">'
+    +'<div class="flex flex-wrap items-center gap-2 mb-1">'
+    +'<p class="font-black text-slate-800 text-sm leading-tight">'+escaparHTML(ctr.nome||'')+'</p>'
+    +_pilhaCtr(status)
+    +(ctr.modalidade?'<span class="text-[9px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">'+escaparHTML(ctr.modalidade)+'</span>':'')
+    +'</div>'
+    +(ctr.descricao?'<p class="text-[11px] text-slate-500 mb-1 truncate">'+escaparHTML(ctr.descricao)+'</p>':'')
+    +'<div class="flex flex-wrap gap-x-4 gap-y-0.5 mt-0.5">'
+    +vigStr
+    +(ctr.numero?'<span class="text-[10px] text-slate-400"><i class="fas fa-hashtag mr-1 text-slate-300"></i>'+escaparHTML(ctr.numero)+'</span>':'')
+    +(ctr.fonteRecurso?'<span class="text-[10px] text-slate-400"><i class="fas fa-landmark mr-1 text-slate-300"></i>'+escaparHTML(ctr.fonteRecurso)+'</span>':'')
+    +'</div>'
+    +(total>0
+      ? '<div class="mt-2">'
+        +'<div class="flex justify-between mb-1">'
+        +'<span class="text-[10px] font-black text-slate-500">Total: <b class="text-slate-700">'+_fmtMoeda(total)+'</b></span>'
+        +'<span class="text-[10px] font-black '+(pct>=90?'text-red-500':pct>=70?'text-amber-500':'text-emerald-600')+'">'+pct+'% alocado</span>'
+        +'</div>'
+        +'<div class="ctr-progress-wrap"><div class="ctr-progress-fill" style="width:'+pct+'%;background:'+barCor+'"></div></div>'
+        +(alocado>0?'<p class="text-[9px] text-slate-400 mt-1">Rubricas: <b class="text-emerald-600">'+_fmtMoeda(alocado)+'</b> · Saldo: <b class="'+(saldo<0?'text-red-500':'text-slate-600')+'">'+_fmtMoeda(saldo)+'</b></p>':'')
+        +'</div>'
+      : (alocado>0?'<div class="mt-1 inline-flex items-center gap-1.5 bg-indigo-50 text-indigo-700 text-[10px] font-black px-3 py-1 rounded-full"><i class="fas fa-coins text-[9px]"></i>'+_fmtMoeda(alocado)+' alocado</div>':''))
+    +'</div>'
+    // ── AÇÕES ──
+    +'<div class="flex flex-col items-end gap-2 shrink-0">'
+    +'<div class="flex gap-1.5 flex-wrap justify-end">'
+    +'<button onclick="event.stopPropagation();abrirModalMeta(\''+escaparHTML(ctr.id)+'\')" class="ctr-btn ctr-btn-indigo"><i class="fas fa-plus text-[8px]"></i>Meta</button>'
+    +'<button onclick="event.stopPropagation();editarContrato(\''+escaparHTML(ctr.id)+'\')" class="ctr-icon-btn bg-slate-100 text-slate-500 hover:bg-indigo-600 hover:text-white"><i class="fas fa-edit text-[10px]"></i></button>'
+    +'<button onclick="event.stopPropagation();excluirContratoUI(\''+escaparHTML(ctr.id)+'\')" class="ctr-icon-btn bg-slate-100 text-slate-400 hover:bg-red-600 hover:text-white"><i class="fas fa-trash text-[10px]"></i></button>'
+    +'</div>'
+    +'<button onclick="event.stopPropagation();_ctrToggle(\''+escaparHTML(ctr.id)+'\')" id="ctr-chevron-'+escaparHTML(ctr.id)+'" class="text-[9px] font-black text-slate-400 hover:text-indigo-600 flex items-center gap-1 transition-colors">'
+    +(expandido?'<i class="fas fa-chevron-up text-[8px]"></i>Recolher':'<i class="fas fa-chevron-down text-[8px]"></i>Expandir')
+    +'</button>'
+    +'</div>'
+    +'</div>'
+    // ── CORPO ──
+    +'<div id="ctr-body-'+escaparHTML(ctr.id)+'" class="pb-1 border-t border-slate-50 bg-slate-50/30"'+(expandido?'':' style="display:none"')+'>'
+    +metasHtml
+    +'</div>'
+    +'</div>';
+}
+
+function _renderMetaBlock(meta, idContrato) {
+  var totalMeta  = _totalRubricasMetaCtr(meta.id);
+  var inds       = (_ctrCache.indicadores||[]).filter(function(i){ return i.idMeta===meta.id; });
+  var rubs       = (_ctrCache.rubricas||[]).filter(function(r){ return r.idMeta===meta.id; });
+  var metaBodyId = 'ctr-meta-body-'+escaparHTML(meta.id);
+  var metaExpandido = _ctrExpanded['meta-'+meta.id] !== false;
+
+  var rubsHtml = rubs.length
+    ? '<div class="px-3 pt-2 pb-1"><p class="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Rubricas</p>'
+      + rubs.map(function(r){
+          return '<div class="ctr-rubrica-row">'
+            +'<div class="flex items-center gap-2 min-w-0"><span class="w-1.5 h-1.5 rounded-full bg-indigo-400 shrink-0"></span>'
+            +'<span class="text-[11px] font-bold text-slate-700 truncate">'+escaparHTML(r.nome||'')+'</span>'
+            +(r.obs?'<span class="text-[9px] text-slate-400 italic truncate hidden sm:block">'+escaparHTML(r.obs.substring(0,40))+'</span>':'')
+            +'</div>'
+            +'<div class="flex items-center gap-1.5 shrink-0">'
+            +'<span class="ctr-valor-tag">'+_fmtMoeda(r.valor)+'</span>'
+            +'<button onclick="editarRubrica(\''+escaparHTML(r.id)+'\')" class="ctr-icon-btn bg-slate-100 text-slate-400 hover:bg-indigo-600 hover:text-white"><i class="fas fa-edit text-[9px]"></i></button>'
+            +'<button onclick="excluirRubricaUI(\''+escaparHTML(r.id)+'\')" class="ctr-icon-btn bg-slate-100 text-slate-400 hover:bg-red-600 hover:text-white"><i class="fas fa-trash text-[9px]"></i></button>'
+            +'</div></div>';
+        }).join('')
+      +'</div>'
+    : '<div class="px-3 pt-2 pb-1"><p class="text-[9px] text-slate-300 italic">Sem rubricas.</p></div>';
+
+  var indsHtml = inds.length
+    ? '<div class="px-3 pb-3 pt-1 border-t border-slate-100">'
+      +'<p class="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-2 mb-2">Indicadores</p>'
+      + inds.map(function(ind){
+          var tot = (ind.meses||[]).reduce(function(a,b){return a+Number(b);},0);
+          return '<div class="flex items-center justify-between gap-2 py-1.5">'
+            +'<div class="flex items-center gap-2 min-w-0">'
+            +'<span class="text-[8px] font-black text-indigo-400 bg-indigo-50 px-1.5 py-0.5 rounded shrink-0">#'+(ind.numero||'—')+'</span>'
+            +'<span class="text-[11px] font-bold text-slate-700 truncate">'+escaparHTML(ind.nome||ind.texto||'')+'</span>'
+            +'<span class="text-[9px] font-black text-purple-600 shrink-0 hidden sm:inline">Meta anual: '+tot+'</span>'
+            +'</div>'
+            +'<div class="flex gap-1 shrink-0">'
+            +'<button onclick="editarIndicador(\''+escaparHTML(ind.id)+'\')" class="ctr-icon-btn bg-slate-100 text-slate-400 hover:bg-indigo-600 hover:text-white"><i class="fas fa-edit text-[9px]"></i></button>'
+            +'<button onclick="excluirIndicadorUI(\''+escaparHTML(ind.id)+'\')" class="ctr-icon-btn bg-slate-100 text-slate-400 hover:bg-red-600 hover:text-white"><i class="fas fa-trash text-[9px]"></i></button>'
+            +'</div></div>';
+        }).join('')
+      +'</div>'
+    : '';
+
+  return '<div class="ctr-meta-block mt-3 first:mt-3">'
+    // meta header — clicável para colapsar
+    +'<div class="ctr-meta-header" style="cursor:pointer" onclick="_ctrToggleMeta(\''+escaparHTML(meta.id)+'\')">'
+    +'<div class="flex-1 min-w-0">'
+    +'<p class="text-[10px] font-black text-indigo-600 uppercase tracking-widest leading-none">Meta '+(meta.numero||'')+'</p>'
+    +'<p class="font-bold text-slate-800 text-sm mt-0.5 leading-tight">'+escaparHTML(meta.titulo||'')+'</p>'
+    +(meta.descricao?'<p class="text-[10px] text-slate-500 mt-0.5 truncate">'+escaparHTML(meta.descricao)+'</p>':'')
+    +(totalMeta>0?'<p class="text-[10px] font-black text-emerald-600 mt-1"><i class="fas fa-coins mr-1 text-[8px]"></i>'+_fmtMoeda(totalMeta)+' em rubricas</p>':'')
+    +'</div>'
+    +'<div class="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">'
+    +'<button onclick="event.stopPropagation();abrirModalIndicador(\''+escaparHTML(meta.id)+'\',\''+escaparHTML(idContrato)+'\')" class="ctr-btn ctr-btn-indigo"><i class="fas fa-chart-line text-[8px]"></i>Indicador</button>'
+    +'<button onclick="event.stopPropagation();abrirModalRubrica(\''+escaparHTML(meta.id)+'\')" class="ctr-btn ctr-btn-green"><i class="fas fa-tag text-[8px]"></i>Rubrica</button>'
+    +'<button onclick="event.stopPropagation();editarMeta(\''+escaparHTML(meta.id)+'\')" class="ctr-icon-btn bg-white text-slate-400 hover:bg-indigo-600 hover:text-white"><i class="fas fa-edit text-[9px]"></i></button>'
+    +'<button onclick="event.stopPropagation();excluirMetaUI(\''+escaparHTML(meta.id)+'\')" class="ctr-icon-btn bg-white text-slate-400 hover:bg-red-600 hover:text-white"><i class="fas fa-trash text-[9px]"></i></button>'
+    +'<i id="ctr-meta-chevron-'+escaparHTML(meta.id)+'" class="fas fa-chevron-'+(metaExpandido?'up':'down')+' text-slate-400 text-[9px] ml-1"></i>'
+    +'</div>'
+    +'</div>'
+    +'<div id="'+metaBodyId+'"'+(metaExpandido?'':' style="display:none"')+'>'
+    + rubsHtml + indsHtml
+    +'</div>'
+    +'</div>';
+}
+
+// ── Toggle collapse contrato ──────────────────────────
+function _ctrToggle(idContrato) {
+  var body    = document.getElementById('ctr-body-'+idContrato);
+  var chevron = document.getElementById('ctr-chevron-'+idContrato);
+  if (!body) return;
+  var aberto = body.style.display !== 'none';
+  body.style.display = aberto ? 'none' : '';
+  _ctrExpanded[idContrato] = !aberto;
+  if (chevron) {
+    chevron.innerHTML = aberto
+      ? '<i class="fas fa-chevron-down text-[8px]"></i>Expandir'
+      : '<i class="fas fa-chevron-up text-[8px]"></i>Recolher';
+  }
+}
+
+// ── Toggle collapse meta ──────────────────────────────
+function _ctrToggleMeta(idMeta) {
+  var body    = document.getElementById('ctr-meta-body-'+idMeta);
+  var chevron = document.getElementById('ctr-meta-chevron-'+idMeta);
+  if (!body) return;
+  var aberto = body.style.display !== 'none';
+  body.style.display = aberto ? 'none' : '';
+  _ctrExpanded['meta-'+idMeta] = !aberto;
+  if (chevron) {
+    chevron.className = 'fas fa-chevron-'+(aberto?'down':'up')+' text-slate-400 text-[9px] ml-1';
+  }
+}
+
+// ══════════════════════════════════════════════════════
+// MODAL CONTRATO
+// ══════════════════════════════════════════════════════
+
+function abrirModalContrato(dadosIn) {
+  var dados = dadosIn || {};
+  var isEdit = !!dados.id;
+
+  var valFmt = dados.valorTotal>0 ? (function(){
+    var n=Number(dados.valorTotal).toFixed(2), p=n.split('.');
+    p[0]=p[0].replace(/\B(?=(\d{3})+(?!\d))/g,'.');
+    return p[0]+','+p[1];
+  })() : '';
+  var ctrFmt = dados.contrapartida>0 ? (function(){
+    var n=Number(dados.contrapartida).toFixed(2), p=n.split('.');
+    p[0]=p[0].replace(/\B(?=(\d{3})+(?!\d))/g,'.');
+    return p[0]+','+p[1];
+  })() : '';
+
+  Swal.fire({
+    title: isEdit ? 'Editar Contrato' : 'Novo Contrato',
+    width: Math.min(660, window.innerWidth-32),
+    showCancelButton: true,
+    confirmButtonText: '<i class="fas fa-save mr-1"></i>Salvar',
+    cancelButtonText: 'Cancelar',
+    confirmButtonColor: '#6366f1',
+    customClass:{ popup:'rounded-3xl', confirmButton:'rounded-xl font-black text-sm', cancelButton:'rounded-xl font-bold text-sm' },
+    html: `
+        <div class="text-left" style="max-height:72vh;overflow-y:auto;padding:0 24px 20px">
+
+        <!-- Identificação -->
+        <div style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:16px;padding:16px;margin-bottom:14px">
+            <p style="font-size:10px;font-weight:900;color:#6366f1;text-transform:uppercase;letter-spacing:.08em;margin:0 0 12px">
+            <i class="fas fa-file-contract mr-1"></i>Identificação
+            </p>
+            <div style="margin-bottom:10px">
+            <label class="ctr-label">Nome / Título *</label>
+            <input id="ctrNome" class="ctr-input" value="${escaparHTML(dados.nome||'')}" placeholder="Ex.: Contrato de Gestão CCBJ 2025/2027">
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+            <div>
+                <label class="ctr-label">Número</label>
+                <input id="ctrNumero" class="ctr-input" value="${escaparHTML(dados.numero||'')}" placeholder="005/2025">
+            </div>
+            <div>
+                <label class="ctr-label">Status</label>
+                <select id="ctrStatus" class="ctr-input">
+                <option ${(dados.status||'Ativo')==='Ativo'?'selected':''}>Ativo</option>
+                <option ${dados.status==='Encerrado'?'selected':''}>Encerrado</option>
+                <option ${dados.status==='Suspenso'?'selected':''}>Suspenso</option>
+                </select>
+            </div>
+            </div>
+            <div>
+            <label class="ctr-label">Objeto / Descrição</label>
+            <textarea id="ctrDesc" class="ctr-obs-textarea" placeholder="Objetivo e escopo...">${escaparHTML(dados.descricao||'')}</textarea>
+            </div>
+        </div>
+
+        <!-- Vigência -->
+        <div style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:16px;padding:16px;margin-bottom:14px">
+            <p style="font-size:10px;font-weight:900;color:#6366f1;text-transform:uppercase;letter-spacing:.08em;margin:0 0 12px">
+            <i class="fas fa-calendar-alt mr-1"></i>Vigência
+            </p>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div>
+                <label class="ctr-label">Início</label>
+                <input id="ctrIni" class="ctr-input" value="${escaparHTML(_fmtDataBR(dados.vigIni))}" placeholder="01/01/2025">
+            </div>
+            <div>
+                <label class="ctr-label">Fim</label>
+                <input id="ctrFim" class="ctr-input" value="${escaparHTML(_fmtDataBR(dados.vigFim))}" placeholder="31/12/2027">
+            </div>
+            </div>
+        </div>
+
+        <!-- Financeiro -->
+        <div style="background:#f0fdf4;border:1.5px solid #bbf7d0;border-radius:16px;padding:16px">
+            <p style="font-size:10px;font-weight:900;color:#059669;text-transform:uppercase;letter-spacing:.08em;margin:0 0 12px">
+            <i class="fas fa-coins mr-1"></i>Financeiro
+            </p>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+            <div>
+                <label class="ctr-label">Valor Total</label>
+                <div style="position:relative">
+                <span style="position:absolute;left:11px;top:50%;transform:translateY(-50%);font-size:11px;font-weight:800;color:#059669;pointer-events:none">R$</span>
+                <input id="ctrValorTotal" class="ctr-input" style="padding-left:30px;text-align:right;font-weight:800;color:#059669" value="${valFmt}" placeholder="0,00">
+                </div>
+            </div>
+            <div>
+                <label class="ctr-label">Fonte de Recurso</label>
+                <input id="ctrFonte" class="ctr-input" value="${escaparHTML(dados.fonteRecurso||'')}" placeholder="SECULT-CE, Prefeitura...">
+            </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+            <div>
+                <label class="ctr-label">Contrapartida</label>
+                <div style="position:relative">
+                <span style="position:absolute;left:11px;top:50%;transform:translateY(-50%);font-size:11px;font-weight:800;color:#6366f1;pointer-events:none">R$</span>
+                <input id="ctrContrapartida" class="ctr-input" style="padding-left:30px;text-align:right;font-weight:800;color:#6366f1" value="${ctrFmt}" placeholder="0,00">
+                </div>
+            </div>
+            <div>
+                <label class="ctr-label">Modalidade</label>
+                <select id="ctrModalidade" class="ctr-input">
+                <option value="" ${!dados.modalidade?'selected':''}>Selecione...</option>
+                <option ${dados.modalidade==='Convênio'?'selected':''}>Convênio</option>
+                <option ${dados.modalidade==='Contrato de Gestão'?'selected':''}>Contrato de Gestão</option>
+                <option ${dados.modalidade==='Termo de Fomento'?'selected':''}>Termo de Fomento</option>
+                <option ${dados.modalidade==='Termo de Colaboração'?'selected':''}>Termo de Colaboração</option>
+                <option ${dados.modalidade==='OSC'?'selected':''}>OSC</option>
+                <option ${dados.modalidade==='Outro'?'selected':''}>Outro</option>
+                </select>
+            </div>
+            </div>
+            <div>
+            <label class="ctr-label">Observações financeiras</label>
+            <textarea id="ctrObsFinan" class="ctr-obs-textarea" placeholder="Parcelas, cronograma...">${escaparHTML(dados.obsFinanceiro||'')}</textarea>
+            </div>
+        </div>
+        </div>`,
+    didOpen: function(){
+      ['ctrIni','ctrFim'].forEach(function(id){
+        var el=document.getElementById(id);
+        if (el && !el._fp) el._fp=flatpickr(el,{dateFormat:'d/m/Y',locale:'pt',allowInput:true});
+      });
+      _mascaraMoeda(document.getElementById('ctrValorTotal'));
+      _mascaraMoeda(document.getElementById('ctrContrapartida'));
+    },
+    preConfirm: function(){
+      var nome=document.getElementById('ctrNome')?.value.trim();
+      if (!nome){ Swal.showValidationMessage('Nome obrigatório.'); return false; }
+      return {
+        id: dados.id||null,
+        nome, numero:document.getElementById('ctrNumero')?.value.trim(),
+        descricao:document.getElementById('ctrDesc')?.value.trim(),
+        vigIni:document.getElementById('ctrIni')?.value.trim(),
+        vigFim:document.getElementById('ctrFim')?.value.trim(),
+        status:document.getElementById('ctrStatus')?.value,
+        valorTotal:_parseMoeda(document.getElementById('ctrValorTotal')?.value),
+        fonteRecurso:document.getElementById('ctrFonte')?.value.trim(),
+        contrapartida:_parseMoeda(document.getElementById('ctrContrapartida')?.value),
+        modalidade:document.getElementById('ctrModalidade')?.value,
+        obsFinanceiro:document.getElementById('ctrObsFinan')?.value.trim()
+      };
+    }
+  }).then(function(r){
+    if (!r.isConfirmed) return;
+    showLoader(true);
+    GAS.contratos.salvar(r.value, AppState.usuario.email,
+      function(){ showLoader(false); carregarDadosContratos(renderizarContratos); codipPopularContratos(); },
+      function(e){ showLoader(false); Swal.fire('Erro',e.message,'error'); });
+  });
+}
+
+function editarContrato(id){
+  var c=(_ctrCache.contratos||[]).find(function(x){return x.id===id;});
+  if(c) abrirModalContrato(c);
+}
+
+function excluirContratoUI(id){
+  var c=(_ctrCache.contratos||[]).find(function(x){return x.id===id;})||{};
+  Swal.fire({
+    title:'Excluir contrato?',
+    html:'<p class="text-sm text-slate-600">O contrato <b>'+escaparHTML(c.nome||'')+'</b> será removido permanentemente.</p>',
+    icon:'warning',showCancelButton:true,confirmButtonColor:'#ef4444',
+    confirmButtonText:'<i class="fas fa-trash mr-1"></i>Excluir',cancelButtonText:'Cancelar',
+    customClass:{popup:'rounded-3xl',confirmButton:'rounded-xl font-black text-sm',cancelButton:'rounded-xl font-bold text-sm'}
+  }).then(function(r){
+    if(!r.isConfirmed) return;
+    showLoader(true);
+    GAS.contratos.excluir(id,AppState.usuario.email,
+      function(){showLoader(false);carregarDadosContratos(renderizarContratos);},
+      function(e){showLoader(false);Swal.fire('Erro',e.message,'error');});
+  });
+}
+
+// ══════════════════════════════════════════════════════
+// MODAL META
+// ══════════════════════════════════════════════════════
+
+function abrirModalMeta(idContrato, dadosIn){
+  var dados=dadosIn||{};
+  var ctr=(_ctrCache.contratos||[]).find(function(c){return c.id===idContrato;})||{};
+  Swal.fire({
+    title: dados.id?'Editar Meta':'Nova Meta',
+    width: Math.min(540, window.innerWidth-32),
+    showCancelButton:true, confirmButtonText:'<i class="fas fa-save mr-1"></i>Salvar',
+    cancelButtonText:'Cancelar', confirmButtonColor:'#6366f1',
+    customClass:{popup:'rounded-3xl',confirmButton:'rounded-xl font-black text-sm',cancelButton:'rounded-xl font-bold text-sm'},
+    html:`
+<div class="text-left" style="padding:0 20px 16px">
+  ${ctr.nome?`<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:#eef2ff;border:1px solid #c7d2fe;border-radius:12px;margin-bottom:14px">
+    <i class="fas fa-file-contract text-indigo-400 text-xs"></i>
+    <span style="font-size:10px;font-weight:900;color:#4338ca;text-transform:uppercase">Contrato:</span>
+    <span style="font-size:11px;color:#4338ca;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escaparHTML(ctr.nome)}</span>
+  </div>`:''}
+  <div style="display:grid;grid-template-columns:80px 1fr;gap:10px;margin-bottom:10px">
+    <div>
+      <label class="ctr-label">Nº</label>
+      <input id="metNum" class="ctr-input" style="text-align:center" value="${escaparHTML(dados.numero||'')}" placeholder="01">
+    </div>
+    <div>
+      <label class="ctr-label">Título *</label>
+      <input id="metTit" class="ctr-input" value="${escaparHTML(dados.titulo||'')}" placeholder="Ex.: Público presencial atendido">
+    </div>
+  </div>
+  <div>
+    <label class="ctr-label">Descrição</label>
+    <textarea id="metDesc" class="ctr-obs-textarea" placeholder="Detalhamento...">${escaparHTML(dados.descricao||'')}</textarea>
+  </div>
+</div>`,
+    preConfirm:function(){
+      var t=document.getElementById('metTit')?.value.trim();
+      if(!t){Swal.showValidationMessage('Título obrigatório.');return false;}
+      return {id:dados.id||null,idContrato,numero:document.getElementById('metNum')?.value.trim(),titulo:t,descricao:document.getElementById('metDesc')?.value.trim()};
+    }
+  }).then(function(r){
+    if(!r.isConfirmed) return;
+    showLoader(true);
+    GAS.contratos.salvarMeta(r.value,AppState.usuario.email,
+      function(){showLoader(false);carregarDadosContratos(renderizarContratos);},
+      function(e){showLoader(false);Swal.fire('Erro',e.message,'error');});
+  });
+}
+
+function editarMeta(id){
+  var m=(_ctrCache.metas||[]).find(function(x){return x.id===id;});
+  if(m) abrirModalMeta(m.idContrato,m);
+}
+
+function excluirMetaUI(id){
+  var m=(_ctrCache.metas||[]).find(function(x){return x.id===id;})||{};
+  Swal.fire({
+    title:'Excluir meta?',
+    html:'<p class="text-sm text-slate-600">Meta <b>'+escaparHTML(m.numero||'')+'</b> — '+escaparHTML(m.titulo||'')+'</p>',
+    icon:'warning',showCancelButton:true,confirmButtonColor:'#ef4444',
+    confirmButtonText:'<i class="fas fa-trash mr-1"></i>Excluir',cancelButtonText:'Cancelar',
+    customClass:{popup:'rounded-3xl',confirmButton:'rounded-xl font-black text-sm',cancelButton:'rounded-xl font-bold text-sm'}
+  }).then(function(r){
+    if(!r.isConfirmed) return;
+    showLoader(true);
+    GAS.contratos.excluirMeta(id,AppState.usuario.email,
+      function(){showLoader(false);carregarDadosContratos(renderizarContratos);},
+      function(e){showLoader(false);Swal.fire('Erro',e.message,'error');});
+  });
+}
+
+// ══════════════════════════════════════════════════════
+// MODAL RUBRICA + MEMÓRIA DE CÁLCULO — CORRIGIDO
+// ══════════════════════════════════════════════════════
+
+var _memoriaCalculo = [];
+
+// Lê valores diretamente dos inputs do DOM (após a máscara já ter rodado)
+function _memCalcularItem(i){
+  const qtd = Number(i.qtd) || 0;
+
+  const valor = typeof i.valor === 'string'
+    ? Number(i.valor.replace(/\./g,'').replace(',','.'))
+    : Number(i.valor) || 0;
+
+  return qtd * valor;
+}
+
+function _memAtualizarTotal() {
+  _memSyncEAtualizar();
+}
+
+function _memRenderizar() {
+  var container = document.getElementById('memLinhas');
+  if (!container) return;
+
+  container.innerHTML = _memoriaCalculo.map(function(item, i) {
+    // Formata valor existente no padrão X.XXX,XX
+    var valorFmt = _fmtMoedaInput(item.valor || 0);
+
+    return '<div class="mem-row" data-idx="' + i + '">'
+
+      + '<input class="mem-input" placeholder="Descrição"'
+      + ' value="' + escaparHTML(item.descricao || '') + '"'
+      + ' oninput="_memoriaCalculo[' + i + '].descricao=this.value">'
+
+      + '<input class="mem-input" placeholder="Observação (opcional)"'
+      + ' value="' + escaparHTML(item.obs || '') + '"'
+      + ' oninput="_memoriaCalculo[' + i + '].obs=this.value">'
+
+      + '<div class="mem-linha-ctrl">'
+
+        + '<select class="mem-input" style="max-width:120px"'
+        + ' onchange="_memoriaCalculo[' + i + '].tipo=this.value">'
+        + '<option value="mensal"'   + ((!item.tipo || item.tipo === 'mensal')   ? ' selected' : '') + '>Mensal</option>'
+        + '<option value="diaria"'   + (item.tipo === 'diaria'   ? ' selected' : '') + '>Diária</option>'
+        + '<option value="hora"'     + (item.tipo === 'hora'     ? ' selected' : '') + '>Hora técnica</option>'
+        + '<option value="unitario"' + (item.tipo === 'unitario' ? ' selected' : '') + '>Unitário</option>'
+        + '<option value="parcela"'  + (item.tipo === 'parcela'  ? ' selected' : '') + '>Parcela</option>'
+        + '</select>'
+
+        // Qtd — oninput direto pois é type=number sem máscara
+        + '<input type="number" class="mem-input mem-qtd"'
+        + ' min="0" step="any" style="max-width:72px;text-align:center"'
+        + ' value="' + (item.qtd || 1) + '"'
+        + ' oninput="_memoriaCalculo[' + i + '].qtd=parseFloat(this.value)||0;_memSyncEAtualizar()">'
+
+        // Valor — SEM oninput inline; a máscara cuida do recálculo
+        + '<input class="mem-input mem-val"'
+        + ' data-idx="' + i + '"'
+        + ' placeholder="0,00"'
+        + ' style="max-width:110px;text-align:right;color:#059669;font-weight:800"'
+        + ' value="' + valorFmt + '">'
+
+        + '<div class="mem-input mem-subtotal"'
+        + ' title="Subtotal da linha (Quantidade × Valor)"'
+        + ' style="min-width:130px;text-align:right;'
+        + 'color:#059669;font-weight:900;font-size:14px;'
+        + 'display:flex;align-items:center;justify-content:flex-end;'
+        + 'background:#f0fdf4;border:1px solid #bbf7d0;cursor:default">'
+        + _fmtMoeda((item.qtd || 0) * (item.valor || 0))
+        + '</div>'
+
+        + '<button type="button" onclick="_memRemoverLinha(' + i + ')"'
+        + ' style="width:30px;height:30px;flex-shrink:0;display:flex;align-items:center;'
+        + 'justify-content:center;background:#fee2e2;border:none;border-radius:7px;'
+        + 'cursor:pointer;color:#dc2626;font-size:11px">✕</button>'
+
+      + '</div>'
+    + '</div>';
+  }).join('');
+
+  // Aplica máscara após render — ela é responsável por chamar _memSyncEAtualizar
+  setTimeout(function() {
+    document.querySelectorAll('.mem-val').forEach(function(el) {
+      _mascaraMoeda(el);
+    });
+    _memSyncEAtualizar();
+  }, 0);
+}
+
+function _memSyncEAtualizar() {
+
+  document.querySelectorAll('.mem-row').forEach(function(row) {
+    var idx   = parseInt(row.getAttribute('data-idx'), 10);
+    var qtdEl = row.querySelector('.mem-qtd');
+    var valEl = row.querySelector('.mem-val');
+
+    if (isNaN(idx) || !_memoriaCalculo[idx]) return;
+
+    if (qtdEl) {
+      _memoriaCalculo[idx].qtd = parseFloat(qtdEl.value) || 0;
+    }
+
+    if (valEl) {
+      _memoriaCalculo[idx].valor = _parseMoeda(valEl.value);
+    }
+
+    var subtotalEl = row.querySelector('.mem-subtotal');
+    if (subtotalEl) {
+      var qtd = Number(_memoriaCalculo[idx].qtd) || 0;
+      var val = Number(_memoriaCalculo[idx].valor) || 0;
+      subtotalEl.textContent = _fmtMoeda(qtd * val);
+    }
+
+  });
+
+  var total = _memoriaCalculo.reduce(function(s, item) {
+    return s + (Number(item.qtd) || 0) * (Number(item.valor) || 0);
+  }, 0);
+
+  window._memTotal = total;
+
+  var el = document.getElementById('memTotal');
+  if (el) el.textContent = _fmtMoeda(total);
+}
+
+function _memAdicionarLinha() {
+  _memoriaCalculo.push({ descricao: '', tipo: 'mensal', qtd: 1, valor: 0, obs: '' });
+  _memRenderizar();
+}
+
+function _memRemoverLinha(i) {
+  _memoriaCalculo.splice(i, 1);
+  if (!_memoriaCalculo.length) {
+    _memoriaCalculo = [{ descricao: '', tipo: 'mensal', qtd: 1, valor: 0, obs: '' }];
+  }
+  _memRenderizar();
+}
+
+function abrirModalRubrica(idMeta, dadosIn) {
+  var dados       = dadosIn || {};
+  var idMetaFinal = idMeta  || dados.idMeta || '';
+  var idRubrica   = dados.id ? String(dados.id).trim() : null;
+
+  console.log('abrirModalRubrica: idRubrica=', idRubrica, '| idMeta=', idMetaFinal, '| dados=', JSON.stringify(dados));
+
+  var meta = (_ctrCache.metas || []).find(function(m) { return m.id === idMetaFinal; }) || {};
+
+  _memoriaCalculo = [];
+
+  // CONTROLE DE CARREGAMENTO
+  var _memCarregando = !!idRubrica;
+
+  Swal.fire({
+    title: idRubrica ? 'Editar Rubrica' : 'Nova Rubrica',
+    width: Math.min(900, window.innerWidth - 32),
+    showCancelButton:   true,
+    confirmButtonText:  '<i class="fas fa-save mr-1"></i>Salvar',
+    cancelButtonText:   'Cancelar',
+    confirmButtonColor: '#6366f1',
+    customClass: {
+      popup:         'ctr-modal rounded-3xl',
+      confirmButton: 'rounded-xl font-black text-sm',
+      cancelButton:  'rounded-xl font-bold text-sm',
+    },
+
+    html: '<div class="text-left" style="padding:0 20px 16px">'
+
+      + (meta.titulo
+          ? '<div style="display:flex;align-items:center;gap:8px;padding:7px 12px;'
+          + 'background:#eef2ff;border:1px solid #c7d2fe;border-radius:10px;margin-bottom:12px">'
+          + '<i class="fas fa-bullseye" style="color:#818cf8;font-size:11px"></i>'
+          + '<span style="font-size:10px;font-weight:900;color:#4338ca;text-transform:uppercase">'
+          + 'Meta ' + escaparHTML(meta.numero || '') + ' — ' + escaparHTML(meta.titulo) + '</span>'
+          + '</div>'
+          : '')
+
+      + '<div style="display:flex;align-items:center;justify-content:space-between">'
+        + '<label class="ctr-label" style="margin-bottom:0">Nome da Rubrica *</label>'
+        + '<input id="rubNome" class="ctr-input"'
+        + ' value="' + escaparHTML(dados.nome || '') + '"'
+        + ' placeholder="Nome da rubrica"'
+        + ' style="margin-bottom:12px">'
+        + (dados.id
+          ? '<button type="button" onclick="_abrirHistoricoRubrica(\'' + dados.id + '\')"'
+            + ' style="font-size:10px;font-weight:900;color:#6366f1;background:#eef2ff;border:none;'
+            + 'border-radius:8px;padding:5px 10px;margin-left:8px;cursor:pointer">'
+            + '<i class="fas fa-history" style="margin-right:4px"></i>Histórico'
+            + '</button>'
+          : '')
+      + '</div>'
+
+      + '<div style="margin-bottom:12px">'
+        + '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px">'
+        + '<label class="ctr-label" style="margin-bottom:0">Memória de Cálculo</label>'
+        + '<button type="button" onclick="_memAdicionarLinha()"'
+        + ' style="font-size:9px;font-weight:900;color:#6366f1;background:#eef2ff;border:none;'
+        + 'border-radius:8px;padding:4px 10px;cursor:pointer;text-transform:uppercase">'
+        + '<i class="fas fa-plus" style="margin-right:4px"></i>Linha</button>'
+        + '</div>'
+
+        + '<div style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:12px;padding:10px">'
+          + '<div id="memScroll" style="max-height:320px;overflow-y:auto;padding-right:4px">'
+            + '<div id="memLinhas"></div>'
+          + '</div>'
+        + '</div>'
+
+        + '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px;'
+        + 'padding:10px 12px;background:#f0fdf4;border:1.5px solid #bbf7d0;border-radius:12px">'
+        + '<span style="font-size:10px;font-weight:900;color:#059669;text-transform:uppercase">Total calculado</span>'
+        + '<span id="memTotal" style="font-size:16px;font-weight:900;color:#059669">R$ 0,00</span>'
+        + '</div>'
+      + '</div>'
+
+      + '<div>'
+      + '<label class="ctr-label">Observação</label>'
+      + '<textarea id="rubObs" class="ctr-obs-textarea"'
+      + ' placeholder="Memória ou justificativa...">' + escaparHTML(dados.obs || '') + '</textarea>'
+      + '</div>'
+
+      + '</div>',
+
+    didOpen: function() {
+      console.log('didOpen: idRubrica=', idRubrica);
+
+      if (idRubrica) {
+        var container = document.getElementById('memLinhas');
+        if (container) {
+          container.innerHTML =
+            '<div style="padding:20px;text-align:center;color:#94a3b8;font-size:12px">'
+            + '<i class="fas fa-spinner fa-spin" style="margin-right:6px"></i>Carregando memória...</div>';
+        }
+
+        GAS.contratos.obterMemorias(idRubrica,
+          function(lista) {
+            console.log('obterMemoriaRubrica retornou', (lista || []).length, 'itens:', JSON.stringify(lista));
+
+            _memCarregando = false; // LIBERA SAVE
+
+            if (Array.isArray(lista) && lista.length) {
+              _memoriaCalculo = lista.map(function(item) {
+                return {
+                  descricao: item.descricao || '',
+                  tipo:      item.tipo || 'mensal',
+                  qtd:       Number(item.qtd) || 0,
+                  valor:     Number(item.valor) || 0,
+                  obs:       item.obs || ''
+                };
+              });
+            } else {
+              _memoriaCalculo = [{ descricao: '', tipo: 'mensal', qtd: 1, valor: 0, obs: '' }];
+            }
+
+            _memRenderizar();
+            _memSyncEAtualizar();
+          },
+          function(e) {
+            console.error('obterMemoriaRubrica ERRO:', e.message);
+
+            _memCarregando = false; // LIBERA SAVE MESMO EM ERRO
+
+            _memoriaCalculo = [{ descricao: '', tipo: 'mensal', qtd: 1, valor: 0, obs: '' }];
+            _memRenderizar();
+            _memSyncEAtualizar(); // GARANTIA
+          });
+
+      } else {
+        _memCarregando = false;
+        _memoriaCalculo = [{ descricao: '', tipo: 'mensal', qtd: 1, valor: 0, obs: '' }];
+        _memRenderizar();
+        _memSyncEAtualizar();
+      }
+    },
+
+    preConfirm: function() {
+
+      // BLOQUEIO CRÍTICO
+      if (_memCarregando) {
+        Swal.showValidationMessage('Aguarde o carregamento da memória de cálculo.');
+        return false;
+      }
+
+      _memSyncEAtualizar();
+
+      var nome = (document.getElementById('rubNome')?.value || '').trim();
+      if (!nome) {
+        Swal.showValidationMessage('Nome obrigatório.');
+        return false;
+      }
+
+      var total = window._memTotal || 0;
+      if (total <= 0) {
+        Swal.showValidationMessage('O total calculado é zero. Verifique as quantidades e valores.');
+        return false;
+      }
+
+      return {
+        id:     idRubrica,
+        idMeta: idMetaFinal,
+        nome:   nome,
+        valor:  total,
+        memoriaCalculo: _memoriaCalculo.map(function(item) {
+          var qtd   = Number(item.qtd)   || 0;
+          var valor = Number(item.valor) || 0;
+          return {
+            descricao: String(item.descricao || '').trim(),
+            tipo:      String(item.tipo      || 'unitario').trim(),
+            qtd:       qtd,
+            valor:     valor,
+            subtotal:  qtd * valor,
+            obs:       String(item.obs || '').trim(),
+          };
+        }),
+        obs: (document.getElementById('rubObs')?.value || '').trim(),
+      };
+    },
+
+  }).then(function(r) {
+    if (!r.isConfirmed) return;
+
+    showLoader(true);
+
+    GAS.contratos.salvarRubrica(r.value, AppState.usuario.email,
+      function() {
+        showLoader(false);
+
+        // RESET DE ESTADO (evita resíduo)
+        _memoriaCalculo = [];
+        window._memTotal = 0;
+
+        carregarDadosContratos(function() {
+          renderizarContratos();
+        });
+      },
+      function(e) {
+        showLoader(false);
+        Swal.fire('Erro', e.message, 'error');
+      });
+  });
+}
+
+function editarRubrica(id) {
+  var r = (_ctrCache.rubricas || []).find(function(x) { return x.id === id; });
+  console.log('editarRubrica chamada: id=', id, '| encontrado=', JSON.stringify(r));
+  if (r) abrirModalRubrica(r.idMeta, r);
+}
+
+function excluirRubricaUI(id){
+  Swal.fire({
+    title:'Excluir rubrica?',text:'Esta ação não pode ser desfeita.',
+    icon:'warning',showCancelButton:true,confirmButtonColor:'#ef4444',
+    confirmButtonText:'<i class="fas fa-trash mr-1"></i>Excluir',cancelButtonText:'Cancelar',
+    customClass:{popup:'rounded-3xl',confirmButton:'rounded-xl font-black text-sm',cancelButton:'rounded-xl font-bold text-sm'}
+  }).then(function(r){
+    if(!r.isConfirmed) return;
+    showLoader(true);
+    GAS.contratos.excluirRubrica(id,AppState.usuario.email,
+      function(){showLoader(false);carregarDadosContratos(renderizarContratos);},
+      function(e){showLoader(false);Swal.fire('Erro',e.message,'error');});
+  });
+}
+
+function _abrirHistoricoRubrica(idRubrica){
+
+  Swal.fire({
+    title: 'Histórico da Rubrica',
+    width: 700,
+    html: '<div id="histContainer" style="max-height:400px;overflow:auto;text-align:left">'
+        + '<div style="padding:20px;text-align:center">'
+        + '<i class="fas fa-spinner fa-spin"></i> Carregando...'
+        + '</div></div>',
+    showConfirmButton: false,
+    showCloseButton: true
+  });
+
+  GAS.contratos.obterHistorico(idRubrica,
+    function(lista){
+
+      if (!lista || !lista.length) {
+        document.getElementById('histContainer').innerHTML =
+          '<div style="padding:20px;text-align:center;color:#94a3b8">Sem histórico</div>';
+        return;
+      }
+
+      window._historicoCache = lista;
+
+      const html = lista.map(function(item, idx){
+
+        const data = new Date(item.data).toLocaleString();
+
+        return '<div style="border-bottom:1px solid #e5e7eb;padding:10px 0">'
+          + '<div style="font-size:11px;color:#6b7280">'
+          + data + ' — ' + (item.usuario || '')
+          + '</div>'
+
+          + '<div style="font-weight:700;margin-top:4px">'
+          + item.nome + ' — ' + _fmtMoeda(item.total)
+          + '</div>'
+
+          + '<div style="margin-top:6px;font-size:11px">'
+          + '<button onclick="_aplicarVersaoHistorico(' + idx + ')"'
+          + ' style="color:#059669;font-weight:700;border:none;background:none;cursor:pointer">'
+          + 'Aplicar versão</button>'
+          + '</div>'
+
+          + '</div>';
+
+      }).join('');
+
+      document.getElementById('histContainer').innerHTML = html;
+
+    },
+    function(e){
+      document.getElementById('histContainer').innerHTML =
+        '<div style="padding:20px;color:red">Erro: ' + e.message + '</div>';
+    });
+}
+
+function _aplicarVersaoHistorico(index){
+
+  const item = window._historicoCache[index];
+  if (!item) return;
+
+  if (!item.itens || !item.itens.length) {
+    Swal.fire('Erro', 'Versão inválida.', 'error');
+    return;
+  }
+
+  _memoriaCalculo = item.itens.map(function(i){
+    return {
+      descricao: i.descricao,
+      tipo: i.tipo,
+      qtd: Number(i.qtd),
+      valor: Number(i.valor),
+      obs: i.obs || ''
+    };
+  });
+
+  _memRenderizar();
+  _memSyncEAtualizar();
+
+  Swal.fire({
+    icon: 'success',
+    title: 'Versão aplicada',
+    timer: 1200,
+    showConfirmButton: false
+  });
+}
+
+// ══════════════════════════════════════════════════════
+// MODAL INDICADOR
+// ══════════════════════════════════════════════════════
+
+function abrirModalIndicador(idMeta, idContrato, dadosIn) {
+  var dados    = dadosIn || {};
+  var ctr      = (_ctrCache.contratos || []).find(function(c) { return c.id === idContrato; }) || {};
+  var metaObj  = (_ctrCache.metas     || []).find(function(m) { return m.id === idMeta;     }) || {};
+  var _NM      = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+
+  // ── Vigência do contrato ───────────────────────────────────────────────
+  var vigIniDate = ctr.vigIni ? _parseDateBR(_fmtDataBR(ctr.vigIni)) : null;
+  var vigFimDate = ctr.vigFim ? _parseDateBR(_fmtDataBR(ctr.vigFim)) : null;
+
+  var anoInicio = vigIniDate ? vigIniDate.getFullYear() : new Date().getFullYear();
+  var anoFim    = vigFimDate ? vigFimDate.getFullYear() : anoInicio;
+
+  // ── Leitura de valor salvo por ano/mês ────────────────────────────────
+  // Suporta 3 formatos que o backend pode devolver:
+  //   1. objeto multi-ano: { "2025": [0,10,...], "2026": [...] }
+  //   2. array simples (legado, ano único):  [0,10,...]
+  //   3. ausente: 0
+  function getVal(ano, mes) {
+    if (!dados.meses) return 0;
+
+    // Formato 1 — objeto multi-ano (formato atual do backend)
+    if (!Array.isArray(dados.meses) && typeof dados.meses === 'object') {
+      var arrAno = dados.meses[ano] || dados.meses[String(ano)];
+      return arrAno ? (Number(arrAno[mes]) || 0) : 0;
+    }
+
+    // Formato 2 — array simples, só válido para o ano de origem
+    if (Array.isArray(dados.meses)) {
+      var anoOrigem = Number(dados.ano) || anoInicio;
+      if (Number(ano) === anoOrigem) {
+        return Number(dados.meses[mes]) || 0;
+      }
+      return 0;
+    }
+
+    return 0;
+  }
+
+  // ── Gerar grid de meses por ano ───────────────────────────────────────
+  var faixasHtml = '';
+
+  for (var ano = anoInicio; ano <= anoFim; ano++) {
+    var _a = ano;
+
+    var mesesHtml = _NM.map(function(nm, i) {
+      var iniciaMes = new Date(_a, i, 1);
+      var terminaMes = new Date(_a, i + 1, 0);
+
+      var foraVigencia = (vigIniDate && terminaMes < vigIniDate) ||
+                         (vigFimDate && iniciaMes  > vigFimDate);
+
+      var val = getVal(_a, i);
+
+      var estiloInput = [
+        'width:100%',
+        'text-align:center',
+        'font-size:11px',
+        'font-weight:700',
+        'border:1.5px solid ' + (foraVigencia ? '#f1f5f9' : '#e2e8f0'),
+        'border-radius:8px',
+        'padding:5px 2px',
+        'outline:none',
+        'background:'       + (foraVigencia ? '#f8fafc' : '#fff'),
+        'opacity:'          + (foraVigencia ? '0.3'     : '1'),
+        'pointer-events:'   + (foraVigencia ? 'none'    : 'auto'),
+        'box-sizing:border-box',
+      ].join(';');
+
+      return '<div style="display:flex;flex-direction:column;align-items:center;gap:3px">'
+        + '<span style="font-size:9px;font-weight:700;color:' + (foraVigencia ? '#cbd5e1' : '#64748b') + '">' + nm + '</span>'
+        + '<input type="number" id="indM_' + _a + '_' + i + '" value="' + val + '" min="0"'
+        + (foraVigencia ? ' disabled' : '')
+        + ' style="' + estiloInput + '">'
+        + '</div>';
+    }).join('');
+
+    faixasHtml += '<div style="margin-bottom:16px">'
+      + '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">'
+      + '<span style="font-size:10px;font-weight:900;color:#fff;background:#6366f1;padding:2px 10px;border-radius:99px;text-transform:uppercase;letter-spacing:.07em">' + _a + '</span>'
+      + '<div style="flex:1;border-top:1.5px solid #e2e8f0"></div>'
+      + '</div>'
+      + '<div style="display:grid;grid-template-columns:repeat(12,1fr);gap:5px">' + mesesHtml + '</div>'
+      + '</div>';
+  }
+
+  if (!faixasHtml) {
+    faixasHtml = '<p style="font-size:11px;color:#94a3b8;font-style:italic;text-align:center;padding:16px">'
+      + 'Configure a vigência do contrato para habilitar os campos mensais.</p>';
+  }
+
+  // ── HTML do modal ─────────────────────────────────────────────────────
+  var htmlModal = ''
+    // Breadcrumb meta vinculada
+    + (metaObj.titulo
+        ? '<div style="display:flex;align-items:center;gap:8px;padding:7px 12px;background:#eef2ff;border:1px solid #c7d2fe;border-radius:10px;margin-bottom:14px">'
+          + '<i class="fas fa-bullseye" style="color:#818cf8;font-size:11px;flex-shrink:0"></i>'
+          + '<span style="font-size:10px;font-weight:900;color:#4338ca;text-transform:uppercase;letter-spacing:.06em;flex-shrink:0">Meta:</span>'
+          + '<span style="font-size:11px;color:#4338ca;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'
+          + 'Meta ' + escaparHTML(metaObj.numero || '') + ' — ' + escaparHTML(metaObj.titulo) + '</span>'
+          + '</div>'
+        : '')
+
+    // Número + Nome
+    + '<div style="display:grid;grid-template-columns:80px 1fr;gap:10px;margin-bottom:12px">'
+    +   '<div>'
+    +     '<label class="ctr-label">Nº</label>'
+    +     '<input id="indNum" class="ctr-input" style="text-align:center" value="'
+    +     escaparHTML(dados.numero || '') + '" placeholder="01">'
+    +   '</div>'
+    +   '<div>'
+    +     '<label class="ctr-label">Nome do Indicador *</label>'
+    +     '<input id="indNome" class="ctr-input" value="'
+    +     escaparHTML(dados.nome || dados.texto || '')
+    +     '" placeholder="Ex.: Nº de pessoas atendidas presencialmente">'
+    +   '</div>'
+    + '</div>'
+
+    // Metodologia
+    + '<div style="margin-bottom:14px">'
+    +   '<label class="ctr-label">Metodologia <span style="font-weight:400;text-transform:none;color:#cbd5e1">(opcional)</span></label>'
+    +   '<textarea id="indDesc" class="ctr-obs-textarea" placeholder="Como este indicador é medido...">'
+    +   escaparHTML(dados.descricao || '') + '</textarea>'
+    + '</div>'
+
+    // Grid meses
+    + '<div>'
+    +   '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">'
+    +     '<label class="ctr-label" style="margin-bottom:0">Metas mensais por ano</label>'
+    +     '<span style="font-size:10px;color:#cbd5e1">'
+    +     '<i class="fas fa-calendar-alt" style="margin-right:4px"></i>'
+    +     (_fmtDataBR(ctr.vigIni) || '—') + ' a ' + (_fmtDataBR(ctr.vigFim) || '—')
+    +     '</span>'
+    +   '</div>'
+    +   '<div style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:12px;padding:14px;max-height:300px;overflow-y:auto;scrollbar-width:thin">'
+    +   faixasHtml
+    +   '</div>'
+    + '</div>';
+
+  // ── Swal ──────────────────────────────────────────────────────────────
+  Swal.fire({
+    title: dados.id ? 'Editar Indicador' : 'Novo Indicador',
+    width: Math.min(720, window.innerWidth - 32),
+    showCancelButton:    true,
+    confirmButtonText:   '<i class="fas fa-save mr-1"></i>Salvar',
+    cancelButtonText:    'Cancelar',
+    confirmButtonColor:  '#6366f1',
+    customClass: {
+      popup:           'rounded-3xl',
+      confirmButton:   'rounded-xl font-black text-sm',
+      cancelButton:    'rounded-xl font-bold text-sm',
+    },
+    html: '<div class="text-left" style="padding:0 20px 16px">' + htmlModal + '</div>',
+
+    preConfirm: function() {
+
+      // ── SYNC DOM → ESTADO (crítico: captura campos sem blur) ──
+      document.querySelectorAll('.mem-row').forEach(function(row, idx) {
+        if (!_memoriaCalculo[idx]) return;
+
+        var qtdEl = row.querySelector('.mem-qtd');
+        var valEl = row.querySelector('.mem-val');
+
+        if (qtdEl) {
+          _memoriaCalculo[idx].qtd = parseFloat(qtdEl.value) || 0;
+        }
+        if (valEl) {
+          // _parseMoeda converte "1.000,00" → 1000 antes de enviar
+          _memoriaCalculo[idx].valor = _parseMoeda(valEl.value);
+        }
+      });
+
+      var nome = document.getElementById('rubNome')?.value.trim();
+      if (!nome) {
+        Swal.showValidationMessage('Nome obrigatório.');
+        return false;
+      }
+
+      // Recalcula após sync
+      var total = _memoriaCalculo.reduce(function(s, item) {
+        return s + (Number(item.qtd) || 0) * (Number(item.valor) || 0);
+      }, 0);
+
+      if (total <= 0) {
+        Swal.showValidationMessage(
+          'O total calculado é zero. Verifique quantidades e valores.'
+        );
+        return false;
+      }
+
+      return {
+        id:     dados.id || null,
+        idMeta: idMeta,
+        nome:   nome,
+        valor:  total,
+        memoriaCalculo: _memoriaCalculo.map(function(item) {
+          var qtd   = Number(item.qtd)   || 0;
+          var valor = Number(item.valor) || 0;  // já convertido pelo sync acima
+          return {
+            descricao: String(item.descricao || '').trim(),
+            tipo:      String(item.tipo      || 'unitario').trim(),
+            qtd:       qtd,    // number puro
+            valor:     valor,  // number puro — ex: 1000, não "1.000,00"
+            subtotal:  qtd * valor,
+            obs:       String(item.obs || '').trim(),
+          };
+        }),
+        obs: document.getElementById('rubObs')?.value.trim() || '',
+      };
+    },
+
+  }).then(function(r) {
+    if (!r.isConfirmed) return;
+
+    showLoader(true);
+
+    GAS.contratos.salvarIndicador(r.value, AppState.usuario.email,
+      function() {
+        showLoader(false);
+        carregarDadosContratos(function() {
+          if (typeof renderizarContratos    === 'function') renderizarContratos();
+          if (typeof codipPopularContratos  === 'function') codipPopularContratos();
+        });
+      },
+      function(e) {
+        showLoader(false);
+        Swal.fire('Erro', e.message, 'error');
+      });
+  });
+}
+
+function editarIndicador(id){
+  var ind=(_ctrCache.indicadores||[]).find(function(x){return x.id===id;});
+  if(ind) abrirModalIndicador(ind.idMeta,ind.idContrato,ind);
+}
+function excluirIndicadorUI(id){
+  Swal.fire({
+    title:'Excluir indicador?',text:'Esta ação não pode ser desfeita.',
+    icon:'warning',showCancelButton:true,confirmButtonColor:'#ef4444',
+    confirmButtonText:'<i class="fas fa-trash mr-1"></i>Excluir',cancelButtonText:'Cancelar',
+    customClass:{popup:'rounded-3xl',confirmButton:'rounded-xl font-black text-sm',cancelButton:'rounded-xl font-bold text-sm'}
+  }).then(function(r){
+    if(!r.isConfirmed) return;
+    showLoader(true);
+    GAS.contratos.excluirIndicador(id,AppState.usuario.email,
+      function(){showLoader(false);carregarDadosContratos(renderizarContratos);},
+      function(e){showLoader(false);Swal.fire('Erro',e.message,'error');});
+  });
+}
+
+// ══════════════════════════════════════════════════════
+// BUSCA DE CONTRATOS
+// ══════════════════════════════════════════════════════
+
+function _ctrBuscar(val){
+  _ctrFiltro=val||'';
+  renderizarContratos();
+}
+
+// ══════════════════════════════════════════════════════
+// AUDITORIA
+// ══════════════════════════════════════════════════════
+
+function carregarAuditoria(){
+  if(!AppState.usuario.isAdmin && !AppState.usuario.isSuperadmin) return;
+  mostrarSubAbaAuditoria('logs');
+  var corpo=document.getElementById('tabelaLogs');
+  if(corpo){
+    corpo.innerHTML='<tr><td colspan="8" class="p-16 text-center"><i class="fas fa-spinner animate-spin text-purple-400 text-2xl"></i><p class="text-slate-400 text-xs mt-3 font-bold uppercase tracking-widest">Carregando auditoria...</p></td></tr>';
+  }
+  GAS.admin.obterLogs(AppState.usuario.email,
+    function(jsonLogs){
+      var logs=JSON.parse(jsonLogs);
+      renderizarLogs(logs);
+    },
+    function(err){ Swal.fire('Erro',err.message,'error'); });
+}
+
+function mostrarSubAbaAuditoria(aba){
+  var ids=['logs','acessos','comparativo'];
+  ids.forEach(function(id){
+    var el=document.getElementById('subaba-'+id);
+    if(el) el.classList.toggle('hidden', id!==aba);
+    var btn=document.getElementById('tab-audit-'+id);
+    if(btn){
+      if(id===aba){
+        btn.className='px-4 py-2 bg-slate-900 text-white text-xs font-black rounded-xl uppercase';
+      } else {
+        btn.className='px-4 py-2 bg-slate-200 text-slate-600 text-xs font-black rounded-xl uppercase hover:bg-slate-300 transition-all';
+      }
+    }
+  });
+  if(aba==='acessos') carregarLogAcessos();
+  if(aba==='comparativo'){
+    var selCtr=document.getElementById('filtroContratoComparativo');
+    if(selCtr&&_ctrCache.contratos&&_ctrCache.contratos.length){
+      popularContratosComparativo();
+    }
+  }
+}
+
+function popularContratosComparativo(){
+  var sel=document.getElementById('filtroContratoComparativo');
+  if(!sel) return;
+  sel.innerHTML='<option value="">Selecione um contrato</option>'
+    +(_ctrCache.contratos||[]).map(function(c){
+      return '<option value="'+escaparHTML(c.id)+'">'+escaparHTML(c.nome)+'</option>';
+    }).join('');
+}
+
+function renderizarLogs(logs){
+  var corpo=document.getElementById('tabelaLogs');
+  if(!corpo) return;
+  if(!logs||!logs.length){
+    corpo.innerHTML='<tr><td colspan="8" class="p-20 text-center"><i class="fas fa-shield-halved text-slate-100 text-5xl mb-4"></i><p class="text-slate-300 font-bold text-xs uppercase tracking-widest">Nenhum registro encontrado.</p></td></tr>';
+    return;
+  }
+  var coresAcao={
+    'CRIAÇÃO':'bg-green-100 text-green-700',
+    'EDIÇÃO':'bg-blue-100 text-blue-700',
+    'EXCLUSÃO':'bg-red-100 text-red-600',
+    'EXCLUSÃO DEFINITIVA':'bg-red-200 text-red-800',
+    'CANCELAMENTO':'bg-amber-100 text-amber-700',
+    'ROLLBACK':'bg-purple-100 text-purple-700',
+    'APROVAÇÃO':'bg-emerald-100 text-emerald-700',
+    'RECUSA':'bg-rose-100 text-rose-700',
+  };
+  var reversíveis=['CRIAÇÃO','EDIÇÃO','EXCLUSÃO','EXCLUSÃO DEFINITIVA','AGENDAMENTO'];
+
+  corpo.innerHTML=logs.map(function(log){
+    var acaoUpper=String(log[2]||'').toUpperCase();
+    var corAcao=coresAcao[acaoUpper]||'bg-slate-100 text-slate-600';
+    var antes=log[6]?'<span class="text-red-400 line-through text-[9px] max-w-[120px] truncate block" title="'+escaparHTML(log[6])+'">'+escaparHTML(String(log[6]).substring(0,40))+'</span>':'<span class="text-slate-300 text-[9px]">—</span>';
+    var depois=log[7]?'<span class="text-green-600 text-[9px] max-w-[120px] truncate block" title="'+escaparHTML(log[7])+'">'+escaparHTML(String(log[7]).substring(0,40))+'</span>':'<span class="text-slate-300 text-[9px]">—</span>';
+    var ehReversivel=AppState.usuario.isSuperadmin&&reversíveis.some(function(r){return acaoUpper.includes(r);});
+    var tsLog=escaparHTML(String(log[0]||''));
+    return '<tr class="text-[11px] hover:bg-slate-50 transition-colors">'
+      +'<td class="p-3 text-slate-500 font-medium whitespace-nowrap text-[10px]">'+tsLog+'</td>'
+      +'<td class="p-3 font-bold text-slate-700 max-w-[100px] truncate">'+escaparHTML(log[1]?String(log[1]).split('@')[0]:'—')+'</td>'
+      +'<td class="p-3 text-center"><span class="audit-chip '+corAcao+'">'+escaparHTML(log[2]||'')+'</span></td>'
+      +'<td class="p-3 text-slate-600 font-medium">'+escaparHTML(String(AppState.mapaSalas&&AppState.mapaSalas[log[4]]?AppState.mapaSalas[log[4]]:log[4]||''))+'</td>'
+      +'<td class="p-3 text-slate-500 max-w-[140px] truncate" title="'+escaparHTML(log[5]||'')+'">'+escaparHTML(String(log[5]||'').substring(0,50))+'</td>'
+      +'<td class="p-3 max-w-[140px]">'+antes+'</td>'
+      +'<td class="p-3 max-w-[140px]">'+depois+'</td>'
+      +'<td class="p-3 text-center">'
+      +(ehReversivel?'<button data-acao="rollback-seletivo" data-timestamp="'+tsLog+'" class="px-2 py-1 bg-amber-100 hover:bg-amber-500 text-amber-700 hover:text-white text-[9px] font-black rounded-lg transition-all uppercase"><i class="fas fa-undo mr-1"></i>Desfazer</button>':'')
+      +'</td></tr>';
+  }).join('');
+}
+
+// ══════════════════════════════════════════════════════
+// INIT BLOCK
+// ══════════════════════════════════════════════════════
+
+window.codipPopularContratos = function(){
+  var sel=document.getElementById('codipSelectContrato');
+  if(!sel) return;
+  sel.innerHTML='<option value="">Selecione o contrato...</option>'
+    +(_ctrCache.contratos||[]).map(function(c){
+      return '<option value="'+escaparHTML(c.id)+'">'+escaparHTML(c.nome)+'</option>';
+    }).join('');
+  var sm=document.getElementById('codipSelectMeta');
+  if(sm) sm.innerHTML='<option value="">Selecione uma meta...</option>';
+  var si=document.getElementById('codipSelectIndicador');
+  if(si) si.innerHTML='<option value="">Selecione um indicador...</option>';
+};
+</script>

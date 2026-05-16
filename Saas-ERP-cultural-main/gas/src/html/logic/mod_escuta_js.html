@@ -1,0 +1,1411 @@
+<script>
+/**
+ * @file logic/mod_escuta_js.html
+ * @layer frontend/module
+ * @description Lógica de frontend do Sistema de Escuta Institucional Contínua.
+ * @responsibility Gerenciar sub-abas, widget pulse, dashboard, formulários,
+ *                 alertas, relatórios, gestão de pesquisas e perfil analítico.
+ * @dependencies GAS.escuta, AppState, showLoader, escaparHTML
+ */
+
+// ── Estado local ─────────────────────────────────────────────
+
+var _escutaCache = {
+  dashboard:    null,
+  alertas:      [],
+  pesquisas:    [],
+  banco:        [],
+  perguntas:    [],
+  config:       {},
+  periodos:     [],
+  participacao: null,
+  nivel:        'colaborador',
+  perfilRH:     null,
+  widgetPergunta:   null,
+  widgetPesquisaId: null
+};
+
+var _escutaWidgetTimer  = null;
+var _escutaAbaPesquisasPerguntas = [];
+
+// Lazy load: registra carregamento ao entrar na aba
+window._onShow_aba_escuta = function() { _escutaInit(); };
+
+// ── Inicialização ─────────────────────────────────────────────
+
+function _escutaInit() {
+  // Popula selects e defaults imediatamente (sem depender do servidor)
+  _escutaCache.periodos = _escutaGerarPeriodos(12);
+  _escutaPopularSelects();
+  _escutaRenderConfig();
+  if (_escutaCache.dashboard) { _escutaRenderTudo(); return; }
+  _escutaRecarregar();
+}
+
+function _escutaRecarregar() {
+  showLoader(true);
+  GAS._call('obterDadosEscuta', [GAS._sessao()], function(res) {
+    showLoader(false);
+    if (!res || !res.ok) {
+      _escutaRenderErroCarregamento(res ? (res.msg || res.error || 'Erro ao carregar dados.') : 'Erro de comunicação com o servidor.');
+      return;
+    }
+    _escutaCache.dashboard    = res.dashboard;
+    _escutaCache.alertas      = res.alertas      || [];
+    _escutaCache.pesquisas    = res.pesquisas     || [];
+    _escutaCache.banco        = res.banco         || [];
+    _escutaCache.perguntas    = res.perguntas     || [];
+    _escutaCache.config       = res.config        || {};
+    _escutaCache.participacao = res.participacao  || null;
+    _escutaCache.nivel        = res.nivel         || 'colaborador';
+    _escutaCache.perfilRH     = res.perfilRH      || null;
+    _escutaCache.periodos     = _escutaGerarPeriodos(12);
+
+    _escutaRenderTudo();
+    _escutaAgendarWidget();
+  }, function(err) {
+    showLoader(false);
+    _escutaRenderErroCarregamento('Não foi possível conectar ao servidor. Verifique sua conexão e tente novamente.');
+    console.error('[Escuta] Falha na conexão:', err);
+  });
+}
+
+function _escutaRenderErroCarregamento(msg) {
+  var paineis = ['painel','espontanea','alertas','distribuicao','relatorios','pesquisas'];
+  paineis.forEach(function(p) {
+    var el = document.getElementById('escuta-painel-' + p);
+    if (el && !el.classList.contains('hidden')) {
+      el.insertAdjacentHTML('afterbegin',
+        '<div id="escuta-erro-banner" class="mb-4 bg-red-50 border border-red-200 rounded-2xl p-4 flex items-start gap-3">' +
+          '<i class="fas fa-circle-exclamation text-red-500 mt-0.5"></i>' +
+          '<div>' +
+            '<p class="font-black text-red-800 text-sm">Não foi possível carregar os dados</p>' +
+            '<p class="text-red-600 text-xs mt-1">' + msg + '</p>' +
+            '<button onclick="_escutaRecarregar()" class="mt-2 text-xs font-black text-red-700 underline">Tentar novamente</button>' +
+          '</div>' +
+        '</div>'
+      );
+    }
+  });
+}
+
+function _escutaGerarPeriodos(n) {
+  var periodos = [];
+  var d = new Date();
+  for (var i = 0; i < n; i++) {
+    var p = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+    periodos.push(p);
+    d.setMonth(d.getMonth() - 1);
+  }
+  return periodos;
+}
+
+function _escutaRenderTudo() {
+  _escutaAplicarPermissoes();
+  _escutaRenderPerfilRH();
+  _escutaPopularSelects();
+  _escutaRenderDashboard();
+  _escutaRenderParticipacao();
+  _escutaRenderAlertas();
+  _escutaRenderConfig();
+  _escutaRenderPerguntas();
+  _escutaRenderPesquisas();
+  _escutaRenderBanco();
+  _escutaRenderDistribuicao();
+  _escutaCarregarFeedback();
+}
+
+// ── Permissões — mostrar/ocultar tabs por nível ───────────────
+
+function _escutaAplicarPermissoes() {
+  var nivel = _escutaCache.nivel || 'colaborador';
+  var isRH  = (nivel === 'rh' || nivel === 'superadmin');
+
+  // Tabs que exigem RH/superadmin
+  document.querySelectorAll('.escuta-tab-rh').forEach(function(el) {
+    el.classList.toggle('hidden', !isRH);
+  });
+
+  // Ajustar layout do formulário de escuta livre:
+  // - Colaborador: formulário em largura total (md:col-span-3)
+  // - RH/superadmin: formulário em 1/3 (md:col-span-1), painel analítico em 2/3
+  var colForm = document.getElementById('escuta-espontanea-col-form');
+  if (colForm) {
+    colForm.classList.toggle('md:col-span-3', !isRH);
+    colForm.classList.toggle('md:col-span-1', isRH);
+  }
+
+  // Colaborador começa na aba Escuta Livre
+  if (!isRH) {
+    _escutaSubAba('espontanea');
+    var painelBtn = document.getElementById('escuta-nav-painel');
+    if (painelBtn) painelBtn.classList.add('hidden');
+  } else {
+    _escutaSubAba('painel');
+  }
+}
+
+// ── Perfil RH banner ──────────────────────────────────────────
+
+function _escutaRenderPerfilRH() {
+  var rh = _escutaCache.perfilRH;
+  var banner = document.getElementById('escuta-perfil-rh-banner');
+  var texto  = document.getElementById('escuta-perfil-rh-texto');
+  if (!banner || !texto) return;
+  if (rh && rh.nome) {
+    texto.textContent = rh.nome + (rh.cargo ? ' — ' + rh.cargo : '') + (rh.setor ? ' / ' + rh.setor : '');
+    banner.classList.remove('hidden');
+  } else {
+    banner.classList.add('hidden');
+  }
+}
+
+// ── Sub-navegação ─────────────────────────────────────────────
+
+function _escutaSubAba(nome) {
+  var paineis = ['painel','espontanea','alertas','distribuicao','relatorios','pesquisas'];
+  paineis.forEach(function(p) {
+    var el = document.getElementById('escuta-painel-' + p);
+    if (el) el.classList.toggle('hidden', p !== nome);
+    var btn = document.getElementById('escuta-nav-' + p);
+    if (btn) {
+      btn.classList.toggle('bg-violet-600', p === nome);
+      btn.classList.toggle('text-white',    p === nome);
+      btn.classList.toggle('bg-slate-100',  p !== nome);
+      btn.classList.toggle('text-slate-600',p !== nome);
+    }
+  });
+  if (nome === 'espontanea')    _escutaRenderEspontanea();
+  if (nome === 'relatorios')    _escutaIniciarRelatorios();
+  if (nome === 'distribuicao')  _escutaRenderDistribuicao();
+}
+
+function _escutaGestaoAba(nome) {
+  ['config','perguntas','pesqs','banco'].forEach(function(g) {
+    var el = document.getElementById('escuta-gestao-' + g);
+    if (el) el.classList.toggle('hidden', g !== nome);
+    var btn = document.getElementById('escuta-g-nav-' + g);
+    if (btn) {
+      btn.classList.toggle('bg-violet-600', g === nome);
+      btn.classList.toggle('text-white',    g === nome);
+      btn.classList.toggle('bg-slate-100',  g !== nome);
+      btn.classList.toggle('text-slate-600',g !== nome);
+    }
+  });
+}
+
+// ── Dashboard ─────────────────────────────────────────────────
+
+function _escutaPopularSelects() {
+  var periodos = _escutaCache.periodos;
+  ['escuta-sel-periodo','escuta-rel-periodo'].forEach(function(id) {
+    var sel = document.getElementById(id);
+    if (!sel) return;
+    sel.innerHTML = periodos.map(function(p, i) {
+      return '<option value="' + p + '"' + (i === 0 ? ' selected' : '') + '>' + p + '</option>';
+    }).join('');
+  });
+}
+
+function _escutaAtualizarDashboard() {
+  var periodo = (document.getElementById('escuta-sel-periodo') || {}).value || '';
+  var modo    = (document.getElementById('escuta-sel-modo')    || {}).value || 'geral';
+  showLoader(true);
+  GAS._call('obterDashboardEscuta', [{ periodo: periodo, modo: modo }], function(res) {
+    showLoader(false);
+    if (res && res.ok) {
+      _escutaCache.dashboard = res.dados;
+      _escutaRenderDashboard();
+    } else {
+      Swal.fire({ icon: 'warning', title: 'Dados indisponíveis', text: res ? res.msg : 'Não foi possível atualizar o painel.', confirmButtonColor: '#7c3aed' });
+    }
+  }, function() { showLoader(false); });
+}
+
+function _escutaRenderDashboard() {
+  var d = _escutaCache.dashboard;
+  if (!d) return;
+
+  // Confiança badge
+  var conf = d.confianca || {};
+  var badgeEl = document.getElementById('escuta-badge-confianca');
+  if (badgeEl) {
+    var pct = conf.percentual || 0;
+    var cor = pct > 0 ? (conf.suficiente ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700')
+                     : 'bg-slate-100 text-slate-500';
+    badgeEl.className = 'px-3 py-1.5 rounded-xl text-[10px] font-black uppercase ' + cor;
+    badgeEl.innerHTML = '<i class="fas fa-circle-dot mr-1"></i>' +
+      pct + '% — ' + (conf.participantes || 0) + ' participantes';
+  }
+
+  // Alerta de confiança insuficiente
+  var avisoEl = document.getElementById('escuta-aviso-confianca');
+  if (avisoEl) avisoEl.classList.toggle('hidden', conf.suficiente !== false);
+
+  // KPIs
+  var ind = d.indicadores || {};
+  var cg  = ind._climaGeral || {};
+  _escutaSetEl('escuta-kpi-clima',       cg.media ? cg.media.toFixed(1) : '—');
+  _escutaSetEl('escuta-kpi-clima-nivel', _escutaLabelNivel(cg.nivel));
+  _escutaSetEl('escuta-kpi-confianca',   (conf.percentual || 0) + '%');
+  _escutaSetEl('escuta-kpi-conf-detail', (conf.participantes || 0) + ' / ' + (conf.total || '?') + ' pessoas');
+  _escutaSetEl('escuta-kpi-alertas',     String(d.alertasAtivos || 0));
+
+  // Badge alertas no nav
+  var badgeA = document.getElementById('escuta-badge-alertas');
+  if (badgeA) {
+    var qtd = d.alertasAtivos || 0;
+    badgeA.textContent = qtd;
+    badgeA.classList.toggle('hidden', qtd === 0);
+  }
+
+  // Tendência
+  var tend = (d.tendencia || []);
+  if (tend.length >= 2) {
+    var ultimo   = tend[tend.length - 1];
+    var anterior = tend[tend.length - 2];
+    var diff = ultimo.climaGeral && anterior.climaGeral
+      ? (ultimo.climaGeral - anterior.climaGeral) : null;
+    _escutaSetEl('escuta-kpi-tendencia',
+      diff !== null ? (diff >= 0 ? '+' : '') + diff.toFixed(1) : '—');
+    _escutaSetEl('escuta-kpi-tend-detail',
+      diff !== null ? (diff >= 0 ? 'em alta' : 'em queda') + ' vs. período anterior' : '');
+  }
+
+  // Dimensões
+  _escutaRenderDimensoes(ind, d.bloqueado);
+
+  // Tendência chart
+  _escutaRenderTendenciaChart(d.tendencia || []);
+
+  // Saturação
+  _escutaRenderSaturacao(d.saturacao || [], d.saturacao && d.saturacao.meta);
+
+  // Estratificado
+  var blocoEst = document.getElementById('escuta-estratificado-bloco');
+  if (blocoEst) {
+    var modo = (document.getElementById('escuta-sel-modo') || {}).value;
+    blocoEst.classList.toggle('hidden', modo !== 'estratificado');
+    if (modo === 'estratificado' && d.estratificado) {
+      _escutaRenderEstratificado(d.estratificado, d.bloqueado);
+    }
+  }
+}
+
+// ── Histórico de Participação ─────────────────────────────────
+
+function _escutaRenderParticipacao() {
+  var p = _escutaCache.participacao;
+  if (!p) return;
+
+  // KPIs
+  _escutaSetEl('escuta-part-total',    String(p.totalRespostas   || 0));
+  _escutaSetEl('escuta-part-esponts',  String(p.totalEspontaneas || 0));
+  _escutaSetEl('escuta-part-periodos', String((p.historico || []).length));
+
+  var ultima = p.ultimaResposta ? _escutaFmtData(p.ultimaResposta) : '—';
+  _escutaSetEl('escuta-part-ultima', ultima);
+
+  // Badge total respostas no cabeçalho
+  var total = (p.totalRespostas || 0) + (p.totalEspontaneas || 0);
+  var badgeTot = document.getElementById('escuta-badge-total-respostas');
+  var txtTot   = document.getElementById('escuta-txt-total-respostas');
+  if (badgeTot && total > 0) {
+    if (txtTot) txtTot.textContent = total;
+    badgeTot.classList.remove('hidden');
+  }
+
+  // Gráfico de barras de histórico
+  var el = document.getElementById('escuta-historico-periodos');
+  if (!el) return;
+  var hist = p.historico || [];
+  if (!hist.length) {
+    el.innerHTML = '<p class="text-[10px] text-slate-400 text-center py-4">Nenhum histórico de participação registrado.</p>';
+    return;
+  }
+  var maxVal = hist.reduce(function(m, h) { return Math.max(m, h.respostas || 0); }, 1);
+  el.innerHTML = hist.map(function(h) {
+    var pct = Math.round(((h.respostas || 0) / maxVal) * 100);
+    var cor = pct >= 70 ? 'bg-violet-500' : pct >= 40 ? 'bg-violet-300' : 'bg-slate-200';
+    var uniq = h.participantes ? ' · ' + h.participantes + ' part.' : '';
+    return '<div class="flex items-center gap-3">' +
+      '<span class="text-[10px] font-mono text-slate-500 w-16 shrink-0">' + h.periodo + '</span>' +
+      '<div class="flex-1 h-5 bg-slate-100 rounded-lg overflow-hidden">' +
+        '<div class="h-full ' + cor + ' rounded-lg flex items-center px-2 transition-all" style="width:' + Math.max(pct, 4) + '%">' +
+          (pct >= 20 ? '<span class="text-white text-[9px] font-black">' + (h.respostas || 0) + '</span>' : '') +
+        '</div>' +
+      '</div>' +
+      '<span class="text-[10px] text-slate-400 w-20 text-right shrink-0">' + (h.respostas || 0) + ' resp.' + uniq + '</span>' +
+    '</div>';
+  }).join('');
+}
+
+// ── Distribuição de pesquisas ─────────────────────────────────
+
+function _escutaRenderDistribuicao() {
+  var p = _escutaCache.participacao;
+  if (!p) {
+    // Tenta carregar se ainda não veio
+    GAS._call('obterParticipacaoEscuta', [], function(res) {
+      if (res && res.ok) {
+        _escutaCache.participacao = res;
+        _escutaRenderDistribuicao();
+      }
+    });
+    return;
+  }
+
+  // Badge no nav
+  var alertas = p.alertasDistribuicao || [];
+  var badgeDist = document.getElementById('escuta-badge-dist');
+  if (badgeDist) {
+    badgeDist.textContent = alertas.length;
+    badgeDist.classList.toggle('hidden', alertas.length === 0);
+  }
+
+  // Painel: pesquisas
+  var elPesq = document.getElementById('escuta-dist-pesquisas');
+  if (elPesq) {
+    var pesquisas = p.pesquisas || [];
+    if (!pesquisas.length) {
+      elPesq.innerHTML = '<p class="text-[10px] text-slate-400 text-center py-8">Nenhuma pesquisa cadastrada.</p>';
+    } else {
+      elPesq.innerHTML = pesquisas.map(function(ps) {
+        var cor = ps.ativa ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-400';
+        var status = ps.ativa ? 'Ativa' : 'Inativa';
+        return '<div class="flex items-center gap-3 p-4">' +
+          '<div class="flex-1 min-w-0">' +
+            '<p class="text-xs font-black text-slate-700 truncate">' + escaparHTML(ps.titulo || 'Sem título') + '</p>' +
+            '<p class="text-[10px] text-slate-400">' + (ps.respostas || 0) + ' respostas</p>' +
+          '</div>' +
+          '<span class="text-[9px] font-black px-2 py-1 rounded-full ' + cor + '">' + status + '</span>' +
+        '</div>';
+      }).join('');
+    }
+  }
+
+  // Painel: alertas de distribuição
+  var elAl = document.getElementById('escuta-dist-alertas');
+  if (elAl) {
+    if (!alertas.length) {
+      elAl.innerHTML = '<p class="text-[10px] text-green-700 bg-green-50 rounded-xl mx-4 my-6 p-3 text-center">' +
+        '<i class="fas fa-check-circle mr-1"></i>Nenhum alerta de distribuição no momento.</p>';
+    } else {
+      var tipoLabel = { ativa_sem_respostas: 'Ativa sem respostas', pesquisa_vencida: 'Pesquisa vencida' };
+      var tipoIcon  = { ativa_sem_respostas: 'fas fa-inbox text-amber-500', pesquisa_vencida: 'fas fa-clock text-red-400' };
+      elAl.innerHTML = alertas.map(function(a) {
+        return '<div class="flex items-start gap-3 p-4">' +
+          '<i class="' + (tipoIcon[a.tipo] || 'fas fa-bell text-slate-400') + ' mt-0.5 shrink-0"></i>' +
+          '<div class="min-w-0">' +
+            '<p class="text-xs font-black text-slate-700">' + (tipoLabel[a.tipo] || a.tipo) + '</p>' +
+            '<p class="text-[10px] text-slate-500 truncate">' + escaparHTML(a.titulo || '') + '</p>' +
+          '</div>' +
+        '</div>';
+      }).join('');
+    }
+  }
+
+  // Histórico de coleta
+  var elHist = document.getElementById('escuta-dist-historico');
+  if (elHist) {
+    var hist = p.historico || [];
+    if (!hist.length) {
+      elHist.innerHTML = '<p class="text-[10px] text-slate-400 text-center py-4">Sem histórico disponível.</p>';
+    } else {
+      var maxH = hist.reduce(function(m, h) { return Math.max(m, h.count || 0); }, 1);
+      elHist.innerHTML = hist.map(function(h) {
+        var pct = Math.round(((h.count || 0) / maxH) * 100);
+        var cor = pct >= 60 ? 'bg-violet-500' : pct >= 30 ? 'bg-violet-300' : 'bg-slate-200';
+        return '<div class="flex items-center gap-3">' +
+          '<span class="text-[10px] font-mono text-slate-500 w-16 shrink-0">' + h.periodo + '</span>' +
+          '<div class="flex-1 h-5 bg-slate-100 rounded-lg overflow-hidden">' +
+            '<div class="h-full ' + cor + ' rounded-lg transition-all" style="width:' + Math.max(pct, 4) + '%"></div>' +
+          '</div>' +
+          '<span class="text-[10px] text-slate-400 w-16 text-right shrink-0">' + (h.count || 0) + ' resp.</span>' +
+        '</div>';
+      }).join('');
+    }
+  }
+}
+
+// ── Manual / Como funciona ────────────────────────────────────
+
+function _escutaAbrirManual() {
+  var modal = document.getElementById('escuta-modal-manual');
+  if (!modal) return;
+  modal.classList.remove('hidden');
+
+  var conteudo = document.getElementById('escuta-manual-conteudo');
+  if (!conteudo) return;
+  conteudo.innerHTML = '<div class="text-center text-slate-300 py-8"><i class="fas fa-spinner fa-spin text-2xl"></i></div>';
+
+  GAS._call('obterManualEscuta', [null], function(res) {
+    if (!res || !res.ok || !res.dados) {
+      conteudo.innerHTML = '<p class="text-slate-400 text-sm text-center py-8">Não foi possível carregar o manual.</p>';
+      return;
+    }
+    var icons = {
+      objetivo:'fas fa-bullseye', funcionamento:'fas fa-cogs',
+      turnos:'fas fa-clock', dimensoes:'fas fa-layer-group',
+      indicadores:'fas fa-chart-bar', confianca:'fas fa-shield-check',
+      fairness:'fas fa-balance-scale', nr1:'fas fa-scale-balanced',
+      privacidade:'fas fa-user-secret', acesso:'fas fa-lock',
+      direitos:'fas fa-file-signature', pesquisas:'fas fa-clipboard-list'
+    };
+    var secoes = res.dados;
+    conteudo.innerHTML = Object.keys(secoes).map(function(key) {
+      var s = secoes[key];
+      if (!s) return '';
+      var titulo   = s.titulo  || key;
+      var itens    = Array.isArray(s.conteudo) ? s.conteudo : [String(s.conteudo || s)];
+      var fonte    = s.fonte   || '';
+      var icon     = icons[key] || 'fas fa-info-circle';
+      return '<div class="bg-slate-50 rounded-2xl p-5">' +
+        '<h4 class="font-black text-slate-700 text-sm flex items-center gap-2 mb-3">' +
+          '<i class="' + icon + ' text-violet-500 text-xs w-4 text-center"></i>' +
+          escaparHTML(titulo) +
+        '</h4>' +
+        '<ul class="space-y-1.5">' +
+          itens.map(function(item) {
+            return '<li class="flex items-start gap-2 text-xs text-slate-600 leading-relaxed">' +
+              '<i class="fas fa-chevron-right text-violet-300 text-[8px] mt-1 shrink-0"></i>' +
+              escaparHTML(item) +
+            '</li>';
+          }).join('') +
+        '</ul>' +
+        (fonte ? '<p class="text-[9px] text-slate-300 mt-3 font-mono">' + escaparHTML(fonte) + '</p>' : '') +
+      '</div>';
+    }).join('');
+  });
+}
+
+function _escutaFecharManual() {
+  var modal = document.getElementById('escuta-modal-manual');
+  if (modal) modal.classList.add('hidden');
+}
+
+function _escutaRenderDimensoes(ind, bloqueado) {
+  var el = document.getElementById('escuta-dimensoes-grid');
+  if (!el) return;
+
+  if (bloqueado) {
+    el.innerHTML = '<div class="col-span-2 text-center py-8 text-amber-600 text-xs bg-amber-50 rounded-xl">' +
+      '<i class="fas fa-lock mr-2"></i>Dados insuficientes para exibir indicadores. Aguarde mais respostas.</div>';
+    return;
+  }
+
+  var labels = {
+    energia:'Energia', carga:'Carga de Trabalho', clareza:'Clareza',
+    apoio:'Apoio', autonomia:'Autonomia', cultura:'Cultura',
+    lideranca:'Liderança', risco_psicossocial:'Risco Psicossocial (NR-1)'
+  };
+  var icons = {
+    energia:'fas fa-bolt', carga:'fas fa-weight-scale', clareza:'fas fa-bullseye',
+    apoio:'fas fa-hands-holding', autonomia:'fas fa-user-shield', cultura:'fas fa-star',
+    lideranca:'fas fa-chess-king', risco_psicossocial:'fas fa-triangle-exclamation'
+  };
+  var cores = {
+    excelente:'bg-green-100 text-green-700', bom:'bg-blue-100 text-blue-700',
+    regular:'bg-yellow-100 text-yellow-700', baixo:'bg-orange-100 text-orange-700',
+    critico:'bg-red-100 text-red-700', sem_dados:'bg-slate-100 text-slate-400'
+  };
+
+  el.innerHTML = ['energia','carga','clareza','apoio','autonomia','cultura','lideranca','risco_psicossocial']
+    .map(function(d) {
+      var i   = ind[d] || {};
+      var cor = cores[i.nivel] || cores.sem_dados;
+      var pct = i.media ? Math.round(((i.media - 1) / 4) * 100) : 0;
+      var barCor = (i.nivel === 'excelente' || i.nivel === 'bom') ? 'bg-green-400' :
+                   (i.nivel === 'regular')  ? 'bg-yellow-400' :
+                   (i.nivel === 'baixo' || i.nivel === 'critico') ? 'bg-red-400' : 'bg-slate-200';
+      return '<div class="flex items-center gap-3 p-3 rounded-xl ' + cor + '">' +
+        '<i class="' + (icons[d]||'fas fa-circle') + ' text-sm w-5 text-center"></i>' +
+        '<div class="flex-1 min-w-0">' +
+          '<div class="flex justify-between items-center mb-1">' +
+            '<span class="text-[10px] font-black uppercase tracking-wider">' + (labels[d]||d) + '</span>' +
+            '<span class="text-sm font-black">' + (i.media ? i.media.toFixed(1) : '—') + '</span>' +
+          '</div>' +
+          '<div class="w-full h-1.5 bg-white/50 rounded-full">' +
+            '<div class="h-1.5 rounded-full ' + barCor + '" style="width:' + pct + '%"></div>' +
+          '</div>' +
+          '<span class="text-[9px] mt-0.5 block">' + (i.n || 0) + ' respostas</span>' +
+        '</div></div>';
+    }).join('');
+}
+
+function _escutaRenderTendenciaChart(tendencia) {
+  var el = document.getElementById('escuta-tendencia-chart');
+  if (!el || !tendencia.length) return;
+
+  var max = 5;
+  el.innerHTML = tendencia.map(function(t) {
+    var pct = t.climaGeral ? Math.round((t.climaGeral / max) * 100) : 0;
+    var cor = pct >= 70 ? 'bg-green-500' : pct >= 50 ? 'bg-yellow-500' : 'bg-red-400';
+    return '<div class="flex items-center gap-3">' +
+      '<span class="text-[10px] font-mono text-slate-500 w-16 shrink-0">' + t.periodo + '</span>' +
+      '<div class="flex-1 h-6 bg-slate-100 rounded-lg overflow-hidden">' +
+        '<div class="h-full ' + cor + ' rounded-lg flex items-center px-2 transition-all" style="width:' + pct + '%">' +
+          (t.climaGeral ? '<span class="text-white text-[9px] font-black">' + t.climaGeral.toFixed(2) + '</span>' : '') +
+        '</div>' +
+      '</div>' +
+      '<span class="text-[10px] text-slate-400 w-12 text-right">' + (t.n || 0) + ' resp.</span>' +
+    '</div>';
+  }).join('');
+}
+
+function _escutaRenderSaturacao(saturacao, meta) {
+  var el = document.getElementById('escuta-saturacao-grid');
+  if (!el) return;
+  var labels = {
+    energia:'Energia', carga:'Carga', clareza:'Clareza', apoio:'Apoio',
+    autonomia:'Autonomia', cultura:'Cultura', lideranca:'Liderança',
+    risco_psicossocial:'Risco Psico.'
+  };
+  var porDimensao = {};
+  saturacao.forEach(function(s) { porDimensao[s.dimensao] = s; });
+
+  el.innerHTML = ['energia','carga','clareza','apoio','autonomia','cultura','lideranca','risco_psicossocial']
+    .map(function(d) {
+      var s   = porDimensao[d] || {};
+      var col = parseInt(s.coletados) || 0;
+      var m   = parseInt(s.meta || meta) || 10;
+      var pct = Math.min(100, Math.round((col / m) * 100));
+      var sat = s.saturado === 'true' || s.saturado === true;
+      var cor = sat ? 'bg-green-400' : (pct >= 60 ? 'bg-blue-400' : 'bg-slate-300');
+      return '<div class="flex items-center gap-2">' +
+        '<span class="text-[9px] text-slate-500 w-20 shrink-0">' + (labels[d]||d) + '</span>' +
+        '<div class="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">' +
+          '<div class="h-full rounded-full ' + cor + ' transition-all" style="width:' + pct + '%"></div>' +
+        '</div>' +
+        '<span class="text-[9px] text-slate-400 w-12 text-right">' + col + '/' + m + '</span>' +
+        (sat ? '<i class="fas fa-check-circle text-green-500 text-[10px]"></i>' : '') +
+      '</div>';
+    }).join('');
+}
+
+function _escutaRenderEstratificado(estratificado, bloqueado) {
+  var el = document.getElementById('escuta-estratificado-content');
+  if (!el) return;
+
+  if (bloqueado) {
+    el.innerHTML = '<p class="text-xs text-amber-600 bg-amber-50 rounded-xl p-3">Grupo muito pequeno para análise estratificada segura.</p>';
+    return;
+  }
+
+  var gaps = estratificado.gaps || [];
+  var gapsHtml = gaps.length
+    ? '<div class="space-y-2">' + gaps.map(function(g) {
+        return '<div class="flex items-start gap-3 p-3 bg-red-50 rounded-xl border border-red-100">' +
+          '<i class="fas fa-triangle-exclamation text-red-500 mt-0.5"></i>' +
+          '<div><p class="text-xs font-black text-red-800">Gap em ' + g.atributo + '</p>' +
+          '<p class="text-[10px] text-red-600">' +
+            g.menor.grupo + ' (' + g.menor.media.toFixed(1) + ') vs ' +
+            g.maior.grupo + ' (' + g.maior.media.toFixed(1) + ') — Δ' + g.gap + '</p>' +
+          '</div></div>';
+      }).join('') + '</div>'
+    : '<p class="text-xs text-green-700 bg-green-50 rounded-xl p-3"><i class="fas fa-check mr-1"></i>Nenhuma desigualdade estrutural significativa detectada neste período.</p>';
+
+  el.innerHTML = '<h4 class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Desigualdades Detectadas</h4>' + gapsHtml;
+}
+
+// ── Escuta Espontânea ─────────────────────────────────────────
+
+function _escutaRenderEspontanea() {
+  // Contador pessoal (anônimo — baseado em cache local da sessão)
+  var totalMeu = _escutaCache._meusTotalEspontaneos || 0;
+  _escutaSetEl('escuta-espontanea-meu-total', totalMeu > 0 ? String(totalMeu) : '0');
+
+  // Timeline de volume por período (para RH)
+  _escutaRenderTimelineEspontanea();
+
+  var d   = _escutaCache.dashboard;
+  var res = d && d.resumoEspontanea;
+  if (!res) return;
+
+  // Sentimentos
+  var sEl = document.getElementById('escuta-sentimentos-chart');
+  if (sEl) {
+    var s = res.sentimentos || {};
+    var total = (s.positivo||0) + (s.negativo||0) + (s.neutro||0) || 1;
+    sEl.innerHTML = [
+      { label: 'Positivo', val: s.positivo||0, cor: 'bg-green-500', emoji: '😊' },
+      { label: 'Neutro',   val: s.neutro  ||0, cor: 'bg-slate-400', emoji: '😐' },
+      { label: 'Negativo', val: s.negativo||0, cor: 'bg-red-400',   emoji: '😢' }
+    ].map(function(x) {
+      var pct = Math.round((x.val / total) * 100);
+      return '<div class="text-center">' +
+        '<div class="text-2xl mb-1">' + x.emoji + '</div>' +
+        '<div class="text-xl font-black text-slate-800">' + pct + '%</div>' +
+        '<div class="text-[10px] text-slate-500 uppercase font-black">' + x.label + '</div>' +
+        '<div class="mt-1 h-1.5 bg-slate-100 rounded-full">' +
+          '<div class="h-1.5 ' + x.cor + ' rounded-full" style="width:' + pct + '%"></div>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+  }
+
+  // Categorias
+  var cEl = document.getElementById('escuta-categorias-chart');
+  if (cEl) {
+    var cats = res.categorias || {};
+    var total2 = Object.values(cats).reduce(function(s, v) { return s + v; }, 0) || 1;
+    var labels = { apoio:'Apoio', carga:'Carga', comunicacao:'Comunicação',
+                   conflito:'Conflito', lideranca:'Liderança', positivo:'Positivo',
+                   ambiente:'Ambiente', outro:'Outro' };
+    cEl.innerHTML = Object.keys(cats).sort(function(a,b){return cats[b]-cats[a];}).map(function(k) {
+      var pct = Math.round((cats[k] / total2) * 100);
+      return '<div class="flex items-center gap-2 mb-2">' +
+        '<span class="text-[10px] text-slate-500 w-24 shrink-0">' + (labels[k]||k) + '</span>' +
+        '<div class="flex-1 h-3 bg-slate-100 rounded-full overflow-hidden">' +
+          '<div class="h-3 bg-violet-400 rounded-full" style="width:' + pct + '%"></div>' +
+        '</div>' +
+        '<span class="text-[10px] font-black text-slate-700 w-8 text-right">' + cats[k] + '</span>' +
+      '</div>';
+    }).join('') || '<p class="text-xs text-slate-400 italic">Sem registros no período.</p>';
+  }
+}
+
+function _escutaEnviarEspontanea() {
+  var cfg = _escutaCache.config || {};
+  if (cfg.ativo === 'false' || cfg.ativoEspontanea === 'false') {
+    Swal.fire('Escuta desativada', 'A escuta espontânea está temporariamente inativa.', 'info');
+    return;
+  }
+  var categoria = document.getElementById('escuta-espontanea-categoria').value;
+  var texto     = (document.getElementById('escuta-espontanea-texto').value || '').trim();
+  var anonimo   = document.getElementById('escuta-espontanea-anonimo').checked;
+
+  var btn = document.querySelector('#escuta-painel-espontanea button[onclick="_escutaEnviarEspontanea()"]');
+  if (btn) { btn.disabled = true; btn.textContent = 'Registrando...'; }
+
+  GAS._call('registrarEscutaEspontanea', [{ categoria: categoria, texto: texto, anonimo: anonimo, email: GAS._sessao() }],
+    function(res) {
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-paper-plane mr-2"></i>Registrar'; }
+      if (res && res.ok) {
+        _escutaCache._meusTotalEspontaneos = (_escutaCache._meusTotalEspontaneos || 0) + 1;
+        _escutaSetEl('escuta-espontanea-meu-total', String(_escutaCache._meusTotalEspontaneos));
+        Swal.fire({ icon: 'success', title: 'Registrado', text: 'Sua contribuição foi acolhida. Obrigado!',
+          timer: 2500, showConfirmButton: false });
+        document.getElementById('escuta-espontanea-texto').value = '';
+        // Atualiza dashboard em background sem bloquear UX
+        GAS._call('obterDadosEscuta', [GAS._sessao()], function(r) {
+          if (r && r.ok) {
+            _escutaCache.dashboard    = r.dashboard;
+            _escutaCache.participacao = r.participacao;
+            _escutaRenderEspontanea();
+            _escutaRenderParticipacao();
+          }
+        });
+      } else {
+        Swal.fire('Não foi possível registrar', res ? (res.msg || 'Erro ao registrar.') : 'Erro ao registrar.', 'error');
+      }
+    }, function() {
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-paper-plane mr-2"></i>Registrar'; }
+      Swal.fire('Erro de conexão', 'Não foi possível conectar ao servidor. Tente novamente.', 'error');
+    });
+}
+
+function _escutaRenderTimelineEspontanea() {
+  var el = document.getElementById('escuta-espontanea-timeline');
+  if (!el) return;
+  var p = _escutaCache.participacao;
+  if (!p || !p.historico || !p.historico.length) {
+    el.innerHTML = '<div class="text-center py-4">' +
+      '<i class="fas fa-chart-bar text-slate-200 text-2xl mb-2"></i>' +
+      '<p class="text-[10px] text-slate-400">Nenhum registro no histórico ainda.<br>Os dados aparecerão conforme a equipe participar.</p>' +
+    '</div>';
+    return;
+  }
+  var maxVal = p.historico.reduce(function(m, h) {
+    return Math.max(m, (h.espontaneas || 0), (h.respostas || 0));
+  }, 1);
+  el.innerHTML = p.historico.map(function(h) {
+    var espt  = h.espontaneas || 0;
+    var pulse = h.respostas   || 0;
+    var pctE  = Math.round((espt  / maxVal) * 100);
+    var pctP  = Math.round((pulse / maxVal) * 100);
+    var periodoLabel = (h.periodo || '').replace(/^(\d{4})-(\d{2})$/, function(_, y, m) {
+      var meses = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+      return meses[parseInt(m, 10) - 1] + ' ' + y;
+    });
+    return '<div class="flex items-center gap-2">' +
+      '<span class="text-[10px] font-mono text-slate-500 w-16 shrink-0">' + periodoLabel + '</span>' +
+      '<div class="flex-1 space-y-0.5">' +
+        '<div class="h-2 bg-slate-100 rounded-full overflow-hidden" title="Escuta livre: ' + espt + '">' +
+          '<div class="h-full bg-violet-500 rounded-full" style="width:' + Math.max(pctE, espt > 0 ? 4 : 0) + '%"></div>' +
+        '</div>' +
+        '<div class="h-1.5 bg-slate-100 rounded-full overflow-hidden" title="Pulse: ' + pulse + '">' +
+          '<div class="h-full bg-slate-300 rounded-full" style="width:' + Math.max(pctP, pulse > 0 ? 4 : 0) + '%"></div>' +
+        '</div>' +
+      '</div>' +
+      '<span class="text-[10px] text-slate-400 w-10 text-right">' + (espt + pulse) + '</span>' +
+    '</div>';
+  }).join('') +
+  '<div class="flex items-center gap-3 mt-2 pt-2 border-t border-slate-100">' +
+    '<div class="flex items-center gap-1"><div class="w-3 h-2 bg-violet-500 rounded"></div><span class="text-[9px] text-slate-400">Escuta livre</span></div>' +
+    '<div class="flex items-center gap-1"><div class="w-3 h-1.5 bg-slate-300 rounded"></div><span class="text-[9px] text-slate-400">Pulse</span></div>' +
+  '</div>';
+}
+
+// ── Alertas ───────────────────────────────────────────────────
+
+function _escutaCarregarAlertas() {
+  var el = document.getElementById('escuta-alertas-lista');
+  if (el) {
+    el.innerHTML = '<div class="flex items-center gap-3 p-6 text-slate-400">' +
+      '<div class="w-4 h-4 rounded-full border-2 border-violet-300 border-t-violet-600 animate-spin"></div>' +
+      '<span class="text-xs">Verificando alertas...</span>' +
+    '</div>';
+  }
+  GAS._call('obterAlertasEscuta', [], function(res) {
+    if (res && res.ok) {
+      _escutaCache.alertas = res.dados || [];
+    }
+    _escutaRenderAlertas();
+  }, function() { _escutaRenderAlertas(); });
+}
+
+function _escutaRenderAlertas() {
+  var el  = document.getElementById('escuta-alertas-lista');
+  if (!el) return;
+  var lst = _escutaCache.alertas || [];
+
+  if (!lst.length) {
+    el.innerHTML = '<div class="text-center py-12 text-slate-400 text-xs">' +
+      '<i class="fas fa-check-circle text-3xl text-green-300 mb-3 block"></i>Nenhum alerta ativo neste período.</div>';
+    return;
+  }
+
+  var cores = { critico:'red', alto:'orange', moderado:'amber', baixo:'slate' };
+  el.innerHTML = lst.map(function(a) {
+    var c = cores[a.nivel] || 'slate';
+    return '<div class="p-4 hover:bg-slate-50 transition-colors">' +
+      '<div class="flex items-start gap-3">' +
+        '<span class="mt-0.5 w-6 h-6 flex items-center justify-center rounded-full bg-' + c + '-100">' +
+          '<i class="fas fa-triangle-exclamation text-' + c + '-600 text-[10px]"></i>' +
+        '</span>' +
+        '<div class="flex-1">' +
+          '<div class="flex items-center gap-2 flex-wrap">' +
+            '<span class="text-xs font-black text-slate-800">' + escaparHTML(a.tipo || '') + '</span>' +
+            '<span class="text-[9px] font-black px-1.5 py-0.5 rounded-full bg-' + c + '-100 text-' + c + '-700 uppercase">' + (a.nivel || '') + '</span>' +
+          '</div>' +
+          '<p class="text-[10px] text-slate-500 mt-1">' + escaparHTML(a.descricao || '') + '</p>' +
+          '<p class="text-[9px] text-slate-400 mt-0.5">' + _escutaFmtData(a.timestamp) + '</p>' +
+        '</div>' +
+        '<button onclick="_escutaResolverAlerta(\'' + escaparHTML(a.id) + '\')" ' +
+          'class="text-[9px] bg-green-100 hover:bg-green-200 text-green-700 font-black px-2 py-1 rounded-lg transition-all shrink-0">Resolver</button>' +
+      '</div></div>';
+  }).join('');
+}
+
+function _escutaResolverAlerta(id) {
+  Swal.fire({
+    title: 'Resolver Alerta', input: 'textarea',
+    inputPlaceholder: 'Descreva a ação tomada...',
+    showCancelButton: true, confirmButtonText: 'Resolver', cancelButtonText: 'Cancelar',
+    confirmButtonColor: '#7c3aed'
+  }).then(function(result) {
+    if (!result.isConfirmed) return;
+    GAS._call('resolverAlertaEscuta', [id, result.value, GAS._sessao()], function(res) {
+      if (res && res.ok) {
+        Swal.fire({ icon: 'success', title: 'Resolvido', timer: 1800, showConfirmButton: false });
+        _escutaCarregarAlertas();
+      }
+    });
+  });
+}
+
+// ── Relatórios ────────────────────────────────────────────────
+
+function _escutaIniciarRelatorios() {
+  _escutaPopularSelects();
+}
+
+function _escutaGerarRelatorio() {
+  var tipo    = (document.getElementById('escuta-rel-tipo')    || {}).value || 'institucional';
+  var periodo = (document.getElementById('escuta-rel-periodo') || {}).value || '';
+  showLoader(true);
+  GAS._call('gerarRelatorioEscuta', [tipo, periodo, GAS._sessao()], function(res) {
+    showLoader(false);
+    if (!res || !res.ok) { Swal.fire('Erro', res ? res.msg : 'Erro.', 'error'); return; }
+    _escutaRenderRelatorio(res.dados);
+  }, function(err) {
+    showLoader(false);
+    Swal.fire('Erro de conexão', 'Não foi possível gerar o relatório. Tente novamente.', 'error');
+  });
+}
+
+function _escutaRenderRelatorio(rel) {
+  var el = document.getElementById('escuta-relatorio-preview');
+  if (!el || !rel) return;
+  var conf = rel.confianca || {};
+  var ind  = rel.indicadores || {};
+  var cg   = ind._climaGeral || {};
+  var recs = rel.recomendacoes || [];
+
+  el.innerHTML =
+    '<div class="space-y-4">' +
+      '<div class="bg-violet-50 rounded-xl p-4 flex justify-between items-start">' +
+        '<div>' +
+          '<p class="font-black text-violet-900 text-sm uppercase">' + (rel.tipo||'').replace(/_/g,' ') + '</p>' +
+          '<p class="text-[10px] text-violet-600">Período: ' + (rel.periodo||'') + '</p>' +
+          '<p class="text-[10px] text-violet-600">Gerado em: ' + _escutaFmtData(rel.geradoEm) + '</p>' +
+        '</div>' +
+        '<div class="text-right">' +
+          '<p class="font-black text-violet-800 text-lg">' + (cg.media ? cg.media.toFixed(2) : '—') + '</p>' +
+          '<p class="text-[10px] text-violet-600">Clima Geral</p>' +
+        '</div>' +
+      '</div>' +
+      '<div class="grid grid-cols-3 gap-2">' +
+        '<div class="text-center bg-slate-50 rounded-xl p-3"><p class="text-lg font-black text-slate-800">' + (conf.percentual||0) + '%</p><p class="text-[10px] text-slate-500">Confiança</p></div>' +
+        '<div class="text-center bg-slate-50 rounded-xl p-3"><p class="text-lg font-black text-slate-800">' + (conf.participantes||0) + '</p><p class="text-[10px] text-slate-500">Participantes</p></div>' +
+        '<div class="text-center bg-slate-50 rounded-xl p-3"><p class="text-lg font-black text-slate-800">' + (rel.alertas && rel.alertas.total||0) + '</p><p class="text-[10px] text-slate-500">Alertas</p></div>' +
+      '</div>' +
+      (recs.length ? '<div><p class="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Recomendações</p>' +
+        recs.map(function(r) {
+          var cor = r.prioridade === 'critica' ? 'red' : r.prioridade === 'alta' ? 'orange' : 'amber';
+          return '<div class="flex items-start gap-2 p-2 bg-' + cor + '-50 rounded-lg mb-1">' +
+            '<i class="fas fa-arrow-right text-' + cor + '-500 mt-0.5 text-[10px]"></i>' +
+            '<p class="text-[10px] text-' + cor + '-800">' + escaparHTML(r.acao) + '</p></div>';
+        }).join('') + '</div>' : '') +
+    '</div>';
+}
+
+// ── Configuração ──────────────────────────────────────────────
+
+function _escutaRenderConfig() {
+  var cfg = _escutaCache.config || {};
+  _escutaSetChk('cfg-ativo',             cfg.ativo             !== 'false');
+  _escutaSetChk('cfg-ativoPadrao',       cfg.ativoPadrao       !== 'false');
+  _escutaSetChk('cfg-ativoPersonalizado',cfg.ativoPersonalizado!== 'false');
+  _escutaSetChk('cfg-ativoEspontanea',   cfg.ativoEspontanea   !== 'false');
+  _escutaSetVal('cfg-limiteDia',         cfg.limiteDia         || '3');
+  _escutaSetVal('cfg-antiSpamHoras',     cfg.antiSpamHoras     || '4');
+  _escutaSetVal('cfg-grupoMinimo',       cfg.grupoMinimo       || '5');
+}
+
+function _escutaSalvarConfig() {
+  var novosCfg = {
+    ativo:              document.getElementById('cfg-ativo').checked             ? 'true' : 'false',
+    ativoPadrao:        document.getElementById('cfg-ativoPadrao').checked       ? 'true' : 'false',
+    ativoPersonalizado: document.getElementById('cfg-ativoPersonalizado').checked? 'true' : 'false',
+    ativoEspontanea:    document.getElementById('cfg-ativoEspontanea').checked   ? 'true' : 'false',
+    limiteDia:          document.getElementById('cfg-limiteDia').value,
+    antiSpamHoras:      document.getElementById('cfg-antiSpamHoras').value,
+    grupoMinimo:        document.getElementById('cfg-grupoMinimo').value
+  };
+  GAS._call('salvarConfiguracaoEscuta', [novosCfg, GAS._sessao()], function(res) {
+    var ok = document.getElementById('cfg-status-msg');
+    var er = document.getElementById('cfg-erro-msg');
+    if (res && res.ok) {
+      Object.assign(_escutaCache.config, novosCfg);
+      if (ok) { ok.classList.remove('hidden'); setTimeout(function() { ok.classList.add('hidden'); }, 2000); }
+    } else {
+      if (er) { er.classList.remove('hidden'); setTimeout(function() { er.classList.add('hidden'); }, 3000); }
+    }
+  });
+}
+
+// ── Perguntas padrão ──────────────────────────────────────────
+
+function _escutaRenderPerguntas() {
+  var el = document.getElementById('escuta-perguntas-lista');
+  if (!el) return;
+  var perguntas = _escutaCache.perguntas || [];
+  if (!perguntas.length) {
+    el.innerHTML = '<div class="p-8 text-center">' +
+      '<i class="fas fa-list-check text-slate-200 text-3xl mb-3"></i>' +
+      '<p class="text-sm font-black text-slate-500">Banco de perguntas vazio</p>' +
+      '<p class="text-xs text-slate-400 mt-1">As perguntas institucionais aparecem aqui após a configuração inicial do sistema.</p>' +
+    '</div>';
+    return;
+  }
+
+  var labels = {
+    energia:'Energia', carga:'Carga', clareza:'Clareza', apoio:'Apoio',
+    autonomia:'Autonomia', cultura:'Cultura', lideranca:'Liderança', risco_psicossocial:'Risco Psico.'
+  };
+
+  el.innerHTML = perguntas.map(function(p) {
+    var ativa = p.ativa !== false && p.ativa !== 'false';
+    return '<div class="p-4 flex items-start gap-3 hover:bg-slate-50 transition-colors">' +
+      '<div class="relative inline-flex items-center mt-0.5">' +
+        '<input type="checkbox" ' + (ativa ? 'checked' : '') + ' class="sr-only peer" id="pq-' + p.id + '"' +
+          ' onchange="_escutaTogglePergunta(\'' + p.id + '\', this.checked)">' +
+        '<div class="w-8 h-4 bg-slate-200 peer-checked:bg-violet-600 rounded-full transition-all peer-checked:after:translate-x-full after:content-[\'\'] after:absolute after:top-0 after:left-0 after:w-4 after:h-4 after:bg-white after:rounded-full after:transition-all after:shadow-sm"></div>' +
+      '</div>' +
+      '<div class="flex-1">' +
+        '<p class="text-xs font-semibold text-slate-700">' + escaparHTML(p.texto) + '</p>' +
+        '<div class="flex gap-2 mt-1">' +
+          '<span class="text-[9px] bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded-full font-black">' + (labels[p.dimensao]||p.dimensao) + '</span>' +
+          '<span class="text-[9px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded-full">' + (p.tipo||'') + '</span>' +
+          '<span class="text-[9px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded-full">' + (p.tipoTempo||'') + '</span>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function _escutaTogglePergunta(id, ativo) {
+  GAS._call('atualizarPerguntaEscuta', [id, { ativa: ativo }, GAS._sessao()], function(res) {
+    if (res && res.ok) {
+      var p = (_escutaCache.perguntas || []).find(function(x) { return x.id === id; });
+      if (p) p.ativa = ativo;
+    } else {
+      // Reverte o toggle visual em caso de erro de permissão
+      var chk = document.getElementById('pq-' + id);
+      if (chk) chk.checked = !ativo;
+      if (res && res.msg) console.warn('[Escuta] togglePergunta:', res.msg);
+    }
+  }, function() {
+    var chk = document.getElementById('pq-' + id);
+    if (chk) chk.checked = !ativo;
+  });
+}
+
+// ── Pesquisas personalizadas ──────────────────────────────────
+
+function _escutaDirLabel(dir) {
+  if (!dir) return '';
+  var partes = [];
+  var labels = { vinculo:'Vínculo', nivelFuncao:'Nível', tempoCasa:'Casa', setores:'Setor' };
+  Object.keys(labels).forEach(function(k) {
+    if (Array.isArray(dir[k]) && dir[k].length) partes.push(labels[k] + ': ' + dir[k].join(', '));
+  });
+  return partes.join(' · ');
+}
+
+function _escutaRenderPesquisas() {
+  var el  = document.getElementById('escuta-pesqs-lista');
+  if (!el) return;
+  var lst = _escutaCache.pesquisas || [];
+  if (!lst.length) {
+    el.innerHTML = '<div class="p-6 text-center text-xs text-slate-400">Nenhuma pesquisa personalizada. <button onclick="_escutaAbrirModalPesquisa()" class="text-violet-600 font-black underline">Criar primeira</button></div>';
+    return;
+  }
+  el.innerHTML = lst.map(function(p) {
+    var ativa   = p.status === 'ativo';
+    var novoSt  = ativa ? 'inativo' : 'ativo';
+    var dirInfo = _escutaDirLabel(p.direcionamento);
+    return '<div class="p-4 hover:bg-slate-50 transition-colors">' +
+      '<div class="flex items-start gap-3">' +
+        // Toggle de ativação inline
+        '<div class="relative inline-flex items-center mt-0.5 shrink-0">' +
+          '<input type="checkbox" ' + (ativa ? 'checked' : '') + ' class="sr-only peer" id="pesq-toggle-' + p.id + '"' +
+            ' onchange="_escutaToggleStatusPesquisa(\'' + escaparHTML(p.id) + '\', this.checked)">' +
+          '<div class="w-8 h-4 bg-slate-200 peer-checked:bg-violet-600 rounded-full transition-all peer-checked:after:translate-x-full after:content-[\'\'] after:absolute after:top-0 after:left-0 after:w-4 after:h-4 after:bg-white after:rounded-full after:transition-all after:shadow-sm"></div>' +
+        '</div>' +
+        '<div class="flex-1 min-w-0">' +
+          '<div class="flex items-center gap-2 flex-wrap">' +
+            '<p class="text-xs font-black text-slate-800">' + escaparHTML(p.titulo||'') + '</p>' +
+            (ativa
+              ? '<span class="text-[8px] bg-green-100 text-green-700 font-black px-1.5 py-0.5 rounded-full uppercase">Ativa</span>'
+              : '<span class="text-[8px] bg-slate-100 text-slate-500 font-black px-1.5 py-0.5 rounded-full uppercase">Inativa</span>') +
+            (p.direcionamento ? '<span class="text-[8px] bg-violet-100 text-violet-700 font-black px-1.5 py-0.5 rounded-full uppercase">Direcionada</span>' : '') +
+          '</div>' +
+          '<p class="text-[10px] text-slate-400 mt-0.5">' +
+            (p.periodoInicio||'—') + ' → ' + (p.periodoFim||'—') +
+            ' · ' + (Array.isArray(p.perguntas) ? p.perguntas.length : 0) + ' pergunta' + (Array.isArray(p.perguntas) && p.perguntas.length !== 1 ? 's' : '') +
+            ' · prioridade ' + (p.prioridade||1) +
+          '</p>' +
+          (dirInfo ? '<p class="text-[9px] text-violet-600 mt-1"><i class="fas fa-crosshairs mr-1"></i>' + escaparHTML(dirInfo) + '</p>' : '') +
+        '</div>' +
+        '<div class="flex gap-1 shrink-0">' +
+          '<button onclick="_escutaEditarPesquisa(\'' + escaparHTML(p.id) + '\')" class="text-[9px] bg-blue-100 hover:bg-blue-200 text-blue-700 font-black px-2 py-1 rounded-lg transition-all">Editar</button>' +
+          '<button onclick="_escutaExcluirPesquisa(\'' + escaparHTML(p.id) + '\')" class="text-[9px] bg-red-100 hover:bg-red-200 text-red-700 font-black px-2 py-1 rounded-lg transition-all">Excluir</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function _escutaToggleStatusPesquisa(id, ativar) {
+  var p = (_escutaCache.pesquisas || []).find(function(x) { return x.id === id; });
+  if (!p) return;
+  var dados = Object.assign({}, p, { status: ativar ? 'ativo' : 'inativo', email: GAS._sessao() });
+  GAS._call('salvarPesquisaEscuta', [dados], function(res) {
+    if (res && res.ok) {
+      p.status = dados.status;
+      _escutaRenderPesquisas();
+    } else {
+      // Reverte o toggle visual em caso de erro
+      var chk = document.getElementById('pesq-toggle-' + id);
+      if (chk) chk.checked = !ativar;
+      Swal.fire('Erro', res ? res.msg : 'Erro ao salvar.', 'error');
+    }
+  });
+}
+
+function _escutaAbrirModalPesquisa(id) {
+  document.getElementById('modal-pesq-id').value      = id || '';
+  document.getElementById('escuta-modal-pesquisa-titulo').textContent = id ? 'Editar Pesquisa' : 'Nova Pesquisa';
+  document.getElementById('modal-pesq-titulo').value  = '';
+  document.getElementById('modal-pesq-status').value  = 'ativo';
+  document.getElementById('modal-pesq-inicio').value  = '';
+  document.getElementById('modal-pesq-fim').value     = '';
+  document.getElementById('modal-pesq-prioridade').value = '1';
+  document.getElementById('modal-pesq-perguntas').innerHTML = '<p class="text-xs text-slate-400 italic">Nenhuma pergunta adicionada.</p>';
+  _escutaAbaPesquisasPerguntas = [];
+
+  // Limpa todas as seleções de direcionamento
+  ['dir-vinculo','dir-nivel','dir-tempoCasa','dir-setor'].forEach(function(selId) {
+    var sel = document.getElementById(selId);
+    if (sel) Array.from(sel.options).forEach(function(o) { o.selected = false; });
+  });
+
+  // Popula dir-setor com setores da base de configuração (primeira vez)
+  var dirSetor = document.getElementById('dir-setor');
+  if (dirSetor && dirSetor.options.length === 0) {
+    (AppState.colecoes?.setores || []).filter(Boolean).forEach(function(s) {
+      var o = document.createElement('option'); o.value = s; o.textContent = s; dirSetor.appendChild(o);
+    });
+  }
+
+  if (id) {
+    var p = (_escutaCache.pesquisas || []).find(function(x) { return x.id === id; });
+    if (p) {
+      document.getElementById('modal-pesq-titulo').value     = p.titulo    || '';
+      document.getElementById('modal-pesq-status').value     = p.status    || 'ativo';
+      document.getElementById('modal-pesq-inicio').value     = p.periodoInicio || '';
+      document.getElementById('modal-pesq-fim').value        = p.periodoFim    || '';
+      document.getElementById('modal-pesq-prioridade').value = p.prioridade    || 1;
+      _escutaAbaPesquisasPerguntas = Array.isArray(p.perguntas) ? p.perguntas.slice() : [];
+      _escutaRenderPerguntasModal();
+
+      // Restaura seleções de direcionamento
+      var dir = p.direcionamento || {};
+      var mapa = { 'dir-vinculo': dir.vinculo, 'dir-nivel': dir.nivelFuncao, 'dir-tempoCasa': dir.tempoCasa, 'dir-setor': dir.setores };
+      Object.keys(mapa).forEach(function(selId) {
+        var vals = mapa[selId];
+        if (!Array.isArray(vals) || !vals.length) return;
+        var sel = document.getElementById(selId);
+        if (!sel) return;
+        Array.from(sel.options).forEach(function(o) { o.selected = vals.includes(o.value); });
+      });
+    }
+  }
+  document.getElementById('escuta-modal-pesquisa').classList.remove('hidden');
+}
+
+function _escutaFecharModalPesquisa() {
+  document.getElementById('escuta-modal-pesquisa').classList.add('hidden');
+}
+
+function _escutaEditarPesquisa(id) { _escutaAbrirModalPesquisa(id); }
+
+function _escutaAdicionarPerguntaModal() {
+  Swal.fire({
+    title: 'Nova Pergunta',
+    html: '<input id="swal-ptexto" class="swal2-input" placeholder="Texto da pergunta">' +
+          '<select id="swal-pdim" class="swal2-select" style="margin-top:10px">' +
+            ['energia','carga','clareza','apoio','autonomia','cultura','lideranca','risco_psicossocial']
+            .map(function(d){ return '<option value="'+d+'">'+d+'</option>'; }).join('') +
+          '</select>' +
+          '<select id="swal-ptipo" class="swal2-select" style="margin-top:10px">' +
+            '<option value="escala">Escala (1–5)</option><option value="emoji">Emojis</option><option value="texto">Texto livre</option>' +
+          '</select>' +
+          '<select id="swal-pttempo" class="swal2-select" style="margin-top:10px">' +
+            '<option value="instantanea">Instantânea</option><option value="acumulativa">Acumulativa (≥50%)</option><option value="final">Final (≥75%)</option>' +
+          '</select>',
+    showCancelButton: true, confirmButtonText: 'Adicionar', confirmButtonColor: '#7c3aed',
+    preConfirm: function() {
+      var t = document.getElementById('swal-ptexto').value.trim();
+      if (!t) { Swal.showValidationMessage('Texto obrigatório'); return false; }
+      return {
+        id:        'C' + Date.now(),
+        texto:     t,
+        dimensao:  document.getElementById('swal-pdim').value,
+        tipo:      document.getElementById('swal-ptipo').value,
+        tipoTempo: document.getElementById('swal-pttempo').value,
+        peso:      1.0, ativa: true
+      };
+    }
+  }).then(function(result) {
+    if (result.isConfirmed && result.value) {
+      _escutaAbaPesquisasPerguntas.push(result.value);
+      _escutaRenderPerguntasModal();
+    }
+  });
+}
+
+function _escutaRenderPerguntasModal() {
+  var el = document.getElementById('modal-pesq-perguntas');
+  if (!el) return;
+  if (!_escutaAbaPesquisasPerguntas.length) {
+    el.innerHTML = '<p class="text-xs text-slate-400 italic">Nenhuma pergunta adicionada.</p>';
+    return;
+  }
+  el.innerHTML = _escutaAbaPesquisasPerguntas.map(function(p, i) {
+    return '<div class="flex items-start gap-2 p-2 bg-slate-50 rounded-xl">' +
+      '<span class="text-[10px] text-slate-400 font-mono mt-1">' + (i+1) + '.</span>' +
+      '<div class="flex-1">' +
+        '<p class="text-xs font-semibold text-slate-700">' + escaparHTML(p.texto) + '</p>' +
+        '<p class="text-[9px] text-slate-400">' + p.dimensao + ' · ' + p.tipo + ' · ' + p.tipoTempo + '</p>' +
+      '</div>' +
+      '<button onclick="_escutaRemoverPerguntaModal(' + i + ')" class="text-red-400 hover:text-red-600 text-[10px]">' +
+        '<i class="fas fa-times"></i></button>' +
+    '</div>';
+  }).join('');
+}
+
+function _escutaRemoverPerguntaModal(i) {
+  _escutaAbaPesquisasPerguntas.splice(i, 1);
+  _escutaRenderPerguntasModal();
+}
+
+function _escutaSalvarPesquisaModal() {
+  var id        = document.getElementById('modal-pesq-id').value;
+  var titulo    = document.getElementById('modal-pesq-titulo').value.trim();
+  var inicio    = document.getElementById('modal-pesq-inicio').value;
+  var fim       = document.getElementById('modal-pesq-fim').value;
+  var status    = document.getElementById('modal-pesq-status').value;
+  var prioridade = parseInt(document.getElementById('modal-pesq-prioridade').value) || 1;
+
+  if (!titulo)  { Swal.fire('Validação', 'Título obrigatório.', 'warning'); return; }
+  if (!inicio)  { Swal.fire('Validação', 'Data de início obrigatória.', 'warning'); return; }
+  if (!fim)     { Swal.fire('Validação', 'Data de fim obrigatória.', 'warning'); return; }
+
+  // Coletar direcionamento
+  function _selVals(id) {
+    var sel = document.getElementById(id);
+    if (!sel) return [];
+    return Array.from(sel.selectedOptions).map(function(o) { return o.value; });
+  }
+  var dir = {
+    vinculo:     _selVals('dir-vinculo'),
+    nivelFuncao: _selVals('dir-nivel'),
+    tempoCasa:   _selVals('dir-tempoCasa'),
+    setores:     _selVals('dir-setor')
+  };
+  var temDir = Object.values(dir).some(function(v) { return v.length > 0; });
+
+  var dados = {
+    id: id || null,
+    titulo: titulo, perguntas: _escutaAbaPesquisasPerguntas,
+    periodoInicio: inicio, periodoFim: fim, status: status, prioridade: prioridade,
+    direcionamento: temDir ? dir : null,
+    email: GAS._sessao()
+  };
+
+  GAS._call('salvarPesquisaEscuta', [dados], function(res) {
+    if (res && res.ok) {
+      _escutaFecharModalPesquisa();
+      Swal.fire({ icon: 'success', title: 'Salvo', timer: 1800, showConfirmButton: false });
+      _escutaRecarregar();
+    } else {
+      Swal.fire('Erro', res ? res.msg : 'Erro.', 'error');
+    }
+  });
+}
+
+function _escutaExcluirPesquisa(id) {
+  Swal.fire({
+    title: 'Excluir pesquisa?', text: 'Esta ação não pode ser desfeita.',
+    icon: 'warning', showCancelButton: true, confirmButtonColor: '#dc2626',
+    confirmButtonText: 'Excluir', cancelButtonText: 'Cancelar'
+  }).then(function(r) {
+    if (!r.isConfirmed) return;
+    GAS._call('excluirPesquisaEscuta', [id, GAS._sessao()], function(res) {
+      if (res && res.ok) {
+        Swal.fire({ icon: 'success', title: 'Excluído', timer: 1500, showConfirmButton: false });
+        _escutaRecarregar();
+      }
+    });
+  });
+}
+
+// ── Banco de Templates ────────────────────────────────────────
+
+function _escutaRenderBanco() {
+  var el  = document.getElementById('escuta-banco-lista');
+  if (!el) return;
+  var lst = _escutaCache.banco || [];
+  if (!lst.length) {
+    el.innerHTML = '<div class="p-8 text-center">' +
+      '<i class="fas fa-file-copy text-slate-200 text-3xl mb-3"></i>' +
+      '<p class="text-sm font-black text-slate-500">Nenhum modelo salvo</p>' +
+      '<p class="text-xs text-slate-400 mt-1">Salve pesquisas como modelos para reutilizá-las rapidamente.</p>' +
+      '<button onclick="_escutaAbrirModalTemplate()" class="mt-3 text-xs bg-violet-100 hover:bg-violet-200 text-violet-700 font-black px-3 py-1.5 rounded-lg transition-all">Criar primeiro modelo</button>' +
+    '</div>';
+    return;
+  }
+  el.innerHTML = lst.map(function(t) {
+    return '<div class="p-4 hover:bg-slate-50 transition-colors">' +
+      '<div class="flex justify-between items-start gap-2">' +
+        '<div>' +
+          '<p class="text-xs font-black text-slate-800">' + escaparHTML(t.titulo||'') + '</p>' +
+          '<p class="text-[10px] text-slate-400">' + escaparHTML(t.descricao||'') + ' · ' +
+            (Array.isArray(t.perguntas) ? t.perguntas.length : 0) + ' perguntas' +
+            (t.tema ? ' · ' + escaparHTML(t.tema) : '') + '</p>' +
+        '</div>' +
+        '<button onclick="_escutaUsarTemplate(\'' + t.id + '\')"' +
+          ' class="text-[9px] bg-violet-100 hover:bg-violet-200 text-violet-700 font-black px-2 py-1 rounded-lg shrink-0">Usar</button>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function _escutaAbrirModalTemplate() {
+  Swal.fire({
+    title: 'Novo Modelo de Pesquisa',
+    html: '<input id="tmpl-titulo"    class="swal2-input" placeholder="Título do modelo">' +
+          '<input id="tmpl-descricao" class="swal2-input" placeholder="Descrição">' +
+          '<input id="tmpl-tema"      class="swal2-input" placeholder="Tema (ex: bem-estar, liderança)">',
+    showCancelButton: true, confirmButtonText: 'Criar', confirmButtonColor: '#7c3aed',
+    preConfirm: function() {
+      var t = document.getElementById('tmpl-titulo').value.trim();
+      if (!t) { Swal.showValidationMessage('Título obrigatório'); return false; }
+      return { titulo: t, descricao: document.getElementById('tmpl-descricao').value,
+               tema: document.getElementById('tmpl-tema').value, perguntas: [],
+               email: GAS._sessao() };
+    }
+  }).then(function(r) {
+    if (!r.isConfirmed) return;
+    GAS._call('salvarTemplateBancoPesquisas', [r.value], function(res) {
+      if (res && res.ok) {
+        Swal.fire({ icon: 'success', title: 'Modelo criado', timer: 1500, showConfirmButton: false });
+        _escutaRecarregar();
+      }
+    });
+  });
+}
+
+function _escutaUsarTemplate(id) {
+  var t = (_escutaCache.banco || []).find(function(x) { return x.id === id; });
+  if (!t) return;
+  _escutaGestaoAba('pesqs');
+  _escutaAbrirModalPesquisa();
+  document.getElementById('modal-pesq-titulo').value = t.titulo || '';
+  _escutaAbaPesquisasPerguntas = Array.isArray(t.perguntas) ? t.perguntas.slice() : [];
+  _escutaRenderPerguntasModal();
+}
+
+// ── Widget Pulse ──────────────────────────────────────────────
+
+function _escutaAgendarWidget() {
+  if (_escutaWidgetTimer) clearTimeout(_escutaWidgetTimer);
+  var cfg = _escutaCache.config || {};
+  if (cfg.ativo === 'false') return;
+
+  // Verificar após 8 minutos de inatividade para exibir
+  _escutaWidgetTimer = setTimeout(function() {
+    _escutaVerificarExibirWidget();
+  }, 8 * 60 * 1000);
+}
+
+function _escutaVerificarExibirWidget() {
+  GAS._call('obterPerguntaPulse', [GAS._sessao()], function(res) {
+    if (!res || !res.ok || !res.pergunta) {
+      // Tentar novamente em 15 minutos
+      _escutaWidgetTimer = setTimeout(_escutaVerificarExibirWidget, 15 * 60 * 1000);
+      return;
+    }
+    _escutaExibirWidget(res.pergunta, res.sourcePesquisaId);
+  });
+}
+
+function _escutaExibirWidget(pergunta, pesquisaId) {
+  if (!pergunta) return;
+  _escutaCache.widgetPergunta   = pergunta;
+  _escutaCache.widgetPesquisaId = pesquisaId || null;
+
+  var el = document.getElementById('escuta-pulse-widget');
+  var pq = document.getElementById('escuta-widget-pergunta');
+  var escEl  = document.getElementById('escuta-widget-escala');
+  var emoEl  = document.getElementById('escuta-widget-emoji');
+
+  if (!el || !pq) return;
+  pq.textContent = pergunta.texto || '';
+
+  var tipo = pergunta.tipo || 'escala';
+  if (escEl) escEl.classList.toggle('hidden', tipo === 'emoji');
+  if (emoEl) emoEl.classList.toggle('hidden', tipo !== 'emoji');
+
+  el.classList.remove('hidden');
+  el.style.animation = 'slideInRight 0.3s ease-out';
+}
+
+function _escutaDismissWidget() {
+  var el = document.getElementById('escuta-pulse-widget');
+  if (el) el.classList.add('hidden');
+  // Tentar novamente em 30 minutos
+  _escutaWidgetTimer = setTimeout(_escutaVerificarExibirWidget, 30 * 60 * 1000);
+}
+
+function _escutaResponderWidget(valor) {
+  var p = _escutaCache.widgetPergunta;
+  if (!p) return;
+
+  var anonimo = (document.getElementById('escuta-widget-anonimo') || {}).checked !== false;
+  var dados   = {
+    perguntaId:      p.id,
+    resposta:        valor,
+    dimensao:        p.dimensao,
+    tipo:            p.tipo,
+    tipoTempo:       p.tipoTempo,
+    anonimo:         anonimo,
+    sourcePesquisaId:_escutaCache.widgetPesquisaId || '',
+    email:           anonimo ? '' : GAS._sessao()
+  };
+
+  GAS._call('registrarRespostaPulse', [dados], function(res) {
+    var el = document.getElementById('escuta-pulse-widget');
+    if (el) {
+      el.innerHTML = '<div class="p-6 text-center"><i class="fas fa-heart text-violet-500 text-2xl mb-2"></i>' +
+        '<p class="font-black text-slate-700 text-sm">Obrigado pela resposta!</p>' +
+        '<p class="text-xs text-slate-400 mt-1">Sua contribuição fortalece a instituição.</p></div>';
+      setTimeout(function() { el.classList.add('hidden'); }, 3000);
+    }
+    _escutaCache.widgetPergunta = null;
+  });
+}
+
+// ── Feedback loop ─────────────────────────────────────────────
+
+function _escutaCarregarFeedback() {
+  GAS._call('obterFeedbackEscuta', [], function(res) {
+    if (!res || !res.ok || !res.dados || !res.dados.length) return;
+    var el = document.getElementById('escuta-acoes-feedback');
+    if (!el) return;
+    el.innerHTML = res.dados.map(function(a) {
+      return '<div class="flex items-start gap-2 p-2 bg-white rounded-xl border border-violet-100">' +
+        '<i class="fas fa-check-circle text-green-500 mt-0.5"></i>' +
+        '<div><p class="text-[10px] font-black text-violet-900">' + escaparHTML(a.tipo||'') + '</p>' +
+        '<p class="text-[10px] text-violet-700">' + escaparHTML(a.acao||'') + '</p></div>' +
+      '</div>';
+    }).join('');
+  });
+}
+
+// ── Helpers UI ────────────────────────────────────────────────
+
+function _escutaSetEl(id, val) {
+  var el = document.getElementById(id);
+  if (el) el.textContent = val;
+}
+function _escutaSetVal(id, val) {
+  var el = document.getElementById(id);
+  if (el) el.value = val;
+}
+function _escutaSetChk(id, val) {
+  var el = document.getElementById(id);
+  if (el) el.checked = val;
+}
+function _val(id) {
+  var el = document.getElementById(id);
+  return el ? el.value : '';
+}
+function _escutaLabelNivel(nivel) {
+  var m = { excelente:'Excelente', bom:'Bom', regular:'Regular',
+             baixo:'Atenção necessária', critico:'Requer ação', sem_dados:'Em formação' };
+  return m[nivel] || nivel || 'Em formação';
+}
+function _escutaFmtData(ts) {
+  if (!ts) return '';
+  try {
+    var d = new Date(ts);
+    return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' });
+  } catch(e) { return String(ts); }
+}
+
+</script>

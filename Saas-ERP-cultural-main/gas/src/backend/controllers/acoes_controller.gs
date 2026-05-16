@@ -338,3 +338,33 @@ function ctrl_acoes_listar_pendentes(emailFallback) {
     return listarSolicitacoesPendentes(email);
   });
 }
+
+/**
+ * Aprova uma solicitação.
+ * @param {string} id
+ * @param {string} emailFallback
+ */
+function ctrl_acoes_aprovar(id, emailFallback) {
+  return GasResponse.wrap(function() {
+    var email = obterEmailUsuario(emailFallback || '');
+    if (!id) throw new Error('ID da solicitação é obrigatório.');
+    aprovarSolicitacao(id, email);
+    return { ok: true };
+  });
+}
+
+/**
+ * Recusa uma solicitação com justificativa.
+ * @param {string} id
+ * @param {string} justificativa
+ * @param {string} emailFallback
+ */
+function ctrl_acoes_recusar(id, justificativa, emailFallback) {
+  return GasResponse.wrap(function() {
+    var email = obterEmailUsuario(emailFallback || '');
+    if (!id) throw new Error('ID da solicitação é obrigatório.');
+    if (!justificativa) throw new Error('Justificativa é obrigatória.');
+    recusarSolicitacao(id, justificativa, email);
+    return { ok: true };
+  });
+}

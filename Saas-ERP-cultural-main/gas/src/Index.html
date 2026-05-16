@@ -29,7 +29,7 @@ ORDEM DE CARREGAMENTO DOS SCRIPTS:
   9.  mod_ui_estado_js          — validação horários, carrinho, salvarAgendamento, inicializarApp
   10. mod_reservas_js           — calendário, render de reservas, lote, diagrama
   11. mod_admin_js              — painéis admin, RECE, dashboard
-  12. mod_contratos_js          — CRUD de contratos, metas, rubricas, indicadores
+  12. mod_gestao_contratos_js   — CRUD de contratos, metas, rubricas, indicadores (lógica de mod_gestao_contratos)
   13. mod_favoritos_js          — drag-and-drop de favoritos na sidebar
   14. mod_protocolo_chaves_js   — protocolo de chaves (lazy via _onShow_aba_protocolo_chaves)
   15. mod_permissoes_v2_js      — temPermissao(), carregarPermissoes(), aplicarPermissoesUI()
@@ -41,13 +41,15 @@ ORDEM DE CARREGAMENTO DOS SCRIPTS:
   21. bootstrap_js              — DOMContentLoaded, event listeners (SEMPRE POR ÚLTIMO)
 
 MÓDULOS HTML (incluídos no <main>, auto-registram _onShow_aba_xxx para lazy load):
-  - mod_tarefas, mod_processos, mod_almoxarifado, mod_balcao, mod_rh
-  - mod_eficiencia, mod_contratacoes, mod_relatorios_financeiros, mod_escuta
+  - mod_tarefas, mod_almoxarifado, mod_balcao
+  - mod_rh (HTML) + mod_rh_js (lógica separada)
+  - mod_eficiencia, mod_contratacoes, mod_relatorios_financeiros
+  - mod_escuta (HTML) + mod_escuta_js (lógica separada)
   - mod_permissoes_v2, mod_gestao_modulos (painéis admin)
 
 MÓDULOS INLINE (carregados após bootstrap):
   - html/modulos/mod_painel_solicitacoes — painel de solicitações externas
-  - html/modulos/mod_gestao_contratos    — gestão completa de contratos com JS próprio
+  - html/modulos/mod_gestao_contratos (HTML) + html/logic/mod_gestao_contratos_js (lógica)
   - html/modais/modal_manual        — modal de ajuda
 -->
 
@@ -234,23 +236,33 @@ MÓDULOS INLINE (carregados após bootstrap):
     <?!= include('html/modulos/mod_agenda_geral'); ?>
     <?!= include('html/modulos/mod_nova_reserva'); ?>
     <?!= include('html/modulos/mod_configuracoes'); ?>
+    <?!= include('html/logic/mod_configuracoes_js'); ?>
     <?!= include('html/modulos/mod_auditoria'); ?>
+    <?!= include('html/logic/mod_auditoria_js'); ?>
     <?!= include('html/modulos/mod_agenda_rece'); ?>
     <?!= include('html/modulos/mod_dashboard'); ?>
     <?!= include('html/modulos/mod_aprovacoes'); ?>
     <?!= include('html/modulos/mod_protocolo_chaves'); ?>
     <?!= include('html/modulos/mod_codip'); ?>
     <?!= include('html/modulos/mod_financeiro'); ?>
+    <?!= include('html/logic/mod_financeiro_js'); ?>
 
     <?!= include('html/modulos/mod_tarefas'); ?>
-    <?!= include('html/modulos/mod_processos'); ?>
+    <?!= include('html/logic/mod_tarefas_js'); ?>
     <?!= include('html/modulos/mod_almoxarifado'); ?>
+    <?!= include('html/logic/mod_almoxarifado_js'); ?>
     <?!= include('html/modulos/mod_balcao'); ?>
+    <?!= include('html/logic/mod_balcao_js'); ?>
     <?!= include('html/modulos/mod_rh'); ?>
+    <?!= include('html/logic/mod_rh_js'); ?>
     <?!= include('html/modulos/mod_eficiencia'); ?>
+    <?!= include('html/logic/mod_eficiencia_js'); ?>
     <?!= include('html/modulos/mod_contratacoes'); ?>
+    <?!= include('html/logic/mod_contratacoes_js'); ?>
     <?!= include('html/modulos/mod_relatorios_financeiros'); ?>
+    <?!= include('html/logic/mod_relatorios_financeiros_js'); ?>
     <?!= include('html/modulos/mod_escuta'); ?>
+    <?!= include('html/logic/mod_escuta_js'); ?>
     <?!= include('html/modulos/mod_reunioes'); ?>
     <?!= include('html/modulos/mod_reunioes_series'); ?>
     <?!= include('html/modulos/mod_processos_institucionais'); ?>
@@ -296,7 +308,6 @@ MÓDULOS INLINE (carregados após bootstrap):
 <?!= include('html/logic/mod_ui_estado_js'); ?>
 <?!= include('html/logic/mod_reservas_js'); ?>
 <?!= include('html/logic/mod_admin_js'); ?>
-<?!= include('html/logic/mod_contratos_js'); ?>
 <?!= include('html/logic/mod_favoritos_js'); ?>
 
 <!-- PROTOCOLO DE CHAVES -->
@@ -339,6 +350,7 @@ MÓDULOS INLINE (carregados após bootstrap):
 <?!= include('html/modais/modal_manual'); ?>
 <?!= include('html/modulos/mod_painel_solicitacoes'); ?>
 <?!= include('html/modulos/mod_gestao_contratos'); ?>
+<?!= include('html/logic/mod_gestao_contratos_js'); ?>
 
 </body>
 </html>

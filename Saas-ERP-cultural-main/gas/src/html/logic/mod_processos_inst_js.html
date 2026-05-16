@@ -1,358 +1,60 @@
+<!--
+  @file html/logic/mod_processos_inst_js.html
+  @layer frontend/logic
+  @description Lógica do módulo Processos Administrativo-Financeiros (padm).
+               Absorve CIs. 4 visões: Pipeline, Lista, Kanban, Dashboard.
+               Lazy-load via _onShow_aba-processos-institucionais.
+  @dependencies GAS.processosAdm (server_bridge_js), BtnGuard, Toast, AppState
+-->
 <script>
 // ── Estado do módulo ─────────────────────────────────────────────────────────
-var _procState = {
+var _padmState = {
   lista:          [],
   listaFiltrada:  [],
   processoAtivo:  null,
   dashboardAtivo: null,
-  tabAtiva:       'timeline'
+  tabAtiva:       'timeline',
+  visaoAtual:     'pipeline',
+  catalogoTipos:  [],
+  tipoSelecionado: null,
+  etapasSelecionadas: [],
+  camposExtrasSelecionados: [],
+  // autocomplete debounce timers
+  _acaoTimer:    null,
+  _rubricaTimer: null,
+  _vinculoTimer: null,
+  carregado:     false
 };
 
-// ── Inicialização ────────────────────────────────────────────────────────────
-function procInicializar() {
-  procCarregar();
-}
+// ── Labels e cores ───────────────────────────────────────────────────────────
+var _PADM_STATUS_LABEL = {
+  solicitado:           'Solicitado',
+  em_andamento:         'Em Andamento',
+  aguardando_setor:     'Aguard. Setor',
+  aguardando_aprovacao: 'Aguard. Aprovação',
+  bloqueado:            'Bloqueado',
+  concluido:            'Concluído',
+  cancelado:            'Cancelado'
+};
 
-function procCarregar() {
-  document.getElementById('proc-lista-container').innerHTML =
-    '<div class="text-center text-gray-400 py-8"><i class="fas fa-spinner fa-spin text-2xl mb-2"></i><p class="text-sm">Carregando…</p></div>';
+var _PADM_STATUS_COR = {
+  solicitado:           'bg-gray-100 text-gray-600',
+  em_andamento:         'bg-blue-100 text-blue-700',
+  aguardando_setor:     'bg-yellow-100 text-yellow-700',
+  aguardando_aprovacao: 'bg-orange-100 text-orange-700',
+  bloqueado:            'bg-red-100 text-red-700',
+  concluido:            'bg-green-100 text-green-700',
+  cancelado:            'bg-gray-200 text-gray-500'
+};
 
-  var filtros = {
-    status: document.getElementById('proc-filtro-status').value || undefined,
-    tipo:   document.getElementById('proc-filtro-tipo').value   || undefined
-  };
+var _PADM_PRIORIDADE_COR = {
+  critica: 'bg-red-100 text-red-700',
+  alta:    'bg-orange-100 text-orange-700',
+  media:   'bg-blue-100 text-blue-700',
+  baixa:   'bg-gray-100 text-gray-600'
+};
 
-  ServerBridge.call('ctrl_proc_listar', [filtros, AppState.email], function(res) {
-    if (!res.ok) { _procMostrarErroLista(res.error); return; }
-    _procState.lista = res.data || [];
-    procFiltrarLista();
-  });
-}
-
-function procFiltrarLista() {
-  var busca   = (document.getElementById('proc-busca').value || '').toLowerCase().trim();
-  var status  = document.getElementById('proc-filtro-status').value;
-  var tipo    = document.getElementById('proc-filtro-tipo').value;
-
-  _procState.listaFiltrada = _procState.lista.filter(function(p) {
-    if (status && p.status !== status) return false;
-    if (tipo   && p.tipo   !== tipo)   return false;
-    if (busca) {
-      var haystack = ((p.titulo || '') + ' ' + (p.tipo || '') + ' ' + (p.responsavelAtual || '')).toLowerCase();
-      if (haystack.indexOf(busca) === -1) return false;
-    }
-    return true;
-  });
-
-  _procRenderizarLista();
-}
-
-function _procRenderizarLista() {
-  var container = document.getElementById('proc-lista-container');
-  var badge     = document.getElementById('proc-badge-total');
-  var lista     = _procState.listaFiltrada;
-
-  badge.textContent = lista.length;
-  badge.classList.toggle('hidden', lista.length === 0);
-
-  if (!lista.length) {
-    container.innerHTML =
-      '<div class="text-center text-gray-400 py-8"><i class="fas fa-inbox text-3xl opacity-30 mb-2"></i><p class="text-sm">Nenhum processo encontrado</p></div>';
-    return;
-  }
-
-  container.innerHTML = lista.map(function(p) {
-    var ativo  = _procState.processoAtivo && _procState.processoAtivo.id === p.id;
-    var corSts = _procCorStatus(p.status);
-    return '<div onclick="procSelecionarProcesso(\'' + p.id + '\')" ' +
-      'class="proc-card cursor-pointer rounded-xl border p-3 transition hover:shadow-sm ' +
-      (ativo ? 'border-indigo-400 bg-indigo-50' : 'border-gray-200 bg-white hover:border-indigo-300') + '">' +
-      '<div class="flex items-start justify-between gap-2">' +
-        '<p class="text-xs font-semibold text-gray-800 leading-snug line-clamp-2 flex-1">' + _esc(p.titulo) + '</p>' +
-        '<span class="flex-shrink-0 text-xs font-medium px-1.5 py-0.5 rounded-full ' + corSts.bg + ' ' + corSts.text + '">' + _procLabelStatus(p.status) + '</span>' +
-      '</div>' +
-      '<div class="flex items-center gap-2 mt-1.5 flex-wrap">' +
-        '<span class="text-xs text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">' + _procLabelTipo(p.tipo) + '</span>' +
-        _procBadgePrioridade(p.prioridade) +
-        (p.prazo ? '<span class="text-xs text-gray-400"><i class="far fa-clock mr-0.5"></i>' + _formatarData(p.prazo) + '</span>' : '') +
-      '</div>' +
-      ((p.setoresEnvolvidos || []).length ? '<div class="flex flex-wrap gap-1 mt-1.5">' +
-        p.setoresEnvolvidos.slice(0,4).map(function(s) {
-          return '<span class="text-xs text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">' + s + '</span>';
-        }).join('') + '</div>' : '') +
-    '</div>';
-  }).join('');
-}
-
-// ── Seleção e carregamento do dashboard ──────────────────────────────────────
-function procSelecionarProcesso(id) {
-  document.getElementById('proc-detalhe-vazio').classList.add('hidden');
-  document.getElementById('proc-detalhe-conteudo').classList.remove('hidden');
-  document.getElementById('proc-detalhe-conteudo').innerHTML =
-    '<div class="flex-1 flex items-center justify-center"><i class="fas fa-spinner fa-spin text-indigo-400 text-2xl"></i></div>';
-
-  ServerBridge.call('ctrl_proc_dashboard', [id, AppState.email], function(res) {
-    if (!res.ok) {
-      document.getElementById('proc-detalhe-conteudo').innerHTML =
-        '<div class="p-4 text-red-500 text-sm">Erro: ' + _esc(res.error || 'Falha ao carregar') + '</div>';
-      return;
-    }
-    _procState.dashboardAtivo = res.data;
-    _procState.processoAtivo  = res.data.processo;
-    _procRenderizarDetalhe(res.data);
-    _procRenderizarLista(); // re-render para marcar ativo
-  });
-}
-
-function _procRenderizarDetalhe(dash) {
-  var proc = dash.processo;
-  var resumo = dash.resumo;
-  var fin  = dash.impactoFinanceiro || {};
-
-  // Restora estrutura do HTML
-  document.getElementById('proc-detalhe-conteudo').innerHTML = '';
-
-  // Rebuild via innerHTML da section original — mais simples
-  // Usamos a mesma estrutura do HTML original via referência direta
-  // O HTML já está no DOM; só precisamos atualizar os valores
-
-  // Re-injetar a estrutura
-  _procInjetarEstruturaDetalhe();
-
-  // Preencher valores
-  document.getElementById('proc-det-titulo').textContent = proc.titulo || '';
-
-  var corSts = _procCorStatus(proc.status);
-  var badgeSts = document.getElementById('proc-det-badge-status');
-  badgeSts.textContent = _procLabelStatus(proc.status);
-  badgeSts.className   = 'text-xs font-medium px-2 py-0.5 rounded-full ' + corSts.bg + ' ' + corSts.text;
-
-  document.getElementById('proc-det-badge-tipo').textContent = _procLabelTipo(proc.tipo);
-  document.getElementById('proc-det-badge-prioridade').className =
-    'text-xs font-medium px-2 py-0.5 rounded-full ' + _procCorPrioridade(proc.prioridade);
-  document.getElementById('proc-det-badge-prioridade').textContent =
-    (proc.prioridade || 'media').charAt(0).toUpperCase() + (proc.prioridade || 'media').slice(1);
-
-  // Cards de resumo
-  document.getElementById('proc-det-n-tarefas').textContent  = resumo.tarefas.total;
-  document.getElementById('proc-det-n-reservas').textContent = resumo.reservas.total;
-  document.getElementById('proc-det-n-reunioes').textContent = resumo.reunioes.total;
-  document.getElementById('proc-det-n-contratos').textContent = resumo.contratos.total;
-
-  // Financeiro
-  if (fin.previsto > 0 || fin.executado > 0) {
-    document.getElementById('proc-det-financeiro').classList.remove('hidden');
-    document.getElementById('proc-fin-previsto').textContent  = 'R$ ' + (fin.previsto  || 0).toFixed(2);
-    document.getElementById('proc-fin-executado').textContent = 'R$ ' + (fin.executado || 0).toFixed(2);
-    var saldoEl = document.getElementById('proc-fin-saldo');
-    saldoEl.textContent = 'R$ ' + (fin.saldo || 0).toFixed(2);
-    saldoEl.className   = 'font-semibold ' + (fin.saldo < 0 ? 'text-red-600' : 'text-green-600');
-  }
-
-  // Renderizar timeline
-  _procRenderizarTimeline(dash.timeline || []);
-
-  // Renderizar tarefas
-  _procRenderizarTarefas(dash.vinculos.tarefas || []);
-
-  // Renderizar reservas
-  _procRenderizarReservas(dash.vinculos.reservas || []);
-
-  // Renderizar contratos
-  _procRenderizarContratos(dash.vinculos.contratos || [], dash.vinculos.contratacoes || []);
-
-  // Renderizar comunicações
-  _procRenderizarComunicacoes(dash.vinculos.comunicacoes || []);
-
-  // Renderizar gargalos
-  _procRenderizarGargalos(dash.gargalos || [], dash.alertas || []);
-
-  // Preencher opções de status no modal
-  _procPreencherOpcoesStatus(proc.status);
-
-  procMostrarTab(_procState.tabAtiva || 'timeline');
-}
-
-function _procInjetarEstruturaDetalhe() {
-  // Estrutura injetada dinamicamente — mantém o padrão do HTML original
-  document.getElementById('proc-detalhe-conteudo').innerHTML = document.getElementById('proc-detalhe-conteudo-template').innerHTML;
-}
-
-// ── Timeline ─────────────────────────────────────────────────────────────────
-function _procRenderizarTimeline(eventos) {
-  var el = document.getElementById('proc-timeline-lista');
-  if (!eventos.length) {
-    el.innerHTML = '<p class="text-xs text-gray-400 text-center py-4">Nenhum evento registrado</p>';
-    return;
-  }
-  var sorted = eventos.slice().sort(function(a, b) { return new Date(b.timestamp) - new Date(a.timestamp); });
-  el.innerHTML = sorted.map(function(evt) {
-    var icon   = _procIconeEvento(evt.tipo);
-    var cor    = _procCorEvento(evt.tipo);
-    return '<div class="flex gap-2.5">' +
-      '<div class="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center mt-0.5 ' + cor + '">' +
-        '<i class="' + icon + ' text-xs"></i>' +
-      '</div>' +
-      '<div class="flex-1 min-w-0">' +
-        '<p class="text-xs text-gray-800 leading-snug">' + _esc(evt.descricao || '') + '</p>' +
-        '<div class="flex items-center gap-2 mt-0.5">' +
-          '<span class="text-xs text-gray-400">' + _formatarDataHora(evt.timestamp) + '</span>' +
-          (evt.ator  ? '<span class="text-xs text-gray-400">· ' + _esc(evt.ator)  + '</span>' : '') +
-          (evt.setor ? '<span class="text-xs text-indigo-500 bg-indigo-50 px-1 rounded">' + evt.setor + '</span>' : '') +
-        '</div>' +
-      '</div>' +
-    '</div>';
-  }).join('');
-}
-
-function procAdicionarComentario() {
-  if (!_procState.processoAtivo) return;
-  var texto = (document.getElementById('proc-comentario-input').value || '').trim();
-  if (!texto) return;
-
-  ServerBridge.call('ctrl_proc_comentar', [_procState.processoAtivo.id, texto, AppState.email], function(res) {
-    if (!res.ok) { _notif('error', res.error || 'Erro ao comentar'); return; }
-    document.getElementById('proc-comentario-input').value = '';
-    procSelecionarProcesso(_procState.processoAtivo.id);
-  });
-}
-
-// ── Tarefas ───────────────────────────────────────────────────────────────────
-function _procRenderizarTarefas(tarefas) {
-  var el = document.getElementById('proc-lista-tarefas');
-  if (!tarefas.length) {
-    el.innerHTML = '<p class="text-xs text-gray-400 text-center py-4">Nenhuma tarefa vinculada</p>';
-    return;
-  }
-  el.innerHTML = tarefas.map(function(t) {
-    var cor = _procCorTarefaStatus(t.status);
-    return '<div class="flex items-center justify-between gap-2 p-2.5 rounded-lg border border-gray-100 hover:border-gray-200 transition">' +
-      '<div class="flex-1 min-w-0">' +
-        '<p class="text-xs font-medium text-gray-800 truncate">' + _esc(t.titulo || t.id) + '</p>' +
-        '<div class="flex items-center gap-2 mt-0.5">' +
-          '<span class="text-xs ' + cor + ' font-medium">' + _procLabelTarefaStatus(t.status) + '</span>' +
-          (t.responsavel ? '<span class="text-xs text-gray-400">' + _esc(t.responsavel) + '</span>' : '') +
-          (t.prazo ? '<span class="text-xs text-gray-400">' + _formatarData(t.prazo) + '</span>' : '') +
-        '</div>' +
-      '</div>' +
-    '</div>';
-  }).join('');
-}
-
-function procAbrirModalCriarTarefa() {
-  document.getElementById('proc-modal-tarefa').classList.remove('hidden');
-}
-
-function procFecharModalTarefa() {
-  document.getElementById('proc-modal-tarefa').classList.add('hidden');
-}
-
-function procCriarTarefaVinculada() {
-  if (!_procState.processoAtivo) return;
-  var titulo  = (document.getElementById('proc-tar-titulo').value || '').trim();
-  if (!titulo) { _notif('warning', 'Título da tarefa é obrigatório'); return; }
-
-  var dados = {
-    titulo:      titulo,
-    responsavel: document.getElementById('proc-tar-responsavel').value || '',
-    prazo:       document.getElementById('proc-tar-prazo').value       || '',
-    prioridade:  document.getElementById('proc-tar-prioridade').value  || 'media',
-    setor:       document.getElementById('proc-tar-setor').value       || ''
-  };
-
-  ServerBridge.call('ctrl_proc_criar_tarefa_vinculada', [_procState.processoAtivo.id, dados, AppState.email], function(res) {
-    if (!res.ok) { _notif('error', res.error || 'Erro ao criar tarefa'); return; }
-    procFecharModalTarefa();
-    _notif('success', 'Tarefa criada e vinculada ao processo');
-    procSelecionarProcesso(_procState.processoAtivo.id);
-  });
-}
-
-// ── Reservas ──────────────────────────────────────────────────────────────────
-function _procRenderizarReservas(reservas) {
-  var el = document.getElementById('proc-lista-reservas');
-  if (!reservas.length) {
-    el.innerHTML = '<p class="text-xs text-gray-400 text-center py-4">Nenhuma reserva vinculada</p>';
-    return;
-  }
-  el.innerHTML = reservas.map(function(r) {
-    return '<div class="p-2.5 rounded-lg border border-gray-100 text-xs">' +
-      '<div class="flex items-center justify-between">' +
-        '<span class="font-medium text-gray-800">' + _esc(r.espaco || r.id) + '</span>' +
-        '<span class="text-gray-400">' + _esc(r.status || '') + '</span>' +
-      '</div>' +
-      '<div class="text-gray-500 mt-0.5">' + _esc(r.data || '') + (r.inicio ? ' · ' + r.inicio + '–' + (r.fim || '') : '') + '</div>' +
-    '</div>';
-  }).join('');
-}
-
-// ── Contratos ─────────────────────────────────────────────────────────────────
-function _procRenderizarContratos(contratos, contratacoes) {
-  var el = document.getElementById('proc-lista-contratos');
-  var todos = contratos.concat(contratacoes);
-  if (!todos.length) {
-    el.innerHTML = '<p class="text-xs text-gray-400 text-center py-4">Nenhum contrato vinculado</p>';
-    return;
-  }
-  el.innerHTML = todos.map(function(c) {
-    var titulo = c.descricao || c.nome || c.id;
-    var valor  = c.valor ? 'R$ ' + parseFloat(c.valor).toFixed(2) : '';
-    return '<div class="p-2.5 rounded-lg border border-gray-100 text-xs">' +
-      '<div class="flex items-center justify-between">' +
-        '<span class="font-medium text-gray-800">' + _esc(titulo) + '</span>' +
-        (valor ? '<span class="text-green-600 font-semibold">' + valor + '</span>' : '') +
-      '</div>' +
-      (c.status ? '<div class="text-gray-500 mt-0.5">' + _esc(c.status) + '</div>' : '') +
-    '</div>';
-  }).join('');
-}
-
-// ── Comunicações ──────────────────────────────────────────────────────────────
-function _procRenderizarComunicacoes(comunicacoes) {
-  var el = document.getElementById('proc-lista-comunicacoes');
-  if (!comunicacoes.length) {
-    el.innerHTML = '<p class="text-xs text-gray-400 text-center py-4">Nenhuma demanda de comunicação vinculada</p>';
-    return;
-  }
-  el.innerHTML = comunicacoes.map(function(c) {
-    return '<div class="p-2.5 rounded-lg border border-gray-100 text-xs">' +
-      '<div class="font-medium text-gray-800">' + _esc(c.titulo || c.id) + '</div>' +
-      '<div class="text-gray-500 mt-0.5">' + _esc(c.tipo || '') + (c.status ? ' · ' + c.status : '') + '</div>' +
-    '</div>';
-  }).join('');
-}
-
-// ── Gargalos ──────────────────────────────────────────────────────────────────
-function _procRenderizarGargalos(gargalos, alertas) {
-  var el   = document.getElementById('proc-lista-gargalos');
-  var todos = gargalos.concat(alertas);
-
-  // Badge na tab
-  var tabEl = document.getElementById('proc-tab-gargalos');
-  if (todos.length) {
-    tabEl.innerHTML = '<i class="fas fa-exclamation-triangle mr-1 text-red-500"></i>Gargalos <span class="bg-red-100 text-red-600 text-xs font-bold px-1.5 rounded-full">' + todos.length + '</span>';
-  } else {
-    tabEl.innerHTML = '<i class="fas fa-exclamation-triangle mr-1"></i>Gargalos';
-  }
-
-  if (!todos.length) {
-    el.innerHTML = '<div class="text-center py-6 text-green-600"><i class="fas fa-check-circle text-2xl mb-2"></i><p class="text-sm font-medium">Nenhum gargalo detectado</p></div>';
-    return;
-  }
-  el.innerHTML = todos.map(function(g) {
-    var urgencia = g.urgencia || 'media';
-    var cor = urgencia === 'critica' ? 'border-red-400 bg-red-50' :
-              urgencia === 'alta'    ? 'border-amber-400 bg-amber-50' : 'border-yellow-300 bg-yellow-50';
-    var texto = g.descricao || (g.tipo + (g.quantidade ? ' (' + g.quantidade + ')' : ''));
-    return '<div class="p-3 rounded-lg border-l-4 ' + cor + '">' +
-      '<p class="text-xs font-medium text-gray-800">' + _esc(texto) + '</p>' +
-      (g.tipo ? '<p class="text-xs text-gray-500 mt-0.5">' + _esc(g.tipo) + '</p>' : '') +
-    '</div>';
-  }).join('');
-}
-
-// ── Modal Status ──────────────────────────────────────────────────────────────
-var _TRANSICOES_UI = {
+var _PADM_TRANSICOES = {
   solicitado:           ['em_andamento', 'cancelado'],
   em_andamento:         ['aguardando_setor', 'aguardando_aprovacao', 'bloqueado', 'concluido', 'cancelado'],
   aguardando_setor:     ['em_andamento', 'aguardando_aprovacao', 'bloqueado', 'concluido', 'cancelado'],
@@ -362,185 +64,1326 @@ var _TRANSICOES_UI = {
   cancelado:            []
 };
 
-var _LABELS_STATUS_UI = {
-  solicitado:           'Solicitado',
-  em_andamento:         'Em Andamento',
-  aguardando_setor:     'Aguardando Setor',
-  aguardando_aprovacao: 'Aguard. Aprovação',
-  bloqueado:            'Bloqueado',
-  concluido:            'Concluído',
-  cancelado:            'Cancelado'
+var _PADM_TIPO_LABEL = {
+  contratacao_professor:    'Contr. Professor',
+  contratacao_profissional: 'Contr. Profissional',
+  servico_grafico:          'Serviço Gráfico',
+  aquisicao_equipamento:    'Aquisição Equip.',
+  bolsista:                 'Bolsista',
+  manutencao_espaco:        'Manutenção',
+  transporte:               'Transporte',
+  projeto_cultural:         'Projeto Cultural',
+  campanha_comunicacao:     'Campanha Comuni.',
+  outro:                    'Outro'
 };
 
-function _procPreencherOpcoesStatus(statusAtual) {
-  var sel    = document.getElementById('proc-status-novo');
-  var opcoes = _TRANSICOES_UI[statusAtual] || [];
-  sel.innerHTML = opcoes.length
-    ? opcoes.map(function(s) { return '<option value="' + s + '">' + (_LABELS_STATUS_UI[s] || s) + '</option>'; }).join('')
-    : '<option value="">Nenhuma transição disponível</option>';
-}
+// ── Inicialização e carregamento ─────────────────────────────────────────────
 
-function procAbrirModalStatus() {
-  document.getElementById('proc-modal-status').classList.remove('hidden');
-}
+function padmCarregar() {
+  _padmEstadoLista('loading');
 
-function procFecharModalStatus() {
-  document.getElementById('proc-modal-status').classList.add('hidden');
-}
-
-function procConfirmarStatus() {
-  if (!_procState.processoAtivo) return;
-  var novoStatus = document.getElementById('proc-status-novo').value;
-  var motivo     = document.getElementById('proc-status-motivo').value || '';
-  if (!novoStatus) { _notif('warning', 'Selecione um status'); return; }
-
-  ServerBridge.call('ctrl_proc_mudar_status', [_procState.processoAtivo.id, novoStatus, motivo, AppState.email], function(res) {
-    if (!res.ok) { _notif('error', res.error || 'Erro ao mudar status'); return; }
-    procFecharModalStatus();
-    _notif('success', 'Status atualizado');
-    procSelecionarProcesso(_procState.processoAtivo.id);
-    procCarregar();
+  BtnGuard.gas(null, GAS.processosAdm.listar, [{ email: AppState.email }], {
+    onSuccess: function(data) {
+      _padmState.lista = data || [];
+      _padmState.carregado = true;
+      _padmCarregarCatalogo(function() {
+        padmFiltrarLista();
+        _padmPreencherFiltroTipo();
+      });
+    },
+    onError: function(err) {
+      _padmEstadoLista('error', err);
+    }
   });
 }
 
-// ── Modal Criar ───────────────────────────────────────────────────────────────
-function procAbrirModal() {
-  document.getElementById('proc-modal-criar').classList.remove('hidden');
+function _padmPreencherFiltroTipo() {
+  var sel = document.getElementById('padm-filtro-tipo');
+  if (!sel) return;
+  var tipos = _padmState.catalogoTipos;
+  if (!tipos.length) return;
+  sel.innerHTML = '<option value="">Todos os tipos</option>' +
+    tipos.map(function(t) {
+      return '<option value="' + _esc(t.id) + '">' + _esc(t.nome || t.id) + '</option>';
+    }).join('');
+  sel.classList.remove('hidden');
 }
 
-function procFecharModal() {
-  document.getElementById('proc-modal-criar').classList.add('hidden');
+function _padmCarregarCatalogo(cb) {
+  if (_padmState.catalogoTipos.length) { if (cb) cb(); return; }
+  BtnGuard.gas(null, GAS.processosAdm.catalogoTipos, [AppState.email], {
+    onSuccess: function(data) {
+      _padmState.catalogoTipos = data || [];
+      if (cb) cb();
+    },
+    onError: function() { if (cb) cb(); }
+  });
 }
 
-function procAbrirModalVinculo() {
-  // TODO: abrir modal para vincular entidade existente (tarefa/reserva/reunião/contrato)
-  _notif('info', 'Para vincular entidades existentes, use os módulos específicos e selecione o processo.');
+function padmFiltrarLista() {
+  var busca  = ((document.getElementById('padm-busca') || {}).value || '').toLowerCase().trim();
+  var status = (document.getElementById('padm-filtro-status') || {}).value || '';
+  var tipo   = (document.getElementById('padm-filtro-tipo') || {}).value   || '';
+
+  _padmState.listaFiltrada = _padmState.lista.filter(function(p) {
+    if (status && p.status !== status) return false;
+    if (tipo   && p.tipo   !== tipo)   return false;
+    if (busca) {
+      var hay = ((p.titulo||'') + ' ' + (p.tipo||'') + ' ' + (p.responsavelAtual||'') + ' ' + (p.etapaAtualNome||'')).toLowerCase();
+      if (hay.indexOf(busca) === -1) return false;
+    }
+    return true;
+  });
+
+  var badge = document.getElementById('padm-badge-total');
+  if (badge) {
+    badge.textContent = _padmState.listaFiltrada.length;
+    badge.classList.toggle('hidden', !_padmState.listaFiltrada.length);
+  }
+
+  _padmRenderizarVisao();
 }
 
-function procSalvar() {
-  var titulo = (document.getElementById('proc-form-titulo').value || '').trim();
-  var tipo   = document.getElementById('proc-form-tipo').value;
-  if (!titulo) { _notif('warning', 'Título é obrigatório'); return; }
-  if (!tipo)   { _notif('warning', 'Tipo é obrigatório');   return; }
+// ── Visões ───────────────────────────────────────────────────────────────────
 
-  var setores = [];
-  document.querySelectorAll('.proc-setor-cb:checked').forEach(function(cb) { setores.push(cb.value); });
+function padmMudarVisao(visao) {
+  _padmState.visaoAtual = visao;
 
-  var dados = {
-    titulo:            titulo,
-    tipo:              tipo,
-    descricao:         document.getElementById('proc-form-descricao').value || '',
-    prioridade:        document.getElementById('proc-form-prioridade').value || 'media',
-    responsavelAtual:  document.getElementById('proc-form-responsavel').value || '',
-    prazo:             document.getElementById('proc-form-prazo').value || '',
-    valorPrevisto:     parseFloat(document.getElementById('proc-form-valor').value) || 0,
-    setoresEnvolvidos: setores
+  ['pipeline','lista','kanban','dashboard'].forEach(function(v) {
+    var el = document.getElementById('padm-visao-' + v);
+    if (el) el.classList.toggle('hidden', v !== visao);
+    var btn = document.getElementById('padm-btn-' + v);
+    if (btn) {
+      if (v === visao) {
+        btn.classList.add('bg-white', 'shadow-sm', 'text-indigo-600');
+        btn.classList.remove('text-gray-400');
+      } else {
+        btn.classList.remove('bg-white', 'shadow-sm', 'text-indigo-600');
+        btn.classList.add('text-gray-400');
+      }
+    }
+  });
+
+  _padmRenderizarVisao();
+}
+
+function _padmRenderizarVisao() {
+  switch (_padmState.visaoAtual) {
+    case 'pipeline':  _padmRenderizarLista(); break;
+    case 'lista':     _padmRenderizarTabela(); break;
+    case 'kanban':    _padmRenderizarKanban(); break;
+    case 'dashboard': _padmCarregarDashboard(); break;
+  }
+}
+
+function _padmEstadoLista(modo, msg) {
+  var el = document.getElementById('padm-pipeline-lista');
+  if (!el) return;
+  if (modo === 'loading') {
+    el.innerHTML = '<div class="text-center text-gray-400 py-10 text-sm"><i class="fas fa-spinner fa-spin text-2xl mb-2 block"></i>Carregando…</div>';
+  } else if (modo === 'error') {
+    el.innerHTML = '<div class="text-center text-red-400 py-8 text-sm">' + _esc(msg || 'Erro ao carregar') + '</div>';
+  }
+}
+
+// ── VISÃO: PIPELINE (lista lateral) ─────────────────────────────────────────
+
+function _padmRenderizarLista() {
+  var el    = document.getElementById('padm-pipeline-lista');
+  var lista = _padmState.listaFiltrada;
+  if (!el) return;
+
+  if (!lista.length) {
+    el.innerHTML = '<div class="text-center text-gray-400 py-10"><i class="fas fa-inbox text-3xl opacity-30 mb-2 block"></i><p class="text-sm">Nenhum processo encontrado</p></div>';
+    return;
+  }
+
+  el.innerHTML = lista.map(function(p) {
+    var ativo  = _padmState.processoAtivo && _padmState.processoAtivo.id === p.id;
+    var corSts = _PADM_STATUS_COR[p.status] || 'bg-gray-100 text-gray-600';
+    var label  = _PADM_STATUS_LABEL[p.status] || (p.status || '');
+    var tipoLabel = _padmLabelTipo(p.tipo);
+    var prazoHtml = p.prazo ? '<span class="text-xs text-gray-400"><i class="far fa-clock mr-0.5"></i>' + _formatarData(p.prazo) + '</span>' : '';
+    var etapaHtml = p.etapaAtualNome ? '<span class="text-xs text-indigo-500 bg-indigo-50 px-1.5 py-0.5 rounded truncate max-w-full">' + _esc(p.etapaAtualNome) + '</span>' : '';
+    var valorHtml = (p.impactoFinanceiro && (p.impactoFinanceiro.previsto || 0) > 0)
+      ? '<span class="text-xs text-green-600 font-medium">R$ ' + parseFloat(p.impactoFinanceiro.previsto).toFixed(2) + '</span>' : '';
+
+    return '<div onclick="padmSelecionarProcesso(\'' + p.id + '\')" ' +
+      'class="cursor-pointer rounded-xl border p-3 transition hover:shadow-sm ' +
+      (ativo ? 'border-indigo-400 bg-indigo-50' : 'border-gray-200 bg-white hover:border-indigo-300') + '">' +
+        '<div class="flex items-start justify-between gap-2">' +
+          '<p class="text-xs font-semibold text-gray-800 leading-snug line-clamp-2 flex-1">' + _esc(p.titulo) + '</p>' +
+          '<span class="flex-shrink-0 text-xs font-medium px-1.5 py-0.5 rounded-full ' + corSts + '">' + label + '</span>' +
+        '</div>' +
+        '<div class="flex items-center gap-2 mt-1.5 flex-wrap">' +
+          '<span class="text-xs text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">' + tipoLabel + '</span>' +
+          _padmBadgePrioridade(p.prioridade) +
+          prazoHtml + valorHtml +
+        '</div>' +
+        (etapaHtml ? '<div class="mt-1.5">' + etapaHtml + '</div>' : '') +
+      '</div>';
+  }).join('');
+}
+
+// ── VISÃO: LISTA (tabela) ────────────────────────────────────────────────────
+
+function _padmRenderizarTabela() {
+  var tbody = document.getElementById('padm-lista-tabela');
+  var lista = _padmState.listaFiltrada;
+  if (!tbody) return;
+
+  if (!lista.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="text-center py-10 text-gray-400 text-sm">Nenhum processo encontrado</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = lista.map(function(p) {
+    var corSts   = _PADM_STATUS_COR[p.status] || 'bg-gray-100 text-gray-600';
+    var label    = _PADM_STATUS_LABEL[p.status] || (p.status || '');
+    var valor    = (p.impactoFinanceiro && p.impactoFinanceiro.previsto > 0) ? 'R$ ' + parseFloat(p.impactoFinanceiro.previsto).toFixed(2) : '—';
+    return '<tr class="hover:bg-gray-50 cursor-pointer transition" onclick="padmSelecionarProcesso(\'' + p.id + '\'); padmMudarVisao(\'pipeline\')">' +
+      '<td class="px-4 py-3"><div class="text-sm font-medium text-gray-800 max-w-xs truncate">' + _esc(p.titulo) + '</div><div class="text-xs text-gray-400">' + _esc(p.id) + '</div></td>' +
+      '<td class="px-3 py-3 text-xs text-gray-600">' + _esc(_padmLabelTipo(p.tipo)) + '</td>' +
+      '<td class="px-3 py-3"><span class="text-xs font-medium px-2 py-0.5 rounded-full ' + corSts + '">' + label + '</span></td>' +
+      '<td class="px-3 py-3 text-xs text-gray-600">' + _esc(p.etapaAtualNome || '—') + '</td>' +
+      '<td class="px-3 py-3 text-xs text-gray-600">' + _esc(p.responsavelAtual || '—') + '</td>' +
+      '<td class="px-3 py-3 text-xs text-gray-500">' + (p.prazo ? _formatarData(p.prazo) : '—') + '</td>' +
+      '<td class="px-3 py-3 text-xs font-medium text-green-600">' + valor + '</td>' +
+      '<td class="px-3 py-3"><button class="text-xs text-indigo-600 hover:text-indigo-800 font-medium">Ver</button></td>' +
+    '</tr>';
+  }).join('');
+}
+
+// ── VISÃO: KANBAN ────────────────────────────────────────────────────────────
+
+function _padmRenderizarKanban() {
+  var container = document.getElementById('padm-kanban-colunas');
+  if (!container) return;
+
+  var statusOrdem = ['solicitado','em_andamento','aguardando_setor','aguardando_aprovacao','bloqueado','concluido','cancelado'];
+  var grupos = {};
+  statusOrdem.forEach(function(s) { grupos[s] = []; });
+  _padmState.listaFiltrada.forEach(function(p) {
+    if (grupos[p.status]) grupos[p.status].push(p); else grupos['solicitado'].push(p);
+  });
+
+  var cores = {
+    solicitado:           'border-t-gray-400',
+    em_andamento:         'border-t-blue-500',
+    aguardando_setor:     'border-t-yellow-400',
+    aguardando_aprovacao: 'border-t-orange-400',
+    bloqueado:            'border-t-red-500',
+    concluido:            'border-t-green-500',
+    cancelado:            'border-t-gray-300'
   };
 
-  ServerBridge.call('ctrl_proc_criar', [dados, AppState.email], function(res) {
-    if (!res.ok) { _notif('error', res.error || 'Erro ao criar processo'); return; }
-    procFecharModal();
-    _notif('success', 'Processo institucional criado');
-    procCarregar();
-    procSelecionarProcesso(res.data.id);
+  container.innerHTML = statusOrdem.map(function(status) {
+    var cards = grupos[status];
+    var label = _PADM_STATUS_LABEL[status] || status;
+    var cor   = cores[status] || 'border-t-gray-400';
+
+    var cardsHtml = cards.length
+      ? cards.map(function(p) {
+          return '<div onclick="padmSelecionarProcesso(\'' + p.id + '\'); padmMudarVisao(\'pipeline\')" ' +
+            'class="bg-white border border-gray-100 rounded-lg p-2.5 cursor-pointer hover:shadow-sm hover:border-indigo-200 transition">' +
+            '<p class="text-xs font-medium text-gray-800 line-clamp-2 leading-snug">' + _esc(p.titulo) + '</p>' +
+            '<div class="flex items-center gap-1.5 mt-1.5 flex-wrap">' +
+              '<span class="text-xs text-gray-400 bg-gray-50 px-1.5 py-0.5 rounded">' + _padmLabelTipo(p.tipo) + '</span>' +
+              _padmBadgePrioridade(p.prioridade) +
+            '</div>' +
+            (p.etapaAtualNome ? '<div class="text-xs text-indigo-500 mt-1 truncate">' + _esc(p.etapaAtualNome) + '</div>' : '') +
+          '</div>';
+        }).join('')
+      : '<div class="text-center text-gray-300 text-xs py-4">Vazio</div>';
+
+    return '<div class="flex-shrink-0 w-56">' +
+      '<div class="bg-white rounded-xl border border-gray-200 border-t-4 ' + cor + ' overflow-hidden">' +
+        '<div class="px-3 py-2 border-b border-gray-100 flex items-center justify-between">' +
+          '<span class="text-xs font-semibold text-gray-700">' + label + '</span>' +
+          '<span class="text-xs text-gray-400 bg-gray-100 rounded-full w-5 h-5 flex items-center justify-center font-bold">' + cards.length + '</span>' +
+        '</div>' +
+        '<div class="p-2 space-y-2 max-h-96 overflow-y-auto custom-scroll">' + cardsHtml + '</div>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+// ── VISÃO: DASHBOARD ─────────────────────────────────────────────────────────
+
+function _padmCarregarDashboard() {
+  var cardsEl = document.getElementById('padm-dash-cards');
+  if (cardsEl) cardsEl.innerHTML = '<div class="col-span-4 text-center py-4 text-gray-400 text-sm"><i class="fas fa-spinner fa-spin mr-1"></i>Carregando…</div>';
+
+  BtnGuard.gas(null, GAS.processosAdm.dashboardInstitucional, [AppState.email], {
+    onSuccess: function(data) {
+      _padmPreencherDashboard(data);
+    },
+    onError: function(err) {
+      if (cardsEl) cardsEl.innerHTML = '<div class="col-span-4 text-center py-4 text-red-400 text-sm">' + _esc(err || 'Erro') + '</div>';
+    }
+  });
+}
+
+function _padmPreencherDashboard(data) {
+  var total      = document.getElementById('padm-dash-total');
+  var abertos    = document.getElementById('padm-dash-abertos');
+  var atrasados  = document.getElementById('padm-dash-atrasados');
+  var comprometido = document.getElementById('padm-dash-comprometido');
+
+  if (total)       total.textContent       = data.totais.total || 0;
+  if (abertos)     abertos.textContent     = data.totais.emAndamento || 0;
+  if (atrasados)   atrasados.textContent   = data.totais.atrasados || 0;
+  if (comprometido) comprometido.textContent = 'R$ ' + ((data.financeiro && data.financeiro.totalComprometido) ? parseFloat(data.financeiro.totalComprometido).toFixed(2) : '0,00');
+
+  // Por status
+  var elStatus = document.getElementById('padm-dash-por-status');
+  if (elStatus && data.porStatus) {
+    var totalProc = data.totais.total || 1;
+    elStatus.innerHTML = Object.keys(data.porStatus).map(function(s) {
+      var n     = data.porStatus[s] || 0;
+      var pct   = Math.round((n / totalProc) * 100);
+      var cor   = _PADM_STATUS_COR[s] || 'bg-gray-100 text-gray-600';
+      return '<div class="flex items-center gap-2">' +
+        '<span class="w-24 text-xs text-gray-600 text-right flex-shrink-0">' + (_PADM_STATUS_LABEL[s] || s) + '</span>' +
+        '<div class="flex-1 bg-gray-100 rounded-full h-2"><div class="h-2 rounded-full bg-indigo-400" style="width:' + pct + '%"></div></div>' +
+        '<span class="text-xs font-semibold text-gray-700 w-6 text-right">' + n + '</span>' +
+      '</div>';
+    }).join('');
+  }
+
+  // Por tipo
+  var elTipo = document.getElementById('padm-dash-por-tipo');
+  if (elTipo && data.porTipo) {
+    elTipo.innerHTML = Object.keys(data.porTipo).map(function(t) {
+      var n = data.porTipo[t] || 0;
+      return '<div class="flex items-center justify-between">' +
+        '<span class="text-xs text-gray-600">' + _padmLabelTipo(t) + '</span>' +
+        '<span class="text-xs font-bold text-indigo-600">' + n + '</span>' +
+      '</div>';
+    }).join('');
+  }
+
+  // Recentes
+  var elRec = document.getElementById('padm-dash-recentes');
+  if (elRec && data.recentesAtivos) {
+    elRec.innerHTML = data.recentesAtivos.slice(0, 5).map(function(p) {
+      var cor = _PADM_STATUS_COR[p.status] || 'bg-gray-100 text-gray-600';
+      return '<div class="flex items-center justify-between gap-2 py-1.5 border-b border-gray-50 last:border-0 cursor-pointer hover:bg-gray-50 rounded px-1 transition" onclick="padmSelecionarProcesso(\'' + p.id + '\'); padmMudarVisao(\'pipeline\')">' +
+        '<div class="flex-1 min-w-0"><p class="text-xs font-medium text-gray-800 truncate">' + _esc(p.titulo) + '</p>' +
+        '<p class="text-xs text-gray-400">' + _padmLabelTipo(p.tipo) + (p.etapaAtualNome ? ' · ' + _esc(p.etapaAtualNome) : '') + '</p></div>' +
+        '<span class="text-xs font-medium px-2 py-0.5 rounded-full flex-shrink-0 ' + cor + '">' + (_PADM_STATUS_LABEL[p.status] || p.status) + '</span>' +
+      '</div>';
+    }).join('');
+  }
+
+  // Reservas orçamentárias
+  var elOrc = document.getElementById('padm-dash-reservas-orc');
+  if (elOrc && data.financeiro && data.financeiro.reservasAtivas) {
+    var reservas = data.financeiro.reservasAtivas;
+    if (!reservas.length) {
+      elOrc.innerHTML = '<p class="text-xs text-gray-400 text-center py-3">Nenhuma reserva ativa</p>';
+    } else {
+      elOrc.innerHTML = reservas.map(function(r) {
+        return '<div class="flex items-center justify-between gap-2 py-1.5 border-b border-gray-50 last:border-0">' +
+          '<div class="flex-1 min-w-0"><p class="text-xs font-medium text-gray-800 truncate">' + _esc(r.rubricaNome || r.rubricaId) + '</p>' +
+          '<p class="text-xs text-gray-400">' + _esc(r.descricao || r.processoId) + '</p></div>' +
+          '<span class="text-xs font-bold text-amber-600">R$ ' + parseFloat(r.valor).toFixed(2) + '</span>' +
+        '</div>';
+      }).join('');
+    }
+  }
+}
+
+// ── Seleção de processo e painel de detalhe ──────────────────────────────────
+
+function padmSelecionarProcesso(id) {
+  var vazioEl    = document.getElementById('padm-detalhe-vazio');
+  var conteudoEl = document.getElementById('padm-detalhe-conteudo');
+  if (vazioEl)    vazioEl.classList.add('hidden');
+  if (conteudoEl) {
+    conteudoEl.classList.remove('hidden');
+    conteudoEl.innerHTML = '<div class="flex-1 flex items-center justify-center"><i class="fas fa-spinner fa-spin text-indigo-400 text-2xl"></i></div>';
+  }
+
+  BtnGuard.gas(null, GAS.processosAdm.dashboard, [id, AppState.email], {
+    onSuccess: function(data) {
+      _padmState.dashboardAtivo = data;
+      _padmState.processoAtivo  = data.processo;
+      if (conteudoEl) conteudoEl.innerHTML = _padmEstruturaDetalhe();
+      _padmPreencherDetalhe(data);
+      _padmRenderizarLista();
+    },
+    onError: function(err) {
+      if (conteudoEl) conteudoEl.innerHTML = '<div class="p-4 text-red-500 text-sm">Erro: ' + _esc(err || 'Falha ao carregar') + '</div>';
+    }
+  });
+}
+
+function _padmEstruturaDetalhe() {
+  return '<div class="px-4 py-3 border-b border-gray-100 bg-gray-50 flex-shrink-0">' +
+    '<div class="flex items-start justify-between gap-2 flex-wrap">' +
+      '<div class="min-w-0">' +
+        '<h3 id="padm-det-titulo" class="font-bold text-gray-800 text-sm truncate"></h3>' +
+        '<div class="flex items-center gap-2 mt-1 flex-wrap">' +
+          '<span id="padm-det-status" class="text-xs font-medium px-2 py-0.5 rounded-full"></span>' +
+          '<span id="padm-det-tipo" class="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full"></span>' +
+          '<span id="padm-det-prioridade" class="text-xs font-medium px-2 py-0.5 rounded-full"></span>' +
+        '</div>' +
+      '</div>' +
+      '<div class="flex items-center gap-1.5 flex-shrink-0">' +
+        '<button onclick="padmAvancarEtapa()" id="padm-btn-avancar" class="text-xs bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 px-2.5 py-1 rounded-lg font-medium transition hidden"><i class="fas fa-arrow-right mr-1"></i>Avançar Etapa</button>' +
+        '<button onclick="padmAbrirModalStatus()" class="text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-2.5 py-1 rounded-lg font-medium transition">Status</button>' +
+        '<button onclick="padmAbrirModalVincular()" class="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-2.5 py-1 rounded-lg font-medium transition">+ Vincular</button>' +
+      '</div>' +
+    '</div>' +
+    '<div id="padm-stepper" class="mt-3 hidden"><div class="flex items-center gap-1 overflow-x-auto pb-1 custom-scroll-x" id="padm-stepper-lista"></div></div>' +
+    '<div class="grid grid-cols-4 gap-2 mt-3">' +
+      '<div class="bg-blue-50 rounded-lg p-2 text-center cursor-pointer hover:bg-blue-100 transition" onclick="padmMostrarTab(\'tarefas\')"><div id="padm-n-tarefas" class="text-lg font-bold text-blue-600">0</div><div class="text-xs text-blue-500">Tarefas</div></div>' +
+      '<div class="bg-purple-50 rounded-lg p-2 text-center cursor-pointer hover:bg-purple-100 transition" onclick="padmMostrarTab(\'reservas\')"><div id="padm-n-reservas" class="text-lg font-bold text-purple-600">0</div><div class="text-xs text-purple-500">Reservas</div></div>' +
+      '<div class="bg-amber-50 rounded-lg p-2 text-center cursor-pointer hover:bg-amber-100 transition" onclick="padmMostrarTab(\'contratos\')"><div id="padm-n-contratos" class="text-lg font-bold text-amber-600">0</div><div class="text-xs text-amber-500">Contratos</div></div>' +
+      '<div class="bg-rose-50 rounded-lg p-2 text-center cursor-pointer hover:bg-rose-100 transition" onclick="padmMostrarTab(\'comunicacao\')"><div id="padm-n-comunicacao" class="text-lg font-bold text-rose-600">0</div><div class="text-xs text-rose-500">Comunicação</div></div>' +
+    '</div>' +
+    '<div id="padm-fin-painel" class="hidden mt-2 bg-gradient-to-r from-gray-50 to-indigo-50 rounded-lg px-3 py-2">' +
+      '<div class="flex items-center gap-4 flex-wrap text-xs">' +
+        '<span class="text-gray-500">Rubrica: <span id="padm-fin-rubrica" class="font-semibold text-gray-700"></span></span>' +
+        '<span class="text-gray-500">Previsto: <span id="padm-fin-previsto" class="font-semibold text-indigo-700"></span></span>' +
+        '<span class="text-gray-500">Reservado: <span id="padm-fin-reservado" class="font-semibold text-amber-600"></span></span>' +
+        '<span class="text-gray-500">Executado: <span id="padm-fin-executado" class="font-semibold text-gray-700"></span></span>' +
+        '<span class="text-gray-500">Saldo: <span id="padm-fin-saldo" class="font-bold"></span></span>' +
+        '<button onclick="padmReservarOrcamento()" id="padm-btn-reservar-orc" class="hidden text-xs bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-lg transition"><i class="fas fa-lock mr-1"></i>Reservar</button>' +
+      '</div>' +
+    '</div>' +
+  '</div>' +
+  '<div class="flex border-b border-gray-200 px-4 overflow-x-auto flex-shrink-0" id="padm-tabs-bar">' +
+    ['timeline','tarefas','reservas','contratos','comunicacao','documentos','gargalos'].map(function(tab) {
+      var icons = { timeline: 'fa-stream', tarefas: 'fa-tasks', reservas: 'fa-calendar', contratos: 'fa-file-contract', comunicacao: 'fa-bullhorn', documentos: 'fa-paperclip', gargalos: 'fa-exclamation-triangle' };
+      var labels = { timeline: 'Timeline', tarefas: 'Tarefas', reservas: 'Reservas', contratos: 'Contratos', comunicacao: 'Comunicação', documentos: 'Docs', gargalos: 'Gargalos' };
+      var active = tab === (_padmState.tabAtiva || 'timeline');
+      return '<button onclick="padmMostrarTab(\'' + tab + '\')" id="padm-tab-' + tab + '" class="padm-tab text-xs py-2.5 px-3 border-b-2 ' + (active ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700') + ' font-medium whitespace-nowrap"><i class="fas ' + icons[tab] + ' mr-1"></i>' + labels[tab] + '</button>';
+    }).join('') +
+  '</div>' +
+  '<div class="flex-1 overflow-y-auto p-4 custom-scroll">' +
+    '<div id="padm-painel-timeline" class="padm-painel">' +
+      '<div class="flex items-center gap-2 mb-3"><textarea id="padm-comentario" rows="2" placeholder="Adicionar comentário à timeline…" class="flex-1 border border-gray-300 rounded-lg px-3 py-1.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-indigo-400"></textarea>' +
+      '<button onclick="padmComentarTimeline()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs px-3 py-1.5 rounded-lg font-medium transition self-end">Enviar</button></div>' +
+      '<div id="padm-timeline-lista" class="space-y-3"></div>' +
+    '</div>' +
+    '<div id="padm-painel-tarefas" class="padm-painel hidden">' +
+      '<div class="flex justify-between items-center mb-3"><span class="text-xs font-semibold text-gray-600">Tarefas vinculadas</span>' +
+      '<button onclick="padmAbrirModalCriarTarefa()" class="text-xs bg-blue-50 hover:bg-blue-100 text-blue-600 px-2.5 py-1 rounded-lg font-medium transition"><i class="fas fa-plus mr-1 text-xs"></i>Nova Tarefa</button></div>' +
+      '<div id="padm-lista-tarefas" class="space-y-2"></div>' +
+    '</div>' +
+    '<div id="padm-painel-reservas" class="padm-painel hidden"><div id="padm-lista-reservas" class="space-y-2"></div></div>' +
+    '<div id="padm-painel-contratos" class="padm-painel hidden"><div id="padm-lista-contratos" class="space-y-2"></div></div>' +
+    '<div id="padm-painel-comunicacao" class="padm-painel hidden">' +
+      '<div class="flex justify-between items-center mb-3"><span class="text-xs font-semibold text-gray-600">Demandas de comunicação</span>' +
+      '<button onclick="padmGerarDemandaComunicacao()" class="text-xs bg-rose-50 hover:bg-rose-100 text-rose-600 px-2.5 py-1 rounded-lg font-medium transition"><i class="fas fa-plus mr-1 text-xs"></i>Gerar Demanda</button></div>' +
+      '<div id="padm-lista-comunicacao" class="space-y-2"></div>' +
+    '</div>' +
+    '<div id="padm-painel-documentos" class="padm-painel hidden">' +
+      '<div class="flex justify-between items-center mb-3"><span class="text-xs font-semibold text-gray-600">Documentos</span>' +
+      '<button onclick="padmAbrirModalDocumento()" class="text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 px-2.5 py-1 rounded-lg font-medium transition"><i class="fas fa-plus mr-1 text-xs"></i>Adicionar</button></div>' +
+      '<div id="padm-lista-documentos" class="space-y-2"></div>' +
+    '</div>' +
+    '<div id="padm-painel-gargalos" class="padm-painel hidden"><div id="padm-lista-gargalos" class="space-y-3"></div></div>' +
+  '</div>';
+}
+
+function _padmPreencherDetalhe(dash) {
+  var proc   = dash.processo;
+  var resumo = dash.resumo || {};
+  var fin    = proc.impactoFinanceiro || {};
+
+  var tEl = document.getElementById('padm-det-titulo');
+  if (tEl) tEl.textContent = proc.titulo || '';
+
+  var stsEl = document.getElementById('padm-det-status');
+  if (stsEl) {
+    stsEl.textContent = _PADM_STATUS_LABEL[proc.status] || proc.status;
+    stsEl.className   = 'text-xs font-medium px-2 py-0.5 rounded-full ' + (_PADM_STATUS_COR[proc.status] || 'bg-gray-100 text-gray-600');
+  }
+
+  var tipoEl = document.getElementById('padm-det-tipo');
+  if (tipoEl) tipoEl.textContent = _padmLabelTipo(proc.tipo);
+
+  var priEl = document.getElementById('padm-det-prioridade');
+  if (priEl) {
+    priEl.textContent = (proc.prioridade || 'media').charAt(0).toUpperCase() + (proc.prioridade || 'media').slice(1);
+    priEl.className   = 'text-xs font-medium px-2 py-0.5 rounded-full ' + (_PADM_PRIORIDADE_COR[proc.prioridade] || 'bg-gray-100 text-gray-600');
+  }
+
+  // Stepper
+  _padmRenderizarStepper(proc);
+
+  // Botão avançar etapa
+  var btnAv = document.getElementById('padm-btn-avancar');
+  if (btnAv) {
+    var podeAvancar = proc.etapas && proc.etapaIndice < (proc.etapas.length - 1) && proc.status !== 'concluido' && proc.status !== 'cancelado';
+    btnAv.classList.toggle('hidden', !podeAvancar);
+  }
+
+  // Métricas
+  var vinc = dash.vinculos || {};
+  _padmSetText('padm-n-tarefas',    (vinc.tarefas    || []).length);
+  _padmSetText('padm-n-reservas',   (vinc.reservas   || []).length);
+  _padmSetText('padm-n-contratos',  ((vinc.contratos || []).concat(vinc.contratacoes || [])).length);
+  _padmSetText('padm-n-comunicacao',(vinc.comunicacoes || []).length);
+
+  // Painel financeiro
+  var finPainel = document.getElementById('padm-fin-painel');
+  if (finPainel) {
+    var mostra = (fin.previsto > 0) || proc.rubricaNome || proc.rubricaId;
+    finPainel.classList.toggle('hidden', !mostra);
+    if (mostra) {
+      _padmSetText('padm-fin-rubrica',   proc.rubricaNome || proc.rubricaId || '—');
+      _padmSetText('padm-fin-previsto',  'R$ ' + parseFloat(fin.previsto   || 0).toFixed(2));
+      _padmSetText('padm-fin-reservado', 'R$ ' + parseFloat(fin.reservado  || 0).toFixed(2));
+      _padmSetText('padm-fin-executado', 'R$ ' + parseFloat(fin.executado  || 0).toFixed(2));
+      var saldoVal = parseFloat(fin.previsto || 0) - parseFloat(fin.executado || 0) - parseFloat(fin.reservado || 0);
+      var saldoEl  = document.getElementById('padm-fin-saldo');
+      if (saldoEl) {
+        saldoEl.textContent = 'R$ ' + saldoVal.toFixed(2);
+        saldoEl.className   = 'font-bold ' + (saldoVal < 0 ? 'text-red-600' : 'text-green-600');
+      }
+      // Botão reservar: só mostra se não há reserva ativa e há valor
+      var btnRes = document.getElementById('padm-btn-reservar-orc');
+      if (btnRes) {
+        var temReserva = fin.reservado > 0 || fin.reservaId;
+        btnRes.classList.toggle('hidden', !!temReserva || !fin.previsto);
+      }
+    }
+  }
+
+  // Conteúdo das tabs
+  _padmRenderizarTimeline(dash.timeline || []);
+  _padmRenderizarTarefas(vinc.tarefas || []);
+  _padmRenderizarReservas(vinc.reservas || []);
+  _padmRenderizarContratos((vinc.contratos || []).concat(vinc.contratacoes || []));
+  _padmRenderizarComunicacao(vinc.comunicacoes || []);
+  _padmRenderizarDocumentos(proc.documentos || []);
+  _padmRenderizarGargalos(dash.gargalos || [], dash.alertas || []);
+
+  // Status modal options
+  _padmPreencherOpcoesStatus(proc.status);
+
+  padmMostrarTab(_padmState.tabAtiva || 'timeline');
+}
+
+// ── Stepper de etapas ─────────────────────────────────────────────────────────
+
+function _padmRenderizarStepper(proc) {
+  var container = document.getElementById('padm-stepper');
+  var lista     = document.getElementById('padm-stepper-lista');
+  if (!container || !lista) return;
+
+  var etapas = proc.etapas || proc.etapasConfig || [];
+  if (!etapas.length) { container.classList.add('hidden'); return; }
+  container.classList.remove('hidden');
+
+  var idx = proc.etapaIndice || 0;
+  lista.innerHTML = etapas.map(function(etapa, i) {
+    var concluida = i < idx;
+    var atual     = i === idx;
+    var futura    = i > idx;
+    var corBolha  = concluida ? 'bg-green-500 text-white' : atual ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-500';
+    var corTexto  = concluida ? 'text-green-600' : atual ? 'text-indigo-700 font-semibold' : 'text-gray-400';
+    var nome      = etapa.nome || etapa.id || ('Etapa ' + (i + 1));
+    var html = '<div class="flex flex-col items-center gap-0.5 flex-shrink-0">' +
+      '<div class="w-5 h-5 rounded-full flex items-center justify-center text-xs ' + corBolha + '">' +
+        (concluida ? '<i class="fas fa-check" style="font-size:9px"></i>' : (i + 1)) +
+      '</div>' +
+      '<span class="text-xs whitespace-nowrap ' + corTexto + '" style="font-size:10px">' + _esc(nome) + '</span>' +
+    '</div>';
+    if (i < etapas.length - 1) {
+      html += '<div class="flex-1 h-0.5 mt-2.5 rounded-full min-w-4 max-w-8 ' + (concluida ? 'bg-green-300' : 'bg-gray-200') + '"></div>';
+    }
+    return html;
+  }).join('');
+}
+
+// ── Avançar etapa ─────────────────────────────────────────────────────────────
+
+function padmAvancarEtapa() {
+  if (!_padmState.processoAtivo) return;
+  var proc  = _padmState.processoAtivo;
+  var etapa = (proc.etapas || [])[proc.etapaIndice] || {};
+  var proxNome = (proc.etapas || [])[(proc.etapaIndice || 0) + 1];
+  proxNome = proxNome ? (proxNome.nome || proxNome.id) : '';
+
+  var msg = 'Avançar para a próxima etapa' + (proxNome ? ' (' + proxNome + ')' : '') + '?';
+  if (!confirm(msg)) return;
+
+  var obs = prompt('Observações sobre o avanço (opcional):') || '';
+
+  var btn = document.getElementById('padm-btn-avancar');
+  BtnGuard.gas(btn, GAS.processosAdm.avancarEtapa, [proc.id, obs, AppState.email], {
+    onSuccess: function() {
+      Toast.show('success', 'Etapa avançada com sucesso');
+      padmSelecionarProcesso(proc.id);
+      padmCarregar();
+    },
+    onError: function(err) {
+      Toast.show('error', err || 'Erro ao avançar etapa');
+    }
+  });
+}
+
+// ── Reservar orçamento ────────────────────────────────────────────────────────
+
+function padmReservarOrcamento() {
+  if (!_padmState.processoAtivo) return;
+  if (!confirm('Reservar orçamento para este processo? Isso vai comprometer o saldo da rubrica.')) return;
+
+  var btn = document.getElementById('padm-btn-reservar-orc');
+  BtnGuard.gas(btn, GAS.processosAdm.reservarOrcamento, [_padmState.processoAtivo.id, AppState.email], {
+    onSuccess: function() {
+      Toast.show('success', 'Orçamento reservado com sucesso');
+      padmSelecionarProcesso(_padmState.processoAtivo.id);
+    },
+    onError: function(err) {
+      Toast.show('error', err || 'Erro ao reservar orçamento');
+    }
   });
 }
 
 // ── Tabs ──────────────────────────────────────────────────────────────────────
-function procMostrarTab(tab) {
-  _procState.tabAtiva = tab;
-  document.querySelectorAll('.proc-tab-btn').forEach(function(btn) {
-    btn.classList.remove('border-indigo-500', 'text-indigo-600');
-    btn.classList.add('border-transparent', 'text-gray-500');
-  });
-  document.querySelectorAll('.proc-painel').forEach(function(p) { p.classList.add('hidden'); });
 
-  var tabBtn = document.getElementById('proc-tab-' + tab);
-  var painel = document.getElementById('proc-painel-' + tab);
-  if (tabBtn) { tabBtn.classList.add('border-indigo-500', 'text-indigo-600'); tabBtn.classList.remove('border-transparent', 'text-gray-500'); }
+function padmMostrarTab(tab) {
+  _padmState.tabAtiva = tab;
+  document.querySelectorAll('.padm-tab').forEach(function(btn) {
+    var isAtivo = btn.id === 'padm-tab-' + tab;
+    btn.classList.toggle('border-indigo-500', isAtivo);
+    btn.classList.toggle('text-indigo-600',   isAtivo);
+    btn.classList.toggle('border-transparent', !isAtivo);
+    btn.classList.toggle('text-gray-500',      !isAtivo);
+  });
+  document.querySelectorAll('.padm-painel').forEach(function(p) { p.classList.add('hidden'); });
+  var painel = document.getElementById('padm-painel-' + tab);
   if (painel) painel.classList.remove('hidden');
 }
 
+// ── Timeline ──────────────────────────────────────────────────────────────────
+
+function _padmRenderizarTimeline(eventos) {
+  var el = document.getElementById('padm-timeline-lista');
+  if (!el) return;
+  if (!eventos.length) {
+    el.innerHTML = '<p class="text-xs text-gray-400 text-center py-4">Nenhum evento registrado</p>';
+    return;
+  }
+  var sorted = eventos.slice().sort(function(a, b) { return new Date(b.timestamp) - new Date(a.timestamp); });
+  el.innerHTML = sorted.map(function(evt) {
+    var icon = _padmIconeEvento(evt.tipo);
+    var cor  = _padmCorEvento(evt.tipo);
+    return '<div class="flex gap-2.5">' +
+      '<div class="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center mt-0.5 ' + cor + '">' +
+        '<i class="' + icon + ' text-xs"></i>' +
+      '</div>' +
+      '<div class="flex-1 min-w-0">' +
+        '<p class="text-xs text-gray-800 leading-snug">' + _esc(evt.descricao || '') + '</p>' +
+        '<div class="flex items-center gap-2 mt-0.5">' +
+          '<span class="text-xs text-gray-400">' + _formatarDataHora(evt.timestamp) + '</span>' +
+          (evt.ator  ? '<span class="text-xs text-gray-400">· ' + _esc(evt.ator) + '</span>' : '') +
+          (evt.setor ? '<span class="text-xs text-indigo-500 bg-indigo-50 px-1 rounded">' + _esc(evt.setor) + '</span>' : '') +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function padmComentarTimeline() {
+  if (!_padmState.processoAtivo) return;
+  var input = document.getElementById('padm-comentario');
+  var texto = ((input && input.value) || '').trim();
+  if (!texto) { Toast.show('warning', 'Digite um comentário'); return; }
+
+  BtnGuard.gas(null, GAS.processosAdm.comentar, [_padmState.processoAtivo.id, texto, AppState.email], {
+    onSuccess: function() {
+      if (input) input.value = '';
+      padmSelecionarProcesso(_padmState.processoAtivo.id);
+    },
+    onError: function(err) { Toast.show('error', err || 'Erro ao comentar'); }
+  });
+}
+
+// ── Tarefas ───────────────────────────────────────────────────────────────────
+
+function _padmRenderizarTarefas(tarefas) {
+  var el = document.getElementById('padm-lista-tarefas');
+  if (!el) return;
+  if (!tarefas.length) {
+    el.innerHTML = '<p class="text-xs text-gray-400 text-center py-4">Nenhuma tarefa vinculada</p>';
+    return;
+  }
+  var statusCor = { backlog:'text-gray-500', solicitada:'text-blue-600', em_analise:'text-yellow-600',
+    em_execucao:'text-indigo-600', aguardando_aprovacao:'text-orange-600',
+    concluida:'text-green-600', cancelada:'text-gray-400', bloqueada:'text-red-600' };
+  var statusLabel = { backlog:'Backlog', solicitada:'Solicitada', em_analise:'Em Análise',
+    em_execucao:'Em Execução', aguardando_aprovacao:'Aguard. Aprovação',
+    concluida:'Concluída', cancelada:'Cancelada', bloqueada:'Bloqueada' };
+
+  el.innerHTML = tarefas.map(function(t) {
+    var cor   = statusCor[t.status]   || 'text-gray-500';
+    var label = statusLabel[t.status] || (t.status || '');
+    return '<div class="flex items-center justify-between gap-2 p-2.5 rounded-lg border border-gray-100 hover:border-gray-200 transition">' +
+      '<div class="flex-1 min-w-0">' +
+        '<p class="text-xs font-medium text-gray-800 truncate">' + _esc(t.titulo || t.id) + '</p>' +
+        '<div class="flex items-center gap-2 mt-0.5">' +
+          '<span class="text-xs ' + cor + ' font-medium">' + label + '</span>' +
+          (t.responsavel ? '<span class="text-xs text-gray-400">' + _esc(t.responsavel) + '</span>' : '') +
+          (t.prazo ? '<span class="text-xs text-gray-400">' + _formatarData(t.prazo) + '</span>' : '') +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+// ── Reservas de espaço ────────────────────────────────────────────────────────
+
+function _padmRenderizarReservas(reservas) {
+  var el = document.getElementById('padm-lista-reservas');
+  if (!el) return;
+  if (!reservas.length) {
+    el.innerHTML = '<p class="text-xs text-gray-400 text-center py-4">Nenhuma reserva de espaço vinculada</p>';
+    return;
+  }
+  el.innerHTML = reservas.map(function(r) {
+    return '<div class="p-2.5 rounded-lg border border-gray-100 text-xs">' +
+      '<div class="flex items-center justify-between"><span class="font-medium text-gray-800">' + _esc(r.espaco || r.id) + '</span><span class="text-gray-400">' + _esc(r.status || '') + '</span></div>' +
+      '<div class="text-gray-500 mt-0.5">' + _esc(r.data || '') + (r.inicio ? ' · ' + r.inicio + '–' + (r.fim || '') : '') + '</div>' +
+    '</div>';
+  }).join('');
+}
+
+// ── Contratos ─────────────────────────────────────────────────────────────────
+
+function _padmRenderizarContratos(todos) {
+  var el = document.getElementById('padm-lista-contratos');
+  if (!el) return;
+  if (!todos.length) {
+    el.innerHTML = '<p class="text-xs text-gray-400 text-center py-4">Nenhum contrato vinculado</p>';
+    return;
+  }
+  el.innerHTML = todos.map(function(c) {
+    var titulo = c.descricao || c.nome || c.id;
+    var valor  = c.valor ? 'R$ ' + parseFloat(c.valor).toFixed(2) : '';
+    return '<div class="p-2.5 rounded-lg border border-gray-100 text-xs">' +
+      '<div class="flex items-center justify-between"><span class="font-medium text-gray-800">' + _esc(titulo) + '</span>' +
+      (valor ? '<span class="text-green-600 font-semibold">' + valor + '</span>' : '') + '</div>' +
+      (c.status ? '<div class="text-gray-500 mt-0.5">' + _esc(c.status) + '</div>' : '') +
+    '</div>';
+  }).join('');
+}
+
+// ── Comunicação ───────────────────────────────────────────────────────────────
+
+function _padmRenderizarComunicacao(comunicacoes) {
+  var el = document.getElementById('padm-lista-comunicacao');
+  if (!el) return;
+  if (!comunicacoes.length) {
+    el.innerHTML = '<p class="text-xs text-gray-400 text-center py-4">Nenhuma demanda de comunicação vinculada</p>';
+    return;
+  }
+  el.innerHTML = comunicacoes.map(function(c) {
+    return '<div class="p-2.5 rounded-lg border border-gray-100 text-xs">' +
+      '<div class="font-medium text-gray-800">' + _esc(c.titulo || c.id) + '</div>' +
+      '<div class="text-gray-500 mt-0.5">' + _esc(c.tipo || '') + (c.status ? ' · ' + _esc(c.status) : '') + '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function padmGerarDemandaComunicacao() {
+  if (!_padmState.processoAtivo) return;
+  if (!confirm('Gerar demanda de comunicação vinculada a este processo?')) return;
+
+  BtnGuard.gas(null, GAS.processosAdm.vincularComunicacao, [_padmState.processoAtivo.id, null, AppState.email], {
+    onSuccess: function() {
+      Toast.show('success', 'Demanda de comunicação gerada');
+      padmSelecionarProcesso(_padmState.processoAtivo.id);
+    },
+    onError: function(err) { Toast.show('error', err || 'Erro ao gerar demanda'); }
+  });
+}
+
+// ── Documentos ────────────────────────────────────────────────────────────────
+
+function _padmRenderizarDocumentos(docs) {
+  var el = document.getElementById('padm-lista-documentos');
+  if (!el) return;
+  if (!docs.length) {
+    el.innerHTML = '<p class="text-xs text-gray-400 text-center py-4">Nenhum documento adicionado</p>';
+    return;
+  }
+  var tipoLabel = { contrato:'Contrato', nota_fiscal:'NF/RPA', orcamento:'Orçamento', arte:'Arte/Layout', certidao:'Certidão', parecer:'Parecer', comprovante:'Comprovante', outro:'Outro' };
+  el.innerHTML = docs.map(function(d) {
+    var label = tipoLabel[d.tipo] || d.tipo || 'Documento';
+    return '<div class="flex items-center gap-2 p-2.5 rounded-lg border border-gray-100 text-xs hover:border-gray-200 transition">' +
+      '<div class="w-7 h-7 rounded bg-gray-100 flex items-center justify-center flex-shrink-0"><i class="fas fa-paperclip text-gray-400 text-xs"></i></div>' +
+      '<div class="flex-1 min-w-0">' +
+        '<p class="font-medium text-gray-800 truncate">' + _esc(d.nome || 'Documento') + '</p>' +
+        '<p class="text-gray-400">' + label + (d.adicionadoEm ? ' · ' + _formatarData(d.adicionadoEm) : '') + '</p>' +
+      '</div>' +
+      (d.url ? '<a href="' + _esc(d.url) + '" target="_blank" class="text-indigo-500 hover:text-indigo-700 flex-shrink-0"><i class="fas fa-external-link-alt"></i></a>' : '') +
+    '</div>';
+  }).join('');
+}
+
+// ── Gargalos ──────────────────────────────────────────────────────────────────
+
+function _padmRenderizarGargalos(gargalos, alertas) {
+  var el   = document.getElementById('padm-lista-gargalos');
+  var tab  = document.getElementById('padm-tab-gargalos');
+  var todos = (gargalos || []).concat(alertas || []);
+  if (!el) return;
+
+  if (tab) {
+    tab.innerHTML = todos.length
+      ? '<i class="fas fa-exclamation-triangle mr-1 text-red-500"></i>Gargalos <span class="bg-red-100 text-red-600 text-xs font-bold px-1.5 rounded-full">' + todos.length + '</span>'
+      : '<i class="fas fa-exclamation-triangle mr-1"></i>Gargalos';
+  }
+
+  if (!todos.length) {
+    el.innerHTML = '<div class="text-center py-6 text-green-600"><i class="fas fa-check-circle text-2xl mb-2 block"></i><p class="text-sm font-medium">Nenhum gargalo detectado</p></div>';
+    return;
+  }
+  el.innerHTML = todos.map(function(g) {
+    var urg = g.urgencia || 'media';
+    var cor = urg === 'critica' ? 'border-red-400 bg-red-50' : urg === 'alta' ? 'border-amber-400 bg-amber-50' : 'border-yellow-300 bg-yellow-50';
+    var txt = g.descricao || (g.tipo ? g.tipo + (g.quantidade ? ' (' + g.quantidade + ')' : '') : 'Alerta');
+    return '<div class="p-3 rounded-lg border-l-4 ' + cor + '">' +
+      '<p class="text-xs font-medium text-gray-800">' + _esc(txt) + '</p>' +
+      (g.tipo ? '<p class="text-xs text-gray-500 mt-0.5">' + _esc(g.tipo) + '</p>' : '') +
+    '</div>';
+  }).join('');
+}
+
+// ── Modal: Status ─────────────────────────────────────────────────────────────
+
+function _padmPreencherOpcoesStatus(statusAtual) {
+  var sel    = document.getElementById('padm-status-novo');
+  var opcoes = _PADM_TRANSICOES[statusAtual] || [];
+  if (!sel) return;
+  sel.innerHTML = opcoes.length
+    ? opcoes.map(function(s) { return '<option value="' + s + '">' + (_PADM_STATUS_LABEL[s] || s) + '</option>'; }).join('')
+    : '<option value="">Nenhuma transição disponível</option>';
+}
+
+function padmAbrirModalStatus() {
+  document.getElementById('padm-modal-status').classList.remove('hidden');
+}
+
+function padmFecharModalStatus() {
+  document.getElementById('padm-modal-status').classList.add('hidden');
+}
+
+function padmConfirmarStatus() {
+  if (!_padmState.processoAtivo) return;
+  var novoStatus = (document.getElementById('padm-status-novo')  || {}).value;
+  var motivo     = (document.getElementById('padm-status-motivo') || {}).value || '';
+  if (!novoStatus) { Toast.show('warning', 'Selecione um status'); return; }
+
+  var btn = document.querySelector('#padm-modal-status button.bg-indigo-600');
+  BtnGuard.gas(btn, GAS.processosAdm.mudarStatus, [_padmState.processoAtivo.id, novoStatus, motivo, AppState.email], {
+    onSuccess: function() {
+      padmFecharModalStatus();
+      Toast.show('success', 'Status atualizado');
+      padmSelecionarProcesso(_padmState.processoAtivo.id);
+      padmCarregar();
+    },
+    onError: function(err) { Toast.show('error', err || 'Erro ao mudar status'); }
+  });
+}
+
+// ── Modal: Criar Processo ─────────────────────────────────────────────────────
+
+function padmAbrirModalCriar() {
+  _padmState.tipoSelecionado        = null;
+  _padmState.etapasSelecionadas     = [];
+  _padmState.camposExtrasSelecionados = [];
+
+  document.getElementById('padm-form-tipo').value = '';
+  document.getElementById('padm-form-titulo').value = '';
+  document.getElementById('padm-form-descricao').value = '';
+  document.getElementById('padm-form-prioridade').value = 'media';
+  document.getElementById('padm-form-prazo').value = '';
+  document.getElementById('padm-form-valor').value = '';
+  document.getElementById('padm-form-responsavel').value = '';
+  document.getElementById('padm-form-acao-busca').value = '';
+  document.getElementById('padm-form-acao-id').value = '';
+  document.getElementById('padm-form-rubrica-busca').value = '';
+  document.getElementById('padm-form-rubrica-id').value = '';
+  document.getElementById('padm-form-rubrica-nome').value = '';
+  document.getElementById('padm-acao-dropdown').classList.add('hidden');
+  document.getElementById('padm-rubrica-dropdown').classList.add('hidden');
+  document.getElementById('padm-saldo-info').classList.add('hidden');
+  document.getElementById('padm-alerta-saldo').classList.add('hidden');
+  document.getElementById('padm-campos-extras').classList.add('hidden');
+  document.getElementById('padm-etapas-preview').classList.add('hidden');
+
+  _padmCarregarCatalogo(_padmRenderizarTipoGrid);
+  document.getElementById('padm-modal-criar').classList.remove('hidden');
+}
+
+function padmFecharModalCriar() {
+  document.getElementById('padm-modal-criar').classList.add('hidden');
+}
+
+function _padmRenderizarTipoGrid() {
+  var grid  = document.getElementById('padm-tipo-grid');
+  var tipos = _padmState.catalogoTipos;
+  if (!grid) return;
+
+  var icones = {
+    contratacao_professor: 'fa-chalkboard-teacher', contratacao_profissional: 'fa-user-tie',
+    servico_grafico: 'fa-palette', aquisicao_equipamento: 'fa-box', bolsista: 'fa-graduation-cap',
+    manutencao_espaco: 'fa-tools', transporte: 'fa-truck', projeto_cultural: 'fa-star',
+    campanha_comunicacao: 'fa-bullhorn', outro: 'fa-ellipsis-h'
+  };
+
+  if (!tipos.length) {
+    grid.innerHTML = '<div class="col-span-3 text-center text-gray-400 text-xs py-4">Nenhum tipo disponível</div>';
+    return;
+  }
+
+  grid.innerHTML = tipos.map(function(t) {
+    var icone = icones[t.id] || 'fa-cog';
+    var qtdEtapas = (t.etapas || []).length;
+    return '<div onclick="padmSelecionarTipo(\'' + t.id + '\')" id="padm-tipo-card-' + t.id + '" ' +
+      'class="padm-tipo-card cursor-pointer border-2 border-gray-200 rounded-xl p-3 text-center hover:border-indigo-400 hover:bg-indigo-50 transition flex flex-col items-center gap-1.5">' +
+      '<div class="w-9 h-9 rounded-lg bg-gray-100 flex items-center justify-center"><i class="fas ' + icone + ' text-gray-500 text-base"></i></div>' +
+      '<span class="text-xs font-semibold text-gray-700 leading-tight">' + _esc(t.nome || t.id) + '</span>' +
+      (qtdEtapas ? '<span class="text-xs text-gray-400">' + qtdEtapas + ' etapas</span>' : '') +
+    '</div>';
+  }).join('');
+}
+
+function padmSelecionarTipo(id) {
+  _padmState.tipoSelecionado = id;
+
+  document.querySelectorAll('.padm-tipo-card').forEach(function(card) {
+    var isSelected = card.id === 'padm-tipo-card-' + id;
+    card.classList.toggle('border-indigo-500', isSelected);
+    card.classList.toggle('bg-indigo-50',      isSelected);
+    card.classList.toggle('border-gray-200',   !isSelected);
+  });
+
+  document.getElementById('padm-form-tipo').value = id;
+
+  var tipo = _padmState.catalogoTipos.find(function(t) { return t.id === id; });
+  if (!tipo) return;
+
+  _padmState.etapasSelecionadas     = tipo.etapas || [];
+  _padmState.camposExtrasSelecionados = tipo.camposExtras || [];
+
+  _padmRenderizarEtapasPreview(tipo.etapas || []);
+  _padmInjetarCamposExtras(tipo.camposExtras || []);
+
+  // Rubrica obrigatória: verificar se alguma etapa exige orçamento
+  var exigeOrc = (tipo.etapas || []).some(function(e) { return e.validacaoOrcamento; });
+  var obrigEl  = document.getElementById('padm-rubrica-obrig');
+  var hintEl   = document.getElementById('padm-rubrica-hint');
+  if (obrigEl) obrigEl.classList.toggle('hidden', !exigeOrc);
+  if (hintEl)  hintEl.textContent = exigeOrc ? '' : '(opcional)';
+}
+
+function _padmRenderizarEtapasPreview(etapas) {
+  var cont  = document.getElementById('padm-etapas-preview');
+  var lista = document.getElementById('padm-etapas-preview-lista');
+  if (!cont || !lista) return;
+  if (!etapas.length) { cont.classList.add('hidden'); return; }
+
+  cont.classList.remove('hidden');
+  lista.innerHTML = etapas.map(function(e, i) {
+    var cor = e.validacaoOrcamento ? 'bg-amber-100 text-amber-700 border-amber-200' : 'bg-gray-100 text-gray-600 border-gray-200';
+    return '<div class="flex items-center gap-1">' +
+      (i > 0 ? '<i class="fas fa-chevron-right text-gray-300 text-xs"></i>' : '') +
+      '<span class="text-xs px-2 py-0.5 rounded-full border ' + cor + '">' + _esc(e.nome || e.id) + '</span>' +
+    '</div>';
+  }).join('');
+}
+
+function _padmInjetarCamposExtras(campos) {
+  var cont  = document.getElementById('padm-campos-extras');
+  var lista = document.getElementById('padm-campos-extras-lista');
+  if (!cont || !lista) return;
+  if (!campos.length) { cont.classList.add('hidden'); return; }
+
+  cont.classList.remove('hidden');
+  lista.innerHTML = campos.map(function(c) {
+    var id       = 'padm-extra-' + c.nome;
+    var labelHtml = '<label for="' + id + '" class="block text-xs font-semibold text-gray-700 mb-1">' + _esc(c.label || c.nome) + (c.obrigatorio ? ' *' : '') + '</label>';
+    var inputHtml;
+    if (c.tipo === 'textarea') {
+      inputHtml = '<textarea id="' + id + '" rows="2" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-indigo-400" ' + (c.obrigatorio ? 'required' : '') + '></textarea>';
+    } else if (c.tipo === 'select' && c.opcoes) {
+      inputHtml = '<select id="' + id + '" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">' +
+        c.opcoes.map(function(o) { return '<option value="' + _esc(o) + '">' + _esc(o) + '</option>'; }).join('') + '</select>';
+    } else {
+      inputHtml = '<input type="' + (c.tipo || 'text') + '" id="' + id + '" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" ' + (c.obrigatorio ? 'required' : '') + '>';
+    }
+    return '<div>' + labelHtml + inputHtml + '</div>';
+  }).join('');
+}
+
+// ── Autocomplete: Ações ───────────────────────────────────────────────────────
+
+function padmBuscarAcoes(q) {
+  if (_padmState._acaoTimer) clearTimeout(_padmState._acaoTimer);
+  var dropdown = document.getElementById('padm-acao-dropdown');
+  if (!q || q.length < 2) { dropdown.classList.add('hidden'); return; }
+
+  _padmState._acaoTimer = setTimeout(function() {
+    BtnGuard.gas(null, GAS.processosAdm.buscarAcoes, [q, AppState.email], {
+      onSuccess: function(resultados) {
+        if (!resultados.length) {
+          dropdown.innerHTML = '<div class="p-2 text-xs text-gray-400 text-center">Nenhuma ação encontrada</div>';
+        } else {
+          dropdown.innerHTML = resultados.map(function(a) {
+            return '<div onclick="padmSelecionarAcao(\'' + a.id + '\', \'' + a.titulo.replace(/'/g, "\\'") + '\')" ' +
+              'class="px-3 py-2 text-xs text-gray-700 hover:bg-indigo-50 cursor-pointer flex items-center gap-2 border-b border-gray-50 last:border-0">' +
+              '<i class="fas fa-star text-indigo-300 flex-shrink-0"></i>' +
+              '<span class="flex-1 min-w-0"><span class="font-medium">' + _esc(a.titulo) + '</span>' +
+              (a.status ? '<span class="text-gray-400 ml-1">· ' + _esc(a.status) + '</span>' : '') + '</span>' +
+            '</div>';
+          }).join('');
+        }
+        dropdown.classList.remove('hidden');
+      },
+      onError: function() { dropdown.classList.add('hidden'); }
+    });
+  }, 300);
+}
+
+function padmSelecionarAcao(id, titulo) {
+  document.getElementById('padm-form-acao-busca').value = titulo;
+  document.getElementById('padm-form-acao-id').value    = id;
+  document.getElementById('padm-acao-dropdown').classList.add('hidden');
+}
+
+// ── Autocomplete: Rubricas ────────────────────────────────────────────────────
+
+function padmBuscarRubricas(q) {
+  if (_padmState._rubricaTimer) clearTimeout(_padmState._rubricaTimer);
+  var dropdown = document.getElementById('padm-rubrica-dropdown');
+  document.getElementById('padm-form-rubrica-id').value   = '';
+  document.getElementById('padm-form-rubrica-nome').value = '';
+  document.getElementById('padm-saldo-info').classList.add('hidden');
+
+  if (!q || q.length < 2) { dropdown.classList.add('hidden'); return; }
+
+  _padmState._rubricaTimer = setTimeout(function() {
+    BtnGuard.gas(null, GAS.processosAdm.buscarRubricas, [q, AppState.email], {
+      onSuccess: function(rubricas) {
+        if (!rubricas.length) {
+          dropdown.innerHTML = '<div class="p-2 text-xs text-gray-400 text-center">Nenhuma rubrica encontrada</div>';
+        } else {
+          dropdown.innerHTML = rubricas.map(function(r) {
+            var dispStr = r.disponivel != null ? ' · R$ ' + parseFloat(r.disponivel).toFixed(2) + ' disp.' : '';
+            return '<div onclick="padmSelecionarRubrica(\'' + (r.id || r.nome).replace(/'/g, "\\'") + '\', \'' + (r.nome || r.id).replace(/'/g, "\\'") + '\')" ' +
+              'class="px-3 py-2 text-xs text-gray-700 hover:bg-indigo-50 cursor-pointer flex items-center gap-2 border-b border-gray-50 last:border-0">' +
+              '<i class="fas fa-coins text-amber-400 flex-shrink-0"></i>' +
+              '<span class="flex-1 min-w-0"><span class="font-medium">' + _esc(r.nome || r.id) + '</span><span class="text-gray-400">' + _esc(dispStr) + '</span></span>' +
+            '</div>';
+          }).join('');
+        }
+        dropdown.classList.remove('hidden');
+      },
+      onError: function() { dropdown.classList.add('hidden'); }
+    });
+  }, 300);
+}
+
+function padmSelecionarRubrica(id, nome) {
+  document.getElementById('padm-form-rubrica-busca').value = nome;
+  document.getElementById('padm-form-rubrica-id').value    = id;
+  document.getElementById('padm-form-rubrica-nome').value  = nome;
+  document.getElementById('padm-rubrica-dropdown').classList.add('hidden');
+  padmVerificarSaldo();
+}
+
+function padmVerificarSaldo() {
+  var rubricaId = (document.getElementById('padm-form-rubrica-id')   || {}).value;
+  var valor     = parseFloat((document.getElementById('padm-form-valor') || {}).value) || 0;
+  var saldoEl   = document.getElementById('padm-saldo-info');
+  var alertaEl  = document.getElementById('padm-alerta-saldo');
+  var textoEl   = document.getElementById('padm-saldo-texto');
+  var alertaTxt = document.getElementById('padm-alerta-saldo-texto');
+
+  if (!rubricaId) { if (saldoEl) saldoEl.classList.add('hidden'); return; }
+
+  BtnGuard.gas(null, GAS.processosAdm.verificarOrcamento, [rubricaId, valor, AppState.email], {
+    onSuccess: function(data) {
+      if (saldoEl) {
+        saldoEl.classList.remove('hidden');
+        if (textoEl) textoEl.textContent = data.mensagem || '';
+      }
+      var semSaldo = !data.ok && valor > 0;
+      if (alertaEl)  alertaEl.classList.toggle('hidden', !semSaldo);
+      if (alertaTxt && semSaldo) alertaTxt.textContent = data.mensagem || 'Saldo insuficiente';
+    },
+    onError: function() {}
+  });
+}
+
+// ── Salvar processo ───────────────────────────────────────────────────────────
+
+function padmSalvarProcesso() {
+  var titulo   = ((document.getElementById('padm-form-titulo')   || {}).value || '').trim();
+  var tipo     = ((document.getElementById('padm-form-tipo')      || {}).value || '').trim();
+  var rubricaId = (document.getElementById('padm-form-rubrica-id') || {}).value || '';
+  var valor    = parseFloat((document.getElementById('padm-form-valor') || {}).value) || 0;
+
+  if (!titulo) { Toast.show('warning', 'Título é obrigatório'); return; }
+  if (!tipo)   { Toast.show('warning', 'Selecione o tipo de processo'); return; }
+
+  // Verificar saldo bloqueante
+  var alertaVisible = !(document.getElementById('padm-alerta-saldo') || {classList:{contains:function(){return true;}}}).classList.contains('hidden');
+  if (alertaVisible) { Toast.show('error', 'Saldo insuficiente. Corrija a rubrica ou o valor antes de criar.'); return; }
+
+  // Coletar campos extras
+  var extras = {};
+  (_padmState.camposExtrasSelecionados || []).forEach(function(c) {
+    var el = document.getElementById('padm-extra-' + c.nome);
+    if (el) extras[c.nome] = el.value;
+  });
+
+  var dados = {
+    titulo:           titulo,
+    tipo:             tipo,
+    descricao:        (document.getElementById('padm-form-descricao')   || {}).value || '',
+    prioridade:       (document.getElementById('padm-form-prioridade')  || {}).value || 'media',
+    responsavelAtual: (document.getElementById('padm-form-responsavel') || {}).value || '',
+    prazo:            (document.getElementById('padm-form-prazo')       || {}).value || '',
+    acaoId:           (document.getElementById('padm-form-acao-id')     || {}).value || '',
+    acaoNome:         (document.getElementById('padm-form-acao-busca')  || {}).value || '',
+    rubricaId:        rubricaId,
+    rubricaNome:      (document.getElementById('padm-form-rubrica-nome') || {}).value || '',
+    impactoFinanceiro: { previsto: valor },
+    camposExtras:     extras
+  };
+
+  var btn = document.getElementById('padm-btn-criar-proc');
+  BtnGuard.gas(btn, GAS.processosAdm.criar, [dados, AppState.email], {
+    onSuccess: function(data) {
+      padmFecharModalCriar();
+      Toast.show('success', 'Processo criado com sucesso');
+      padmCarregar();
+      if (data && data.id) padmSelecionarProcesso(data.id);
+    },
+    onError: function(err) {
+      Toast.show('error', err || 'Erro ao criar processo');
+    }
+  });
+}
+
+// ── Modal: Criar Tarefa ───────────────────────────────────────────────────────
+
+function padmAbrirModalCriarTarefa() {
+  document.getElementById('padm-modal-tarefa').classList.remove('hidden');
+}
+
+function padmFecharModalTarefa() {
+  document.getElementById('padm-modal-tarefa').classList.add('hidden');
+}
+
+function padmCriarTarefaVinculada() {
+  if (!_padmState.processoAtivo) return;
+  var titulo = ((document.getElementById('padm-tar-titulo') || {}).value || '').trim();
+  if (!titulo) { Toast.show('warning', 'Título da tarefa é obrigatório'); return; }
+
+  var dados = {
+    titulo:      titulo,
+    responsavel: (document.getElementById('padm-tar-responsavel') || {}).value || '',
+    prazo:       (document.getElementById('padm-tar-prazo')       || {}).value || '',
+    prioridade:  (document.getElementById('padm-tar-prioridade')  || {}).value || 'media',
+    setor:       (document.getElementById('padm-tar-setor')       || {}).value || ''
+  };
+
+  var btn = document.querySelector('#padm-modal-tarefa button.bg-blue-600');
+  BtnGuard.gas(btn, GAS.processosAdm.criarTarefaVinculada, [_padmState.processoAtivo.id, dados, AppState.email], {
+    onSuccess: function() {
+      padmFecharModalTarefa();
+      Toast.show('success', 'Tarefa criada e vinculada ao processo');
+      padmSelecionarProcesso(_padmState.processoAtivo.id);
+    },
+    onError: function(err) { Toast.show('error', err || 'Erro ao criar tarefa'); }
+  });
+}
+
+// ── Modal: Vincular Entidade ──────────────────────────────────────────────────
+
+function padmAbrirModalVincular() {
+  if (!_padmState.processoAtivo) return;
+  var idEl = document.getElementById('padm-vincular-id');
+  if (idEl) idEl.value = '';
+  var drop = document.getElementById('padm-vincular-dropdown');
+  if (drop) drop.classList.add('hidden');
+  document.getElementById('padm-modal-vincular').classList.remove('hidden');
+  padmAtualizarFormVinculo();
+}
+
+function padmFecharModalVincular() {
+  document.getElementById('padm-modal-vincular').classList.add('hidden');
+}
+
+function padmAtualizarFormVinculo() {
+  var tipo     = (document.getElementById('padm-vincular-tipo') || {}).value;
+  var nomeEl   = document.getElementById('padm-vincular-nome-campo');
+  var valorEl  = document.getElementById('padm-vincular-valor-campo');
+  var idEl     = document.getElementById('padm-vincular-id');
+
+  if (nomeEl)  nomeEl.classList.toggle('hidden',  tipo !== 'rubrica');
+  if (valorEl) valorEl.classList.toggle('hidden', tipo !== 'contrato');
+  if (idEl)    idEl.placeholder = tipo === 'acao' ? 'Buscar ação…' : tipo === 'rubrica' ? 'Buscar rubrica…' : tipo === 'tarefa' ? 'ID da tarefa…' : 'ID do contrato…';
+}
+
+function padmBuscarParaVinculo(q) {
+  if (_padmState._vinculoTimer) clearTimeout(_padmState._vinculoTimer);
+  var dropdown = document.getElementById('padm-vincular-dropdown');
+  var tipo     = (document.getElementById('padm-vincular-tipo') || {}).value;
+
+  if (!q || q.length < 2) { if (dropdown) dropdown.classList.add('hidden'); return; }
+
+  _padmState._vinculoTimer = setTimeout(function() {
+    var fn = tipo === 'acao' ? GAS.processosAdm.buscarAcoes : tipo === 'rubrica' ? GAS.processosAdm.buscarRubricas : null;
+    if (!fn) return;
+
+    BtnGuard.gas(null, fn, [q, AppState.email], {
+      onSuccess: function(resultados) {
+        if (!resultados.length) {
+          dropdown.innerHTML = '<div class="p-2 text-xs text-gray-400 text-center">Sem resultados</div>';
+        } else {
+          dropdown.innerHTML = resultados.map(function(r) {
+            var nome = r.titulo || r.nome || r.id;
+            return '<div onclick="padmSelecionarVinculoItem(\'' + (r.id || r.nome).replace(/'/g,"\\'") + '\', \'' + nome.replace(/'/g,"\\'") + '\')" class="px-3 py-2 text-xs hover:bg-indigo-50 cursor-pointer">' + _esc(nome) + '</div>';
+          }).join('');
+        }
+        dropdown.classList.remove('hidden');
+      },
+      onError: function() { dropdown.classList.add('hidden'); }
+    });
+  }, 300);
+}
+
+function padmSelecionarVinculoItem(id, nome) {
+  var idEl   = document.getElementById('padm-vincular-id');
+  var nomeEl = document.getElementById('padm-vincular-nome');
+  if (idEl)   idEl.value   = id;
+  if (nomeEl) nomeEl.value = nome;
+  var drop = document.getElementById('padm-vincular-dropdown');
+  if (drop) drop.classList.add('hidden');
+}
+
+function padmConfirmarVinculo() {
+  if (!_padmState.processoAtivo) return;
+  var tipo    = (document.getElementById('padm-vincular-tipo')  || {}).value;
+  var idVal   = ((document.getElementById('padm-vincular-id')   || {}).value || '').trim();
+  var nomeVal = ((document.getElementById('padm-vincular-nome') || {}).value || '').trim();
+  var valor   = parseFloat((document.getElementById('padm-vincular-valor') || {}).value) || 0;
+
+  if (!idVal) { Toast.show('warning', 'Informe o ID ou busque a entidade'); return; }
+
+  var procId = _padmState.processoAtivo.id;
+  var btn    = document.querySelector('#padm-modal-vincular button.bg-indigo-600');
+
+  var fn, args;
+  if (tipo === 'acao')    { fn = GAS.processosAdm.vincularAcao;    args = [procId, idVal, AppState.email]; }
+  else if (tipo === 'rubrica') { fn = GAS.processosAdm.vincularRubrica; args = [procId, idVal, nomeVal, AppState.email]; }
+  else if (tipo === 'tarefa')  { fn = GAS.processosAdm.vincularTarefa;  args = [procId, idVal, AppState.email]; }
+  else if (tipo === 'contrato'){ fn = GAS.processosAdm.vincularContrato; args = [procId, idVal, valor, AppState.email]; }
+  else { Toast.show('warning', 'Tipo não suportado'); return; }
+
+  BtnGuard.gas(btn, fn, args, {
+    onSuccess: function() {
+      padmFecharModalVincular();
+      Toast.show('success', 'Vínculo realizado com sucesso');
+      padmSelecionarProcesso(procId);
+    },
+    onError: function(err) { Toast.show('error', err || 'Erro ao vincular'); }
+  });
+}
+
+// ── Modal: Adicionar Documento ────────────────────────────────────────────────
+
+function padmAbrirModalDocumento() {
+  if (!_padmState.processoAtivo) return;
+  var nomeEl = document.getElementById('padm-doc-nome');
+  var urlEl  = document.getElementById('padm-doc-url');
+  if (nomeEl) nomeEl.value = '';
+  if (urlEl)  urlEl.value  = '';
+  document.getElementById('padm-modal-doc').classList.remove('hidden');
+}
+
+function padmFecharModalDoc() {
+  document.getElementById('padm-modal-doc').classList.add('hidden');
+}
+
+function padmAdicionarDocumento() {
+  if (!_padmState.processoAtivo) return;
+  var nome = ((document.getElementById('padm-doc-nome') || {}).value || '').trim();
+  if (!nome) { Toast.show('warning', 'Nome do documento é obrigatório'); return; }
+
+  var doc = {
+    nome: nome,
+    tipo: (document.getElementById('padm-doc-tipo') || {}).value || 'outro',
+    url:  (document.getElementById('padm-doc-url')  || {}).value || ''
+  };
+
+  var btn = document.querySelector('#padm-modal-doc button.bg-gray-700');
+  BtnGuard.gas(btn, GAS.processosAdm.adicionarDocumento, [_padmState.processoAtivo.id, doc, AppState.email], {
+    onSuccess: function() {
+      padmFecharModalDoc();
+      Toast.show('success', 'Documento adicionado');
+      padmSelecionarProcesso(_padmState.processoAtivo.id);
+    },
+    onError: function(err) { Toast.show('error', err || 'Erro ao adicionar documento'); }
+  });
+}
+
 // ── Helpers visuais ───────────────────────────────────────────────────────────
-function _procCorStatus(status) {
-  var mapa = {
-    solicitado:           { bg: 'bg-gray-100',   text: 'text-gray-600' },
-    em_andamento:         { bg: 'bg-blue-100',   text: 'text-blue-700' },
-    aguardando_setor:     { bg: 'bg-yellow-100', text: 'text-yellow-700' },
-    aguardando_aprovacao: { bg: 'bg-orange-100', text: 'text-orange-700' },
-    bloqueado:            { bg: 'bg-red-100',    text: 'text-red-700' },
-    concluido:            { bg: 'bg-green-100',  text: 'text-green-700' },
-    cancelado:            { bg: 'bg-gray-200',   text: 'text-gray-500' }
-  };
-  return mapa[status] || { bg: 'bg-gray-100', text: 'text-gray-600' };
+
+function _padmLabelTipo(tipo) {
+  if (!tipo) return '';
+  var cat = _padmState.catalogoTipos.find(function(t) { return t.id === tipo; });
+  if (cat && cat.nome) return cat.nome;
+  return _PADM_TIPO_LABEL[tipo] || tipo;
 }
 
-function _procLabelStatus(s) {
-  return _LABELS_STATUS_UI[s] || (s || '');
-}
-
-function _procLabelTipo(tipo) {
-  var mapa = {
-    contratacao_professor:    'Contr. Professor',
-    contratacao_profissional: 'Contr. Profissional',
-    contratacao_servico:      'Contr. Serviço',
-    aquisicao_equipamento:    'Aquisição Equip.',
-    bolsista:                 'Bolsista',
-    manutencao_espaco:        'Manutenção',
-    projeto_cultural:         'Projeto Cultural',
-    campanha_comunicacao:     'Campanha Comuni.',
-    outro:                    'Outro'
-  };
-  return mapa[tipo] || (tipo || '');
-}
-
-function _procBadgePrioridade(pri) {
+function _padmBadgePrioridade(pri) {
   if (!pri) return '';
-  var cor = _procCorPrioridade(pri);
+  var cor   = _PADM_PRIORIDADE_COR[pri] || 'bg-gray-100 text-gray-600';
   var label = pri.charAt(0).toUpperCase() + pri.slice(1);
   return '<span class="text-xs font-medium px-1.5 py-0.5 rounded-full ' + cor + '">' + label + '</span>';
 }
 
-function _procCorPrioridade(pri) {
-  var mapa = { critica: 'bg-red-100 text-red-700', alta: 'bg-orange-100 text-orange-700',
-               media: 'bg-blue-100 text-blue-700', baixa: 'bg-gray-100 text-gray-600' };
-  return mapa[pri] || 'bg-gray-100 text-gray-600';
-}
-
-function _procIconeEvento(tipo) {
+function _padmIconeEvento(tipo) {
   var mapa = {
     criacao: 'fas fa-plus-circle', status_change: 'fas fa-arrow-right',
-    vinculo: 'fas fa-link', comentario: 'fas fa-comment', alerta: 'fas fa-exclamation-triangle',
-    aprovacao: 'fas fa-check-circle', pagamento: 'fas fa-dollar-sign', edicao: 'fas fa-pencil-alt',
-    tarefa_status: 'fas fa-tasks'
+    etapa_avancada: 'fas fa-forward', etapa_voltada: 'fas fa-backward',
+    vinculo: 'fas fa-link', comentario: 'fas fa-comment',
+    alerta: 'fas fa-exclamation-triangle', aprovacao: 'fas fa-check-circle',
+    pagamento: 'fas fa-dollar-sign', edicao: 'fas fa-pencil-alt',
+    tarefa_status: 'fas fa-tasks', orcamento: 'fas fa-lock',
+    documento: 'fas fa-paperclip'
   };
   return mapa[tipo] || 'fas fa-circle';
 }
 
-function _procCorEvento(tipo) {
+function _padmCorEvento(tipo) {
   var mapa = {
     criacao: 'bg-green-100 text-green-600', status_change: 'bg-blue-100 text-blue-600',
-    vinculo: 'bg-indigo-100 text-indigo-600', comentario: 'bg-gray-100 text-gray-600',
+    etapa_avancada: 'bg-indigo-100 text-indigo-600', etapa_voltada: 'bg-yellow-100 text-yellow-600',
+    vinculo: 'bg-purple-100 text-purple-600', comentario: 'bg-gray-100 text-gray-600',
     alerta: 'bg-red-100 text-red-600', aprovacao: 'bg-green-100 text-green-600',
-    pagamento: 'bg-yellow-100 text-yellow-600', tarefa_status: 'bg-purple-100 text-purple-600'
+    pagamento: 'bg-yellow-100 text-yellow-600', tarefa_status: 'bg-blue-100 text-blue-600',
+    orcamento: 'bg-amber-100 text-amber-600', documento: 'bg-gray-100 text-gray-500'
   };
   return mapa[tipo] || 'bg-gray-100 text-gray-500';
 }
 
-function _procCorTarefaStatus(status) {
-  var mapa = {
-    backlog: 'text-gray-500', solicitada: 'text-blue-600', em_analise: 'text-yellow-600',
-    em_execucao: 'text-indigo-600', aguardando_aprovacao: 'text-orange-600',
-    concluida: 'text-green-600', cancelada: 'text-gray-400', bloqueada: 'text-red-600'
-  };
-  return mapa[status] || 'text-gray-500';
-}
-
-function _procLabelTarefaStatus(s) {
-  var mapa = { backlog: 'Backlog', solicitada: 'Solicitada', em_analise: 'Em Análise',
-               em_execucao: 'Em Execução', aguardando_aprovacao: 'Aguard. Aprovação',
-               concluida: 'Concluída', cancelada: 'Cancelada', bloqueada: 'Bloqueada' };
-  return mapa[s] || (s || '');
+function _padmSetText(id, val) {
+  var el = document.getElementById(id);
+  if (el) el.textContent = (val !== undefined && val !== null) ? val : '';
 }
 
 function _esc(str) {
@@ -554,21 +1397,31 @@ function _formatarData(iso) {
 
 function _formatarDataHora(iso) {
   if (!iso) return '';
-  try { return new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }); } catch(_) { return iso; }
+  try { return new Date(iso).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' }); } catch(_) { return iso; }
 }
 
-function _procMostrarErroLista(msg) {
-  document.getElementById('proc-lista-container').innerHTML =
-    '<div class="text-center text-red-400 py-8 text-sm">' + _esc(msg || 'Erro ao carregar') + '</div>';
-}
+// ── Lazy-load — ativado quando a aba é aberta ────────────────────────────────
 
-function _notif(tipo, msg) {
-  if (typeof AppUI !== 'undefined' && AppUI.toast) { AppUI.toast(tipo, msg); return; }
-  console.log('[Processos] ' + tipo + ': ' + msg);
-}
+window['_onShow_aba-processos-institucionais'] = function() {
+  if (!_padmState.carregado) {
+    padmMudarVisao('pipeline');
+    padmCarregar();
+  }
+};
 
-// ── Registro no AppState para ativação da aba ────────────────────────────────
-if (typeof AppState !== 'undefined' && AppState.registrarModulo) {
-  AppState.registrarModulo('processos_institucionais', { onAtivado: procInicializar });
-}
+// ── Fechamento de dropdowns ao clicar fora ───────────────────────────────────
+
+document.addEventListener('click', function(e) {
+  var dropdowns = ['padm-acao-dropdown', 'padm-rubrica-dropdown', 'padm-vincular-dropdown'];
+  dropdowns.forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el && !el.classList.contains('hidden')) {
+      if (!el.contains(e.target) && e.target.id !== 'padm-form-acao-busca' &&
+          e.target.id !== 'padm-form-rubrica-busca' && e.target.id !== 'padm-vincular-id') {
+        el.classList.add('hidden');
+      }
+    }
+  });
+});
+
 </script>

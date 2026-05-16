@@ -1,19 +1,30 @@
 <!-- mod_processos_institucionais.html -->
-<!-- Módulo: Processos Institucionais — Camada transversal de rastreabilidade -->
-<div id="aba-processos-institucionais" class="aba-conteudo hidden">
+<!-- Engine Transversal de Processos Administrativo-Financeiros -->
+<!-- Absorve CIs + processos institucionais — 4 visões: Pipeline · Lista · Kanban · Dashboard -->
+<div id="aba-processos-institucionais" class="aba-conteudo hidden pb-20">
 
-  <!-- ── Header ──────────────────────────────────────────────────────────── -->
+  <!-- ── Header ──────────────────────────────────────────────────────────────── -->
   <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
     <div class="flex items-center gap-2">
-      <i class="fas fa-project-diagram text-indigo-500 text-xl"></i>
-      <h2 class="text-lg font-bold text-gray-800">Processos Institucionais</h2>
-      <span id="proc-badge-total" class="ml-1 bg-indigo-100 text-indigo-700 text-xs font-semibold px-2 py-0.5 rounded-full hidden">0</span>
+      <div class="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center flex-shrink-0">
+        <i class="fas fa-project-diagram text-white text-sm"></i>
+      </div>
+      <div>
+        <h2 class="text-base font-bold text-gray-800 leading-tight">Processos Administrativo-Financeiros</h2>
+        <p class="text-xs text-gray-400">Engine transversal · CIs · Contratações · Aquisições</p>
+      </div>
+      <span id="padm-badge-total" class="ml-1 bg-indigo-100 text-indigo-700 text-xs font-bold px-2 py-0.5 rounded-full hidden">0</span>
     </div>
     <div class="flex items-center gap-2 flex-wrap">
-      <input type="text" id="proc-busca" placeholder="Buscar processo…"
-        class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 w-52"
-        oninput="procFiltrarLista()">
-      <select id="proc-filtro-status" onchange="procFiltrarLista()"
+      <!-- Busca -->
+      <div class="relative">
+        <i class="fas fa-search absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-300 text-xs"></i>
+        <input type="text" id="padm-busca" placeholder="Buscar processo…"
+          class="border border-gray-300 rounded-lg pl-8 pr-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 w-44"
+          oninput="padmFiltrarLista()">
+      </div>
+      <!-- Filtro Status -->
+      <select id="padm-filtro-status" onchange="padmFiltrarLista()"
         class="border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
         <option value="">Todos os status</option>
         <option value="solicitado">Solicitado</option>
@@ -24,126 +35,156 @@
         <option value="concluido">Concluído</option>
         <option value="cancelado">Cancelado</option>
       </select>
-      <select id="proc-filtro-tipo" onchange="procFiltrarLista()"
-        class="border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
+      <!-- Filtro Tipo -->
+      <select id="padm-filtro-tipo" onchange="padmFiltrarLista()"
+        class="border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 hidden" id="padm-sel-tipo">
         <option value="">Todos os tipos</option>
-        <option value="contratacao_professor">Contratação Professor</option>
-        <option value="contratacao_profissional">Contratação Profissional</option>
-        <option value="contratacao_servico">Contratação Serviço</option>
-        <option value="aquisicao_equipamento">Aquisição Equipamento</option>
-        <option value="bolsista">Bolsista</option>
-        <option value="manutencao_espaco">Manutenção Espaço</option>
-        <option value="projeto_cultural">Projeto Cultural</option>
-        <option value="campanha_comunicacao">Campanha Comunicação</option>
-        <option value="outro">Outro</option>
       </select>
-      <button onclick="procAbrirModal()" data-perm="processos:criar"
+      <!-- Botões de visão -->
+      <div class="flex items-center bg-gray-100 rounded-lg p-0.5 gap-0.5">
+        <button onclick="padmMudarVisao('pipeline')" id="padm-btn-pipeline" title="Pipeline por etapas"
+          class="padm-visao-btn p-1.5 rounded-md bg-white shadow-sm text-indigo-600 transition">
+          <i class="fas fa-stream text-sm"></i>
+        </button>
+        <button onclick="padmMudarVisao('lista')" id="padm-btn-lista" title="Lista"
+          class="padm-visao-btn p-1.5 rounded-md text-gray-400 hover:text-gray-600 transition">
+          <i class="fas fa-list text-sm"></i>
+        </button>
+        <button onclick="padmMudarVisao('kanban')" id="padm-btn-kanban" title="Kanban por status"
+          class="padm-visao-btn p-1.5 rounded-md text-gray-400 hover:text-gray-600 transition">
+          <i class="fas fa-columns text-sm"></i>
+        </button>
+        <button onclick="padmMudarVisao('dashboard')" id="padm-btn-dashboard" title="Dashboard"
+          class="padm-visao-btn p-1.5 rounded-md text-gray-400 hover:text-gray-600 transition">
+          <i class="fas fa-chart-bar text-sm"></i>
+        </button>
+      </div>
+      <button onclick="padmAbrirModalCriar()" data-perm="processos:criar"
         class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition">
         <i class="fas fa-plus text-xs"></i> Novo Processo
       </button>
-      <button onclick="procCarregar()" class="text-gray-500 hover:text-gray-700 p-1.5 rounded-lg hover:bg-gray-100 transition" title="Atualizar">
+      <button onclick="padmCarregar()" class="text-gray-500 hover:text-gray-700 p-1.5 rounded-lg hover:bg-gray-100 transition" title="Atualizar">
         <i class="fas fa-sync-alt text-sm"></i>
       </button>
     </div>
   </div>
 
-  <!-- ── Layout principal: lista + detalhe ────────────────────────────────── -->
-  <div class="flex flex-col lg:flex-row gap-4 h-[calc(100vh-200px)] min-h-[500px]">
+  <!-- ── VISÃO: PIPELINE (split layout: lista à esq + detalhe à dir) ───────── -->
+  <div id="padm-visao-pipeline" class="flex gap-4" style="height:calc(100vh - 200px);min-height:520px">
 
     <!-- Lista de processos -->
-    <div class="w-full lg:w-80 xl:w-96 flex-shrink-0 flex flex-col">
-      <div id="proc-lista-container" class="flex-1 overflow-y-auto space-y-2 pr-1 custom-scroll">
-        <div class="text-center text-gray-400 py-8">
-          <i class="fas fa-spinner fa-spin text-2xl mb-2"></i>
-          <p class="text-sm">Carregando processos…</p>
+    <div class="w-80 xl:w-96 flex-shrink-0 flex flex-col gap-2">
+      <div id="padm-pipeline-lista" class="flex-1 overflow-y-auto space-y-2 pr-1 custom-scroll">
+        <div class="text-center text-gray-400 py-10 text-sm">
+          <i class="fas fa-spinner fa-spin text-2xl mb-2 block"></i>Carregando…
         </div>
       </div>
     </div>
 
-    <!-- Painel de detalhe / timeline -->
-    <div class="flex-1 bg-white rounded-xl border border-gray-200 overflow-hidden flex flex-col">
-      <div id="proc-detalhe-vazio" class="flex-1 flex flex-col items-center justify-center text-gray-400 gap-3">
-        <i class="fas fa-project-diagram text-4xl opacity-30"></i>
-        <p class="text-sm">Selecione um processo para ver os detalhes</p>
+    <!-- Painel de detalhe -->
+    <div class="flex-1 bg-white rounded-xl border border-gray-200 flex flex-col overflow-hidden min-w-0">
+      <div id="padm-detalhe-vazio" class="flex-1 flex flex-col items-center justify-center text-gray-300 gap-3">
+        <i class="fas fa-project-diagram text-5xl opacity-20"></i>
+        <p class="text-sm font-medium">Selecione um processo para ver os detalhes</p>
       </div>
-      <div id="proc-detalhe-conteudo" class="hidden flex-1 flex flex-col overflow-hidden">
+      <div id="padm-detalhe-conteudo" class="hidden flex-1 flex flex-col overflow-hidden">
 
-        <!-- Cabeçalho do detalhe -->
-        <div class="px-4 py-3 border-b border-gray-100 bg-gray-50">
-          <div class="flex items-start justify-between gap-2">
-            <div>
-              <h3 id="proc-det-titulo" class="font-semibold text-gray-800 text-sm"></h3>
+        <!-- Header do detalhe -->
+        <div class="px-4 py-3 border-b border-gray-100 bg-gray-50 flex-shrink-0">
+          <div class="flex items-start justify-between gap-2 flex-wrap">
+            <div class="min-w-0">
+              <h3 id="padm-det-titulo" class="font-bold text-gray-800 text-sm truncate"></h3>
               <div class="flex items-center gap-2 mt-1 flex-wrap">
-                <span id="proc-det-badge-status" class="text-xs font-medium px-2 py-0.5 rounded-full"></span>
-                <span id="proc-det-badge-tipo" class="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full"></span>
-                <span id="proc-det-badge-prioridade" class="text-xs font-medium px-2 py-0.5 rounded-full"></span>
+                <span id="padm-det-status" class="text-xs font-medium px-2 py-0.5 rounded-full"></span>
+                <span id="padm-det-tipo" class="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full"></span>
+                <span id="padm-det-prioridade" class="text-xs font-medium px-2 py-0.5 rounded-full"></span>
               </div>
             </div>
             <div class="flex items-center gap-1.5 flex-shrink-0">
-              <button id="proc-btn-status" onclick="procAbrirModalStatus()"
-                class="text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-2.5 py-1 rounded-lg font-medium transition">
-                Avançar Status
+              <button onclick="padmAvancarEtapa()" id="padm-btn-avancar"
+                class="text-xs bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 px-2.5 py-1 rounded-lg font-medium transition hidden">
+                <i class="fas fa-arrow-right mr-1"></i>Avançar Etapa
               </button>
-              <button onclick="procAbrirModalVinculo()"
+              <button onclick="padmAbrirModalStatus()"
+                class="text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-2.5 py-1 rounded-lg font-medium transition">
+                Status
+              </button>
+              <button onclick="padmAbrirModalVincular()"
                 class="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-2.5 py-1 rounded-lg font-medium transition">
                 + Vincular
               </button>
             </div>
           </div>
 
-          <!-- Cards de resumo -->
+          <!-- Stepper de etapas -->
+          <div id="padm-stepper" class="mt-3 hidden">
+            <div class="flex items-center gap-1 overflow-x-auto pb-1 custom-scroll-x" id="padm-stepper-lista"></div>
+          </div>
+
+          <!-- Cards de resumo (4 métricas) -->
           <div class="grid grid-cols-4 gap-2 mt-3">
-            <div class="bg-blue-50 rounded-lg p-2 text-center">
-              <div id="proc-det-n-tarefas" class="text-lg font-bold text-blue-600">0</div>
+            <div class="bg-blue-50 rounded-lg p-2 text-center cursor-pointer hover:bg-blue-100 transition" onclick="padmMostrarTab('tarefas')">
+              <div id="padm-n-tarefas" class="text-lg font-bold text-blue-600">0</div>
               <div class="text-xs text-blue-500">Tarefas</div>
             </div>
-            <div class="bg-green-50 rounded-lg p-2 text-center">
-              <div id="proc-det-n-reservas" class="text-lg font-bold text-green-600">0</div>
-              <div class="text-xs text-green-500">Reservas</div>
+            <div class="bg-purple-50 rounded-lg p-2 text-center cursor-pointer hover:bg-purple-100 transition" onclick="padmMostrarTab('reservas')">
+              <div id="padm-n-reservas" class="text-lg font-bold text-purple-600">0</div>
+              <div class="text-xs text-purple-500">Reservas</div>
             </div>
-            <div class="bg-purple-50 rounded-lg p-2 text-center">
-              <div id="proc-det-n-reunioes" class="text-lg font-bold text-purple-600">0</div>
-              <div class="text-xs text-purple-500">Reuniões</div>
-            </div>
-            <div class="bg-amber-50 rounded-lg p-2 text-center">
-              <div id="proc-det-n-contratos" class="text-lg font-bold text-amber-600">0</div>
+            <div class="bg-amber-50 rounded-lg p-2 text-center cursor-pointer hover:bg-amber-100 transition" onclick="padmMostrarTab('contratos')">
+              <div id="padm-n-contratos" class="text-lg font-bold text-amber-600">0</div>
               <div class="text-xs text-amber-500">Contratos</div>
+            </div>
+            <div class="bg-rose-50 rounded-lg p-2 text-center cursor-pointer hover:bg-rose-100 transition" onclick="padmMostrarTab('comunicacao')">
+              <div id="padm-n-comunicacao" class="text-lg font-bold text-rose-600">0</div>
+              <div class="text-xs text-rose-500">Comunicação</div>
             </div>
           </div>
 
-          <!-- Financeiro -->
-          <div id="proc-det-financeiro" class="hidden mt-2 bg-gray-50 rounded-lg px-3 py-2 text-xs text-gray-600">
-            <span class="font-medium">Financeiro:</span>
-            Previsto: <span id="proc-fin-previsto" class="font-semibold text-gray-800">R$ 0</span> |
-            Executado: <span id="proc-fin-executado" class="font-semibold text-gray-800">R$ 0</span> |
-            Saldo: <span id="proc-fin-saldo" class="font-semibold">R$ 0</span>
+          <!-- Painel financeiro -->
+          <div id="padm-fin-painel" class="hidden mt-2 bg-gradient-to-r from-gray-50 to-indigo-50 rounded-lg px-3 py-2">
+            <div class="flex items-center gap-4 flex-wrap text-xs">
+              <span class="text-gray-500">Rubrica: <span id="padm-fin-rubrica" class="font-semibold text-gray-700"></span></span>
+              <span class="text-gray-500">Previsto: <span id="padm-fin-previsto" class="font-semibold text-indigo-700"></span></span>
+              <span class="text-gray-500">Reservado: <span id="padm-fin-reservado" class="font-semibold text-amber-600"></span></span>
+              <span class="text-gray-500">Executado: <span id="padm-fin-executado" class="font-semibold text-gray-700"></span></span>
+              <span class="text-gray-500">Saldo: <span id="padm-fin-saldo" class="font-bold"></span></span>
+              <button onclick="padmReservarOrcamento()" id="padm-btn-reservar-orc"
+                class="hidden text-xs bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-lg transition">
+                <i class="fas fa-lock mr-1"></i>Reservar
+              </button>
+            </div>
           </div>
         </div>
 
-        <!-- Tabs do detalhe -->
-        <div class="flex border-b border-gray-200 px-4 overflow-x-auto">
-          <button onclick="procMostrarTab('timeline')" id="proc-tab-timeline"
-            class="proc-tab-btn text-xs py-2.5 px-3 border-b-2 border-indigo-500 text-indigo-600 font-medium whitespace-nowrap">
+        <!-- Tabs -->
+        <div class="flex border-b border-gray-200 px-4 overflow-x-auto flex-shrink-0" id="padm-tabs-bar">
+          <button onclick="padmMostrarTab('timeline')" id="padm-tab-timeline"
+            class="padm-tab text-xs py-2.5 px-3 border-b-2 border-indigo-500 text-indigo-600 font-medium whitespace-nowrap">
             <i class="fas fa-stream mr-1"></i>Timeline
           </button>
-          <button onclick="procMostrarTab('tarefas')" id="proc-tab-tarefas"
-            class="proc-tab-btn text-xs py-2.5 px-3 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium whitespace-nowrap">
+          <button onclick="padmMostrarTab('tarefas')" id="padm-tab-tarefas"
+            class="padm-tab text-xs py-2.5 px-3 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium whitespace-nowrap">
             <i class="fas fa-tasks mr-1"></i>Tarefas
           </button>
-          <button onclick="procMostrarTab('reservas')" id="proc-tab-reservas"
-            class="proc-tab-btn text-xs py-2.5 px-3 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium whitespace-nowrap">
+          <button onclick="padmMostrarTab('reservas')" id="padm-tab-reservas"
+            class="padm-tab text-xs py-2.5 px-3 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium whitespace-nowrap">
             <i class="fas fa-calendar mr-1"></i>Reservas
           </button>
-          <button onclick="procMostrarTab('contratos')" id="proc-tab-contratos"
-            class="proc-tab-btn text-xs py-2.5 px-3 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium whitespace-nowrap">
+          <button onclick="padmMostrarTab('contratos')" id="padm-tab-contratos"
+            class="padm-tab text-xs py-2.5 px-3 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium whitespace-nowrap">
             <i class="fas fa-file-contract mr-1"></i>Contratos
           </button>
-          <button onclick="procMostrarTab('comunicacao')" id="proc-tab-comunicacao"
-            class="proc-tab-btn text-xs py-2.5 px-3 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium whitespace-nowrap">
+          <button onclick="padmMostrarTab('comunicacao')" id="padm-tab-comunicacao"
+            class="padm-tab text-xs py-2.5 px-3 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium whitespace-nowrap">
             <i class="fas fa-bullhorn mr-1"></i>Comunicação
           </button>
-          <button onclick="procMostrarTab('gargalos')" id="proc-tab-gargalos"
-            class="proc-tab-btn text-xs py-2.5 px-3 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium whitespace-nowrap">
+          <button onclick="padmMostrarTab('documentos')" id="padm-tab-documentos"
+            class="padm-tab text-xs py-2.5 px-3 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium whitespace-nowrap">
+            <i class="fas fa-paperclip mr-1"></i>Docs
+          </button>
+          <button onclick="padmMostrarTab('gargalos')" id="padm-tab-gargalos"
+            class="padm-tab text-xs py-2.5 px-3 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium whitespace-nowrap">
             <i class="fas fa-exclamation-triangle mr-1"></i>Gargalos
           </button>
         </div>
@@ -152,59 +193,67 @@
         <div class="flex-1 overflow-y-auto p-4 custom-scroll">
 
           <!-- Tab: Timeline -->
-          <div id="proc-painel-timeline" class="proc-painel">
+          <div id="padm-painel-timeline" class="padm-painel">
             <div class="flex items-center gap-2 mb-3">
-              <textarea id="proc-comentario-input" rows="2"
-                class="flex-1 border border-gray-300 rounded-lg px-3 py-1.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                placeholder="Adicionar comentário à timeline…"></textarea>
-              <button onclick="procAdicionarComentario()"
-                class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs px-3 py-1.5 rounded-lg font-medium transition">
+              <textarea id="padm-comentario" rows="2" placeholder="Adicionar comentário à timeline…"
+                class="flex-1 border border-gray-300 rounded-lg px-3 py-1.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-indigo-400"></textarea>
+              <button onclick="padmComentarTimeline()"
+                class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs px-3 py-1.5 rounded-lg font-medium transition self-end">
                 Enviar
               </button>
             </div>
-            <div id="proc-timeline-lista" class="space-y-3">
-              <p class="text-xs text-gray-400 text-center">Selecione um processo para ver a timeline</p>
-            </div>
+            <div id="padm-timeline-lista" class="space-y-3"></div>
           </div>
 
           <!-- Tab: Tarefas -->
-          <div id="proc-painel-tarefas" class="proc-painel hidden">
+          <div id="padm-painel-tarefas" class="padm-painel hidden">
             <div class="flex justify-between items-center mb-3">
-              <span class="text-xs font-medium text-gray-600">Tarefas vinculadas</span>
-              <button onclick="procAbrirModalCriarTarefa()"
+              <span class="text-xs font-semibold text-gray-600">Tarefas vinculadas</span>
+              <button onclick="padmAbrirModalCriarTarefa()"
                 class="text-xs bg-blue-50 hover:bg-blue-100 text-blue-600 px-2.5 py-1 rounded-lg font-medium transition">
-                + Nova Tarefa
+                <i class="fas fa-plus mr-1 text-xs"></i>Nova Tarefa
               </button>
             </div>
-            <div id="proc-lista-tarefas" class="space-y-2"></div>
+            <div id="padm-lista-tarefas" class="space-y-2"></div>
           </div>
 
           <!-- Tab: Reservas -->
-          <div id="proc-painel-reservas" class="proc-painel hidden">
-            <div id="proc-lista-reservas" class="space-y-2">
-              <p class="text-xs text-gray-400 text-center py-4">Nenhuma reserva vinculada</p>
-            </div>
+          <div id="padm-painel-reservas" class="padm-painel hidden">
+            <div id="padm-lista-reservas" class="space-y-2"></div>
           </div>
 
           <!-- Tab: Contratos -->
-          <div id="proc-painel-contratos" class="proc-painel hidden">
-            <div id="proc-lista-contratos" class="space-y-2">
-              <p class="text-xs text-gray-400 text-center py-4">Nenhum contrato vinculado</p>
-            </div>
+          <div id="padm-painel-contratos" class="padm-painel hidden">
+            <div id="padm-lista-contratos" class="space-y-2"></div>
           </div>
 
           <!-- Tab: Comunicação -->
-          <div id="proc-painel-comunicacao" class="proc-painel hidden">
-            <div id="proc-lista-comunicacoes" class="space-y-2">
-              <p class="text-xs text-gray-400 text-center py-4">Nenhuma demanda de comunicação vinculada</p>
+          <div id="padm-painel-comunicacao" class="padm-painel hidden">
+            <div class="flex justify-between items-center mb-3">
+              <span class="text-xs font-semibold text-gray-600">Demandas de comunicação</span>
+              <button onclick="padmGerarDemandaComunicacao()"
+                class="text-xs bg-rose-50 hover:bg-rose-100 text-rose-600 px-2.5 py-1 rounded-lg font-medium transition">
+                <i class="fas fa-plus mr-1 text-xs"></i>Gerar Demanda
+              </button>
             </div>
+            <div id="padm-lista-comunicacao" class="space-y-2"></div>
+          </div>
+
+          <!-- Tab: Documentos -->
+          <div id="padm-painel-documentos" class="padm-painel hidden">
+            <div class="flex justify-between items-center mb-3">
+              <span class="text-xs font-semibold text-gray-600">Documentos</span>
+              <button onclick="padmAbrirModalDocumento()"
+                class="text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 px-2.5 py-1 rounded-lg font-medium transition">
+                <i class="fas fa-plus mr-1 text-xs"></i>Adicionar
+              </button>
+            </div>
+            <div id="padm-lista-documentos" class="space-y-2"></div>
           </div>
 
           <!-- Tab: Gargalos -->
-          <div id="proc-painel-gargalos" class="proc-painel hidden">
-            <div id="proc-lista-gargalos" class="space-y-3">
-              <p class="text-xs text-gray-400 text-center py-4">Nenhum gargalo detectado</p>
-            </div>
+          <div id="padm-painel-gargalos" class="padm-painel hidden">
+            <div id="padm-lista-gargalos" class="space-y-3"></div>
           </div>
 
         </div>
@@ -212,42 +261,124 @@
     </div>
   </div>
 
+  <!-- ── VISÃO: LISTA ──────────────────────────────────────────────────────── -->
+  <div id="padm-visao-lista" class="hidden">
+    <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="bg-gray-50 border-b border-gray-200">
+            <tr>
+              <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Processo</th>
+              <th class="px-3 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Tipo</th>
+              <th class="px-3 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Status</th>
+              <th class="px-3 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Etapa Atual</th>
+              <th class="px-3 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Responsável</th>
+              <th class="px-3 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Prazo</th>
+              <th class="px-3 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">R$ Previsto</th>
+              <th class="px-3 py-3"></th>
+            </tr>
+          </thead>
+          <tbody id="padm-lista-tabela" class="divide-y divide-gray-50">
+            <tr><td colspan="8" class="text-center py-10 text-gray-400 text-sm">Carregando…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── VISÃO: KANBAN (por status) ────────────────────────────────────────── -->
+  <div id="padm-visao-kanban" class="hidden overflow-x-auto pb-4">
+    <div class="flex gap-4 min-w-max" id="padm-kanban-colunas">
+      <!-- Colunas injetadas via JS -->
+    </div>
+  </div>
+
+  <!-- ── VISÃO: DASHBOARD ───────────────────────────────────────────────────── -->
+  <div id="padm-visao-dashboard" class="hidden space-y-4">
+    <!-- Cards superiores -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3" id="padm-dash-cards">
+      <div class="bg-white rounded-xl border border-gray-200 p-4 text-center">
+        <div id="padm-dash-total" class="text-3xl font-black text-indigo-600">—</div>
+        <div class="text-xs text-gray-500 mt-1 font-medium">Total de Processos</div>
+      </div>
+      <div class="bg-white rounded-xl border border-gray-200 p-4 text-center">
+        <div id="padm-dash-abertos" class="text-3xl font-black text-blue-500">—</div>
+        <div class="text-xs text-gray-500 mt-1 font-medium">Em Andamento</div>
+      </div>
+      <div class="bg-white rounded-xl border border-gray-200 p-4 text-center">
+        <div id="padm-dash-atrasados" class="text-3xl font-black text-red-500">—</div>
+        <div class="text-xs text-gray-500 mt-1 font-medium">Atrasados</div>
+      </div>
+      <div class="bg-white rounded-xl border border-gray-200 p-4 text-center">
+        <div id="padm-dash-comprometido" class="text-3xl font-black text-amber-500">—</div>
+        <div class="text-xs text-gray-500 mt-1 font-medium">R$ Comprometido</div>
+      </div>
+    </div>
+    <!-- Distribuição por status e por tipo -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div class="bg-white rounded-xl border border-gray-200 p-4">
+        <h4 class="text-sm font-semibold text-gray-700 mb-3"><i class="fas fa-chart-pie mr-2 text-indigo-400"></i>Por Status</h4>
+        <div id="padm-dash-por-status" class="space-y-2"></div>
+      </div>
+      <div class="bg-white rounded-xl border border-gray-200 p-4">
+        <h4 class="text-sm font-semibold text-gray-700 mb-3"><i class="fas fa-layer-group mr-2 text-purple-400"></i>Por Tipo</h4>
+        <div id="padm-dash-por-tipo" class="space-y-2"></div>
+      </div>
+    </div>
+    <!-- Processos recentes -->
+    <div class="bg-white rounded-xl border border-gray-200 p-4">
+      <h4 class="text-sm font-semibold text-gray-700 mb-3"><i class="fas fa-clock mr-2 text-amber-400"></i>Processos com Atividade Recente</h4>
+      <div id="padm-dash-recentes" class="space-y-2"></div>
+    </div>
+    <!-- Reservas orçamentárias -->
+    <div class="bg-white rounded-xl border border-gray-200 p-4">
+      <h4 class="text-sm font-semibold text-gray-700 mb-3"><i class="fas fa-lock mr-2 text-amber-500"></i>Reservas Orçamentárias Ativas</h4>
+      <div id="padm-dash-reservas-orc" class="space-y-2"></div>
+    </div>
+  </div>
+
 </div>
 
-<!-- ── Modal: Criar Processo ────────────────────────────────────────────────── -->
-<div id="proc-modal-criar" class="fixed inset-0 bg-black bg-opacity-40 z-50 hidden flex items-center justify-center p-4">
-  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
-    <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-      <h3 class="font-semibold text-gray-800 text-sm">Novo Processo Institucional</h3>
-      <button onclick="procFecharModal()" class="text-gray-400 hover:text-gray-600 transition"><i class="fas fa-times"></i></button>
-    </div>
-    <div class="px-5 py-4 space-y-3 max-h-[75vh] overflow-y-auto custom-scroll">
+<!-- ═══════════════════════════════════════════════════════════════════════════ -->
+<!-- MODAIS                                                                      -->
+<!-- ═══════════════════════════════════════════════════════════════════════════ -->
+
+<!-- ── Modal: Criar Processo ──────────────────────────────────────────────── -->
+<div id="padm-modal-criar" class="fixed inset-0 bg-black bg-opacity-40 z-50 hidden flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden">
+    <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between bg-indigo-50">
       <div>
-        <label class="block text-xs font-medium text-gray-700 mb-1">Título *</label>
-        <input id="proc-form-titulo" type="text" maxlength="120"
-          class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
-          placeholder="Ex: Contratação de professor de teatro para curso de extensão">
+        <h3 class="font-bold text-gray-800 text-sm">Novo Processo Administrativo-Financeiro</h3>
+        <p class="text-xs text-gray-500 mt-0.5">Selecione o tipo para configurar os campos e etapas automaticamente</p>
       </div>
+      <button onclick="padmFecharModalCriar()" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="px-5 py-4 space-y-3 max-h-[78vh] overflow-y-auto custom-scroll">
+
+      <!-- Tipo: cards visuais -->
+      <div>
+        <label class="block text-xs font-semibold text-gray-700 mb-2">Tipo de Processo *</label>
+        <div id="padm-tipo-grid" class="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-52 overflow-y-auto custom-scroll pr-1">
+          <div class="text-center text-gray-400 py-4 text-xs col-span-3"><i class="fas fa-spinner fa-spin mr-1"></i>Carregando tipos…</div>
+        </div>
+      </div>
+
+      <!-- Campo oculto com tipo selecionado -->
+      <input type="hidden" id="padm-form-tipo">
+
+      <!-- Título -->
+      <div>
+        <label class="block text-xs font-semibold text-gray-700 mb-1">Título *</label>
+        <input id="padm-form-titulo" type="text" maxlength="150"
+          class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+          placeholder="Descreva resumidamente o processo…">
+      </div>
+
+      <!-- Linha: Prioridade + Prazo -->
       <div class="grid grid-cols-2 gap-3">
         <div>
-          <label class="block text-xs font-medium text-gray-700 mb-1">Tipo *</label>
-          <select id="proc-form-tipo"
-            class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
-            <option value="">Selecione…</option>
-            <option value="contratacao_professor">Contratação Professor</option>
-            <option value="contratacao_profissional">Contratação Profissional</option>
-            <option value="contratacao_servico">Contratação Serviço</option>
-            <option value="aquisicao_equipamento">Aquisição Equipamento</option>
-            <option value="bolsista">Bolsista</option>
-            <option value="manutencao_espaco">Manutenção Espaço</option>
-            <option value="projeto_cultural">Projeto Cultural</option>
-            <option value="campanha_comunicacao">Campanha Comunicação</option>
-            <option value="outro">Outro</option>
-          </select>
-        </div>
-        <div>
-          <label class="block text-xs font-medium text-gray-700 mb-1">Prioridade</label>
-          <select id="proc-form-prioridade"
+          <label class="block text-xs font-semibold text-gray-700 mb-1">Prioridade</label>
+          <select id="padm-form-prioridade"
             class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
             <option value="media">Média</option>
             <option value="alta">Alta</option>
@@ -255,115 +386,170 @@
             <option value="baixa">Baixa</option>
           </select>
         </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-700 mb-1">Prazo</label>
+          <input id="padm-form-prazo" type="date"
+            class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
+        </div>
       </div>
+
+      <!-- Descrição -->
       <div>
-        <label class="block text-xs font-medium text-gray-700 mb-1">Descrição</label>
-        <textarea id="proc-form-descricao" rows="3"
+        <label class="block text-xs font-semibold text-gray-700 mb-1">Descrição / Justificativa</label>
+        <textarea id="padm-form-descricao" rows="2"
           class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-indigo-400"
-          placeholder="Descreva o contexto e objetivo do processo…"></textarea>
+          placeholder="Contexto e motivação do processo…"></textarea>
       </div>
+
+      <!-- Ação Institucional (autocomplete) -->
+      <div>
+        <label class="block text-xs font-semibold text-gray-700 mb-1">
+          Ação Institucional vinculada
+          <span class="text-gray-400 font-normal">(opcional)</span>
+        </label>
+        <div class="relative">
+          <input id="padm-form-acao-busca" type="text" placeholder="Buscar ação pelo nome…"
+            class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+            oninput="padmBuscarAcoes(this.value)" autocomplete="off">
+          <input type="hidden" id="padm-form-acao-id">
+          <div id="padm-acao-dropdown" class="absolute z-10 w-full bg-white border border-gray-200 rounded-lg shadow-lg mt-1 hidden max-h-40 overflow-y-auto custom-scroll"></div>
+        </div>
+      </div>
+
+      <!-- Rubrica Orçamentária (autocomplete) -->
+      <div>
+        <label class="block text-xs font-semibold text-gray-700 mb-1">
+          Rubrica Orçamentária
+          <span id="padm-rubrica-obrig" class="text-red-500 hidden">*</span>
+          <span class="text-gray-400 font-normal" id="padm-rubrica-hint"></span>
+        </label>
+        <div class="relative">
+          <input id="padm-form-rubrica-busca" type="text" placeholder="Buscar rubrica…"
+            class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+            oninput="padmBuscarRubricas(this.value)" autocomplete="off">
+          <input type="hidden" id="padm-form-rubrica-id">
+          <input type="hidden" id="padm-form-rubrica-nome">
+          <div id="padm-rubrica-dropdown" class="absolute z-10 w-full bg-white border border-gray-200 rounded-lg shadow-lg mt-1 hidden max-h-40 overflow-y-auto custom-scroll"></div>
+        </div>
+        <!-- Saldo disponível -->
+        <div id="padm-saldo-info" class="hidden mt-1.5 text-xs flex items-center gap-2">
+          <i class="fas fa-coins text-amber-500"></i>
+          <span id="padm-saldo-texto" class="text-gray-600"></span>
+        </div>
+      </div>
+
+      <!-- Valor Previsto -->
       <div class="grid grid-cols-2 gap-3">
         <div>
-          <label class="block text-xs font-medium text-gray-700 mb-1">Responsável</label>
-          <input id="proc-form-responsavel" type="email"
+          <label class="block text-xs font-semibold text-gray-700 mb-1">Valor Previsto (R$)</label>
+          <input id="padm-form-valor" type="number" min="0" step="0.01"
+            class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+            placeholder="0,00" oninput="padmVerificarSaldo()">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-700 mb-1">Responsável</label>
+          <input id="padm-form-responsavel" type="email"
             class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
             placeholder="email@ccbj.com.br">
         </div>
-        <div>
-          <label class="block text-xs font-medium text-gray-700 mb-1">Prazo</label>
-          <input id="proc-form-prazo" type="date"
-            class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
+      </div>
+
+      <!-- Campos extras (injetados conforme o tipo) -->
+      <div id="padm-campos-extras" class="space-y-3 hidden">
+        <div class="border-t border-gray-100 pt-3">
+          <p class="text-xs font-semibold text-gray-700 mb-2 flex items-center gap-1">
+            <i class="fas fa-sliders-h text-indigo-400"></i>
+            Campos específicos do tipo
+          </p>
+          <div id="padm-campos-extras-lista" class="space-y-2"></div>
         </div>
       </div>
-      <div>
-        <label class="block text-xs font-medium text-gray-700 mb-1">Valor Previsto (R$)</label>
-        <input id="proc-form-valor" type="number" min="0" step="0.01"
-          class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
-          placeholder="0,00">
-      </div>
-      <div>
-        <label class="block text-xs font-medium text-gray-700 mb-1">Setores Envolvidos</label>
-        <div class="flex flex-wrap gap-2" id="proc-form-setores">
-          <label class="inline-flex items-center gap-1.5 text-xs cursor-pointer"><input type="checkbox" value="rh" class="proc-setor-cb rounded"> RH</label>
-          <label class="inline-flex items-center gap-1.5 text-xs cursor-pointer"><input type="checkbox" value="financeiro" class="proc-setor-cb rounded"> Financeiro</label>
-          <label class="inline-flex items-center gap-1.5 text-xs cursor-pointer"><input type="checkbox" value="comunicacao" class="proc-setor-cb rounded"> Comunicação</label>
-          <label class="inline-flex items-center gap-1.5 text-xs cursor-pointer"><input type="checkbox" value="reservas" class="proc-setor-cb rounded"> Reservas</label>
-          <label class="inline-flex items-center gap-1.5 text-xs cursor-pointer"><input type="checkbox" value="juridico" class="proc-setor-cb rounded"> Jurídico</label>
-          <label class="inline-flex items-center gap-1.5 text-xs cursor-pointer"><input type="checkbox" value="operacional" class="proc-setor-cb rounded"> Operacional</label>
-          <label class="inline-flex items-center gap-1.5 text-xs cursor-pointer"><input type="checkbox" value="direcao" class="proc-setor-cb rounded"> Direção</label>
+
+      <!-- Preview das etapas -->
+      <div id="padm-etapas-preview" class="hidden">
+        <div class="border-t border-gray-100 pt-3">
+          <p class="text-xs font-semibold text-gray-700 mb-2 flex items-center gap-1">
+            <i class="fas fa-route text-green-400"></i>
+            Fluxo de etapas configurado
+          </p>
+          <div id="padm-etapas-preview-lista" class="flex items-center gap-1 flex-wrap"></div>
         </div>
       </div>
+
+      <!-- Alerta de saldo insuficiente -->
+      <div id="padm-alerta-saldo" class="hidden bg-red-50 border border-red-200 rounded-lg px-3 py-2 flex items-start gap-2">
+        <i class="fas fa-exclamation-triangle text-red-500 text-sm mt-0.5"></i>
+        <p id="padm-alerta-saldo-texto" class="text-xs text-red-700"></p>
+      </div>
+
     </div>
     <div class="px-5 py-3 border-t border-gray-100 flex justify-end gap-2">
-      <button onclick="procFecharModal()" class="text-sm text-gray-600 hover:text-gray-800 px-4 py-2 rounded-lg transition">Cancelar</button>
-      <button onclick="procSalvar()"
+      <button onclick="padmFecharModalCriar()" class="text-sm text-gray-600 hover:text-gray-800 px-4 py-2 rounded-lg transition">Cancelar</button>
+      <button onclick="padmSalvarProcesso()" id="padm-btn-criar-proc"
         class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition">
-        Criar Processo
+        <i class="fas fa-plus mr-1.5 text-xs"></i>Criar Processo
       </button>
     </div>
   </div>
 </div>
 
-<!-- ── Modal: Avançar Status ─────────────────────────────────────────────────── -->
-<div id="proc-modal-status" class="fixed inset-0 bg-black bg-opacity-40 z-50 hidden flex items-center justify-center p-4">
+<!-- ── Modal: Avançar Status (manual) ─────────────────────────────────────── -->
+<div id="padm-modal-status" class="fixed inset-0 bg-black bg-opacity-40 z-50 hidden flex items-center justify-center p-4">
   <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
     <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-      <h3 class="font-semibold text-gray-800 text-sm">Avançar Status do Processo</h3>
-      <button onclick="procFecharModalStatus()" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times"></i></button>
+      <h3 class="font-semibold text-gray-800 text-sm">Alterar Status do Processo</h3>
+      <button onclick="padmFecharModalStatus()" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times"></i></button>
     </div>
     <div class="px-5 py-4 space-y-3">
       <div>
-        <label class="block text-xs font-medium text-gray-700 mb-1">Novo Status *</label>
-        <select id="proc-status-novo"
-          class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
-        </select>
+        <label class="block text-xs font-semibold text-gray-700 mb-1">Novo Status *</label>
+        <select id="padm-status-novo"
+          class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"></select>
       </div>
       <div>
-        <label class="block text-xs font-medium text-gray-700 mb-1">Motivo / Observação</label>
-        <textarea id="proc-status-motivo" rows="2"
+        <label class="block text-xs font-semibold text-gray-700 mb-1">Motivo / Observação</label>
+        <textarea id="padm-status-motivo" rows="2"
           class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-indigo-400"
-          placeholder="Opcional — será registrado na timeline"></textarea>
+          placeholder="Registrado na timeline…"></textarea>
       </div>
     </div>
     <div class="px-5 py-3 border-t border-gray-100 flex justify-end gap-2">
-      <button onclick="procFecharModalStatus()" class="text-sm text-gray-600 px-4 py-2 rounded-lg">Cancelar</button>
-      <button onclick="procConfirmarStatus()"
-        class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition">
-        Confirmar
-      </button>
+      <button onclick="padmFecharModalStatus()" class="text-sm text-gray-600 px-4 py-2 rounded-lg">Cancelar</button>
+      <button onclick="padmConfirmarStatus()"
+        class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition">Confirmar</button>
     </div>
   </div>
 </div>
 
-<!-- ── Modal: Nova Tarefa Vinculada ──────────────────────────────────────────── -->
-<div id="proc-modal-tarefa" class="fixed inset-0 bg-black bg-opacity-40 z-50 hidden flex items-center justify-center p-4">
+<!-- ── Modal: Nova Tarefa Vinculada ───────────────────────────────────────── -->
+<div id="padm-modal-tarefa" class="fixed inset-0 bg-black bg-opacity-40 z-50 hidden flex items-center justify-center p-4">
   <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
     <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
       <h3 class="font-semibold text-gray-800 text-sm">Nova Tarefa no Processo</h3>
-      <button onclick="procFecharModalTarefa()" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times"></i></button>
+      <button onclick="padmFecharModalTarefa()" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times"></i></button>
     </div>
     <div class="px-5 py-4 space-y-3">
       <div>
-        <label class="block text-xs font-medium text-gray-700 mb-1">Título *</label>
-        <input id="proc-tar-titulo" type="text"
+        <label class="block text-xs font-semibold text-gray-700 mb-1">Título *</label>
+        <input id="padm-tar-titulo" type="text"
           class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
       </div>
       <div class="grid grid-cols-2 gap-3">
         <div>
-          <label class="block text-xs font-medium text-gray-700 mb-1">Responsável</label>
-          <input id="proc-tar-responsavel" type="email"
+          <label class="block text-xs font-semibold text-gray-700 mb-1">Responsável</label>
+          <input id="padm-tar-responsavel" type="email"
             class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
         </div>
         <div>
-          <label class="block text-xs font-medium text-gray-700 mb-1">Prazo</label>
-          <input id="proc-tar-prazo" type="date"
+          <label class="block text-xs font-semibold text-gray-700 mb-1">Prazo</label>
+          <input id="padm-tar-prazo" type="date"
             class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
         </div>
       </div>
       <div class="grid grid-cols-2 gap-3">
         <div>
-          <label class="block text-xs font-medium text-gray-700 mb-1">Prioridade</label>
-          <select id="proc-tar-prioridade"
+          <label class="block text-xs font-semibold text-gray-700 mb-1">Prioridade</label>
+          <select id="padm-tar-prioridade"
             class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
             <option value="media">Média</option>
             <option value="alta">Alta</option>
@@ -372,8 +558,8 @@
           </select>
         </div>
         <div>
-          <label class="block text-xs font-medium text-gray-700 mb-1">Setor</label>
-          <select id="proc-tar-setor"
+          <label class="block text-xs font-semibold text-gray-700 mb-1">Setor</label>
+          <select id="padm-tar-setor"
             class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
             <option value="rh">RH</option>
             <option value="financeiro">Financeiro</option>
@@ -381,17 +567,107 @@
             <option value="operacional">Operacional</option>
             <option value="infraestrutura">Infraestrutura</option>
             <option value="juridico">Jurídico</option>
+            <option value="programacao">Programação</option>
+            <option value="direcao">Direção</option>
           </select>
         </div>
       </div>
     </div>
     <div class="px-5 py-3 border-t border-gray-100 flex justify-end gap-2">
-      <button onclick="procFecharModalTarefa()" class="text-sm text-gray-600 px-4 py-2 rounded-lg">Cancelar</button>
-      <button onclick="procCriarTarefaVinculada()"
-        class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition">
-        Criar Tarefa
-      </button>
+      <button onclick="padmFecharModalTarefa()" class="text-sm text-gray-600 px-4 py-2 rounded-lg">Cancelar</button>
+      <button onclick="padmCriarTarefaVinculada()"
+        class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition">Criar Tarefa</button>
     </div>
   </div>
 </div>
 
+<!-- ── Modal: Vincular Entidade ───────────────────────────────────────────── -->
+<div id="padm-modal-vincular" class="fixed inset-0 bg-black bg-opacity-40 z-50 hidden flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+    <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+      <h3 class="font-semibold text-gray-800 text-sm">Vincular ao Processo</h3>
+      <button onclick="padmFecharModalVincular()" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="px-5 py-4 space-y-3">
+      <div>
+        <label class="block text-xs font-semibold text-gray-700 mb-1">O que deseja vincular?</label>
+        <select id="padm-vincular-tipo" onchange="padmAtualizarFormVinculo()"
+          class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
+          <option value="acao">Ação Institucional</option>
+          <option value="rubrica">Rubrica Orçamentária</option>
+          <option value="tarefa">Tarefa existente (por ID)</option>
+          <option value="contrato">Contrato (por ID e valor)</option>
+        </select>
+      </div>
+      <div id="padm-vincular-campos" class="space-y-2">
+        <div>
+          <label class="block text-xs font-semibold text-gray-700 mb-1">Buscar / ID</label>
+          <input id="padm-vincular-id" type="text" placeholder="Digite para buscar…"
+            class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+            oninput="padmBuscarParaVinculo(this.value)">
+          <div id="padm-vincular-dropdown" class="hidden mt-1 bg-white border border-gray-200 rounded-lg shadow-sm max-h-36 overflow-y-auto"></div>
+        </div>
+        <div id="padm-vincular-nome-campo" class="hidden">
+          <label class="block text-xs font-semibold text-gray-700 mb-1">Nome (opcional)</label>
+          <input id="padm-vincular-nome" type="text"
+            class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
+        </div>
+        <div id="padm-vincular-valor-campo" class="hidden">
+          <label class="block text-xs font-semibold text-gray-700 mb-1">Valor (R$)</label>
+          <input id="padm-vincular-valor" type="number" step="0.01"
+            class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
+        </div>
+      </div>
+    </div>
+    <div class="px-5 py-3 border-t border-gray-100 flex justify-end gap-2">
+      <button onclick="padmFecharModalVincular()" class="text-sm text-gray-600 px-4 py-2 rounded-lg">Cancelar</button>
+      <button onclick="padmConfirmarVinculo()"
+        class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition">Vincular</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Modal: Adicionar Documento ─────────────────────────────────────────── -->
+<div id="padm-modal-doc" class="fixed inset-0 bg-black bg-opacity-40 z-50 hidden flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+    <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+      <h3 class="font-semibold text-gray-800 text-sm">Adicionar Documento</h3>
+      <button onclick="padmFecharModalDoc()" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="px-5 py-4 space-y-3">
+      <div>
+        <label class="block text-xs font-semibold text-gray-700 mb-1">Nome do Documento *</label>
+        <input id="padm-doc-nome" type="text"
+          class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+          placeholder="Ex: Contrato de Prestação de Serviço">
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-gray-700 mb-1">Tipo</label>
+          <select id="padm-doc-tipo"
+            class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
+            <option value="contrato">Contrato</option>
+            <option value="nota_fiscal">Nota Fiscal / RPA</option>
+            <option value="orcamento">Orçamento</option>
+            <option value="arte">Arte / Layout</option>
+            <option value="certidao">Certidão</option>
+            <option value="parecer">Parecer</option>
+            <option value="comprovante">Comprovante</option>
+            <option value="outro">Outro</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-700 mb-1">Link / URL (opcional)</label>
+          <input id="padm-doc-url" type="url"
+            class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+            placeholder="https://drive.google.com/…">
+        </div>
+      </div>
+    </div>
+    <div class="px-5 py-3 border-t border-gray-100 flex justify-end gap-2">
+      <button onclick="padmFecharModalDoc()" class="text-sm text-gray-600 px-4 py-2 rounded-lg">Cancelar</button>
+      <button onclick="padmAdicionarDocumento()"
+        class="bg-gray-700 hover:bg-gray-800 text-white text-sm font-medium px-4 py-2 rounded-lg transition">Adicionar</button>
+    </div>
+  </div>
+</div>

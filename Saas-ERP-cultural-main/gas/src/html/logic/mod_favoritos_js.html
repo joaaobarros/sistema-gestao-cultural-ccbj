@@ -3,7 +3,7 @@
 @type logic
 @description Gerenciamento de favoritos (atalhos rápidos) na sidebar via drag-and-drop.
 @responsibility Manter, persistir e renderizar a lista de abas favoritadas pelo usuário.
-@dependencies google.script.run.salvarPreferencia / obterPreferencia, mostrarAba
+@dependencies GAS.sessao.salvarPreferencia / carregarPreferencias, mostrarAba
 -->
 <script>
 // ══════════════════════════════════════════════════════
@@ -19,12 +19,9 @@ let favoritos  = [];
 // ══════════════════════════════════════════════════════
 
 function salvarFavoritos() {
-  try {
-    google.script.run
-      .withFailureHandler(function(e){ console.warn('salvarFavoritos:', e.message); })
-      .salvarPreferencia('favoritos', JSON.stringify(favoritos));
-  } catch(e) { console.warn('salvarFavoritos:', e); }
-  // cache local para resposta imediata na próxima carga
+  GAS.sessao.salvarPreferencia('favoritos', favoritos, null, function(e) {
+    console.warn('salvarFavoritos:', e);
+  });
   try { localStorage.setItem('_fav_cache', JSON.stringify(favoritos)); } catch(e) {}
 }
 
@@ -39,25 +36,21 @@ function carregarFavoritos(cb) {
   } catch(e) {}
 
   // sincroniza com servidor
-  try {
-    google.script.run
-      .withSuccessHandler(function(val) {
-        if (val) {
-          try { favoritos = JSON.parse(val) || []; } catch(e) { favoritos = []; }
-          // atualiza cache local
-          try { localStorage.setItem('_fav_cache', JSON.stringify(favoritos)); } catch(e) {}
-          renderizarFavoritos();
-        }
-        if (typeof cb === 'function') cb();
-      })
-      .withFailureHandler(function(e) {
-        console.warn('carregarFavoritos:', e.message);
-        if (typeof cb === 'function') cb();
-      })
-      .obterPreferencia('favoritos');
-  } catch(e) {
-    if (typeof cb === 'function') cb();
-  }
+  GAS.sessao.carregarPreferencias(
+    function(prefs) {
+      var val = prefs && prefs['favoritos'];
+      if (val) {
+        favoritos = Array.isArray(val) ? val : (function() { try { return JSON.parse(val) || []; } catch(e) { return []; } })();
+        try { localStorage.setItem('_fav_cache', JSON.stringify(favoritos)); } catch(e) {}
+        renderizarFavoritos();
+      }
+      if (typeof cb === 'function') cb();
+    },
+    function(e) {
+      console.warn('carregarFavoritos:', e);
+      if (typeof cb === 'function') cb();
+    }
+  );
 }
 
 // ══════════════════════════════════════════════════════

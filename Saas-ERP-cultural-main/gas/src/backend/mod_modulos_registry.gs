@@ -117,14 +117,6 @@ var _MOD_DEFAULTS = [
     menus: [{ grupo: 'mod-comunicacao', btn: 'aba-balcao' }],
     dependencias: [], status_operacional: 'beta'
   },
-  {
-    moduleId: 'processos', nome: 'Processos', categoria: 'comunicacao',
-    descricao: 'Gestão de processos de comunicação institucional', versao: '0.8',
-    ativo: false, nucleo: false, apenasSuperadmin: false,
-    rotas: ['aba-processos'],
-    menus: [],
-    dependencias: [], status_operacional: 'beta'
-  },
 
   // ESTRATÉGIA — ativáveis
   {
@@ -228,15 +220,6 @@ var _MOD_DEFAULTS = [
     menus: [],
     dependencias: ['tarefas'], status_operacional: 'beta'
   },
-  {
-    moduleId: 'processos_institucionais', nome: 'Processos Institucionais', categoria: 'governanca',
-    descricao: 'Fio institucional transversal — rastreia processos que cruzam RH, financeiro, reservas, tarefas e reuniões',
-    versao: '1.0',
-    ativo: false, nucleo: false, apenasSuperadmin: false,
-    rotas: ['aba-processos-institucionais'],
-    menus: [],
-    dependencias: ['tarefas', 'reunioes'], status_operacional: 'beta'
-  },
 
   // SOLICITAÇÕES / PAUTA EXTERNA — ativáveis
   {
@@ -265,6 +248,15 @@ var _MOD_DEFAULTS = [
     rotas: [],
     menus: [],
     dependencias: ['solicitacoes'], status_operacional: 'beta'
+  },
+  {
+    moduleId: 'processos_adm', nome: 'Processos Administrativo-Financeiros', categoria: 'operacional',
+    descricao: 'Engine transversal de processos administrativo-financeiros: contratações, aquisições, serviços gráficos, bolsistas, manutenções, projetos culturais e mais. Absorve CIs, controla orçamento, integra tarefas, contratos, reuniões e comunicação.',
+    versao: '2.0',
+    ativo: false, nucleo: false, apenasSuperadmin: false,
+    rotas: ['aba-processos-institucionais'],
+    menus: [{ grupo: 'mod-governanca', btn: 'aba-processos-institucionais' }],
+    dependencias: ['tarefas', 'reunioes'], status_operacional: 'beta'
   }
 ];
 

@@ -653,9 +653,6 @@ function perguntarIA(pergunta) {
       )
       .join("\n");
 
-    const emailAtivo = obterEmailUsuario('').toLowerCase();
-    const ehUsuarioTeste = emailAtivo.includes("joao.barros");
-
     const prompt = `Você é o Bêjotinha, assistente de gestão de espaços do Centro Cultural Bom Jardim (CCBJ), Fortaleza/CE.
 
 REGRA ABSOLUTA — APRESENTAÇÃO:
@@ -671,7 +668,6 @@ REGRA ABSOLUTA — PROATIVIDADE:
 PERMISSÃO PARA CRIAR CONTEÚDO:
 - Você PODE inventar nomes de ações, releases técnicos, descrições, público-alvo, categorias e observações coerentes com o contexto.
 - Sempre deixe claro que são sugestões revisáveis.
-${ehUsuarioTeste ? "- USUÁRIO DE TESTE AUTORIZADO: crie programações completas e detalhadas livremente, sem pedir confirmação." : ""}
 
 REGRAS DE AGENDAMENTO:
 - Nunca usar ID de sala na resposta textual — use sempre o nome real.

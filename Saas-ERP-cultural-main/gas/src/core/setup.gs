@@ -58,15 +58,22 @@ const _DATA_FILES = [
   'rh_cargos.json', 'rh_historico.json', 'rh_avaliacoes.json',
   'rh_ponto.json', 'rh_documentos.json', 'rh_folha.json', 'rh_perfil_social.json',
   'rh_escalas.json', 'rh_escalas_trocas.json', 'rh_escalas_logs.json',
+  'rh_ferias.json', 'rh_alertas_ferias.json',
+  'rh_pccs.json', 'rh_pccs_params.json',
   // Financeiro
   'contratacoes.json', 'pagamentos.json',
-  // Pessoal / Processos
+  // Pessoal / Processos Administrativo-Financeiros
   'tarefas.json', 'processos.json', 'demandas.json', 'atendimentos.json',
+  'processo_tipos.json', 'orcamento_reservas.json',
   // Almoxarifado
   'almoxarifado.json', 'movimentacoes_almox.json',
   // Reuniões, Encaminhamentos, Séries e Histórico de Pautas
   'reunioes.json', 'encaminhamentos.json',
   'reunioes_series.json', 'pauta_historico.json',
+  // Solicitações externas
+  'solicitacoes.json', 'solicitacoes_seq.json',
+  // Pauta Externa
+  'pauta_externa.json', 'pauta_externa_seq.json',
   // Registry de módulos — pré-criado para evitar perda de estado ao recarregar
   'modulos_registry.json',
 ];

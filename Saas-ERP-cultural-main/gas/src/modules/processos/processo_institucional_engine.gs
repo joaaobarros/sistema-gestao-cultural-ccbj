@@ -144,8 +144,27 @@ var ProcessoInstitucionalEngine = (function() {
         responsavelAtual:  dados.responsavelAtual || emailCriador || '',
         setoresEnvolvidos: dados.setoresEnvolvidos || [],
 
-        // Vínculo com Ação Institucional (opcional)
+        // Vínculo com Ação Institucional — ENTIDADE REAL (não apenas texto)
         acaoId:            dados.acaoId       || '',
+        acaoNome:          dados.acaoNome     || '',  // snapshot do nome no momento do vínculo
+
+        // Rubrica orçamentária vinculada
+        rubricaId:         dados.rubricaId    || '',
+        rubricaNome:       dados.rubricaNome  || '',
+
+        // Campos extras do tipo de processo (configuráveis por tipo)
+        camposExtras:      dados.camposExtras || {},
+
+        // Documentos anexados
+        documentos:        [],
+
+        // ── Etapas do processo (derivadas do tipo, via ProcessoTipoConfigEngine) ──
+        etapaAtualId:      '',   // id da etapa corrente
+        etapaAtualNome:    '',
+        etapaAtualSetor:   '',
+        etapaIndice:       -1,   // -1 = não iniciado
+        etapas:            [],   // histórico de etapas executadas
+        etapasConfig:      [],   // snapshot das etapas configuradas no tipo
 
         // Vínculos com entidades (snapshots — não dados live)
         tarefas:           [],
@@ -158,8 +177,10 @@ var ProcessoInstitucionalEngine = (function() {
 
         // Financeiro consolidado (atualizado a cada vínculo financeiro)
         impactoFinanceiro: {
-          previsto:  dados.valorPrevisto || 0,
-          executado: 0
+          previsto:    dados.valorPrevisto || 0,
+          executado:   0,
+          reservado:   0,   // valor reservado via OrcamentoGuard
+          reservaId:   ''   // id da reserva ativa
         },
 
         // Timeline unificada (append-only)
@@ -193,6 +214,47 @@ var ProcessoInstitucionalEngine = (function() {
           timestamp:  agora
         }]
       };
+
+      // ── Inicializar etapas a partir do tipo configurado ──────────────────
+      try {
+        if (typeof ProcessoTipoConfigEngine !== 'undefined') {
+          var etapasConf = ProcessoTipoConfigEngine.obterEtapas(proc.tipo);
+          proc.etapasConfig = etapasConf;
+
+          var tipoCfg = ProcessoTipoConfigEngine.obterPorId(proc.tipo);
+          if (tipoCfg) {
+            if (!proc.setoresEnvolvidos.length && tipoCfg.setoresPadrao) {
+              proc.setoresEnvolvidos = tipoCfg.setoresPadrao.slice();
+            }
+          }
+
+          if (etapasConf.length) {
+            var primeiraEtapa = etapasConf[0];
+            proc.etapaAtualId    = primeiraEtapa.id;
+            proc.etapaAtualNome  = primeiraEtapa.nome;
+            proc.etapaAtualSetor = primeiraEtapa.setorResponsavel;
+            proc.etapaIndice     = 0;
+            proc.etapas.push({
+              id:         primeiraEtapa.id,
+              nome:       primeiraEtapa.nome,
+              setor:      primeiraEtapa.setorResponsavel,
+              entradaEm:  agora,
+              saidaEm:    null,
+              responsavel: emailCriador || '',
+              observacoes: ''
+            });
+            proc.timeline.push(_novoEventoTimeline(
+              'etapa',
+              'Processo iniciado na etapa: ' + primeiraEtapa.nome,
+              emailCriador,
+              null, null,
+              primeiraEtapa.setorResponsavel
+            ));
+          }
+        }
+      } catch(eEtapa) {
+        Logger.warn('[ProcessoInstitucionalEngine.criar] Falha ao inicializar etapas: ' + eEtapa.message);
+      }
 
       ProcessoInstitucionalRepository.salvar(proc);
 
@@ -880,6 +942,371 @@ var ProcessoInstitucionalEngine = (function() {
 
       Logger.info('[ProcessoInstitucionalEngine] Alertas diários: ' + alertas.length + ' detectados, ' + enviados + ' enviados.');
       return { alertas: alertas.length, enviados: enviados };
+    },
+
+    // ── Avanço de Etapa ───────────────────────────────────────────────────────
+
+    avancarEtapa: function(id, observacoes, emailAtor) {
+      var proc = ProcessoInstitucionalRepository.obterPorId(id);
+      if (!proc) throw new Error('Processo não encontrado: ' + id);
+
+      var etapasConf = proc.etapasConfig || [];
+      if (!etapasConf.length) throw new Error('Este processo não possui etapas configuradas.');
+
+      var indiceAtual = typeof proc.etapaIndice === 'number' ? proc.etapaIndice : -1;
+      var proximoIndice = indiceAtual + 1;
+
+      if (proximoIndice >= etapasConf.length) {
+        throw new Error('Processo já está na etapa final. Conclua o processo para encerrar.');
+      }
+
+      var agora       = _agora_proc();
+      var etapaAtual  = etapasConf[indiceAtual] || null;
+      var proximaEtapa = etapasConf[proximoIndice];
+
+      // Marca saída da etapa atual no histórico
+      proc.etapas = proc.etapas || [];
+      if (etapaAtual) {
+        var etapaHist = proc.etapas.find(function(e) { return e.id === etapaAtual.id && !e.saidaEm; });
+        if (etapaHist) {
+          etapaHist.saidaEm    = agora;
+          etapaHist.observacoes = observacoes || '';
+          etapaHist.concluidoPor = emailAtor || 'sistema';
+        }
+      }
+
+      // Verifica se a próxima etapa requer validação orçamentária
+      if (proximaEtapa.validacaoOrcamento && proc.rubricaId && proc.impactoFinanceiro.previsto > 0) {
+        try {
+          var checkOrc = OrcamentoGuard.verificarSaldo(proc.rubricaId, proc.impactoFinanceiro.previsto);
+          if (!checkOrc.ok) {
+            throw new Error('Bloqueio orçamentário: ' + checkOrc.mensagem);
+          }
+        } catch(eOrc) {
+          if (eOrc.message.indexOf('Bloqueio') === 0) throw eOrc;
+          Logger.warn('[ProcessoInstitucionalEngine.avancarEtapa] Falha ao verificar orçamento: ' + eOrc.message);
+        }
+      }
+
+      // Atualiza etapa corrente
+      proc.etapaAtualId    = proximaEtapa.id;
+      proc.etapaAtualNome  = proximaEtapa.nome;
+      proc.etapaAtualSetor = proximaEtapa.setorResponsavel;
+      proc.etapaIndice     = proximoIndice;
+      proc.atualizadoEm    = agora;
+
+      // Registra entrada na nova etapa
+      proc.etapas.push({
+        id:          proximaEtapa.id,
+        nome:        proximaEtapa.nome,
+        setor:       proximaEtapa.setorResponsavel,
+        entradaEm:   agora,
+        saidaEm:     null,
+        responsavel: emailAtor || '',
+        observacoes: ''
+      });
+
+      // Atualiza status do processo com base na etapa
+      if (proximoIndice === etapasConf.length - 1) {
+        // Última etapa = encerramento
+        if (proc.status !== STATUS_PROCESSO.CONCLUIDO) {
+          proc.status = STATUS_PROCESSO.EM_ANDAMENTO;
+        }
+      } else if (proximaEtapa.setorResponsavel === 'financeiro' || proximaEtapa.validacaoOrcamento) {
+        proc.status = STATUS_PROCESSO.AGUARDANDO_APROVACAO;
+      } else if (proximaEtapa.setorResponsavel !== 'solicitante') {
+        proc.status = STATUS_PROCESSO.AGUARDANDO_SETOR;
+      } else {
+        proc.status = STATUS_PROCESSO.EM_ANDAMENTO;
+      }
+
+      proc.timeline = proc.timeline || [];
+      proc.timeline.push(_novoEventoTimeline(
+        'etapa',
+        'Etapa avançada: ' + (etapaAtual ? etapaAtual.nome : '—') + ' → ' + proximaEtapa.nome +
+          (observacoes ? ' (' + observacoes + ')' : ''),
+        emailAtor,
+        null, null,
+        proximaEtapa.setorResponsavel
+      ));
+
+      ProcessoInstitucionalRepository.salvar(proc);
+
+      _emitir_proc('PROCESSO_ETAPA_AVANCADA', proc, emailAtor, {
+        etapaAnterior: etapaAtual ? etapaAtual.id : '',
+        etapaAtual:    proximaEtapa.id,
+        indice:        proximoIndice
+      });
+
+      // Gera demanda no Balcão se a etapa exige comunicação
+      if (proximaEtapa.gerarDemandaBalcao) {
+        try {
+          ProcessoInstitucionalEngine._gerarDemandaBalcao(proc, proximaEtapa, emailAtor);
+        } catch(eBalcao) {
+          Logger.warn('[ProcessoInstitucionalEngine.avancarEtapa] Falha ao gerar demanda Balcão: ' + eBalcao.message);
+        }
+      }
+
+      return proc;
+    },
+
+    // ── Voltar Etapa (retificação) ─────────────────────────────────────────────
+
+    voltarEtapa: function(id, motivo, emailAtor) {
+      var proc = ProcessoInstitucionalRepository.obterPorId(id);
+      if (!proc) throw new Error('Processo não encontrado: ' + id);
+
+      var indiceAtual = typeof proc.etapaIndice === 'number' ? proc.etapaIndice : 0;
+      if (indiceAtual <= 0) throw new Error('Já está na primeira etapa — não é possível voltar.');
+
+      var etapasConf    = proc.etapasConfig || [];
+      var etapaAnterior = etapasConf[indiceAtual - 1];
+      var agora         = _agora_proc();
+
+      proc.etapaAtualId    = etapaAnterior.id;
+      proc.etapaAtualNome  = etapaAnterior.nome;
+      proc.etapaAtualSetor = etapaAnterior.setorResponsavel;
+      proc.etapaIndice     = indiceAtual - 1;
+      proc.status          = STATUS_PROCESSO.EM_ANDAMENTO;
+      proc.atualizadoEm    = agora;
+
+      proc.etapas = proc.etapas || [];
+      proc.etapas.push({
+        id:          etapaAnterior.id,
+        nome:        etapaAnterior.nome + ' (retorno)',
+        setor:       etapaAnterior.setorResponsavel,
+        entradaEm:   agora,
+        saidaEm:     null,
+        responsavel: emailAtor || '',
+        observacoes: 'Retorno: ' + (motivo || '')
+      });
+
+      proc.timeline.push(_novoEventoTimeline(
+        'retificacao',
+        'Retorno à etapa: ' + etapaAnterior.nome + (motivo ? ' — ' + motivo : ''),
+        emailAtor,
+        null, null,
+        etapaAnterior.setorResponsavel
+      ));
+
+      ProcessoInstitucionalRepository.salvar(proc);
+      return proc;
+    },
+
+    // ── Vínculo Real com Ação Institucional ───────────────────────────────────
+
+    vincularAcao: function(processoId, acaoId, emailAtor) {
+      if (!acaoId) throw new Error('acaoId é obrigatório.');
+      var proc = ProcessoInstitucionalRepository.obterPorId(processoId);
+      if (!proc) throw new Error('Processo não encontrado: ' + processoId);
+
+      // Busca entidade real no ActionEngine
+      var acaoNome = acaoId;
+      try {
+        if (typeof obterAcao === 'function') {
+          var acao = obterAcao(acaoId);
+          if (acao) acaoNome = acao.nome || acao.titulo || acaoId;
+        }
+      } catch(e) {
+        Logger.warn('[ProcessoInstitucionalEngine.vincularAcao] Falha ao buscar ação: ' + e.message);
+      }
+
+      proc.acaoId   = acaoId;
+      proc.acaoNome = acaoNome;
+      proc.atualizadoEm = _agora_proc();
+
+      proc.timeline = proc.timeline || [];
+      proc.timeline.push(_novoEventoTimeline(
+        'vinculo',
+        'Ação institucional vinculada: ' + acaoNome + ' (ID: ' + acaoId + ')',
+        emailAtor,
+        'acao',
+        acaoId
+      ));
+
+      ProcessoInstitucionalRepository.salvar(proc);
+      _emitir_proc('PROCESSO_VINCULO_ADICIONADO', proc, emailAtor, { tipoVinculo: 'acao', entidadeId: acaoId });
+      return proc;
+    },
+
+    // ── Reserva Orçamentária ──────────────────────────────────────────────────
+
+    reservarOrcamento: function(processoId, emailAtor) {
+      var proc = ProcessoInstitucionalRepository.obterPorId(processoId);
+      if (!proc) throw new Error('Processo não encontrado: ' + processoId);
+
+      if (!proc.rubricaId) throw new Error('Nenhuma rubrica orçamentária vinculada ao processo.');
+      var valor = proc.impactoFinanceiro.previsto || 0;
+      if (valor <= 0) throw new Error('Valor previsto inválido para reserva orçamentária.');
+
+      var reserva = OrcamentoGuard.reservar(
+        proc.id, proc.rubricaId, valor,
+        'Processo: ' + proc.titulo, emailAtor
+      );
+
+      proc.impactoFinanceiro.reservado = valor;
+      proc.impactoFinanceiro.reservaId = reserva ? reserva.id : '';
+      proc.atualizadoEm = _agora_proc();
+
+      proc.timeline = proc.timeline || [];
+      proc.timeline.push(_novoEventoTimeline(
+        'orcamento',
+        'Reserva orçamentária efetuada: R$ ' + valor.toFixed(2) + ' — Rubrica: ' + (proc.rubricaNome || proc.rubricaId),
+        emailAtor,
+        null, null,
+        'financeiro'
+      ));
+
+      ProcessoInstitucionalRepository.salvar(proc);
+      return { proc: proc, reserva: reserva };
+    },
+
+    // ── Vincular Rubrica Orçamentária ─────────────────────────────────────────
+
+    vincularRubrica: function(processoId, rubricaId, rubricaNome, emailAtor) {
+      var proc = ProcessoInstitucionalRepository.obterPorId(processoId);
+      if (!proc) throw new Error('Processo não encontrado: ' + processoId);
+
+      proc.rubricaId   = rubricaId;
+      proc.rubricaNome = rubricaNome || rubricaId;
+      proc.atualizadoEm = _agora_proc();
+
+      proc.timeline = proc.timeline || [];
+      proc.timeline.push(_novoEventoTimeline(
+        'orcamento',
+        'Rubrica orçamentária vinculada: ' + (rubricaNome || rubricaId),
+        emailAtor,
+        null, null,
+        'financeiro'
+      ));
+
+      ProcessoInstitucionalRepository.salvar(proc);
+      return proc;
+    },
+
+    // ── Adicionar Documento ───────────────────────────────────────────────────
+
+    adicionarDocumento: function(processoId, doc, emailAtor) {
+      if (!doc || !doc.nome) throw new Error('doc.nome é obrigatório.');
+      var proc = ProcessoInstitucionalRepository.obterPorId(processoId);
+      if (!proc) throw new Error('Processo não encontrado: ' + processoId);
+
+      proc.documentos = proc.documentos || [];
+      proc.documentos.push({
+        id:           _gerarId_proc('doc'),
+        nome:         doc.nome,
+        tipo:         doc.tipo         || 'outro',
+        url:          doc.url          || '',
+        driveId:      doc.driveId      || '',
+        etapa:        proc.etapaAtualId || '',
+        adicionadoPor: emailAtor       || '',
+        adicionadoEm:  _agora_proc()
+      });
+
+      proc.atualizadoEm = _agora_proc();
+      proc.timeline.push(_novoEventoTimeline(
+        'documento',
+        'Documento adicionado: ' + doc.nome,
+        emailAtor
+      ));
+
+      ProcessoInstitucionalRepository.salvar(proc);
+      return proc;
+    },
+
+    // ── Dashboard Institucional Transversal ───────────────────────────────────
+
+    obterDashboardInstitucional: function() {
+      var todos    = ProcessoInstitucionalRepository.listar();
+      var abertos  = todos.filter(function(p) { return ['concluido','cancelado'].indexOf(p.status) === -1; });
+      var agora    = Date.now();
+
+      var porStatus = {};
+      Object.values(STATUS_PROCESSO).forEach(function(s) { porStatus[s] = 0; });
+      todos.forEach(function(p) { porStatus[p.status] = (porStatus[p.status] || 0) + 1; });
+
+      var porTipo = {};
+      todos.forEach(function(p) {
+        porTipo[p.tipo] = (porTipo[p.tipo] || 0) + 1;
+      });
+
+      var atrasados = abertos.filter(function(p) {
+        return p.prazo && new Date(p.prazo).getTime() < agora;
+      }).length;
+
+      var semAtividade7d = abertos.filter(function(p) {
+        if (!p.atualizadoEm) return true;
+        return (agora - new Date(p.atualizadoEm).getTime()) > 7 * 86400000;
+      }).length;
+
+      var totalComprometido = 0;
+      var totalExecutado    = 0;
+      abertos.forEach(function(p) {
+        var fin = p.impactoFinanceiro || {};
+        totalComprometido += (fin.previsto  || 0);
+        totalExecutado    += (fin.executado || 0);
+      });
+
+      // Top gargalos por etapa
+      var porEtapa = {};
+      abertos.forEach(function(p) {
+        var etapa = p.etapaAtualNome || p.status;
+        porEtapa[etapa] = (porEtapa[etapa] || 0) + 1;
+      });
+
+      return {
+        totais: {
+          total:        todos.length,
+          abertos:      abertos.length,
+          atrasados:    atrasados,
+          semAtividade: semAtividade7d
+        },
+        porStatus:    porStatus,
+        porTipo:      porTipo,
+        porEtapa:     porEtapa,
+        financeiro: {
+          totalComprometido: totalComprometido,
+          totalExecutado:    totalExecutado,
+          saldo:             totalComprometido - totalExecutado
+        },
+        recentesAtivos: abertos.slice().sort(function(a,b) {
+          return new Date(b.atualizadoEm || b.criadoEm) - new Date(a.atualizadoEm || a.criadoEm);
+        }).slice(0, 10)
+      };
+    },
+
+    // ── Gerador de Demanda no Balcão (interno) ────────────────────────────────
+
+    _gerarDemandaBalcao: function(proc, etapa, emailAtor) {
+      if (typeof TarefaEngine === 'undefined') {
+        Logger.warn('[ProcessoInstitucionalEngine] TarefaEngine não disponível para gerar demanda Balcão.');
+        return null;
+      }
+
+      var dadosTarefa = {
+        titulo:      'Demanda de comunicação — ' + proc.titulo,
+        descricao:   'Processo ' + (proc.id || '') + ' avançou para etapa "' + etapa.nome + '" e requer material de comunicação.',
+        modulo:      'comunicacao',
+        tipo:        'processo_comunicacao',
+        prioridade:  proc.prioridade || 'media',
+        processoId:  proc.id,
+        responsavel: ''
+      };
+
+      try {
+        var tarefa = TarefaEngine.criar(dadosTarefa, emailAtor);
+        ProcessoInstitucionalEngine.vincularComunicacao(proc.id, {
+          id:     tarefa.id,
+          titulo: tarefa.titulo,
+          tipo:   'demanda_balcao',
+          status: tarefa.status,
+          responsavel: emailAtor || ''
+        }, emailAtor);
+        return tarefa;
+      } catch(e) {
+        Logger.warn('[ProcessoInstitucionalEngine._gerarDemandaBalcao] ' + e.message);
+        return null;
+      }
     }
 
   };
