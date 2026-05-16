@@ -13,11 +13,11 @@
  *              4. Liberar reserva se cancelado
  *
  *              INTEGRAÇÃO:
- *              - Lê rubricas de obterRubricas() (mod_relatorios.gs)
+ *              - Lê rubricas via ContratoRepository.listarRubricas()
  *              - Persiste reservas em orcamento_reservas.json
  *              - Registra no EventBus: ORCAMENTO_RESERVADO, ORCAMENTO_LIBERADO
  *
- * @depends backend/mod_relatorios.gs (obterRubricas, obterContratoPorId)
+ * @depends modules/contratos/contrato_repository.gs (ContratoRepository)
  * @depends core/data_layer.gs (readJSON, writeJSON)
  * @depends core/event_bus_backend.gs (SystemEvents)
  * @depends core/logger.gs (Logger)
@@ -47,7 +47,7 @@ var OrcamentoGuard = (function() {
   function _calcularSaldoRubrica(rubricaId) {
     var rubricas = [];
     try {
-      rubricas = obterRubricas ? obterRubricas() : [];
+      rubricas = ContratoRepository.listarRubricas();
     } catch(e) {
       Logger.warn('[OrcamentoGuard] Falha ao obter rubricas: ' + e.message);
       return null;

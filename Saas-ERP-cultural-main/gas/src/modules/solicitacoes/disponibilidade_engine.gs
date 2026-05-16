@@ -9,7 +9,7 @@
  * 3. OPERACIONAL: conflito de datas e limites operacionais
  *
  * @depends modules/solicitacoes/catalogo_engine.gs
- * @depends backend/mod_relatorios.gs (obterContratos, saldoRubrica)
+ * @depends modules/contratos/contrato_repository.gs (ContratoRepository)
  * @depends core/logger.gs
  */
 
@@ -23,8 +23,7 @@ var DisponibilidadeEngine = (function() {
     }
 
     try {
-      // Busca contratos/metas/rubricas via mod_relatorios
-      var contratos = (typeof obterContratos === 'function') ? obterContratos() : [];
+      var contratos = ContratoRepository.listar();
       var contrato  = contratos.find(function(c) { return c.id === contratoId; });
 
       if (!contrato) return { saldo: null, definido: false, erro: 'Contrato não encontrado' };

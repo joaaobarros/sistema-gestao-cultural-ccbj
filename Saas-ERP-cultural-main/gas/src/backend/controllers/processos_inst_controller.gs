@@ -1,7 +1,9 @@
 /**
  * @file backend/controllers/processos_inst_controller.gs
  * @layer backend/controllers
- * @description Fachada oficial do domínio Processos Institucionais.
+ * @description Fachada oficial do domínio Processos Administrativo-Financeiros.
+ *              Absorve o fluxo das antigas CIs (Comunicações Internas) e
+ *              evolui para engine transversal de processos institucionais.
  *
  *              Responsabilidade: orquestrar as chamadas entre engines especializados
  *              (TarefaEngine, ProcessoInstitucionalEngine) e garantir que vínculos
@@ -412,4 +414,286 @@ function ctrl_proc_sync_tarefa(processoId, tarefaId, emailFallback) {
       prazo:       tarefa.prazo
     }, email || 'sistema');
   }, 'ctrl_proc_sync_tarefa');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CATÁLOGO DE TIPOS E ETAPAS (ProcessoTipoConfigEngine)
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * Retorna catálogo completo de tipos de processo configuráveis.
+ * Usado para popular o formulário de criação (sem hardcode no frontend).
+ */
+function ctrl_proc_catalogo_tipos(emailFallback) {
+  return GasResponse.wrap(function() {
+    obterEmailUsuario(emailFallback || '');
+    return ProcessoTipoConfigEngine.listar();
+  }, 'ctrl_proc_catalogo_tipos');
+}
+
+/**
+ * Retorna etapas de um tipo de processo.
+ * @param {string} tipoId
+ */
+function ctrl_proc_obter_etapas(tipoId, emailFallback) {
+  return GasResponse.wrap(function() {
+    if (!tipoId) throw new Error('tipoId é obrigatório.');
+    obterEmailUsuario(emailFallback || '');
+    return ProcessoTipoConfigEngine.obterEtapas(tipoId);
+  }, 'ctrl_proc_obter_etapas');
+}
+
+/**
+ * Salva tipo de processo customizado (superadmin).
+ * @param {Object} tipo
+ */
+function ctrl_proc_salvar_tipo(tipo, emailFallback) {
+  return GasResponse.wrap(function() {
+    var email = obterEmailUsuario(emailFallback || '');
+    var perms = obterPermissoesUsuario(email);
+    if (!perms || perms.nivel !== 'superadmin') throw new Error('Apenas superadmin pode customizar tipos.');
+    return ProcessoTipoConfigEngine.salvar(tipo);
+  }, 'ctrl_proc_salvar_tipo');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// GESTÃO DE ETAPAS
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * Avança o processo para a próxima etapa configurada no tipo.
+ * Valida orçamento se a etapa exige.
+ * @param {string} processoId
+ * @param {string} observacoes
+ * @param {string} emailFallback
+ */
+function ctrl_proc_avancar_etapa(processoId, observacoes, emailFallback) {
+  return GasResponse.wrap(function() {
+    var email = obterEmailUsuario(emailFallback || '');
+    if (!email)      throw new Error('Usuário não identificado.');
+    if (!processoId) throw new Error('processoId é obrigatório.');
+
+    var proc = ProcessoInstitucionalEngine.avancarEtapa(processoId, observacoes || '', email);
+
+    AuditoriaService.registrar('AVANCAR_ETAPA', 'processo_institucional', processoId, {
+      etapaAtual: proc.etapaAtualId, etapaIndice: proc.etapaIndice
+    }, email);
+
+    return proc;
+  }, 'ctrl_proc_avancar_etapa');
+}
+
+/**
+ * Retorna o processo para etapa anterior (retificação).
+ * @param {string} processoId
+ * @param {string} motivo
+ * @param {string} emailFallback
+ */
+function ctrl_proc_voltar_etapa(processoId, motivo, emailFallback) {
+  return GasResponse.wrap(function() {
+    var email = obterEmailUsuario(emailFallback || '');
+    if (!email)      throw new Error('Usuário não identificado.');
+    if (!processoId) throw new Error('processoId é obrigatório.');
+
+    var proc = ProcessoInstitucionalEngine.voltarEtapa(processoId, motivo || '', email);
+    AuditoriaService.registrar('VOLTAR_ETAPA', 'processo_institucional', processoId, {
+      etapaAtual: proc.etapaAtualId
+    }, email);
+    return proc;
+  }, 'ctrl_proc_voltar_etapa');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// VÍNCULOS ADICIONAIS
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * Vincula ação institucional REAL (com lookup no ActionEngine).
+ * @param {string} processoId
+ * @param {string} acaoId
+ * @param {string} emailFallback
+ */
+function ctrl_proc_vincular_acao(processoId, acaoId, emailFallback) {
+  return GasResponse.wrap(function() {
+    var email = obterEmailUsuario(emailFallback || '');
+    if (!email)      throw new Error('Usuário não identificado.');
+    if (!processoId) throw new Error('processoId é obrigatório.');
+    if (!acaoId)     throw new Error('acaoId é obrigatório.');
+    return ProcessoInstitucionalEngine.vincularAcao(processoId, acaoId, email);
+  }, 'ctrl_proc_vincular_acao');
+}
+
+/**
+ * Vincula rubrica orçamentária ao processo.
+ * @param {string} processoId
+ * @param {string} rubricaId
+ * @param {string} rubricaNome
+ * @param {string} emailFallback
+ */
+function ctrl_proc_vincular_rubrica(processoId, rubricaId, rubricaNome, emailFallback) {
+  return GasResponse.wrap(function() {
+    var email = obterEmailUsuario(emailFallback || '');
+    if (!email)      throw new Error('Usuário não identificado.');
+    if (!processoId) throw new Error('processoId é obrigatório.');
+    if (!rubricaId)  throw new Error('rubricaId é obrigatório.');
+    return ProcessoInstitucionalEngine.vincularRubrica(processoId, rubricaId, rubricaNome || rubricaId, email);
+  }, 'ctrl_proc_vincular_rubrica');
+}
+
+/**
+ * Adiciona documento ao processo.
+ * @param {string} processoId
+ * @param {Object} doc — { nome, tipo, url, driveId }
+ * @param {string} emailFallback
+ */
+function ctrl_proc_adicionar_documento(processoId, doc, emailFallback) {
+  return GasResponse.wrap(function() {
+    var email = obterEmailUsuario(emailFallback || '');
+    if (!email)      throw new Error('Usuário não identificado.');
+    if (!processoId) throw new Error('processoId é obrigatório.');
+    if (!doc || !doc.nome) throw new Error('doc.nome é obrigatório.');
+    return ProcessoInstitucionalEngine.adicionarDocumento(processoId, doc, email);
+  }, 'ctrl_proc_adicionar_documento');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CONTROLE ORÇAMENTÁRIO
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * Verifica saldo orçamentário disponível em uma rubrica.
+ * @param {string} rubricaId
+ * @param {number} valor
+ * @param {string} emailFallback
+ */
+function ctrl_proc_verificar_orcamento(rubricaId, valor, emailFallback) {
+  return GasResponse.wrap(function() {
+    obterEmailUsuario(emailFallback || '');
+    return OrcamentoGuard.verificarSaldo(rubricaId, parseFloat(valor) || 0);
+  }, 'ctrl_proc_verificar_orcamento');
+}
+
+/**
+ * Efetua reserva orçamentária para o processo (após aprovação).
+ * @param {string} processoId
+ * @param {string} emailFallback
+ */
+function ctrl_proc_reservar_orcamento(processoId, emailFallback) {
+  return GasResponse.wrap(function() {
+    var email = obterEmailUsuario(emailFallback || '');
+    if (!email)      throw new Error('Usuário não identificado.');
+    if (!processoId) throw new Error('processoId é obrigatório.');
+
+    var resultado = ProcessoInstitucionalEngine.reservarOrcamento(processoId, email);
+
+    AuditoriaService.registrar('RESERVAR_ORCAMENTO', 'processo_institucional', processoId, {
+      rubricaId: (resultado.proc || {}).rubricaId,
+      valor:     ((resultado.proc || {}).impactoFinanceiro || {}).reservado || 0
+    }, email);
+
+    return resultado;
+  }, 'ctrl_proc_reservar_orcamento');
+}
+
+/**
+ * Libera reserva orçamentária (cancelamento).
+ * @param {string} processoId
+ * @param {string} motivo
+ * @param {string} emailFallback
+ */
+function ctrl_proc_liberar_orcamento(processoId, motivo, emailFallback) {
+  return GasResponse.wrap(function() {
+    var email = obterEmailUsuario(emailFallback || '');
+    if (!email)      throw new Error('Usuário não identificado.');
+    if (!processoId) throw new Error('processoId é obrigatório.');
+    return OrcamentoGuard.liberar(processoId, motivo || '', email);
+  }, 'ctrl_proc_liberar_orcamento');
+}
+
+/**
+ * Retorna dashboard orçamentário (reservas ativas, por rubrica).
+ * @param {string} emailFallback
+ */
+function ctrl_proc_dashboard_orcamentario(emailFallback) {
+  return GasResponse.wrap(function() {
+    var email = obterEmailUsuario(emailFallback || '');
+    var perms = obterPermissoesUsuario(email);
+    var nivel = (perms && perms.nivel) ? perms.nivel : 'visitante';
+    if (['superadmin','admin','gestor'].indexOf(nivel) === -1) {
+      throw new Error('Acesso restrito ao dashboard orçamentário.');
+    }
+    return OrcamentoGuard.obterDashboardOrcamentario();
+  }, 'ctrl_proc_dashboard_orcamentario');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// BUSCA DE AÇÕES PARA AUTOCOMPLETE
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * Busca ações institucionais para autocomplete no formulário de processo.
+ * @param {string} busca — termo de busca
+ * @param {string} emailFallback
+ */
+function ctrl_proc_buscar_acoes(busca, emailFallback) {
+  return GasResponse.wrap(function() {
+    obterEmailUsuario(emailFallback || '');
+    if (typeof listarAcoes !== 'function') return [];
+    var todas = listarAcoes({ status: 'Ativa' }) || [];
+    if (!busca || !busca.trim()) return todas.slice(0, 20);
+    var q = busca.toLowerCase().trim();
+    return todas.filter(function(a) {
+      var texto = ((a.nome || '') + ' ' + (a.titulo || '') + ' ' + (a.descricao || '')).toLowerCase();
+      return texto.indexOf(q) !== -1;
+    }).slice(0, 20);
+  }, 'ctrl_proc_buscar_acoes');
+}
+
+/**
+ * Busca rubricas orçamentárias para autocomplete.
+ * @param {string} busca — termo de busca
+ * @param {string} emailFallback
+ */
+function ctrl_proc_buscar_rubricas(busca, emailFallback) {
+  return GasResponse.wrap(function() {
+    obterEmailUsuario(emailFallback || '');
+    var todas = ContratoRepository.listarRubricas();
+    if (!busca || !busca.trim()) return todas.slice(0, 30);
+    var q = busca.toLowerCase().trim();
+    return todas.filter(function(r) {
+      return ((r.nome || '') + ' ' + (r.id || '')).toLowerCase().indexOf(q) !== -1;
+    }).slice(0, 20);
+  }, 'ctrl_proc_buscar_rubricas');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// DASHBOARD INSTITUCIONAL TRANSVERSAL
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * Retorna dashboard transversal de processos (para painel de gestão).
+ * @param {string} emailFallback
+ */
+function ctrl_proc_dashboard_institucional(emailFallback) {
+  return GasResponse.wrap(function() {
+    var email = obterEmailUsuario(emailFallback || '');
+    if (!email) throw new Error('Usuário não identificado.');
+    var perms = obterPermissoesUsuario(email);
+    var nivel = (perms && perms.nivel) ? perms.nivel : 'visitante';
+    if (['superadmin','admin','gestor'].indexOf(nivel) === -1) {
+      throw new Error('Acesso restrito ao dashboard institucional.');
+    }
+    return ProcessoInstitucionalEngine.obterDashboardInstitucional();
+  }, 'ctrl_proc_dashboard_institucional');
+}
+
+/**
+ * Retorna alertas de todos os processos abertos (para NotificationEngine e painel).
+ */
+function ctrl_proc_alertas_globais(emailFallback) {
+  return GasResponse.wrap(function() {
+    var email = obterEmailUsuario(emailFallback || '');
+    if (!email) throw new Error('Usuário não identificado.');
+    return ProcessoInstitucionalEngine.detectarAlertas();
+  }, 'ctrl_proc_alertas_globais');
 }

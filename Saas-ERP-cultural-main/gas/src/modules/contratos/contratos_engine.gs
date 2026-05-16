@@ -8,14 +8,14 @@
  *   - FSM oficial de transições de status
  *   - Orquestração de mudança de status com evento + auditoria
  *
- * NOTA: O CRUD de contratos, metas, rubricas e indicadores permanece em
- * mod_relatorios.gs por ora — migração para ContratosRepository é FASE 5.
- * Este engine introduz a camada de governança de estado.
+ * NOTA: CRUD de contratos, metas, rubricas e indicadores em ContratoRepository
+ * (modules/contratos/contrato_repository.gs) — migração concluída na Fase 5.
+ * Este engine governa transições de status e emite eventos de domínio.
  *
  * @depends core/event_bus_backend.gs (SystemEvents),
  *          core/events_constants.gs (SystemEventTypes),
  *          core/services/auditoria_service.gs (AuditoriaService),
- *          backend/mod_relatorios.gs (obterContratoPorId, salvarContrato)
+ *          modules/contratos/contrato_repository.gs (ContratoRepository)
  */
 
 // ══════════════════════════════════════════════════════════════
@@ -86,13 +86,13 @@ var ContratosEngine = (function () {
    * @param {string} email — email do responsável
    */
   function aplicarTransicao(id, novoStatus, email) {
-    var contrato = obterContratoPorId(id);
+    var contrato = ContratoRepository.buscarPorId(id);
     if (!contrato) throw new Error('Contrato não encontrado: ' + id);
 
     var statusAtual = contrato.status || STATUS_CONTRATO.ATIVO;
     _assertTransicaoValida(statusAtual, novoStatus);
 
-    salvarContrato(Object.assign({}, contrato, { status: novoStatus }), email);
+    ContratoRepository.salvar(Object.assign({}, contrato, { status: novoStatus }), email);
 
     var ctx = { de: statusAtual, para: novoStatus };
     _emitirEvento(novoStatus, id, email, ctx);
@@ -103,7 +103,7 @@ var ContratosEngine = (function () {
 
   /**
    * Registra criação de contrato com auditoria e evento.
-   * Delega o CRUD para salvarContrato (mod_relatorios.gs).
+   * Delega o CRUD para ContratoRepository.salvar().
    */
   function registrarCriacao(id, dados, email) {
     try {

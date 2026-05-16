@@ -7,11 +7,12 @@
  *   - A bridge aponta APENAS para funções ctrl_contratos_*.
  *   - Todo retorno é GasResponse: { ok, data, error, metadata }.
  *   - Motor de status: ContratosEngine (contratos_engine.gs).
- *   - CRUD: mod_relatorios.gs (migração para ContratosRepository é FASE 5).
+ *   - CRUD: ContratoRepository (modules/contratos/contrato_repository.gs).
  *
  * @depends shared/response.gs (GasResponse),
  *          modules/contratos/contratos_engine.gs (ContratosEngine),
- *          backend/mod_relatorios.gs (obterContratos, salvarContrato, excluirContrato, ...),
+ *          modules/contratos/contrato_repository.gs (ContratoRepository),
+ *          backend/mod_relatorios.gs (obterDashboardComparativoContrato),
  *          core/utils.gs (obterEmailUsuario)
  */
 
@@ -21,25 +22,25 @@
 
 function ctrl_contratos_listar() {
   return GasResponse.wrap(function() {
-    return obterContratos();
+    return ContratoRepository.listar();
   });
 }
 
 function ctrl_contratos_dados() {
   return GasResponse.wrap(function() {
-    return obterDadosContratos();
+    return ContratoRepository.obterDados();
   });
 }
 
 function ctrl_contratos_memorias_rubrica(idRubrica) {
   return GasResponse.wrap(function() {
-    return obterMemoriaRubrica(idRubrica);
+    return ContratoRepository.obterMemoriaRubrica(idRubrica);
   });
 }
 
 function ctrl_contratos_historico_rubrica(idRubrica) {
   return GasResponse.wrap(function() {
-    return obterHistoricoRubrica(idRubrica);
+    return ContratoRepository.obterHistoricoRubrica(idRubrica);
   });
 }
 
@@ -56,10 +57,8 @@ function ctrl_contratos_comparativo(idContrato, v1, v2) {
 function ctrl_contratos_salvar(dados, emailFallback) {
   return GasResponse.wrap(function() {
     var email = obterEmailUsuario(emailFallback || '');
-    // salvarContrato já emite SystemEvents internamente
-    var ok = salvarContrato(dados, email);
+    var ok = ContratoRepository.salvar(dados, email);
     if (!ok) throw new Error('Erro ao salvar contrato.');
-    // Adiciona apenas auditoria (que salvarContrato não faz)
     try {
       if (typeof AuditoriaService !== 'undefined' && AuditoriaService.registrar) {
         var acao = dados.id ? 'CONTRATO_ATUALIZADO' : 'CONTRATO_CRIADO';
@@ -73,7 +72,7 @@ function ctrl_contratos_salvar(dados, emailFallback) {
 function ctrl_contratos_excluir(id, emailFallback) {
   return GasResponse.wrap(function() {
     var email = obterEmailUsuario(emailFallback || '');
-    var ok = excluirContrato(id, email);
+    var ok = ContratoRepository.excluir(id, email);
     if (!ok) throw new Error('Erro ao excluir contrato.');
     return { ok: true };
   });
@@ -99,14 +98,14 @@ function ctrl_contratos_status(id, novoStatus, emailFallback) {
 function ctrl_contratos_salvar_meta(dados, emailFallback) {
   return GasResponse.wrap(function() {
     var email = obterEmailUsuario(emailFallback || '');
-    return salvarMeta(dados, email);
+    return ContratoRepository.salvarMeta(dados, email);
   });
 }
 
 function ctrl_contratos_excluir_meta(id, emailFallback) {
   return GasResponse.wrap(function() {
     var email = obterEmailUsuario(emailFallback || '');
-    return excluirMeta(id, email);
+    return ContratoRepository.excluirMeta(id, email);
   });
 }
 
@@ -117,14 +116,14 @@ function ctrl_contratos_excluir_meta(id, emailFallback) {
 function ctrl_contratos_salvar_rubrica(dados, emailFallback) {
   return GasResponse.wrap(function() {
     var email = obterEmailUsuario(emailFallback || '');
-    return salvarRubrica(dados, email);
+    return ContratoRepository.salvarRubrica(dados, email);
   });
 }
 
 function ctrl_contratos_excluir_rubrica(id, emailFallback) {
   return GasResponse.wrap(function() {
     var email = obterEmailUsuario(emailFallback || '');
-    return excluirRubrica(id, email);
+    return ContratoRepository.excluirRubrica(id, email);
   });
 }
 
@@ -135,13 +134,13 @@ function ctrl_contratos_excluir_rubrica(id, emailFallback) {
 function ctrl_contratos_salvar_indicador(dados, emailFallback) {
   return GasResponse.wrap(function() {
     var email = obterEmailUsuario(emailFallback || '');
-    return salvarIndicador(dados, email);
+    return ContratoRepository.salvarIndicador(dados, email);
   });
 }
 
 function ctrl_contratos_excluir_indicador(id, emailFallback) {
   return GasResponse.wrap(function() {
     var email = obterEmailUsuario(emailFallback || '');
-    return excluirIndicador(id, email);
+    return ContratoRepository.excluirIndicador(id, email);
   });
 }
