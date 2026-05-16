@@ -17,7 +17,9 @@
  * @depends shared/response.gs (GasResponse),
  *          backend/mod_admin.gs,
  *          backend/mod_metrics.gs,
- *          core/auth_session.gs
+ *          core/auth_session.gs,
+ *          modules/admin/config_service.gs (ConfigService),
+ *          modules/admin/rollback_service.gs (RollbackService)
  */
 
 // ═══════════════════════════════════════════════════════════════════
@@ -92,7 +94,7 @@ function ctrl_admin_salvar_setor(emailAlvo, setor, emailSolicitante) {
 function ctrl_admin_salvar_config(dados) {
   return GasResponse.wrap(function () {
     if (!dados || typeof dados !== 'object') throw new Error('Dados de configuração são obrigatórios');
-    return processarSalvarConfig(dados);
+    return ConfigService.salvar(dados);
   }, 'ctrl_admin_salvar_config');
 }
 
@@ -122,7 +124,7 @@ function ctrl_admin_remover_registro(id, tipo, emailFallback) {
     if (!id)   throw new Error('ID é obrigatório');
     if (!tipo) throw new Error('Tipo é obrigatório');
     var email = obterEmailUsuario(emailFallback || '');
-    return removerRegistroGenerico(id, tipo, email);
+    return ConfigService.remover(id, tipo, email);
   }, 'ctrl_admin_remover_registro');
 }
 
@@ -132,7 +134,7 @@ function ctrl_admin_remover_registro(id, tipo, emailFallback) {
  */
 function ctrl_admin_dados_config(nomeAba) {
   return GasResponse.wrap(function () {
-    return obterDadosParaConfig(nomeAba || undefined);
+    return ConfigService.obterDados(nomeAba || undefined);
   }, 'ctrl_admin_dados_config');
 }
 
@@ -149,7 +151,7 @@ function ctrl_admin_alternar_item(idItem, idSala, qtd, acao, emailFallback) {
     if (!idItem) throw new Error('ID do item é obrigatório');
     if (!idSala) throw new Error('ID da sala é obrigatório');
     var email = obterEmailUsuario(emailFallback || '');
-    return alternarQuantidadeItem(idItem, idSala, qtd, acao, email);
+    return ConfigService.alternarItem(idItem, idSala, qtd, acao, email);
   }, 'ctrl_admin_alternar_item');
 }
 
@@ -275,7 +277,7 @@ function ctrl_admin_rollback(emailFallback, timestamp) {
   return GasResponse.wrap(function () {
     if (!timestamp) throw new Error('Timestamp é obrigatório para rollback');
     var email = obterEmailUsuario(emailFallback || '');
-    return rollbackAcaoPorTimestamp(email, timestamp);
+    return RollbackService.porTimestamp(email, timestamp);
   }, 'ctrl_admin_rollback');
 }
 
@@ -288,7 +290,7 @@ function ctrl_admin_rollback_indice(emailFallback, indice) {
   return GasResponse.wrap(function () {
     if (indice === undefined || indice === null) throw new Error('Índice é obrigatório para rollback');
     var email = obterEmailUsuario(emailFallback || '');
-    return rollbackAcaoPorIndice(email, indice);
+    return RollbackService.porIndice(email, indice);
   }, 'ctrl_admin_rollback_indice');
 }
 
