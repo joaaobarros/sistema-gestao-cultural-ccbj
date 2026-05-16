@@ -20,7 +20,8 @@
  *          core/auth_session.gs,
  *          modules/admin/config_service.gs (ConfigService),
  *          modules/admin/rollback_service.gs (RollbackService),
- *          modules/relatorios/codip_service.gs (CodipService)
+ *          modules/relatorios/codip_service.gs (CodipService),
+ *          core/services/metrics_engine.gs (MetricsEngine)
  */
 
 // ═══════════════════════════════════════════════════════════════════
@@ -190,7 +191,7 @@ function ctrl_admin_salvar_sistema_config(cfg, emailFallback) {
  */
 function ctrl_admin_metricas_dashboard(dataInicio, dataFim, sala, setor) {
   return GasResponse.wrap(function () {
-    return obterMetricasDashboard(dataInicio || null, dataFim || null, sala || null, setor || null);
+    return MetricsEngine.obterDashboard(dataInicio || null, dataFim || null, sala || null, setor || null);
   }, 'ctrl_admin_metricas_dashboard');
 }
 
@@ -199,7 +200,7 @@ function ctrl_admin_metricas_dashboard(dataInicio, dataFim, sala, setor) {
  */
 function ctrl_admin_grafico_reservas() {
   return GasResponse.wrap(function () {
-    return obterDadosGraficoReservas();
+    return MetricsEngine.obterGraficoReservas();
   }, 'ctrl_admin_grafico_reservas');
 }
 

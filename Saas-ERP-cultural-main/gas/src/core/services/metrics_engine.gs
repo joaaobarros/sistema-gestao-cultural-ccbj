@@ -55,7 +55,7 @@ var MetricsEngine = (function () {
   function operacional(filtros) {
     filtros = filtros || {};
     try {
-      var resultado = obterMetricasDashboard(
+      var resultado = _calcularDashboard(
         filtros.dataInicio || null,
         filtros.dataFim    || null,
         filtros.sala       || null,
@@ -71,19 +71,24 @@ var MetricsEngine = (function () {
 
   /**
    * Dados para gráfico de linha de reservas ao longo do tempo.
-   * Delega para obterDadosGraficoReservas (mod_metrics.gs).
-   *
-   * @returns {Object} séries temporais de reservas
    */
   function graficoReservas() {
     try {
-      var resultado = obterDadosGraficoReservas();
+      var resultado = _calcularGraficoReservas();
       resultado._tipo = METRICA_TIPO.OPERACIONAL;
       return resultado;
     } catch(e) {
       Logger.error('metrics_engine', 'graficoReservas', e.message);
       throw new Error('Erro ao calcular gráfico de reservas: ' + e.message);
     }
+  }
+
+  function obterDashboard(dataInicio, dataFim, filtroSala, filtroSetor) {
+    return _calcularDashboard(dataInicio || null, dataFim || null, filtroSala || null, filtroSetor || null);
+  }
+
+  function obterGraficoReservas() {
+    return _calcularGraficoReservas();
   }
 
   // ── Chaves ────────────────────────────────────────────────────
@@ -464,7 +469,7 @@ var MetricsEngine = (function () {
 
   function _calcularMetricasInstitucionais(filtros) {
     try {
-      var codip = typeof obterMetricasCODIP === 'function' ? obterMetricasCODIP() : null;
+      var codip = CodipService.obterMetricas();
       return {
         _tipo: METRICA_TIPO.INSTITUCIONAL,
         codip: codip
@@ -474,21 +479,235 @@ var MetricsEngine = (function () {
     }
   }
 
+  // ── Dashboard operacional (absorvido de mod_metrics.gs) ──────────
+
+  function _calcularDashboard(dataInicio, dataFim, filtroSala, filtroSetor) {
+    const abaReservas = _getSheet('Reservas');
+    const abaItens    = _getSheet('Itens');
+    const abaLogs     = _getSheet('LogAcessos');
+    const porDiaSemana = { 0:'Domingo',1:'Segunda',2:'Terça',3:'Quarta',4:'Quinta',5:'Sexta',6:'Sábado' };
+    const contagemDias = {}, contagemMeses = {}, contagemHoras = {};
+    const temposPorSala = {}, temposPorItem = {};
+
+    const parseFiltro = (str) => {
+      if (!str) return null;
+      const p = str.split('-');
+      if (p.length === 3) { const d = new Date(p[0], p[1]-1, p[2]); d.setHours(0,0,0,0); return d; }
+      return null;
+    };
+    const filtroInicio  = parseFiltro(dataInicio);
+    const filtroFim     = parseFiltro(dataFim);
+    if (filtroFim) filtroFim.setHours(23,59,59,999);
+    const filtroSalaStr  = String(filtroSala  || '').trim();
+    const filtroSetorStr = String(filtroSetor || '').trim();
+
+    const todasReservas = abaReservas && abaReservas.getLastRow() > 1
+      ? abaReservas.getRange(2, 1, abaReservas.getLastRow()-1, 16).getValues() : [];
+
+    const reservas = todasReservas.filter((r) => {
+      if (filtroSalaStr  && String(r[4]).trim() !== filtroSalaStr)  return false;
+      if (filtroSetorStr && String(r[9]).trim() !== filtroSetorStr) return false;
+      if (!filtroInicio && !filtroFim) return true;
+      try {
+        const raw = r[1];
+        let d = raw instanceof Date ? new Date(raw) : null;
+        if (!d) {
+          const str = String(raw||'').trim();
+          if (str.includes('/')) { const p = str.split('/'); d = new Date(p[2],p[1]-1,p[0]); }
+          else if (str.includes('-')) d = new Date(str);
+        }
+        if (!d || isNaN(d.getTime())) return true;
+        d.setHours(0,0,0,0);
+        if (filtroInicio && d < filtroInicio) return false;
+        if (filtroFim    && d > filtroFim)    return false;
+        return true;
+      } catch(e) { return true; }
+    });
+
+    let total=0, confirmadas=0, canceladas=0;
+    const porSala={}, porSetor={}, porTurno={}, porMes={};
+    const cancelPorSala={}, cancelPorSetor={}, contagemItens={};
+
+    reservas.forEach((r) => {
+      total++;
+      const status = String(r[13]||'').toUpperCase();
+      const sala   = String(r[4] ||'Não informado');
+      const setor  = String(r[9] ||'Não informado');
+      const turno  = String(r[5] ||'Não informado');
+      porSala[sala]   = (porSala[sala]   || 0) + 1;
+      porSetor[setor] = (porSetor[setor] || 0) + 1;
+      porTurno[turno] = (porTurno[turno] || 0) + 1;
+      if (status === STATUS_RESERVA.CONFIRMADA) confirmadas++;
+      if (status === STATUS_RESERVA.CANCELADA)  {
+        canceladas++;
+        cancelPorSala[sala]   = (cancelPorSala[sala]   || 0) + 1;
+        cancelPorSetor[setor] = (cancelPorSetor[setor] || 0) + 1;
+      }
+      const itensStr = String(r[12]||'');
+      if (itensStr && itensStr !== 'Nenhum') {
+        itensStr.split(/[|]/).forEach((i) => {
+          const semFixo = i.trim().replace(/\s*\(fixo\)\s*/gi,'');
+          const p = semFixo.split('x '); const qtd = Number(p[0])||0; const nome = (p[1]||'').trim();
+          if (nome && qtd > 0) contagemItens[nome] = (contagemItens[nome]||0) + qtd;
+        });
+      }
+      try {
+        const raw = r[1]; let dataObj = raw instanceof Date ? raw : null;
+        if (!dataObj) { const s = String(raw||'').trim(); if (s.includes('/')) { const p=s.split('/'); dataObj=new Date(p[2],p[1]-1,p[0]); } }
+        if (dataObj && !isNaN(dataObj.getTime())) {
+          const chave = `${dataObj.getFullYear()}-${String(dataObj.getMonth()+1).padStart(2,'0')}`;
+          porMes[chave] = (porMes[chave]||0) + 1;
+          const nomeDia = porDiaSemana[dataObj.getDay()];
+          const MESES_PT = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+          const nomeMes  = MESES_PT[dataObj.getMonth()] + '/' + dataObj.getFullYear();
+          contagemDias[nomeDia]  = (contagemDias[nomeDia]  ||0) + 1;
+          contagemMeses[nomeMes] = (contagemMeses[nomeMes] ||0) + 1;
+        }
+      } catch(e) {}
+      const _toMin = (v) => {
+        if (v instanceof Date) return v.getHours()*60 + v.getMinutes();
+        const s = String(v||'').trim(); if (!s.includes(':')) return null;
+        const p = s.split(':'); return parseInt(p[0])*60 + parseInt(p[1]);
+      };
+      const iniH = _toMin(r[2]), terH = _toMin(r[3]);
+      if (iniH !== null && terH !== null && terH > iniH) {
+        for (let hh = Math.floor(iniH/60); hh < Math.ceil(terH/60); hh++) {
+          const hStr = String(hh).padStart(2,'0') + 'h';
+          contagemHoras[hStr] = (contagemHoras[hStr]||0) + 1;
+        }
+      }
+      const mins = (iniH !== null && terH !== null && terH > iniH) ? terH - iniH : null;
+      if (mins !== null) {
+        const s = String(r[4]||'').trim();
+        if (s) { if (!temposPorSala[s]) temposPorSala[s]=[]; temposPorSala[s].push(mins); }
+        const itStr = String(r[12]||'');
+        if (itStr && itStr !== 'Nenhum') {
+          itStr.split(/[|]/).forEach((i) => {
+            const nome = (i.trim().replace(/\s*\(fixo\)\s*/gi,'').split('x ')[1]||'').trim();
+            if (nome) { if (!temposPorItem[nome]) temposPorItem[nome]=[]; temposPorItem[nome].push(mins); }
+          });
+        }
+      }
+    });
+
+    const top5Salas  = Object.entries(porSala).sort((a,b)=>b[1]-a[1]).slice(0,5);
+    const top5Setores= Object.entries(porSetor).sort((a,b)=>b[1]-a[1]).slice(0,5);
+    const ultimos6Meses       = Object.entries(porMes).sort().slice(-6);
+    const cancelamentosPorSala  = Object.entries(cancelPorSala).sort((a,b)=>b[1]-a[1]).slice(0,5);
+    const cancelamentosPorSetor = Object.entries(cancelPorSetor).sort((a,b)=>b[1]-a[1]).slice(0,5);
+    const topItens = Object.entries(contagemItens).sort((a,b)=>b[1]-a[1]).slice(0,5);
+    const ordemDias = ['Segunda','Terça','Quarta','Quinta','Sexta','Sábado','Domingo'];
+    const diasSemana = ordemDias.map((d) => [d, contagemDias[d]||0]);
+    const MESES_ORD  = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+    const mesesAno = Object.entries(contagemMeses)
+      .sort((a,b) => { const [mA,yA]=a[0].split('/'); const [mB,yB]=b[0].split('/'); return Number(yA)-Number(yB)||MESES_ORD.indexOf(mA)-MESES_ORD.indexOf(mB); })
+      .filter(([,v]) => v > 0);
+    const horasPico = Object.entries(contagemHoras).sort((a,b)=>parseInt(a[0])-parseInt(b[0]));
+    const mediaMin  = (arr) => arr.length>0 ? Math.round(arr.reduce((a,b)=>a+b,0)/arr.length) : 0;
+    const mediaOcupacaoPorSala = Object.entries(temposPorSala).map(([s,a])=>[s,mediaMin(a),a.length]).sort((a,b)=>b[2]-a[2]).slice(0,6);
+    const mediaUsoItens        = Object.entries(temposPorItem).map(([n,a])=>[n,mediaMin(a),a.length]).sort((a,b)=>b[2]-a[2]).slice(0,6);
+
+    let habilitadas=0;
+    reservas.forEach((r) => { if (String(r[13]||'').toUpperCase()===STATUS_RESERVA.HABILITADA) habilitadas++; });
+
+    let solPendentes=0, solAprovadas=0, solRecusadas=0;
+    try {
+      const abaSol = _getSheet('Solicitacoes');
+      if (abaSol && abaSol.getLastRow()>1) {
+        abaSol.getRange(2,1,abaSol.getLastRow()-1,9).getValues().forEach((r) => {
+          const st = String(r[8]||'').toUpperCase();
+          if (st==='PENDENTE') solPendentes++;
+          else if (st==='APROVADO') solAprovadas++;
+          else if (st==='RECUSADO') solRecusadas++;
+        });
+      }
+    } catch(e) {}
+
+    let itensDisponiveis=0, itensFixados=0;
+    if (abaItens && abaItens.getLastRow()>1) {
+      abaItens.getRange(2,1,abaItens.getLastRow()-1,5).getValues().forEach((i) => {
+        itensDisponiveis += Number(i[3]||0);
+        try { const mapa=JSON.parse(String(i[4]||'{}')); itensFixados+=Object.values(mapa).reduce((a,v)=>a+Number(v),0); } catch(e) {}
+      });
+    }
+
+    let acessosUnicos30d=0;
+    if (abaLogs && abaLogs.getLastRow()>1) {
+      const logs = abaLogs.getRange(2,1,abaLogs.getLastRow()-1,3).getValues();
+      const limite = new Date(); limite.setDate(limite.getDate()-30);
+      const emailsVistos = new Set();
+      logs.forEach((l) => { try { if (new Date(l[0]) >= limite) emailsVistos.add(l[1]); } catch(e) {} });
+      acessosUnicos30d = emailsVistos.size;
+    }
+
+    let codip = { totalEstimado:0, totalReal:0, totalRegistros:0, taxaPresenca:0 };
+    try {
+      const abaCodip = _getSheet('RelatoriosCODIP');
+      const dIObj = dataInicio ? new Date(dataInicio) : null;
+      const dFObj = dataFim    ? new Date(dataFim)    : null;
+      if (abaCodip && abaCodip.getLastRow()>1) {
+        const dc = abaCodip.getRange(2,1,abaCodip.getLastRow()-1,34).getValues();
+        dc.forEach((linha) => {
+          const dr = new Date(linha[33]);
+          if (dIObj && dr < dIObj) return;
+          if (dFObj && dr > dFObj) return;
+          codip.totalEstimado += Number(linha[13]||0);
+          codip.totalReal     += Number(linha[13]||0);
+        });
+        codip.totalRegistros = dc.length;
+        codip.taxaPresenca   = codip.totalEstimado>0 ? Math.round((codip.totalReal/codip.totalEstimado)*100) : 0;
+      }
+    } catch(e) { Logger.error('metrics_engine','_calcularDashboard codip',String(e)); }
+
+    return {
+      total, confirmadas, canceladas,
+      taxaCancelamento: total>0 ? Math.round((canceladas/total)*100) : 0,
+      porSalaTotal: porSala, porSetor, porTurno,
+      top5Salas, top5Setores, ultimos6Meses,
+      cancelamentosPorSala, cancelamentosPorSetor, topItens,
+      itensDisponiveis, itensFixados, acessosUnicos30d,
+      diasSemana, mesesAno, mediaOcupacaoPorSala, mediaUsoItens, horasPico,
+      habilitadas, solPendentes, solAprovadas, solRecusadas, codip
+    };
+  }
+
+  function _calcularGraficoReservas() {
+    const aba = _getSheet('Reservas');
+    if (!aba || aba.getLastRow()<2) return { labels:[], valores:[], tipo:'bar', titulo:'Reservas' };
+    const dados = aba.getRange(2,1,aba.getLastRow()-1,16).getValues();
+    const contagem = {};
+    dados.forEach((r) => {
+      if (String(r[13]||'').toUpperCase()===STATUS_RESERVA.CANCELADA) return;
+      const sala = String(r[4]||'').trim();
+      if (sala) contagem[sala] = (contagem[sala]||0) + 1;
+    });
+    const mapaSalas = obterMapaSalas();
+    const sorted = Object.entries(contagem).sort((a,b)=>b[1]-a[1]).slice(0,8);
+    return {
+      labels:  sorted.map(([id])  => mapaSalas[id] || id),
+      valores: sorted.map(([,v])  => v),
+      tipo:    'bar',
+      titulo:  'Reservas por Espaço'
+    };
+  }
+
   // ── API pública ───────────────────────────────────────────────
 
   return {
-    operacional:     operacional,
-    graficoReservas: graficoReservas,
-    chaves:          chaves,
-    usuarios:        usuarios,
-    auditoria:       auditoria,
-    performance:     performance,
-    institucional:   institucional,
-    fsm:             fsm,
-    seguranca:       seguranca,
-    governanca:      governanca,
-    dashboard:       dashboard,
-    TIPO:            METRICA_TIPO
+    operacional:          operacional,
+    graficoReservas:      graficoReservas,
+    obterDashboard:       obterDashboard,
+    obterGraficoReservas: obterGraficoReservas,
+    chaves:               chaves,
+    usuarios:             usuarios,
+    auditoria:            auditoria,
+    performance:          performance,
+    institucional:        institucional,
+    fsm:                  fsm,
+    seguranca:            seguranca,
+    governanca:           governanca,
+    dashboard:            dashboard,
+    TIPO:                 METRICA_TIPO
   };
 
 })();
