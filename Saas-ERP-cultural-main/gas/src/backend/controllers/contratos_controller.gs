@@ -12,7 +12,7 @@
  * @depends shared/response.gs (GasResponse),
  *          modules/contratos/contratos_engine.gs (ContratosEngine),
  *          modules/contratos/contrato_repository.gs (ContratoRepository),
- *          backend/mod_relatorios.gs (obterDashboardComparativoContrato),
+ *          modules/contratos/contrato_analytics_service.gs (ContratoAnalyticsService),
  *          core/utils.gs (obterEmailUsuario)
  */
 
@@ -46,7 +46,7 @@ function ctrl_contratos_historico_rubrica(idRubrica) {
 
 function ctrl_contratos_comparativo(idContrato, v1, v2) {
   return GasResponse.wrap(function() {
-    return obterDashboardComparativoContrato(idContrato, v1, v2);
+    return ContratoAnalyticsService.dashboard(idContrato, v1, v2);
   });
 }
 
