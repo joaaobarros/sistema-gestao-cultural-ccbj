@@ -19,12 +19,12 @@
 // LEITURA
 // ═══════════════════════════════════════════════════════════════
 
-function ctrl_escuta_dados() {
-  return GasResponse.wrap(function() { return obterDadosEscuta(); });
+function ctrl_escuta_dados(emailFallback) {
+  return GasResponse.wrap(function() { return obterDadosEscuta(obterEmailUsuario(emailFallback || '')); });
 }
 
-function ctrl_escuta_pergunta_pulse() {
-  return GasResponse.wrap(function() { return obterPerguntaPulse(); });
+function ctrl_escuta_pergunta_pulse(emailFallback) {
+  return GasResponse.wrap(function() { return obterPerguntaPulse(emailFallback || ''); });
 }
 
 function ctrl_escuta_dashboard(filtros) {
@@ -51,8 +51,8 @@ function ctrl_escuta_perguntas() {
   return GasResponse.wrap(function() { return obterPerguntasEscuta(); });
 }
 
-function ctrl_escuta_perfil() {
-  return GasResponse.wrap(function() { return obterPerfilAnaliticoEscuta(); });
+function ctrl_escuta_perfil(emailFallback) {
+  return GasResponse.wrap(function() { return obterPerfilAnaliticoEscuta(emailFallback || ''); });
 }
 
 function ctrl_escuta_feedback() {
@@ -121,12 +121,12 @@ function ctrl_escuta_salvar_template(dados) {
   return GasResponse.wrap(function() { return salvarTemplateBancoPesquisas(dados); });
 }
 
-function ctrl_escuta_salvar_config(cfg) {
-  return GasResponse.wrap(function() { return salvarConfiguracaoEscuta(cfg); });
+function ctrl_escuta_salvar_config(cfg, emailFallback) {
+  return GasResponse.wrap(function() { return salvarConfiguracaoEscuta(cfg, emailFallback || ''); });
 }
 
-function ctrl_escuta_atualizar_pergunta(id, controle) {
-  return GasResponse.wrap(function() { return atualizarPerguntaEscuta(id, controle); });
+function ctrl_escuta_atualizar_pergunta(id, controle, emailFallback) {
+  return GasResponse.wrap(function() { return atualizarPerguntaEscuta(id, controle, emailFallback || ''); });
 }
 
 function ctrl_escuta_salvar_perfil(dados) {
@@ -137,8 +137,8 @@ function ctrl_escuta_salvar_perfil(dados) {
 // ANÁLISE E MOTOR METODOLÓGICO
 // ═══════════════════════════════════════════════════════════════
 
-function ctrl_escuta_gerar_relatorio(tipo, params) {
-  return GasResponse.wrap(function() { return gerarRelatorioEscuta(tipo, params); });
+function ctrl_escuta_gerar_relatorio(tipo, params, emailFallback) {
+  return GasResponse.wrap(function() { return gerarRelatorioEscuta(tipo, params, emailFallback || ''); });
 }
 
 function ctrl_escuta_simular_impacto(pesquisa) {
@@ -157,8 +157,8 @@ function ctrl_escuta_sugerir_parametros(objetivo, publico) {
   return GasResponse.wrap(function() { return sugerirParametrosPesquisa(objetivo, publico); });
 }
 
-function ctrl_escuta_definir_total_colab(total) {
-  return GasResponse.wrap(function() { return definirTotalColaboradoresEscuta(total); });
+function ctrl_escuta_definir_total_colab(total, emailFallback) {
+  return GasResponse.wrap(function() { return definirTotalColaboradoresEscuta(total, emailFallback || ''); });
 }
 
 function ctrl_escuta_suprimir_emails() {
