@@ -819,6 +819,8 @@ function prepararEdicao(id) {
  * @sideEffects google.script.run.excluirRegistro — operação irreversível na planilha.
  */
 function excluirDefinitivo(id, tipo) {
+  var lockId = 'excluir:' + tipo + ':' + id;
+  if (BtnGuard.isLocked(lockId)) return;
   Swal.fire({
     title: 'EXCLUSÃO DEFINITIVA!',
     text: 'Esta ação não pode ser desfeita.',
@@ -827,21 +829,22 @@ function excluirDefinitivo(id, tipo) {
     confirmButtonColor: '#d33',
     confirmButtonText: 'SIM, DELETAR',
     cancelButtonText: 'CANCELAR'
-  }).then((result) => {
-    if (result.isConfirmed) {
-      if (typeof showLoader === 'function') showLoader(true);
-      GAS.admin.excluirPorId(tipo, id, AppState.usuario.email, () => {
-          showLoader(false);
-          Swal.fire({ title: 'Sucesso!', text: 'Reserva cancelada.', icon: 'success', timer: 2000, showConfirmButton: false });
-          carregarReservas();
-          // Atualiza RECE se já foi carregado
-          if (AppState.colecoes.reservasRece) carregarReservasRece();
-        }, err => {
-          if (typeof showLoader === 'function') showLoader(false);
-          Swal.fire('Erro no Servidor', err.message, 'error');
-        });
-    }
-  });
+  }).then(function(result) {
+    if (!result.isConfirmed) return;
+    BtnGuard.lock(lockId);
+    showLoader(true);
+    GAS.admin.excluirPorId(tipo, id, AppState.usuario.email, function() {
+        BtnGuard.unlock(lockId);
+        showLoader(false);
+        Toast.success('Excluído com sucesso.');
+        carregarReservas();
+        if (AppState.colecoes.reservasRece) carregarReservasRece();
+      }, function(err) {
+        BtnGuard.unlock(lockId);
+        showLoader(false);
+        Swal.fire('Erro no Servidor', err.message, 'error');
+      });
+  }).catch(function() { BtnGuard.unlock(lockId); });
 }
 
 /**
@@ -911,31 +914,34 @@ function salvarConfiguracao() {
     return;
   }
 
-  if (btnSalvar?.disabled) return;
-  if (btnSalvar) { btnSalvar.disabled = true; btnSalvar.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> SALVANDO...'; }
-
-  GAS.admin.salvarConfig(dados, function(novosDados) {
-      if (btnSalvar) { btnSalvar.disabled = false; btnSalvar.innerHTML = 'SALVAR ALTERAÇÕES'; }
-      fecharModalConfig();
-      AppState.colecoes.salas = novosDados.salas || [];
-      AppState.colecoes.itens = novosDados.listaItens || [];
-      AppState.colecoes.administradores = novosDados.administradores || [];
-      AppState.colecoes.setores = novosDados.setores || [];
-      AppState.mapaSalas = novosDados.mapaSalas || {};
-      AppState.mapaFlagsEspacos = novosDados.mapaFlagsEspacos || AppState.mapaFlagsEspacos || {};
-      setTimeout(() => {
-        if (typeof renderizarEspacosAdmin === 'function') renderizarEspacosAdmin();
-        if (typeof renderizarItensAdmin === 'function') renderizarItensAdmin();
-        if (typeof renderizarAdmins === 'function') renderizarAdmins();
-        if (typeof renderizarSetoresAdmin === 'function') renderizarSetoresAdmin();
-        if (typeof popularSelectsIniciais === 'function') popularSelectsIniciais();
-        if (typeof renderizarReservas === 'function') renderizarReservas();
-      }, 100);
-      Swal.fire({ title: 'Sucesso!', text: 'Dados atualizados.', icon: 'success', timer: 2000, showConfirmButton: false, toast: true, position: 'top-end' });
-    }, function(err) {
-      if (btnSalvar) { btnSalvar.disabled = false; btnSalvar.innerHTML = 'SALVAR ALTERAÇÕES'; }
-      Swal.fire('Erro ao Salvar', err.message, 'error');
-    });
+  BtnGuard.gas('', 'admin-salvar-config', 'Salvando...', function(ok, fail) {
+    if (btnSalvar) {
+      btnSalvar.disabled = true;
+      btnSalvar.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> SALVANDO...';
+    }
+    GAS.admin.salvarConfig(dados, ok, fail);
+  }, function(novosDados) {
+    if (btnSalvar) { btnSalvar.disabled = false; btnSalvar.innerHTML = 'SALVAR ALTERAÇÕES'; }
+    fecharModalConfig();
+    AppState.colecoes.salas = novosDados.salas || [];
+    AppState.colecoes.itens = novosDados.listaItens || [];
+    AppState.colecoes.administradores = novosDados.administradores || [];
+    AppState.colecoes.setores = novosDados.setores || [];
+    AppState.mapaSalas = novosDados.mapaSalas || {};
+    AppState.mapaFlagsEspacos = novosDados.mapaFlagsEspacos || AppState.mapaFlagsEspacos || {};
+    setTimeout(function() {
+      if (typeof renderizarEspacosAdmin === 'function') renderizarEspacosAdmin();
+      if (typeof renderizarItensAdmin === 'function') renderizarItensAdmin();
+      if (typeof renderizarAdmins === 'function') renderizarAdmins();
+      if (typeof renderizarSetoresAdmin === 'function') renderizarSetoresAdmin();
+      if (typeof popularSelectsIniciais === 'function') popularSelectsIniciais();
+      if (typeof renderizarReservas === 'function') renderizarReservas();
+    }, 100);
+    Toast.success('Dados atualizados com sucesso.');
+  }, function(err) {
+    if (btnSalvar) { btnSalvar.disabled = false; btnSalvar.innerHTML = 'SALVAR ALTERAÇÕES'; }
+    Swal.fire('Erro ao Salvar', err.message, 'error');
+  });
 }
 
 

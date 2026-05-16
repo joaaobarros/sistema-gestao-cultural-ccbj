@@ -72,6 +72,15 @@ document.addEventListener('DOMContentLoaded', function () {
     var acao = btn.dataset.acao;
     var id   = btn.dataset.id || null;
 
+    // Throttle global: previne duplo clique em qualquer botão data-acao.
+    // 500ms de janela por ação+id — permite ações distintas simultâneas.
+    var _guardKey = 'data-acao:' + acao + ':' + (id || '');
+    var _now = Date.now();
+    if (window._dataAcaoThrottle && window._dataAcaoThrottle[_guardKey] &&
+        _now - window._dataAcaoThrottle[_guardKey] < 500) return;
+    if (!window._dataAcaoThrottle) window._dataAcaoThrottle = {};
+    window._dataAcaoThrottle[_guardKey] = _now;
+
     var acoes = {
       'editar-espaco':  function() { abrirModalConfig('espaco', id, btn.dataset.nome, btn.dataset.capacidade, btn.dataset.email || '', btn.dataset.possuiChaves === 'true', btn.dataset.aceitaReserva !== 'false'); },
       'excluir-espaco': function() { dispararExclusao(id, 'espaco'); },
@@ -99,6 +108,8 @@ document.addEventListener('DOMContentLoaded', function () {
           return;
         }
         var timestamp = btn.dataset.timestamp;
+        var rollbackLock = 'rollback:' + timestamp;
+        if (BtnGuard.isLocked(rollbackLock)) return;
         Swal.fire({
           title: 'Desfazer esta ação?',
           text: 'Esta operação reverterá a alteração selecionada. Não pode ser desfeita.',
@@ -109,23 +120,26 @@ document.addEventListener('DOMContentLoaded', function () {
           cancelButtonText: 'Cancelar'
         }).then(function (result) {
           if (!result.isConfirmed) return;
+          BtnGuard.lock(rollbackLock);
           showLoader(true);
           GAS.admin.rollback(
             AppState.usuario.email,
             timestamp,
             function () {
+              BtnGuard.unlock(rollbackLock);
               showLoader(false);
-              Swal.fire({ title: 'Desfeito!', text: 'Ação revertida com sucesso.', icon: 'success', timer: 2500, showConfirmButton: false });
+              Toast.success('Ação revertida com sucesso.');
               carregarAuditoria();
               carregarReservas();
               if (AppState.colecoes.reservasRece) carregarReservasRece();
             },
             function (err) {
+              BtnGuard.unlock(rollbackLock);
               showLoader(false);
               Swal.fire('Erro no Rollback', err.message, 'error');
             }
           );
-        });
+        }).catch(function() { BtnGuard.unlock(rollbackLock); });
       }
     };
 

@@ -149,13 +149,20 @@ function _chvAtualizarTimestamp() {
 function _chvBtnLoading(btn, loading) {
   if (!btn) return;
   if (loading) {
+    if (btn.disabled) return; // já em loading — previne duplo disparo
     btn.disabled = true;
-    btn.dataset.html = btn.innerHTML;
+    btn._chvOrigHTML = btn.innerHTML;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1.5"></i>Aguarde...';
   } else {
     btn.disabled = false;
-    btn.innerHTML = btn.dataset.html || btn.innerHTML;
+    btn.innerHTML = btn._chvOrigHTML || btn.innerHTML;
+    delete btn._chvOrigHTML;
   }
+}
+
+// Verifica se botão já está em loading (guard rápido sem BtnGuard)
+function _chvBtnIsLoading(btn) {
+  return btn && btn.disabled && btn._chvOrigHTML !== undefined;
 }
 
 function _chvAtualizarDados() {
@@ -778,9 +785,9 @@ function _chvAprovarEntrega(protocoloId) {
     }
   }).then(function(r) {
     if (!r.isConfirmed) return;
-    Swal.fire({ icon: 'success', title: 'Aprovado!', text: 'Aguardando confirmação do usuário.', timer: 2500, showConfirmButton: false });
+    Toast.success('Aprovado! Aguardando confirmação do usuário.');
     _chvAtualizarDados();
-  });
+  }).catch(function() {});
 }
 
 function _chvNegar(protocoloId) {
@@ -800,9 +807,9 @@ function _chvNegar(protocoloId) {
     }
   }).then(function(r) {
     if (!r.isConfirmed) return;
-    Swal.fire({ icon: 'info', title: 'Solicitação negada', timer: 2000, showConfirmButton: false });
+    Toast.info('Solicitação negada.');
     _chvAtualizarDados();
-  });
+  }).catch(function() {});
 }
 
 function _chvConfirmarRecebimento(protocoloId) {
@@ -821,9 +828,9 @@ function _chvConfirmarRecebimento(protocoloId) {
     }
   }).then(function(r) {
     if (!r.isConfirmed) return;
-    Swal.fire({ icon: 'success', title: 'Recebimento confirmado!', text: 'Chave em seu poder.', timer: 2500, showConfirmButton: false });
+    Toast.success('Recebimento confirmado! Chave em seu poder.');
     _chvAtualizarDados();
-  });
+  }).catch(function() {});
 }
 
 function _chvRegistrarDevolucao(protocoloId) {
@@ -842,9 +849,9 @@ function _chvRegistrarDevolucao(protocoloId) {
     }
   }).then(function(r) {
     if (!r.isConfirmed) return;
-    Swal.fire({ icon: 'success', title: 'Devolução registrada!', text: 'Aguardando confirmação da Infraestrutura.', timer: 2500, showConfirmButton: false });
+    Toast.success('Devolução registrada! Aguardando confirmação da Infraestrutura.');
     _chvAtualizarDados();
-  });
+  }).catch(function() {});
 }
 
 function _chvConfirmarDevolucao(protocoloId) {
@@ -863,9 +870,9 @@ function _chvConfirmarDevolucao(protocoloId) {
     }
   }).then(function(r) {
     if (!r.isConfirmed) return;
-    Swal.fire({ icon: 'success', title: 'Devolução confirmada!', text: 'Chave devolvida ao estoque.', timer: 2500, showConfirmButton: false });
+    Toast.success('Devolução confirmada! Chave devolvida ao estoque.');
     _chvAtualizarDados();
-  });
+  }).catch(function() {});
 }
 
 function _chvConfirmarTransferencia(protocoloId) {
@@ -884,9 +891,9 @@ function _chvConfirmarTransferencia(protocoloId) {
     }
   }).then(function(r) {
     if (!r.isConfirmed) return;
-    Swal.fire({ icon: 'success', title: 'Transferência aceita!', text: 'Você é o novo responsável pela chave.', timer: 2500, showConfirmButton: false });
+    Toast.success('Transferência aceita! Você é o novo responsável pela chave.');
     _chvAtualizarDados();
-  });
+  }).catch(function() {});
 }
 
 function _chvCancelarTransferencia(protocoloId) {
@@ -905,9 +912,9 @@ function _chvCancelarTransferencia(protocoloId) {
     }
   }).then(function(r) {
     if (!r.isConfirmed) return;
-    Swal.fire({ icon: 'info', title: 'Transferência cancelada', text: 'Você continua como responsável.', timer: 2000, showConfirmButton: false });
+    Toast.info('Transferência cancelada. Você continua como responsável.');
     _chvAtualizarDados();
-  });
+  }).catch(function() {});
 }
 
 function _chvCancelar(protocoloId) {
@@ -926,9 +933,9 @@ function _chvCancelar(protocoloId) {
     }
   }).then(function(r) {
     if (!r.isConfirmed) return;
-    Swal.fire({ icon: 'info', title: 'Solicitação cancelada', timer: 2000, showConfirmButton: false });
+    Toast.info('Solicitação cancelada.');
     _chvAtualizarDados();
-  });
+  }).catch(function() {});
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -1073,6 +1080,8 @@ function _chvPopularSelectChaves(selectId, espacoId) {
 // ══════════════════════════════════════════════════════════════════
 
 function _chvEnviarSolicitacao() {
+  const btn = document.getElementById('chv-btn-solicitar-submit');
+  if (_chvBtnIsLoading(btn)) return;
   const chaveId  = document.getElementById('chv-sol-chave').value;
   const espacoId = document.getElementById('chv-sol-espaco').value;
   if (!chaveId || !espacoId) { Swal.fire('Atenção', 'Selecione espaço e chave.', 'warning'); return; }
@@ -1083,19 +1092,20 @@ function _chvEnviarSolicitacao() {
     reservaId:  document.getElementById('chv-sol-reserva').value || '',
     observacoes: document.getElementById('chv-sol-obs').value || ''
   };
-  const btn = document.getElementById('chv-btn-solicitar-submit');
   _chvBtnLoading(btn, true);
   GAS.chaves.solicitar(dados, _chvEmailAtual(), function(res) {
     _chvBtnLoading(btn, false);
     if (res && res.ok) {
       _chvFecharModal('chv-modal-solicitar');
-      Swal.fire({ icon: 'success', title: 'Solicitação enviada!', text: 'Aguarde aprovação da Infraestrutura.', timer: 2500, showConfirmButton: false });
+      Toast.success('Solicitação enviada! Aguarde aprovação da Infraestrutura.');
       _chvAtualizarDados();
     } else Swal.fire('Erro', (res && res.msg) || 'Falha ao solicitar.', 'error');
   }, function(err) { _chvBtnLoading(btn, false); Swal.fire('Erro', String(err), 'error'); });
 }
 
 function _chvEnviarEntregaDireta() {
+  const btn = document.getElementById('chv-btn-entrega-submit');
+  if (_chvBtnIsLoading(btn)) return;
   const chaveId  = document.getElementById('chv-ed-chave').value;
   const espacoId = document.getElementById('chv-ed-espaco').value;
   const destino  = document.getElementById('chv-ed-destino').value.trim();
@@ -1107,19 +1117,20 @@ function _chvEnviarEntregaDireta() {
     dtPrevistaDevolucao: document.getElementById('chv-ed-devolucao').value || '',
     observacoes: document.getElementById('chv-ed-obs').value || ''
   };
-  const btn = document.getElementById('chv-btn-entrega-submit');
   _chvBtnLoading(btn, true);
   GAS.chaves.iniciarEntregaDireta(dados, _chvEmailAtual(), function(res) {
     _chvBtnLoading(btn, false);
     if (res && res.ok) {
       _chvFecharModal('chv-modal-entrega-direta');
-      Swal.fire({ icon: 'success', title: 'Entrega registrada!', text: 'Aguardando confirmação do usuário.', timer: 2500, showConfirmButton: false });
+      Toast.success('Entrega registrada! Aguardando confirmação do usuário.');
       _chvAtualizarDados();
     } else Swal.fire('Erro', (res && res.msg) || 'Falha.', 'error');
   }, function(err) { _chvBtnLoading(btn, false); Swal.fire('Erro', String(err), 'error'); });
 }
 
 function _chvEnviarRetiradaOp() {
+  const btn = document.getElementById('chv-btn-retirada-op-submit');
+  if (_chvBtnIsLoading(btn)) return;
   const chaveId  = document.getElementById('chv-rop-chave').value;
   const espacoId = document.getElementById('chv-rop-espaco').value;
   const nome     = document.getElementById('chv-rop-nome').value.trim();
@@ -1133,13 +1144,12 @@ function _chvEnviarRetiradaOp() {
     dtPrevistaDevolucao: document.getElementById('chv-rop-devolucao').value || '',
     observacoes: document.getElementById('chv-rop-obs').value || ''
   };
-  const btn = document.getElementById('chv-btn-retirada-op-submit');
   _chvBtnLoading(btn, true);
   GAS.chaves.retiradaOperacional(dados, _chvEmailAtual(), function(res) {
     _chvBtnLoading(btn, false);
     if (res && res.ok) {
       _chvFecharModal('chv-modal-retirada-op');
-      Swal.fire({ icon: 'success', title: 'Retirada registrada!', text: nome + ' consta como responsável pela chave.', timer: 2500, showConfirmButton: false });
+      Toast.success('Retirada registrada! ' + nome + ' consta como responsável pela chave.');
       _chvAtualizarDados();
     } else Swal.fire('Erro', (res && res.msg) || 'Falha ao registrar.', 'error');
   }, function(err) { _chvBtnLoading(btn, false); Swal.fire('Erro', String(err), 'error'); });
@@ -1163,63 +1173,66 @@ function _chvDevolucaoOperacional(protocoloId) {
     }
   }).then(function(r) {
     if (!r.isConfirmed) return;
-    Swal.fire({ icon: 'success', title: 'Devolução registrada!', text: 'Chave devolvida ao estoque.', timer: 2500, showConfirmButton: false });
+    Toast.success('Devolução registrada! Chave devolvida ao estoque.');
     _chvAtualizarDados();
-  });
+  }).catch(function() {});
 }
 
 function _chvEnviarTransferenciaOp() {
+  const btn = document.getElementById('chv-btn-transf-op-submit');
+  if (_chvBtnIsLoading(btn)) return;
   const protocoloId = document.getElementById('chv-top-protocolo-id').value;
   const nome = document.getElementById('chv-top-nome').value.trim();
   if (!nome) { Swal.fire('Atenção', 'Informe o nome do novo responsável.', 'warning'); return; }
   const setor = document.getElementById('chv-top-setor').value || '';
   const obs = document.getElementById('chv-top-obs').value || '';
 
-  const btn = document.getElementById('chv-btn-transf-op-submit');
   _chvBtnLoading(btn, true);
   GAS.chaves.transferenciaOperacional(protocoloId, nome, setor, obs, _chvEmailAtual(), function(res) {
     _chvBtnLoading(btn, false);
     if (res && res.ok) {
       _chvFecharModal('chv-modal-transf-op');
-      Swal.fire({ icon: 'success', title: 'Transferência registrada!', text: nome + ' é o novo responsável pela chave.', timer: 2500, showConfirmButton: false });
+      Toast.success('Transferência registrada! ' + nome + ' é o novo responsável pela chave.');
       _chvAtualizarDados();
     } else Swal.fire('Erro', (res && res.msg) || 'Falha.', 'error');
   }, function(err) { _chvBtnLoading(btn, false); Swal.fire('Erro', String(err), 'error'); });
 }
 
 function _chvEnviarTransferencia() {
+  const btn = document.getElementById('chv-btn-transferencia-submit');
+  if (_chvBtnIsLoading(btn)) return;
   const protocoloId = document.getElementById('chv-tr-protocolo-id').value;
   const destino = document.getElementById('chv-tr-destino').value.trim();
   if (!destino || !destino.includes('@')) { Swal.fire('Atenção', 'Informe email válido.', 'warning'); return; }
   const obs = document.getElementById('chv-tr-obs').value || '';
 
-  const btn = document.getElementById('chv-btn-transferencia-submit');
   _chvBtnLoading(btn, true);
   GAS.chaves.solicitarTransferencia(protocoloId, destino, obs, _chvEmailAtual(), function(res) {
     _chvBtnLoading(btn, false);
     if (res && res.ok) {
       _chvFecharModal('chv-modal-transferencia');
-      Swal.fire({ icon: 'success', title: 'Transferência solicitada!', text: `${destino} precisa confirmar o recebimento.`, timer: 2500, showConfirmButton: false });
+      Toast.success(destino + ' precisa confirmar o recebimento da chave.');
       _chvAtualizarDados();
     } else Swal.fire('Erro', (res && res.msg) || 'Falha.', 'error');
   }, function(err) { _chvBtnLoading(btn, false); Swal.fire('Erro', String(err), 'error'); });
 }
 
 function _chvSalvarChave() {
+  const btn = document.getElementById('chv-btn-nova-chave-submit');
+  if (_chvBtnIsLoading(btn)) return;
   const id       = document.getElementById('chv-form-chave-id').value || '';
   const espacoId = document.getElementById('chv-form-chave-espaco').value;
   const tipo     = document.getElementById('chv-form-chave-tipo').value;
   const obs      = document.getElementById('chv-form-chave-obs').value || '';
   if (!espacoId) { Swal.fire('Atenção', 'Selecione o espaço.', 'warning'); return; }
 
-  const btn = document.getElementById('chv-btn-nova-chave-submit');
   _chvBtnLoading(btn, true);
   const dados = { id: id || undefined, espacoId, tipo, observacoes: obs, ativa: true };
   GAS.chaves.salvarChave(dados, _chvEmailAtual(), function(res) {
     _chvBtnLoading(btn, false);
     if (res && res.ok) {
       _chvFecharModal('chv-modal-nova-chave');
-      Swal.fire({ icon: 'success', title: 'Salvo!', timer: 2000, showConfirmButton: false });
+      Toast.success('Chave salva com sucesso!');
       _chvAtualizarDados();
     } else Swal.fire('Erro', (res && res.msg) || 'Falha.', 'error');
   }, function(err) { _chvBtnLoading(btn, false); Swal.fire('Erro', String(err), 'error'); });

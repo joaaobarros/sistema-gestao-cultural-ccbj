@@ -326,6 +326,7 @@ function _habVerDetalhe(id) {
  */
 
 function _habSubmit() {
+  if (BtnGuard.isLocked('hab-submit')) return;
   var editando = document.getElementById('hab-form-id').value;
   var dados = {
     proponente_nome:  document.getElementById('hab-f-nome').value.trim(),
@@ -342,34 +343,23 @@ function _habSubmit() {
   if (!dados.proponente_tipo)  { Swal.fire({ icon: 'warning', title: 'Campo obrigatório', text: 'Selecione o tipo de proponente.', timer: 2000, showConfirmButton: false }); return; }
   if (!dados.area_cultural)    { Swal.fire({ icon: 'warning', title: 'Campo obrigatório', text: 'Selecione a área cultural.', timer: 2000, showConfirmButton: false }); return; }
 
-  var btn = document.getElementById('hab-form-btn');
-  btn.disabled    = true;
-  btn.textContent = 'Salvando...';
-
-  var onSuccess = function(res) {
-    btn.disabled    = false;
-    btn.textContent = editando ? 'Salvar' : 'Salvar';
-
+  BtnGuard.gas('hab-form-btn', 'hab-submit', 'Salvando...', function(ok, fail) {
+    if (editando) {
+      GAS.habilitacoes.atualizar(editando, dados, ok, fail);
+    } else {
+      GAS.habilitacoes.criar(dados, ok, fail);
+    }
+  }, function(res) {
     if (!res || !res.ok) {
       Swal.fire({ icon: 'error', title: 'Erro', text: res && res.erro ? res.erro : 'Falha desconhecida' });
       return;
     }
-    Swal.fire({ icon: 'success', title: editando ? 'Habilitação atualizada!' : 'Habilitação registrada!', timer: 1500, showConfirmButton: false });
+    Toast.success(editando ? 'Habilitação atualizada!' : 'Habilitação registrada!');
     _habPainelFechar();
     _habCarregar();
-  };
-
-  var onError = function(e) {
-    btn.disabled    = false;
-    btn.textContent = 'Salvar';
+  }, function(e) {
     Swal.fire({ icon: 'error', title: 'Erro ao salvar', text: e.message || String(e) });
-  };
-
-  if (editando) {
-    GAS.habilitacoes.atualizar(editando, dados, onSuccess, onError);
-  } else {
-    GAS.habilitacoes.criar(dados, onSuccess, onError);
-  }
+  });
 }
 
 /**
@@ -379,6 +369,8 @@ function _habSubmit() {
  */
 
 function _habMudarStatus(id, novoStatus) {
+  var lockId = 'hab-status-' + id;
+  if (BtnGuard.isLocked(lockId)) return;
   var labelNovo = _HAB_STATUS_LABEL[novoStatus] || novoStatus;
 
   Swal.fire({
@@ -394,20 +386,25 @@ function _habMudarStatus(id, novoStatus) {
     inputPlaceholder: 'Descreva o motivo...'
   }).then(function(result) {
     if (!result.isConfirmed) return;
-
     var obs = result.value || '';
-
+    BtnGuard.lock(lockId);
+    showLoader(true);
     GAS.habilitacoes.mudarStatus(id, novoStatus, obs, function(res) {
+      BtnGuard.unlock(lockId);
+      showLoader(false);
       if (!res || !res.ok) {
         Swal.fire({ icon: 'error', title: 'Erro', text: res && res.erro ? res.erro : 'Falha desconhecida' });
         return;
       }
+      Toast.success('Status atualizado para ' + labelNovo + '.');
       _habPainelFechar();
       _habCarregar();
     }, function(e) {
+      BtnGuard.unlock(lockId);
+      showLoader(false);
       Swal.fire({ icon: 'error', title: 'Erro', text: e.message || String(e) });
     });
-  });
+  }).catch(function() { BtnGuard.unlock(lockId); });
 }
 
 /**

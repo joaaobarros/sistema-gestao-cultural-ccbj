@@ -369,6 +369,8 @@ function _acoesAbrirForm(acao) {
 }
 
 function _acoesSubmit() {
+  if (BtnGuard.isLocked('acoes-submit')) return;
+
   var id     = document.getElementById('acoes-form-id').value;
   var editando = !!id;
 
@@ -381,38 +383,26 @@ function _acoesSubmit() {
     descricao:   document.getElementById('acoes-f-descricao').value.trim()
   };
 
-  if (!dados.nome)        { Swal.fire({ icon: 'warning', title: 'Campo obrigatório', text: 'Informe o nome da ação.', timer: 2000, showConfirmButton: false }); return; }
-  if (!dados.tipo)        { Swal.fire({ icon: 'warning', title: 'Campo obrigatório', text: 'Selecione o tipo da ação.', timer: 2000, showConfirmButton: false }); return; }
-  if (!dados.responsavel) { Swal.fire({ icon: 'warning', title: 'Campo obrigatório', text: 'Informe o responsável.', timer: 2000, showConfirmButton: false }); return; }
+  if (!dados.nome)        { Toast.warning('Informe o nome da ação.'); return; }
+  if (!dados.tipo)        { Toast.warning('Selecione o tipo da ação.'); return; }
+  if (!dados.responsavel) { Toast.warning('Informe o responsável.'); return; }
 
-  var btn = document.getElementById('acoes-form-btn');
-  btn.disabled    = true;
-  btn.textContent = 'Salvando...';
-
-  var onSuccess = function(res) {
-    btn.disabled    = false;
-    btn.textContent = editando ? 'Salvar alterações' : 'Criar ação';
-
+  BtnGuard.gas('acoes-form-btn', 'acoes-submit', 'Salvando...', function(ok, fail) {
+    var gasFn = editando
+      ? function(s, e) { GAS.acoes.atualizar(id, dados, s, e); }
+      : function(s, e) { GAS.acoes.criar(dados, s, e); };
+    gasFn(ok, fail);
+  }, function(res) {
     if (!res || !res.ok) {
       Swal.fire({ icon: 'error', title: 'Erro', text: res && res.erro ? res.erro : 'Falha desconhecida' });
       return;
     }
-    Swal.fire({ icon: 'success', title: editando ? 'Ação atualizada!' : 'Ação criada!', timer: 1500, showConfirmButton: false });
+    Toast.success(editando ? 'Ação atualizada!' : 'Ação criada!');
     _acoesPainelFechar();
     _acoesCarregar();
-  };
-
-  var onError = function(e) {
-    btn.disabled    = false;
-    btn.textContent = editando ? 'Salvar alterações' : 'Criar ação';
+  }, function(e) {
     Swal.fire({ icon: 'error', title: 'Erro ao salvar', text: e.message || String(e) });
-  };
-
-  if (editando) {
-    GAS.acoes.atualizar(id, dados, onSuccess, onError);
-  } else {
-    GAS.acoes.criar(dados, onSuccess, onError);
-  }
+  });
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -420,6 +410,9 @@ function _acoesSubmit() {
 // ─────────────────────────────────────────────────────────────
 
 function _acoesMudarStatus(id, novoStatus) {
+  var lockId = 'acoes-status-' + id;
+  if (BtnGuard.isLocked(lockId)) return;
+
   var labelNovo = _ACOES_STATUS_LABEL[novoStatus] || novoStatus;
   Swal.fire({
     title: 'Confirmar transição?',
@@ -431,21 +424,24 @@ function _acoesMudarStatus(id, novoStatus) {
     cancelButtonText: 'Cancelar'
   }).then(function(result) {
     if (!result.isConfirmed) return;
+    BtnGuard.lock(lockId);
     showLoader(true);
     GAS.acoes.mudarStatus(id, novoStatus, '', function(res) {
+      BtnGuard.unlock(lockId);
       showLoader(false);
       if (!res || !res.ok) {
         Swal.fire({ icon: 'error', title: 'Erro', text: res && res.erro ? res.erro : 'Falha desconhecida' });
         return;
       }
-      Swal.fire({ icon: 'success', title: 'Status atualizado!', text: 'Ação movida para ' + labelNovo + '.', timer: 1500, showConfirmButton: false });
+      Toast.success('Ação movida para ' + labelNovo + '.');
       _acoesPainelFechar();
       _acoesCarregar();
     }, function(e) {
+      BtnGuard.unlock(lockId);
       showLoader(false);
       Swal.fire({ icon: 'error', title: 'Erro', text: e.message || String(e) });
     });
-  });
+  }).catch(function() { BtnGuard.unlock(lockId); });
 }
 
 // ─────────────────────────────────────────────────────────────

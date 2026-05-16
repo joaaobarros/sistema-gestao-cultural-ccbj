@@ -17,8 +17,11 @@
  */
 function _handleServerError(err) {
   showLoader(false);
+  // Libera qualquer lock pendente do BtnGuard (caso o erro venha do withFailureHandler)
+  // Não é possível saber o lockId aqui, mas o GAS.gas() wrapper já chama done() antes disso.
   if (err && err.message === 'EM_BREVE') {
-    Swal.fire('Em breve', 'Essa funcionalidade ainda será implementada.', 'info');
+    if (typeof Toast !== 'undefined') Toast.info('Essa funcionalidade ainda será implementada.');
+    else Swal.fire('Em breve', 'Essa funcionalidade ainda será implementada.', 'info');
     return;
   }
   Swal.fire('Erro', (err && err.message) || String(err), 'error');
@@ -90,5 +93,21 @@ function escaparHTML(str) {
 function showLoader(exibir) {
   const loader = document.getElementById('globalLoader');
   if (loader) exibir ? loader.classList.remove('hidden') : loader.classList.add('hidden');
+}
+
+/**
+ * ========================================
+ * BLOCO: showToast — atalho para Toast global
+ * ========================================
+ * @description Wrapper para acesso conveniente ao Toast (action_guard_js).
+ *              Compatibilidade: se Toast não estiver carregado, usa console.log.
+ * @pattern showToast('Mensagem', 'success' | 'error' | 'info' | 'warning')
+ */
+function showToast(msg, tipo, duracao) {
+  if (typeof Toast !== 'undefined') {
+    Toast.show(msg, tipo || 'info', duracao);
+  } else {
+    console.log('[Toast]', tipo, msg);
+  }
 }
 </script>

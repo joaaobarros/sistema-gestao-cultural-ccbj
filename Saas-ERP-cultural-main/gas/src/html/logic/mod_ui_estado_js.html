@@ -470,6 +470,7 @@ function _precisaAprovacaoResponsavel(salaId) {
 }
 
 async function salvarAgendamento() {
+  if (BtnGuard.isLocked('salvar-agendamento')) return;
 
   if (typeof calendarInstance === 'undefined' || !calendarInstance) {
     Swal.fire('Erro', 'Calendário não inicializado. Recarregue a página.', 'error');
@@ -570,6 +571,7 @@ async function salvarAgendamento() {
     return;
   }
 
+  BtnGuard.lock('salvar-agendamento');
   showLoader(true);
 
   const btnSubmit = document.querySelector('#formReserva button[type="submit"]');
@@ -579,6 +581,7 @@ async function salvarAgendamento() {
   if (typeof modoEdicao !== 'undefined' && modoEdicao === "RECE") {
 
     if (!dados.id) {
+      BtnGuard.unlock('salvar-agendamento');
       showLoader(false);
       Swal.fire('Erro', 'ID da reserva RECE não encontrado.', 'error');
       if (btnSubmit) btnSubmit.disabled = false;
@@ -617,15 +620,17 @@ async function salvarAgendamento() {
       };
 
       GAS.rece.salvar(payload, () => {
+          BtnGuard.unlock('salvar-agendamento');
           showLoader(false);
           window.modoEdicao = null;
           AppState.editandoReceId = null;
-          Swal.fire('Sucesso', 'Agenda RECE atualizada!', 'success');
+          Toast.success('Agenda RECE atualizada!');
           resetarFormulario();
           mostrarAba('aba-agenda-rece');
           if (typeof carregarReservasRece === 'function') carregarReservasRece();
           if (btnSubmit) btnSubmit.disabled = false;
         }, err => {
+          BtnGuard.unlock('salvar-agendamento');
           showLoader(false);
           Swal.fire('Erro', err.message, 'error');
           if (btnSubmit) btnSubmit.disabled = false;
@@ -641,6 +646,7 @@ async function salvarAgendamento() {
 
   // 🔍 NOVA RESERVA — verifica se precisa de aprovação do responsável
   if (_precisaAprovacaoResponsavel(dados.sala)) {
+    BtnGuard.unlock('salvar-agendamento');
     showLoader(false);
     if (btnSubmit) btnSubmit.disabled = false;
 
@@ -669,14 +675,15 @@ async function salvarAgendamento() {
     const payload = { sala: dados.sala, datas: datas, dados: dados };
     GAS.solicitacoes.criar('RESERVA', 'ESPACO', payload, dados.responsavel, swalResult.value,
       function() {
+        BtnGuard.unlock('salvar-agendamento');
         showLoader(false);
         if (btnSubmit) btnSubmit.disabled = false;
         resetarFormulario();
         mostrarAba('aba-lista-reservas');
-        Swal.mixin({ toast: true, position: 'top-end', showConfirmButton: false, timer: 4000 })
-          .fire({ icon: 'info', title: 'Solicitação enviada! Aguarde aprovação do responsável.' });
+        Toast.info('Solicitação enviada! Aguarde aprovação do responsável.');
       },
       function(err) {
+        BtnGuard.unlock('salvar-agendamento');
         showLoader(false);
         if (btnSubmit) btnSubmit.disabled = false;
         Swal.fire('Erro', err?.message || 'Erro ao criar solicitação', 'error');
@@ -686,6 +693,7 @@ async function salvarAgendamento() {
   }
 
   GAS.reservas.criar(dados, datas, function(res) {
+      BtnGuard.unlock('salvar-agendamento');
       showLoader(false);
       if (btnSubmit) btnSubmit.disabled = false;
 
@@ -719,6 +727,7 @@ async function salvarAgendamento() {
       });
 
     }, function(err) {
+      BtnGuard.unlock('salvar-agendamento');
       showLoader(false);
       Swal.fire('Erro', err?.message || 'Erro ao criar reserva', 'error');
       if (btnSubmit) btnSubmit.disabled = false;

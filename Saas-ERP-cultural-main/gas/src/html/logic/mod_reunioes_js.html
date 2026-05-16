@@ -33,46 +33,8 @@ var _reuState = {
 var _reuDebounceTimer = null;
 
 // ── Lock universal contra duplo clique ───────────────────────────────────────
-// Garante idempotência em todos os botões de ação crítica.
-var _reunBtn = (function() {
-  var locks = {};
-  return {
-    lock: function(id) { locks[id] = true; },
-    unlock: function(id) { delete locks[id]; },
-    isLocked: function(id) { return !!locks[id]; },
-    /**
-     * Executa fn() com proteção contra duplo clique.
-     * @param {string}   btnId — id do elemento botão (para feedback visual)
-     * @param {string}   lockId — chave única da operação
-     * @param {string}   labelCarregando — texto exibido durante loading
-     * @param {Function} fn — função a executar (deve retornar Promise ou chamar done() ao final)
-     */
-    wrap: function(btnId, lockId, labelCarregando, fn) {
-      if (locks[lockId]) return;
-      locks[lockId] = true;
-      var btn = btnId ? document.getElementById(btnId) : null;
-      var originalHTML = btn ? btn.innerHTML : '';
-      var originalDisabled = btn ? btn.disabled : false;
-      if (btn) {
-        btn.disabled = true;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>' + (labelCarregando || 'Aguarde...');
-      }
-      function done() {
-        delete locks[lockId];
-        if (btn) {
-          btn.disabled = originalDisabled;
-          btn.innerHTML = originalHTML;
-        }
-      }
-      try {
-        fn(done);
-      } catch(e) {
-        done();
-        throw e;
-      }
-    }
-  };
-})();
+// Alias de BtnGuard (action_guard_js) para compatibilidade com todo código existente.
+var _reunBtn = BtnGuard;
 
 // ── Autosave de rascunho da ata ───────────────────────────────────────────────
 var _reuAutosaveTimer = null;
