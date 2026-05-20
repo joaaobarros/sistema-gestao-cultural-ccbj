@@ -1,0 +1,57 @@
+<!--
+@file mod_almoxarifado.html
+@type module
+@description Controle de estoque do almoxarifado — itens, quantidades e movimentações.
+@responsibility Estrutura HTML + JS da aba #aba-almoxarifado.
+@dependencies GAS.almoxarifado, showLoader, escaparHTML, temPermissao
+-->
+<section id="aba-almoxarifado" class="tab-content hidden pb-20">
+
+  <div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+
+    <!-- HEADER -->
+    <div class="p-5 border-b border-slate-100 bg-slate-50/50 flex flex-wrap justify-between items-center gap-3">
+      <div>
+        <h3 class="font-black text-slate-800 uppercase tracking-tighter text-sm">
+          <i class="fas fa-boxes-stacked text-emerald-500 mr-2"></i>Almoxarifado
+        </h3>
+        <p class="text-[10px] text-slate-400 font-medium">Controle de estoque e movimentações</p>
+      </div>
+      <div class="flex gap-2 items-center flex-wrap">
+        <div class="relative">
+          <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 text-xs"></i>
+          <input type="text" id="almBusca" placeholder="Buscar item..."
+            oninput="_almFiltrar()"
+            style="padding:8px 12px 8px 30px;border:1.5px solid #e2e8f0;border-radius:12px;font-size:12px;outline:none;width:160px"
+            onfocus="this.style.borderColor='#10b981'" onblur="this.style.borderColor='#e2e8f0'">
+        </div>
+        <select id="almFiltroCategoria" onchange="_almFiltrar()"
+          style="padding:8px 12px;border:1.5px solid #e2e8f0;border-radius:12px;font-size:12px;outline:none;color:#475569">
+          <option value="">Todas as categorias</option>
+        </select>
+        <select id="almFiltroStatus" onchange="_almFiltrar()"
+          style="padding:8px 12px;border:1.5px solid #e2e8f0;border-radius:12px;font-size:12px;outline:none;color:#475569">
+          <option value="">Todos</option>
+          <option value="Normal">Normal</option>
+          <option value="Baixo">Estoque Baixo</option>
+          <option value="Zerado">Zerado</option>
+        </select>
+        <button onclick="abrirModalAlmoxarifado()" data-requer-permissao="almoxarifado:editar"
+          class="bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black px-4 py-2 rounded-xl transition-all uppercase flex items-center gap-1.5">
+          <i class="fas fa-plus text-[9px]"></i>Novo Item
+        </button>
+      </div>
+    </div>
+
+    <!-- TABELA -->
+    <div id="almoxarifadoContainer" class="overflow-x-auto">
+      <div class="p-8 text-center">
+        <i class="fas fa-spinner animate-spin text-emerald-300 text-xl"></i>
+        <p class="text-[11px] text-slate-400 mt-2">Carregando...</p>
+      </div>
+    </div>
+
+  </div>
+
+</section>
+

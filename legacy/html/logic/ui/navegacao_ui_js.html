@@ -1,0 +1,419 @@
+<!--
+@file ui/navegacao_ui_js.html
+@layer frontend/ui
+@description Controla a navegação entre abas, sidebar e módulos colapsáveis.
+             Todas as funções aqui manipulam DOM — nenhuma regra de negócio reside aqui.
+@responsibility Exibir/ocultar seções, gerenciar estado ativo de navegação,
+                disparar carregamento lazy de dados por aba.
+@dependencies core/app_state_js (AppState)
+-->
+<script>
+
+/**
+ * ========================================
+ * BLOCO: Sidebar — toggle de visibilidade
+ * ========================================
+ * @description Alterna a visibilidade da sidebar no mobile via classList.
+ * @context Chamado pelo botão hamburger e pelo overlay de fechamento.
+ * @inputs Nenhum.
+ * @outputs DOM: toggle de -translate-x-full e hidden em #sidebarPrincipal/#sidebarOverlay.
+ * @sideEffects Nenhum além da mutação do DOM.
+ */
+function toggleSidebar() {
+  const sidebar = document.getElementById('sidebarPrincipal');
+  const overlay = document.getElementById('sidebarOverlay');
+  if (sidebar) sidebar.classList.toggle('-translate-x-full');
+  if (overlay) overlay.classList.toggle('hidden');
+}
+
+/**
+ * ========================================
+ * BLOCO: Navegação entre abas
+ * ========================================
+ * @description Ponto central de troca de contexto: esconde todas as .tab-content,
+ *              exibe a aba solicitada, atualiza o título e o botão ativo na sidebar,
+ *              aplica proteção de acesso e dispara carregamento lazy por aba.
+ * @context Chamado pelos botões data-aba, pelos módulos ao concluir ações e recursivamente
+ *          ao redirecionar usuários sem permissão.
+ * @inputs idAba: string ID do elemento HTML da aba a exibir.
+ * @outputs DOM: visibilidade das abas, #tituloAba, botão ativo na sidebar.
+ * @sideEffects Dispara carregarDashboard(), carregarAuditoria() etc. ao entrar nas abas.
+ */
+function mostrarAba(idAba) {
+
+  // BLOQUEIO DINÂMICO — baseado no registro de módulos (AppState.modulos)
+  // Mapa rota → moduleId conforme _MOD_DEFAULTS em mod_modulos_registry.gs
+  var _rotaParaModulo = {
+    'aba-lista-reservas':   'agenda_geral',
+    'aba-nova-reserva':     'nova_reserva',
+    'aba-aprovacoes':       'aprovacoes',
+    'aba-agenda-rece':      'agenda_rece',
+    'aba-dashboard':        'dashboard',
+    'aba-protocolo-chaves': 'chaves',
+    'aba-tarefas':          'tarefas',
+    'aba-processos':        'processos',
+    'aba-almoxarifado':     'almoxarifado',
+    'aba-balcao':           'balcao',
+    'aba-rh':               'rh',
+    'aba-eficiencia':       'eficiencia',
+    'aba-contratos-fin':    'financeiro',
+    'aba-contratacoes':     'contratacoes',
+    'aba-rel-financeiros':  'relatorios_fin',
+    'aba-escuta':           'escuta',
+    'aba-codip':            'codip',
+    'aba-acoes':            'acoes'
+  };
+
+  var moduleId = _rotaParaModulo[idAba];
+  if (moduleId && typeof AppState !== 'undefined' && AppState.modulos) {
+    // Se o mapa já foi carregado e o módulo está explicitamente inativo → bloquear
+    var mapaCarregado = Object.keys(AppState.modulos).length > 0;
+    if (mapaCarregado && AppState.modulos[moduleId] === false) {
+      if (idAba !== 'aba-lista-reservas') mostrarAba('aba-lista-reservas');
+      return;
+    }
+  }
+
+  // BLOQUEIO POR PERMISSÃO (SEM LOOP)
+  if (typeof temPermissao === 'function') {
+
+    const mapa = {
+      'aba-lista-reservas':     'espacos',
+      'aba-nova-reserva':       'espacos',
+      'aba-agenda-rece':        'espacos',
+      'aba-aprovacoes':         'reservas',
+      'aba-protocolo-chaves':   'espacos',
+      'aba-dashboard':          'estrategia',
+      'aba-gestao-admin':       'sistema',
+      'aba-auditoria':          'sistema',
+      'aba-permissoes-v2':      'sistema',
+      'aba-acoes':              'acoes'
+    };
+
+    // Gestão de Módulos: exclusivo SUPERADMIN
+    if (idAba === 'aba-gestao-modulos') {
+      var _isSA = typeof AppState !== 'undefined' && AppState.usuario && AppState.usuario.isSuperadmin;
+      if (!_isSA) {
+        if (idAba !== 'aba-lista-reservas') mostrarAba('aba-lista-reservas');
+        return;
+      }
+    }
+
+    var mod = mapa[idAba];
+
+    if (mod && !temPermissao(mod, 'visualizar')) {
+
+      // evita loop infinito
+      if (idAba !== 'aba-lista-reservas') {
+        mostrarAba('aba-lista-reservas');
+      }
+
+      return;
+    }
+  }
+
+  document.querySelectorAll('.tab-content').forEach(a => a.classList.add('hidden'));
+  document.querySelectorAll('.tab-btn').forEach(b => {
+    b.classList.remove('bg-white/10', 'text-white', 'border-purple-500');
+    b.classList.add('text-purple-200', 'border-transparent');
+  });
+
+  const abaAlvo = document.getElementById(idAba);
+  if (abaAlvo) {
+    abaAlvo.classList.remove('hidden');
+
+    const titulos = {
+      'aba-lista-reservas':    'Agenda Geral',
+      'aba-nova-reserva':      (typeof AppState !== 'undefined' && (AppState.editandoId || AppState.editandoReceId))
+                                 ? 'Editar Reserva' : 'Novo Agendamento',
+      'aba-agenda-rece':       'Agenda RECE',
+      'aba-codip':             'Relatórios CODIP',
+      'aba-gestao-admin':      'Configurações do Sistema',
+      'aba-auditoria':         'Painel de Auditoria',
+      'aba-dashboard':         'Dashboard',
+      'aba-aprovacoes':        'Operacional — Aprovações',
+      'aba-permissoes-v2':     'Gestão de Permissões',
+      'aba-protocolo-chaves':  'Protocolo de Chaves',
+      'aba-gestao-modulos':    'Gestão de Módulos',
+      'aba-acoes':             'Ações Institucionais'
+    };
+
+    const titulo = document.getElementById('tituloAba');
+    if (titulo) titulo.innerText = titulos[idAba] || 'Sistema CCBJ';
+  }
+
+  const botaoAtivo =
+    document.querySelector(`button[data-aba="${idAba}"]`) ||
+    document.querySelector(`button[onclick="mostrarAba('${idAba}')"]`);
+
+  if (botaoAtivo) {
+    botaoAtivo.classList.add('bg-white/10', 'text-white', 'border-purple-500');
+    botaoAtivo.classList.remove('text-purple-200', 'border-transparent');
+  }
+
+  // PROTEÇÃO LEGADA (mantida como fallback)
+  if (typeof AppState !== 'undefined' && !AppState.usuario.isAdmin && !AppState.usuario.isSuperadmin) {
+    if (idAba === 'aba-gestao-admin' || idAba === 'aba-auditoria') {
+      if (idAba !== 'aba-lista-reservas') {
+        mostrarAba('aba-lista-reservas');
+      }
+      return;
+    }
+  }
+
+  // ── Lazy load ─────────────────────────
+
+  if (idAba === 'aba-gestao-admin') {
+    if (typeof renderizarEspacosAdmin     === 'function') renderizarEspacosAdmin();
+    if (typeof renderizarItensAdmin       === 'function') renderizarItensAdmin();
+    if (typeof renderizarSetoresAdmin     === 'function') renderizarSetoresAdmin();
+    if (typeof renderizarAdmins           === 'function') renderizarAdmins();
+    if (typeof carregarUsuariosPermissoes === 'function') carregarUsuariosPermissoes();
+
+    if (typeof _ctrCache === 'undefined' || !_ctrCache || !_ctrCache.contratos || !_ctrCache.contratos.length) {
+      if (typeof carregarDadosContratos === 'function') carregarDadosContratos(renderizarContratos);
+    } else {
+      if (typeof renderizarContratos === 'function') renderizarContratos();
+    }
+  }
+
+  if (idAba === 'aba-contratos-fin') {
+    if (typeof _finOnShow === 'function') {
+      _finOnShow();
+    } else if (!_ctrCache || !_ctrCache.contratos || !_ctrCache.contratos.length) {
+      carregarDadosContratos();
+    } else {
+      renderizarContratos();
+    }
+  }
+
+  if (idAba === 'aba-auditoria') {
+    if (typeof carregarAuditoria === 'function') carregarAuditoria();
+  }
+
+  if (idAba === 'aba-agenda-rece') {
+    if (typeof carregarReservasRece === 'function') carregarReservasRece();
+  }
+
+  if (idAba === 'aba-codip') {
+    if (typeof carregarAbaCODIP === 'function') carregarAbaCODIP();
+  }
+
+  if (idAba === 'aba-dashboard') {
+    // Na primeira abertura aplica filtro padrão de 30 dias
+    if (!window._dashboardJaAberto) {
+      window._dashboardJaAberto = true;
+      if (typeof aplicarAtalhoDashboard === 'function') {
+        aplicarAtalhoDashboard('30');
+        var sel = document.getElementById('dashFiltroAtalho');
+        if (sel) sel.value = '30';
+      }
+    }
+    if (typeof carregarDashboard === 'function') carregarDashboard();
+  }
+
+  if (idAba === 'aba-aprovacoes') {
+    if (typeof carregarSolicitacoes    === 'function') carregarSolicitacoes();
+    if (typeof carregarCadastrosExternos === 'function') carregarCadastrosExternos();
+    if (typeof carregarChavesPendentes === 'function') carregarChavesPendentes();
+  }
+
+  if (idAba === 'aba-nova-reserva') {
+    if (typeof _novaReservaInicializarPainelAcao === 'function') _novaReservaInicializarPainelAcao();
+  }
+
+  if (idAba === 'aba-acoes') {
+    if (typeof _acoesCarregar === 'function') _acoesCarregar();
+  }
+
+  if (typeof EventBus !== 'undefined') {
+    EventBus.emit('aba:' + idAba + ':show', { id: idAba });
+  }
+
+  var _dynHandler = window['_onShow_' + idAba.replace(/-/g, '_')];
+  if (typeof _dynHandler === 'function') _dynHandler();
+
+  if (window.innerWidth < 768) {
+    const sb = document.getElementById('sidebarPrincipal');
+    const ov = document.getElementById('sidebarOverlay');
+    if (sb && !sb.classList.contains('-translate-x-full')) {
+      sb.classList.add('-translate-x-full');
+      if (ov) ov.classList.add('hidden');
+    }
+  }
+
+  window.scrollTo(0, 0);
+}
+
+/**
+ * ========================================
+ * BLOCO: Módulos colapsáveis e placeholders de módulo em breve
+ * ========================================
+ * @description toggleModulo: abre/fecha seções colapsáveis da sidebar.
+ *              _mostrarPlaceholderEmBreve: exibe tela "Em Desenvolvimento" para abas não implementadas;
+ *              cria o elemento placeholder se não existir.
+ * @context toggleModulo: botões de expandir grupos; _mostrarPlaceholderEmBreve: abas stub.
+ * @inputs id: string ID / aba: string nome da aba.
+ * @outputs DOM: classList toggle de hidden; placeholder dinâmico criado no container.
+ * @sideEffects Nenhum além da mutação do DOM.
+ */
+function toggleModulo(id) {
+  const el   = document.getElementById(id);
+  const icon = document.getElementById('icon-' + id);
+  if (!el) return;
+  const estaAberto = !el.classList.contains('hidden');
+  el.classList.toggle('hidden', estaAberto);
+  if (icon) {
+    icon.className = estaAberto
+      ? 'fas fa-chevron-down text-[8px] text-slate-600'
+      : 'fas fa-chevron-up text-[8px] text-slate-600';
+  }
+}
+
+/**
+ * ========================================
+ * BLOCO: Sistema de Módulos — estado de ativação
+ * ========================================
+ * @description aplicarEstadoModulos: lê AppState.modulos e aplica visibilidade
+ *              nos itens de sidebar e na proteção de rotas.
+ *              carregarStatusModulos: chama o backend para popular AppState.modulos.
+ * @context Chamado após boot (inicializarApp) e após cada alteração pelo SUPERADMIN.
+ * @inputs AppState.modulos (mapa moduleId→boolean)
+ * @outputs DOM: botões de nav visíveis/ocultos; AppState.modulos atualizado.
+ * @sideEffects Redireciona aba ativa se o módulo dela for desativado.
+ */
+
+// Mapa moduleId → botões de nav correspondentes na sidebar
+var _MOD_SIDEBAR_MAP = {
+  aprovacoes:    ['button[data-aba="aba-aprovacoes"]'],
+  agenda_rece:   ['button[data-aba="aba-agenda-rece"]', '#btn-aba-rece'],
+  dashboard:     ['button[data-aba="aba-dashboard"]'],
+  chaves:        ['button[data-aba="aba-protocolo-chaves"]'],
+  tarefas:       ['button[data-aba="aba-tarefas"]'],
+  processos:     ['button[data-aba="aba-processos"]'],
+  almoxarifado:  ['button[data-aba="aba-almoxarifado"]'],
+  balcao:        ['button[data-aba="aba-balcao"]'],
+  rh:            ['button[data-aba="aba-rh"]'],
+  eficiencia:    ['button[data-aba="aba-eficiencia"]'],
+  contratacoes:  ['button[data-aba="aba-contratacoes"]'],
+  relatorios_fin:['button[data-aba="aba-rel-financeiros"]'],
+  escuta:        ['button[data-aba="aba-escuta"]'],
+  codip:         ['button[data-aba="aba-codip"]'],
+  financeiro:    ['button[data-aba="aba-contratos-fin"]'],
+  acoes:         ['button[data-aba="aba-acoes"]']
+};
+
+function aplicarEstadoModulos() {
+  if (typeof AppState === 'undefined' || !AppState.modulos) return;
+  var mapa = AppState.modulos;
+  var saMap = (AppState.modulosSuperadmin) || {};
+  var isSA = AppState.usuario && AppState.usuario.isSuperadmin;
+
+  Object.keys(_MOD_SIDEBAR_MAP).forEach(function(moduleId) {
+    var ativo = mapa[moduleId] !== false; // fail-open: undefined → visível
+    var somenteAdmin = !!saMap[moduleId] && !isSA;
+    var visivel = ativo && !somenteAdmin;
+    var seletores = _MOD_SIDEBAR_MAP[moduleId];
+    seletores.forEach(function(sel) {
+      try {
+        document.querySelectorAll(sel).forEach(function(el) {
+          if (visivel) {
+            el.classList.remove('hidden');
+          } else {
+            el.classList.add('hidden');
+          }
+        });
+      } catch(e) {}
+    });
+  });
+
+  // Mostrar/ocultar grupos container conforme se têm algum botão visível
+  ['modulo-trabalho','modulo-atendimento','modulo-pessoas','modulo-financeiro','modulo-institucional'].forEach(function(grupoId) {
+    var wrapper = document.getElementById(grupoId);
+    if (!wrapper) return;
+    var temVisivel = wrapper.querySelectorAll('button[data-aba]:not(.hidden)').length > 0;
+    if (temVisivel) wrapper.classList.remove('hidden');
+    else wrapper.classList.add('hidden');
+  });
+
+  // Se aba ativa foi desativada, redireciona para agenda geral
+  var abaAtiva = document.querySelector('.tab-content:not(.hidden)');
+  if (abaAtiva) {
+    var rotaParaModulo = {
+      'aba-aprovacoes':      'aprovacoes',
+      'aba-agenda-rece':     'agenda_rece',
+      'aba-dashboard':       'dashboard',
+      'aba-protocolo-chaves':'chaves',
+      'aba-tarefas':         'tarefas',
+      'aba-processos':       'processos',
+      'aba-almoxarifado':    'almoxarifado',
+      'aba-balcao':          'balcao',
+      'aba-rh':              'rh',
+      'aba-eficiencia':      'eficiencia',
+      'aba-contratos-fin':   'financeiro',
+      'aba-contratacoes':    'contratacoes',
+      'aba-rel-financeiros': 'relatorios_fin',
+      'aba-escuta':          'escuta',
+      'aba-codip':           'codip'
+    };
+    var mid = rotaParaModulo[abaAtiva.id];
+    if (mid && (mapa[mid] === false || (saMap[mid] && !isSA))) {
+      mostrarAba('aba-lista-reservas');
+    }
+  }
+}
+
+/**
+ * Carrega o status dos módulos do backend e aplica na UI.
+ * Chamado durante inicializarApp() — fail-open (não bloqueia o boot).
+ */
+function carregarStatusModulos(callback) {
+  if (typeof GAS === 'undefined' || !GAS.modulos) {
+    if (typeof callback === 'function') callback();
+    return;
+  }
+  GAS.modulos.obterStatus(function(res) {
+    if (res && res.ok && res.mapa) {
+      if (typeof AppState !== 'undefined') {
+        AppState.modulos = res.mapa;
+        AppState.modulosSuperadmin = res.superadmin_only || {};
+      }
+      aplicarEstadoModulos();
+    }
+    if (typeof callback === 'function') callback();
+  }, function() {
+    // Fail-open — não bloqueia o boot em caso de erro
+    if (typeof callback === 'function') callback();
+  });
+}
+
+function _mostrarPlaceholderEmBreve(aba) {
+  document.querySelectorAll('.tab-content').forEach(a => a.classList.add('hidden'));
+  let ph = document.getElementById('aba-placeholder-embreve');
+  if (!ph) {
+    ph = document.createElement('section');
+    ph.id = 'aba-placeholder-embreve';
+    ph.className = 'tab-content animate-fadeIn';
+    document.querySelector('.flex-1.overflow-y-auto').appendChild(ph);
+  }
+  ph.innerHTML = `
+    <div class="flex flex-col items-center justify-center min-h-[60vh] gap-6 text-center p-8">
+      <div class="w-24 h-24 bg-purple-50 rounded-full flex items-center justify-center">
+        <i class="fas fa-hard-hat text-purple-300 text-4xl"></i>
+      </div>
+      <div>
+        <h2 class="text-2xl font-black text-slate-700 uppercase tracking-tight">Em Desenvolvimento</h2>
+        <p class="text-slate-400 text-sm mt-2">O módulo <b class="text-purple-500">${aba.replace('aba-','').replace(/-/g,' ')}</b> será entregue em breve.</p>
+        <p class="text-[10px] text-slate-300 mt-1 font-mono">${aba}</p>
+      </div>
+      <button onclick="mostrarAba('aba-lista-reservas')"
+        class="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-black text-sm rounded-2xl transition-all">
+        Voltar para Agenda Geral
+      </button>
+    </div>`;
+  ph.classList.remove('hidden');
+  const titulo = document.getElementById('tituloAba');
+  if (titulo) titulo.innerText = 'Em Breve';
+}
+
+</script>

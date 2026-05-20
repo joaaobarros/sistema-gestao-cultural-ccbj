@@ -1,0 +1,44 @@
+<!--
+@file modules/itens_module_js.html
+@layer frontend/modules
+@description Regras puras de lookup de itens: itens fixos por sala e resolução de nome de sala.
+             Sem acesso a DOM ou backend.
+@responsibility Consultar AppState.colecoes.itens e AppState.mapaSalas sem efeitos colaterais.
+@dependencies core/app_state_js (AppState)
+-->
+<script>
+
+/**
+ * ========================================
+ * BLOCO: Lookup de itens fixos e nomes de sala
+ * ========================================
+ * @description obterItensFixosDaSala: retorna itens fixos alocados em uma sala,
+ *              lendo o mapa JSON em AppState.colecoes.itens[4].
+ *              obterNomeSala: resolve ID de sala para nome legível via AppState.mapaSalas.
+ * @context Chamados ao trocar sala no formulário, ao renderizar reservas e no bootstrap.
+ * @inputs idSala: string ID da sala.
+ * @outputs Array de { nome: string, qtd: number } | string nome da sala.
+ * @sideEffects Nenhum.
+ */
+function obterItensFixosDaSala(idSala) {
+  const itens = (typeof AppState !== 'undefined' ? AppState.colecoes.itens : []) || [];
+  return itens.map(item => {
+    let mapa = {};
+    try {
+      const raw = String(item[4] || '{}').trim();
+      if (raw.startsWith('{') && raw.endsWith('}')) mapa = JSON.parse(raw);
+    } catch(e) {}
+    const nomeSala = (typeof AppState !== 'undefined' && AppState.mapaSalas?.[idSala]) || idSala;
+    const qtd = Number(mapa[idSala] || mapa[nomeSala] || 0);
+    return { nome: item[1], qtd };
+  }).filter(i => i.qtd > 0);
+}
+
+function obterNomeSala(idSala) {
+  if (typeof AppState !== 'undefined' && AppState.mapaSalas) {
+    return AppState.mapaSalas[idSala] || idSala;
+  }
+  return idSala;
+}
+
+</script>

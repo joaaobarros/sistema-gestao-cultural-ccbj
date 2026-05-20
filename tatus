@@ -1,0 +1,5 @@
+[33m65808fd[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mrefactor-fase2[m[33m, [m[1;31morigin/refactor-fase2[m[33m)[m fix: corrigir pipeline de conflito de reservas — padronização de contrato e eliminação de bypasses
+[33m51f7169[m correção conflitos reserva
+[33mdb9af61[m fix: corrigir getHours→getUTCHours em normalizarHora (legacy/utils.js)
+[33m4cfceaa[m fix: passar AppState.editandoId como idIgnorar no conflito frontend
+[33m31003e5[m fix: restaurar UX de conflito de reserva idêntica ao sistema legado

@@ -1,0 +1,197 @@
+{
+  "permissoes_v2_exemplo": [
+    {
+      "email": "joao.gestor@ccbj.org.br",
+      "perfil_base": "gestor",
+      "origem": {
+        "cargo": "gestor",
+        "funcoes": ["reservas", "contratos"],
+        "setores": ["producao"],
+        "donos_espaco": ["teatro-principal", "sala-ensaios"]
+      },
+      "permissoes_automaticas": {
+        "agenda":        { "visualizar": true,  "editar": true,  "excluir": false, "origem": ["cargo:gestor"] },
+        "estrategia":    { "visualizar": true,  "editar": true,  "excluir": false, "origem": ["cargo:gestor"] },
+        "comunicacao":   { "visualizar": true,  "editar": false, "excluir": false, "origem": ["cargo:gestor"] },
+        "espacos":       { "visualizar": true,  "editar": true,  "excluir": false, "origem": ["cargo:gestor","dono_espaco"] },
+        "reservas":      { "visualizar": true,  "editar": true,  "excluir": false, "origem": ["cargo:gestor","funcao:reservas","dono_espaco"] },
+        "contratos":     { "visualizar": true,  "editar": true,  "excluir": false, "origem": ["cargo:gestor","funcao:contratos"] },
+        "financeiro":    { "visualizar": true,  "editar": false, "excluir": false, "origem": ["funcao:contratos"] },
+        "tarefas":       { "visualizar": true,  "editar": true,  "excluir": false, "origem": ["cargo:gestor"] },
+        "processos":     { "visualizar": true,  "editar": true,  "excluir": false, "origem": ["cargo:gestor"] },
+        "almoxarifado":  { "visualizar": false, "editar": false, "excluir": false, "origem": [] },
+        "balcao":        { "visualizar": false, "editar": false, "excluir": false, "origem": [] },
+        "rh":            { "visualizar": false, "editar": false, "excluir": false, "origem": [] },
+        "eficiencia":    { "visualizar": true,  "editar": false, "excluir": false, "origem": ["cargo:gestor"] },
+        "contratacoes":  { "visualizar": false, "editar": false, "excluir": false, "origem": [] },
+        "relatorios":    { "visualizar": true,  "editar": false, "excluir": false, "origem": ["cargo:gestor","setor:producao"] },
+        "escuta":        { "visualizar": false, "editar": false, "excluir": false, "origem": [] },
+        "pessoal":       { "visualizar": false, "editar": false, "excluir": false, "origem": [] }
+      },
+      "permissoes_manuais": {
+        "almoxarifado":  { "visualizar": true,  "editar": null,  "excluir": null  },
+        "escuta":        { "visualizar": true,  "editar": null,  "excluir": null  },
+        "rh":            { "visualizar": false, "editar": null,  "excluir": null  }
+      },
+      "permissoes_finais": {
+        "agenda":        { "visualizar": true,  "editar": true,  "excluir": false, "explicacao": ["visualizar:auto(cargo:gestor)", "editar:auto(cargo:gestor)"] },
+        "estrategia":    { "visualizar": true,  "editar": true,  "excluir": false, "explicacao": ["visualizar:auto(cargo:gestor)", "editar:auto(cargo:gestor)"] },
+        "comunicacao":   { "visualizar": true,  "editar": false, "excluir": false, "explicacao": ["visualizar:perfil(gestor)"] },
+        "espacos":       { "visualizar": true,  "editar": true,  "excluir": false, "explicacao": ["visualizar:auto(cargo:gestor)", "editar:auto(cargo:gestor)"] },
+        "reservas":      { "visualizar": true,  "editar": true,  "excluir": false, "explicacao": ["visualizar:auto(cargo:gestor)", "editar:auto(cargo:gestor)"] },
+        "contratos":     { "visualizar": true,  "editar": true,  "excluir": false, "explicacao": ["visualizar:auto(cargo:gestor)", "editar:auto(cargo:gestor)"] },
+        "financeiro":    { "visualizar": true,  "editar": false, "excluir": false, "explicacao": ["visualizar:auto(funcao:contratos)"] },
+        "tarefas":       { "visualizar": true,  "editar": true,  "excluir": false, "explicacao": ["visualizar:auto(cargo:gestor)", "editar:auto(cargo:gestor)"] },
+        "processos":     { "visualizar": true,  "editar": true,  "excluir": false, "explicacao": ["visualizar:auto(cargo:gestor)", "editar:auto(cargo:gestor)"] },
+        "almoxarifado":  { "visualizar": true,  "editar": false, "excluir": false, "explicacao": ["visualizar:manual(+)"] },
+        "balcao":        { "visualizar": false, "editar": false, "excluir": false, "explicacao": [] },
+        "rh":            { "visualizar": false, "editar": false, "excluir": false, "explicacao": ["visualizar:manual(-)"] },
+        "eficiencia":    { "visualizar": true,  "editar": false, "excluir": false, "explicacao": ["visualizar:auto(cargo:gestor)"] },
+        "contratacoes":  { "visualizar": false, "editar": false, "excluir": false, "explicacao": [] },
+        "relatorios":    { "visualizar": true,  "editar": false, "excluir": false, "explicacao": ["visualizar:auto(cargo:gestor)"] },
+        "escuta":        { "visualizar": true,  "editar": false, "excluir": false, "explicacao": ["visualizar:manual(+)"] },
+        "pessoal":       { "visualizar": false, "editar": false, "excluir": false, "explicacao": [] }
+      },
+      "atualizadoEm": "2026-05-05T14:30:00.000Z"
+    },
+    {
+      "email": "ana.visitante@ccbj.org.br",
+      "perfil_base": "visitante_controlado",
+      "origem": {
+        "cargo": "",
+        "funcoes": [],
+        "setores": [],
+        "donos_espaco": []
+      },
+      "permissoes_automaticas": {
+        "agenda":        { "visualizar": false, "editar": false, "excluir": false, "origem": [] },
+        "estrategia":    { "visualizar": false, "editar": false, "excluir": false, "origem": [] },
+        "comunicacao":   { "visualizar": false, "editar": false, "excluir": false, "origem": [] },
+        "espacos":       { "visualizar": false, "editar": false, "excluir": false, "origem": [] },
+        "reservas":      { "visualizar": false, "editar": false, "excluir": false, "origem": [] },
+        "contratos":     { "visualizar": false, "editar": false, "excluir": false, "origem": [] },
+        "financeiro":    { "visualizar": false, "editar": false, "excluir": false, "origem": [] },
+        "tarefas":       { "visualizar": false, "editar": false, "excluir": false, "origem": [] },
+        "processos":     { "visualizar": false, "editar": false, "excluir": false, "origem": [] },
+        "almoxarifado":  { "visualizar": false, "editar": false, "excluir": false, "origem": [] },
+        "balcao":        { "visualizar": false, "editar": false, "excluir": false, "origem": [] },
+        "rh":            { "visualizar": false, "editar": false, "excluir": false, "origem": [] },
+        "eficiencia":    { "visualizar": false, "editar": false, "excluir": false, "origem": [] },
+        "contratacoes":  { "visualizar": false, "editar": false, "excluir": false, "origem": [] },
+        "relatorios":    { "visualizar": false, "editar": false, "excluir": false, "origem": [] },
+        "escuta":        { "visualizar": false, "editar": false, "excluir": false, "origem": [] },
+        "pessoal":       { "visualizar": false, "editar": false, "excluir": false, "origem": [] }
+      },
+      "permissoes_manuais": {},
+      "permissoes_finais": {
+        "agenda":        { "visualizar": true,  "editar": false, "excluir": false, "explicacao": ["visualizar:perfil(visitante_controlado)"] },
+        "estrategia":    { "visualizar": true,  "editar": false, "excluir": false, "explicacao": ["visualizar:perfil(visitante_controlado)"] },
+        "comunicacao":   { "visualizar": true,  "editar": false, "excluir": false, "explicacao": ["visualizar:perfil(visitante_controlado)"] },
+        "espacos":       { "visualizar": true,  "editar": false, "excluir": false, "explicacao": ["visualizar:perfil(visitante_controlado)"] },
+        "reservas":      { "visualizar": false, "editar": false, "excluir": false, "explicacao": [] },
+        "contratos":     { "visualizar": false, "editar": false, "excluir": false, "explicacao": [] },
+        "financeiro":    { "visualizar": false, "editar": false, "excluir": false, "explicacao": [] },
+        "tarefas":       { "visualizar": false, "editar": false, "excluir": false, "explicacao": [] },
+        "processos":     { "visualizar": false, "editar": false, "excluir": false, "explicacao": [] },
+        "almoxarifado":  { "visualizar": false, "editar": false, "excluir": false, "explicacao": [] },
+        "balcao":        { "visualizar": false, "editar": false, "excluir": false, "explicacao": [] },
+        "rh":            { "visualizar": false, "editar": false, "excluir": false, "explicacao": [] },
+        "eficiencia":    { "visualizar": false, "editar": false, "excluir": false, "explicacao": [] },
+        "contratacoes":  { "visualizar": false, "editar": false, "excluir": false, "explicacao": [] },
+        "relatorios":    { "visualizar": false, "editar": false, "excluir": false, "explicacao": [] },
+        "escuta":        { "visualizar": false, "editar": false, "excluir": false, "explicacao": [] },
+        "pessoal":       { "visualizar": false, "editar": false, "excluir": false, "explicacao": [] }
+      },
+      "atualizadoEm": null
+    }
+  ],
+
+  "usuarios_sistema_exemplo": [
+    {
+      "email": "joao.gestor@ccbj.org.br",
+      "nome": "João Gestor",
+      "ultimoAcesso": "2026-05-05T10:00:00.000Z",
+      "origem": ["log_acessos", "administradores"],
+      "nivelAdmin": "gestor",
+      "configurado": true,
+      "ativo": true
+    },
+    {
+      "email": "ana.visitante@ccbj.org.br",
+      "nome": "Ana Visitante",
+      "ultimoAcesso": "2026-05-03T16:45:00.000Z",
+      "origem": ["log_acessos", "reservas"],
+      "nivelAdmin": null,
+      "configurado": false,
+      "ativo": true
+    },
+    {
+      "email": "carlos.rh@ccbj.org.br",
+      "nome": "Carlos RH",
+      "ultimoAcesso": "2026-05-04T09:20:00.000Z",
+      "origem": ["log_acessos", "administradores"],
+      "nivelAdmin": "rh",
+      "configurado": true,
+      "ativo": true
+    }
+  ],
+
+  "auditoria_permissoes_exemplo": [
+    {
+      "editor": "admin@ccbj.org.br",
+      "alvo": "joao.gestor@ccbj.org.br",
+      "timestamp": "2026-05-05T14:30:00.000Z",
+      "antes": {
+        "email": "joao.gestor@ccbj.org.br",
+        "perfil_base": "visitante_controlado",
+        "permissoes_manuais": {},
+        "atualizadoEm": null
+      },
+      "depois": {
+        "email": "joao.gestor@ccbj.org.br",
+        "perfil_base": "gestor",
+        "permissoes_manuais": {
+          "almoxarifado": { "visualizar": true, "editar": null, "excluir": null }
+        },
+        "atualizadoEm": "2026-05-05T14:30:00.000Z"
+      }
+    }
+  ],
+
+  "mocks_teste_gas": {
+    "calcularPermissoesAutomaticas_cargo_gestor": {
+      "input": {
+        "origem": { "cargo": "gestor", "funcoes": [], "setores": ["producao"], "donos_espaco": [] },
+        "perfil_base": "gestor"
+      },
+      "expected_visualizar": ["agenda", "estrategia", "comunicacao", "espacos", "reservas", "contratos", "relatorios", "eficiencia", "tarefas", "processos"]
+    },
+    "calcularPermissoesAutomaticas_cargo_rh": {
+      "input": {
+        "origem": { "cargo": "rh", "funcoes": [], "setores": [], "donos_espaco": [] },
+        "perfil_base": "rh"
+      },
+      "expected_visualizar": ["agenda", "estrategia", "comunicacao", "espacos", "financeiro", "tarefas", "rh", "eficiencia", "contratacoes", "relatorios", "escuta", "pessoal"],
+      "expected_NOT_visualizar": ["reservas", "contratos", "processos", "almoxarifado", "balcao"]
+    },
+    "calcularPermissoesAutomaticas_admin_tecnico_bloqueio_sensiveis": {
+      "input": {
+        "origem": { "cargo": "admin_tecnico", "funcoes": [], "setores": [], "donos_espaco": [] },
+        "perfil_base": "admin"
+      },
+      "expected_NOT_visualizar": ["rh", "contratacoes", "financeiro"]
+    },
+    "consolidar_manual_override": {
+      "cenario": "manual bloqueia permissão que perfil concederia",
+      "perfil_base": "admin",
+      "permissoes_manuais": { "financeiro": { "visualizar": false } },
+      "expected": { "financeiro": { "visualizar": false, "editar": false, "excluir": false } }
+    },
+    "consolidar_manual_concede": {
+      "cenario": "manual concede permissão que perfil não tem",
+      "perfil_base": "tecnico",
+      "permissoes_manuais": { "relatorios": { "visualizar": true } },
+      "expected": { "relatorios": { "visualizar": true, "editar": false } }
+    }
+  }
+}

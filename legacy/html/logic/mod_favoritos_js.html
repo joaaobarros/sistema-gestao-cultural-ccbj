@@ -1,0 +1,248 @@
+<!--
+@file mod_favoritos_js.html
+@type logic
+@description Gerenciamento de favoritos (atalhos rápidos) na sidebar via drag-and-drop.
+@responsibility Manter, persistir e renderizar a lista de abas favoritadas pelo usuário.
+@dependencies google.script.run.salvarPreferencia / obterPreferencia, mostrarAba
+-->
+<script>
+// ══════════════════════════════════════════════════════
+// ESTADO LOCAL
+// ══════════════════════════════════════════════════════
+let dragItem   = null;
+let dragOrigem = null;
+let dragIndex  = null;
+let favoritos  = [];
+
+// ══════════════════════════════════════════════════════
+// PERSISTÊNCIA — usa PreferenciasUsuarios via GAS
+// ══════════════════════════════════════════════════════
+
+function salvarFavoritos() {
+  try {
+    google.script.run
+      .withFailureHandler(function(e){ console.warn('salvarFavoritos:', e.message); })
+      .salvarPreferencia('favoritos', JSON.stringify(favoritos));
+  } catch(e) { console.warn('salvarFavoritos:', e); }
+  // cache local para resposta imediata na próxima carga
+  try { localStorage.setItem('_fav_cache', JSON.stringify(favoritos)); } catch(e) {}
+}
+
+function carregarFavoritos(cb) {
+  // aplica cache local imediatamente (evita flash vazio)
+  try {
+    var local = localStorage.getItem('_fav_cache');
+    if (local) {
+      favoritos = JSON.parse(local) || [];
+      renderizarFavoritos();
+    }
+  } catch(e) {}
+
+  // sincroniza com servidor
+  try {
+    google.script.run
+      .withSuccessHandler(function(val) {
+        if (val) {
+          try { favoritos = JSON.parse(val) || []; } catch(e) { favoritos = []; }
+          // atualiza cache local
+          try { localStorage.setItem('_fav_cache', JSON.stringify(favoritos)); } catch(e) {}
+          renderizarFavoritos();
+        }
+        if (typeof cb === 'function') cb();
+      })
+      .withFailureHandler(function(e) {
+        console.warn('carregarFavoritos:', e.message);
+        if (typeof cb === 'function') cb();
+      })
+      .obterPreferencia('favoritos');
+  } catch(e) {
+    if (typeof cb === 'function') cb();
+  }
+}
+
+// ══════════════════════════════════════════════════════
+// DRAG — arrastar do menu para favoritos
+// ══════════════════════════════════════════════════════
+
+function iniciarDrag(e) {
+  const el = e.currentTarget;
+  dragOrigem = 'menu';
+  dragItem = {
+    aba:  el.dataset.aba,
+    nome: el.querySelector('span')?.innerText?.trim() || '',
+    icon: el.querySelector('i')?.className || ''
+  };
+  e.dataTransfer.setData('text/plain', dragItem.aba || '');
+}
+
+// ── Reordenar favoritos entre si ──────────────────────
+
+function iniciarDragFavorito(e, index) {
+  dragOrigem = 'favorito';
+  dragIndex  = index;
+  e.dataTransfer.setData('text/plain', String(index));
+}
+
+function onDragOverItem(e, index) {
+  e.preventDefault();
+}
+
+function onDropReorder(e, index) {
+  e.preventDefault();
+  e.stopPropagation();
+  if (dragOrigem !== 'favorito' || dragIndex === null) return;
+  const item = favoritos.splice(dragIndex, 1)[0];
+  favoritos.splice(index, 0, item);
+  dragIndex  = null;
+  dragOrigem = null;
+  salvarFavoritos();
+  renderizarFavoritos();
+}
+
+// ── Drop na área de favoritos (vindo do menu) ─────────
+
+function onDropFavoritos(e) {
+  e.preventDefault();
+  if (!dragItem || dragOrigem !== 'menu') return;
+  if (favoritos.some(function(f){ return f.aba === dragItem.aba; })) return;
+  favoritos.push(dragItem);
+  dragItem   = null;
+  dragOrigem = null;
+  salvarFavoritos();
+  renderizarFavoritos();
+}
+
+function onDragOverFavoritos(e) {
+  e.preventDefault();
+}
+
+// ══════════════════════════════════════════════════════
+// INICIALIZAÇÃO — chamada no boot após login
+// ══════════════════════════════════════════════════════
+
+// Compatibilidade com chamada legada via preferencias objeto
+function iniciarPreferencias(preferencias) {
+  if (preferencias && Array.isArray(preferencias.favoritos)) {
+    favoritos = preferencias.favoritos;
+    try { localStorage.setItem('_fav_cache', JSON.stringify(favoritos)); } catch(e) {}
+    renderizarFavoritos();
+  } else {
+    // carrega direto do backend se preferencias não tiver favoritos
+    carregarFavoritos();
+  }
+}
+
+function resetarFavoritos() {
+  favoritos = [];
+  try { localStorage.removeItem('_fav_cache'); } catch(e) {}
+  salvarFavoritos();
+  renderizarFavoritos();
+}
+
+function removerFavorito(index) {
+  favoritos.splice(index, 1);
+  salvarFavoritos();
+  renderizarFavoritos();
+}
+
+// ══════════════════════════════════════════════════════
+// RENDERIZAÇÃO
+// ══════════════════════════════════════════════════════
+
+function renderizarFavoritos() {
+  const container = document.getElementById('favoritosContainer');
+  if (!container) return;
+
+  container.innerHTML = '';
+
+  if (!favoritos || !favoritos.length) {
+    container.innerHTML = '<div class="text-[9px] text-slate-600 italic px-2 py-1">Arraste abas para cá</div>';
+    return;
+  }
+
+  var _favBloqueados = ['aba-tarefas','aba-processos','aba-almoxarifado','aba-balcao',
+    'aba-rh','aba-eficiencia','aba-contratos-fin','aba-contratacoes',
+    'aba-codip','aba-rel-financeiros','aba-escuta','aba-permissoes-v2'];
+
+  favoritos.slice(0, 12).forEach((fav, index) => {
+    if (_favBloqueados.indexOf(fav.aba) !== -1) return;
+    const el = document.createElement('div');
+
+    el.className = 'favorito-item flex items-center justify-between group';
+    el.draggable = true;
+    el.dataset.index = index;
+
+    el.innerHTML = `
+      <button data-aba="${fav.aba}"
+        class="flex items-center gap-2 w-full text-left truncate">
+        <i class="${fav.icon} w-5 text-center text-xs"></i>
+        <span class="text-xs font-semibold truncate">${fav.nome}</span>
+      </button>
+
+      <button
+        class="opacity-0 group-hover:opacity-100 px-2 text-slate-400 hover:text-red-400 transition"
+        title="Remover favorito">
+        <i class="fas fa-times text-[10px]"></i>
+      </button>
+    `;
+
+    // abrir aba
+    el.querySelector('button[data-aba]').onclick = function() {
+      mostrarAba(fav.aba);
+    };
+
+    // remover
+    el.querySelector('button:last-child').onclick = function(e) {
+      e.stopPropagation();
+      removerFavorito(index);
+    };
+
+    // drag
+    el.addEventListener('dragstart', function() {
+      dragOrigem = 'favorito';
+      dragIndex = index;
+      el.classList.add('dragging');
+    });
+
+    el.addEventListener('dragend', function() {
+      el.classList.remove('dragging');
+    });
+
+    el.addEventListener('dragover', function(e) {
+      e.preventDefault();
+    });
+
+    el.addEventListener('drop', function(e) {
+      e.preventDefault();
+      const targetIndex = Number(el.dataset.index);
+
+      if (dragIndex === null || targetIndex === dragIndex) return;
+
+      const item = favoritos.splice(dragIndex, 1)[0];
+      favoritos.splice(targetIndex, 0, item);
+
+      salvarFavoritos();
+      renderizarFavoritos();
+    });
+
+    container.appendChild(el);
+  });
+
+     setTimeout(() => {
+    const atual = document.querySelector('.tab-btn.active')?.dataset?.aba;
+    if (!atual) return;
+
+    document.querySelectorAll('#favoritosContainer [data-aba]')
+      .forEach(btn => {
+        const item = btn.closest('.favorito-item');
+
+        if (btn.dataset.aba === atual) {
+          item.classList.add('ativo');
+        } else {
+          item.classList.remove('ativo');
+        }
+      });
+  }, 0);
+}
+
+  </script>

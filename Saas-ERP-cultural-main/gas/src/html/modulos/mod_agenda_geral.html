@@ -1,0 +1,606 @@
+<!--
+@file mod_agenda_geral.html
+@type module
+@description Aba principal do sistema: tabela de reservas com filtros, mini-calendário
+             lateral, seletor de modo de visualização (lista/diagrama/agenda Google)
+             e exportação CSV.
+@responsibility Estrutura HTML da Agenda Geral (#aba-lista-reservas).
+@dependencies renderizarReservas, aplicarAtalhoPeriodo, exportarAgendaCSV,
+              renderizarModoDiagrama (mod_reservas_js)
+-->
+      <section id="aba-lista-reservas" class="tab-content animate-fadeIn space-y-6 pb-20">
+
+        <!-- Cabeçalho do módulo -->
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-2">
+          <div>
+            <h2 class="text-xl font-black text-slate-800 flex items-center gap-2">
+              <i class="fas fa-calendar-alt text-purple-600"></i>
+              Agenda Geral
+            </h2>
+            <p class="text-xs text-slate-500 mt-0.5">Todas as reservas e agendamentos do CCBJ</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <div class="flex items-center rounded-xl overflow-hidden border border-purple-200 shadow-sm shadow-purple-100">
+              <button data-requer-permissao="reservas:editar"
+                onclick="resetarFormulario();mostrarAba('aba-nova-reserva')"
+                class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-black text-white bg-purple-600 hover:bg-purple-700 active:scale-95 transition-all uppercase">
+                <i class="fas fa-plus-circle text-[10px]"></i> Novo Agendamento
+              </button>
+              <button onclick="adicionarFavorito('aba-nova-reserva','Novo Agendamento','fas fa-plus-circle w-5 text-center text-xs')"
+                title="Adicionar aos favoritos"
+                class="px-2 py-1.5 text-purple-300 bg-purple-700 hover:bg-purple-800 hover:text-white transition-all text-[10px]">
+                <i class="fas fa-star"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Seletor de modo de visualização -->
+        <div class="flex items-center gap-2 mb-4 flex-wrap">
+          <button id="btnModoLista" onclick="alternarModoVisualizacao('lista')"
+            class="px-4 py-2 bg-slate-900 text-white text-xs font-black rounded-xl uppercase transition-all">
+            <i class="fas fa-list mr-1"></i>Lista
+          </button>
+          <button id="btnModoAgenda" onclick="alternarModoVisualizacao('agenda')"
+            class="px-4 py-2 bg-slate-200 text-slate-600 text-xs font-black rounded-xl uppercase hover:bg-slate-300 transition-all">
+            <i class="fas fa-calendar-week mr-1"></i>Agenda
+          </button>
+          <button id="btnModoDiagrama" onclick="alternarModoVisualizacao('diagrama')"
+            class="px-4 py-2 bg-slate-200 text-slate-600 text-xs font-black rounded-xl uppercase hover:bg-slate-300 transition-all">
+            <i class="fas fa-stream mr-1"></i>Diagrama
+          </button>
+          <button id="btnModoHabilitacoes" onclick="alternarModoVisualizacao('habilitacoes')"
+            title="Relatório de habilitação diária dos espaços"
+            class="px-4 py-2 bg-slate-200 text-slate-600 text-xs font-black rounded-xl uppercase hover:bg-slate-300 transition-all">
+            <i class="fas fa-clipboard-check mr-1"></i>Hab. Diária
+          </button>
+          <button onclick="bloquearDiaCCBJ()" id="btnCCBJFechado"
+            class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-black rounded-xl uppercase transition-all flex items-center gap-2 hidden">
+            <i class="fas fa-lock"></i>CCBJ Fechado
+          </button>
+        </div>
+
+        <div class="bg-white rounded-3xl shadow-sm border border-slate-200 p-6">
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div class="relative">
+              <label class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">Busca Rápida</label>
+              <i class="fas fa-search absolute left-3 top-8 text-slate-300"></i>
+              <input type="text" id="filtroBusca" placeholder="Nome da ação, ID ou Responsável..."
+                class="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 transition-all">
+            </div>
+            <div>
+              <label class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">Setor Solicitante</label>
+              <select id="filtroSetor" class="w-full px-4 py-2.5 bg-indigo-50 border border-indigo-100 rounded-xl text-sm text-indigo-700 font-bold outline-none">
+                <option value="">TODOS OS SETORES</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">Espaço / Sala</label>
+              <select id="filtroSala" class="w-full px-4 py-2.5 bg-indigo-50 border border-indigo-100 rounded-xl text-sm text-indigo-700 font-bold outline-none">
+                <option value="">TODAS AS SALAS</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">Status da Reserva</label>
+              <select id="filtroStatus" class="w-full px-4 py-2.5 bg-indigo-50 border border-indigo-100 rounded-xl text-sm text-indigo-700 font-bold outline-none">
+                <option value="">TODOS OS STATUS</option>
+                <option value="CONFIRMADO">✅ CONFIRMADO</option>
+                <option value="HABILITADO">🟢 HABILITADO</option>
+                <option value="CANCELADO">❌ CANCELADO</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">Turno</label>
+              <select id="filtroTurno" class="w-full px-4 py-2.5 bg-indigo-50 border border-indigo-100 rounded-xl text-sm text-indigo-700 font-bold outline-none">
+                <option value="">TODOS OS TURNOS</option>
+                <option value="MANHÃ">MANHÃ</option>
+                <option value="TARDE">TARDE</option>
+                <option value="NOITE">NOITE</option>
+                <option value="MANHÃ/TARDE">MANHÃ/TARDE</option>
+                <option value="TARDE/NOITE">TARDE/NOITE</option>
+                <option value="MULTITURNO">MULTITURNO</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">Período</label>
+              <select id="filtroIntervalo" onchange="aplicarAtalhoPeriodo()" class="w-full px-4 py-2.5 bg-indigo-50 border border-indigo-100 rounded-xl text-sm text-indigo-700 font-bold outline-none">
+                <option value="todos">Todo o histórico</option>
+                <option value="apartir">A partir de hoje</option>
+                <option value="hoje">Somente hoje</option>
+                <option value="7">Próximos 7 dias</option>
+                <option value="30">Próximos 30 dias</option>
+              </select>
+            </div>
+            <div class="flex items-center gap-3 mt-2">
+              <label class="relative inline-flex items-center cursor-pointer">
+                <input type="checkbox" id="filtroMinhas" class="sr-only peer">
+                <div class="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:bg-purple-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full"></div>
+              </label>
+              <span id="labelMinhas" class="text-xs font-black uppercase tracking-wide text-slate-400">Minhas reservas</span>
+            </div>
+            <div class="flex items-end gap-2">
+              <button onclick="limparFiltros()" class="w-full px-4 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-sm font-bold transition-all">
+                Redefinir filtros
+              </button>
+              <button onclick="exportarAgendaCSV()" class="w-full px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black rounded-xl uppercase transition-all">
+                <i class="fas fa-file-csv mr-1"></i> Exportar CSV
+              </button>
+            </div>
+            <input type="date" id="filtroDataInicio" class="hidden">
+            <input type="date" id="filtroDataFim" class="hidden">
+          </div>
+        </div>
+
+        <div id="tabelaContainerOuter" class="bg-white rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-200 overflow-hidden">
+          <div class="overflow-x-auto">
+            <table class="w-full min-w-[640px] text-left border-collapse">
+              <thead>
+                <tr class="bg-slate-50/50 border-b border-slate-100">
+                  <th class="p-4 text-[10px] font-black text-slate-400 uppercase tracking-widest w-36">Data e Horário</th>
+                  <th class="p-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Informações da Ação</th>
+                  <th class="p-4 text-[10px] font-black text-slate-400 uppercase tracking-widest max-w-[240px]">Recursos/Release</th>
+                  <th class="p-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center w-28">Status</th>
+                  <th class="p-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right w-28">Ações</th>
+                </tr>
+              </thead>
+              <tbody id="corpoTabela" class="divide-y divide-slate-50"></tbody>
+            </table>
+          </div>
+          <div id="semResultados" class="hidden p-20 text-center">
+            <div class="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
+              <i class="fas fa-calendar-times text-slate-200 text-3xl"></i>
+            </div>
+            <p class="text-slate-400 font-medium">Nenhuma reserva encontrada para os filtros aplicados.</p>
+          </div>
+        </div>
+
+        <!-- View Agenda Google Calendar -->
+        <div id="viewAgendaGoogle" class="hidden space-y-4">
+          <div class="bg-white rounded-3xl shadow-sm border border-slate-200 p-5">
+            <div class="flex flex-wrap items-end gap-4">
+              <div class="flex-1 min-w-[200px]">
+                <label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Espaço visualizado</label>
+                <select id="agendaGoogleSala"
+                  onchange="window._agendaGoogleSemana=0; renderizarModoAgendaGoogle()"
+                  class="w-full px-4 py-2.5 bg-purple-50 border border-purple-100 rounded-xl text-sm text-purple-700 font-bold outline-none">
+                  <option value="">Todas as salas</option>
+                </select>
+              </div>
+              <div class="flex-1 min-w-[160px]">
+                <label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Setor</label>
+                <select id="agendaGoogleSetor"
+                  onchange="renderizarModoAgendaGoogle()"
+                  class="w-full px-4 py-2.5 bg-indigo-50 border border-indigo-100 rounded-xl text-sm text-indigo-700 font-bold outline-none">
+                  <option value="">Todos os setores</option>
+                </select>
+              </div>
+              <div class="min-w-[160px]">
+                <label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Data</label>
+                <input type="text" id="agendaGoogleDatePicker" placeholder="Selecione uma data..."
+                  class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-purple-400 cursor-pointer">
+              </div>
+              <div class="flex gap-2 shrink-0">
+                <button
+                  onclick="window._agendaGoogleSemana=(window._agendaGoogleSemana||0)-1; renderizarModoAgendaGoogle()"
+                  class="w-9 h-9 flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-all">
+                  <i class="fas fa-chevron-left text-xs"></i>
+                </button>
+                <button
+                  onclick="window._agendaGoogleSemana=0; renderizarModoAgendaGoogle()"
+                  class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-black rounded-xl uppercase transition-all">
+                  Hoje
+                </button>
+                <button
+                  onclick="window._agendaGoogleSemana=(window._agendaGoogleSemana||0)+1; renderizarModoAgendaGoogle()"
+                  class="w-9 h-9 flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-all">
+                  <i class="fas fa-chevron-right text-xs"></i>
+                </button>
+                <button
+                  onclick="limparFiltrosAgenda()"
+                  class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-600 text-xs font-black rounded-xl uppercase transition-all">
+                  <i class="fas fa-rotate-left mr-1"></i>Redefinir
+                </button>
+              </div>
+              <span id="agendaGoogleSemanaLabel" class="text-sm font-black text-slate-600 self-center"></span>
+            </div>
+          </div>
+          <div id="agendaGoogleContainer" style="height:calc(100vh - 280px)">
+            <div class="p-16 text-center text-slate-300">
+              <i class="fas fa-calendar-week text-4xl mb-3"></i><br>
+              <span class="text-sm font-bold">Selecione um espaço para visualizar</span>
+            </div>
+          </div>
+        </div>
+      <!-- View Diagrama / Gantt por espaço -->
+      <div id="viewDiagrama" class="hidden space-y-4 mt-4">
+        <div class="bg-white rounded-3xl shadow-sm border border-slate-200 p-5">
+          <div class="flex flex-wrap items-center gap-3">
+            <div class="flex gap-2">
+              <button onclick="window._diagramaSemana=(window._diagramaSemana||0)-1;renderizarModoDiagrama()"
+                class="w-9 h-9 flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-all">
+                <i class="fas fa-chevron-left text-xs"></i>
+              </button>
+              <button onclick="window._diagramaSemana=0;renderizarModoDiagrama()"
+                class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-black rounded-xl uppercase transition-all">Hoje</button>
+              <button onclick="window._diagramaSemana=(window._diagramaSemana||0)+1;renderizarModoDiagrama()"
+                class="w-9 h-9 flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-all">
+                <i class="fas fa-chevron-right text-xs"></i>
+              </button>
+            </div>
+            <span id="diagramaSemanaLabel" class="text-sm font-black text-slate-600"></span>
+          </div>
+        </div>
+        <div class="bg-white rounded-3xl shadow-sm border border-slate-200 p-4 flex flex-wrap gap-3 items-end">
+          <div class="flex-1 min-w-[160px]">
+            <label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Espaço</label>
+            <select id="diagramaFiltroSala" onchange="renderizarModoDiagrama()" class="w-full px-3 py-2 bg-indigo-50 border border-indigo-100 rounded-xl text-sm text-indigo-700 font-bold outline-none">
+              <option value="">Todos os espaços</option>
+            </select>
+          </div>
+          <div class="flex-1 min-w-[160px]">
+            <label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Setor</label>
+            <select id="diagramaFiltroSetor" onchange="renderizarModoDiagrama()" class="w-full px-3 py-2 bg-indigo-50 border border-indigo-100 rounded-xl text-sm text-indigo-700 font-bold outline-none">
+              <option value="">Todos os setores</option>
+            </select>
+          </div>
+          <div class="flex-1 min-w-[160px]">
+            <label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Busca</label>
+            <input type="text" id="diagramaFiltroBusca" oninput="renderizarModoDiagrama()" placeholder="Nome da ação..." class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-purple-400">
+          </div>
+          <div class="flex gap-2 shrink-0 items-end">
+            <button onclick="limparFiltrosDiagrama()" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-600 text-xs font-black rounded-xl uppercase transition-all">
+              <i class="fas fa-rotate-left mr-1"></i>Redefinir
+            </button>
+          </div>
+          <div class="w-full flex items-center gap-4 pt-1 border-t border-slate-100">
+            <span class="text-[9px] font-black text-slate-400 uppercase">Legenda:</span>
+            <span class="flex items-center gap-1 text-[9px] font-bold text-slate-600"><span class="w-3 h-3 rounded inline-block border-2 border-dashed border-amber-400"></span>Pendente habilitação</span>
+            <span class="flex items-center gap-1 text-[9px] font-bold text-emerald-700"><span class="w-3 h-3 rounded inline-block bg-emerald-600"></span>Habilitado</span>
+            <span class="flex items-center gap-1 text-[9px] font-bold text-slate-400 italic">Espaços: azul/roxo/rosa — nunca verde ou âmbar</span>
+          </div>
+        </div>
+        <div id="diagramaContainer" class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden mt-2"></div>
+      </div>
+
+      <!-- View Habilitação Diária de Espaços -->
+      <div id="viewHabilitacoes" class="hidden space-y-4 mt-4">
+
+        <!-- Cabeçalho + navegação de data -->
+        <div class="bg-white rounded-3xl shadow-sm border border-slate-200 p-5">
+          <div class="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <h3 class="text-sm font-black text-slate-800 flex items-center gap-2">
+                <i class="fas fa-clipboard-check text-purple-500"></i>
+                Habilitação Diária de Espaços
+              </h3>
+              <p class="text-xs text-slate-400 mt-0.5">Acompanhe a pontualidade de entrega dos espaços agendados</p>
+            </div>
+            <div class="flex items-center gap-2 flex-wrap">
+              <button onclick="habDiariaNavegar(-1)"
+                class="w-9 h-9 flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-all">
+                <i class="fas fa-chevron-left text-xs"></i>
+              </button>
+              <input type="date" id="habDDataInput"
+                onchange="habDiariaDefinirDataInput(this.value)"
+                class="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-purple-400 cursor-pointer">
+              <button onclick="habDiariaIrHoje()"
+                class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-black rounded-xl uppercase transition-all">
+                Hoje
+              </button>
+              <button onclick="habDiariaNavegar(1)"
+                class="w-9 h-9 flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-all">
+                <i class="fas fa-chevron-right text-xs"></i>
+              </button>
+              <button onclick="habDiariaAtualizar()"
+                class="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-all">
+                <i class="fas fa-sync-alt text-[10px]"></i> Atualizar
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Conteúdo dinâmico: métricas + tabela -->
+        <div id="habDConteudo">
+          <div class="p-16 text-center text-slate-300">
+            <i class="fas fa-clipboard-check text-4xl mb-3"></i><br>
+            <span class="text-sm font-bold">Selecione uma data para carregar o relatório</span>
+          </div>
+        </div>
+
+      </div>
+
+      </section>
+
+      <!-- ═══════════════════════════════════════════════════════════
+           MODAL: CCBJ Fechado — Bloqueio em Lote
+           ═══════════════════════════════════════════════════════════ -->
+      <div id="ccbjModal" class="hidden fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 pt-8">
+        <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" onclick="_ccbjFecharModal()"></div>
+        <div class="relative w-full max-w-3xl bg-slate-900 border border-white/10 rounded-3xl shadow-2xl overflow-hidden my-4">
+
+          <!-- Header -->
+          <div class="flex items-center justify-between px-6 py-4 border-b border-white/10">
+            <div class="flex items-center gap-3">
+              <div class="w-8 h-8 bg-red-600/20 rounded-xl flex items-center justify-center">
+                <i class="fas fa-lock text-red-400 text-sm"></i>
+              </div>
+              <div>
+                <h3 class="text-sm font-black text-white uppercase tracking-widest">CCBJ Fechado</h3>
+                <p class="text-[10px] text-slate-400 font-medium">Bloqueio em lote de todos os espaços</p>
+              </div>
+            </div>
+            <button onclick="_ccbjFecharModal()"
+              class="w-8 h-8 flex items-center justify-center bg-white/5 hover:bg-white/10 rounded-xl transition-all text-slate-400 hover:text-white">
+              <i class="fas fa-times text-sm"></i>
+            </button>
+          </div>
+
+          <!-- Body -->
+          <div class="p-6 space-y-5">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+              <!-- Coluna esquerda: controles -->
+              <div class="space-y-4">
+
+                <!-- Turno -->
+                <div>
+                  <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Turno do bloqueio</label>
+                  <select id="ccbjTurno"
+                    class="w-full px-3 py-2.5 rounded-xl text-sm font-semibold outline-none focus:ring-2 focus:ring-red-500 border-0"
+                    style="background:#1e293b;color:#f1f5f9">
+                    <option value="integral" style="background:#1e293b;color:#f1f5f9">Integral — 08:00 às 22:00</option>
+                    <option value="manha"    style="background:#1e293b;color:#f1f5f9">Manhã — 08:00 às 12:00</option>
+                    <option value="tarde"    style="background:#1e293b;color:#f1f5f9">Tarde — 12:00 às 18:00</option>
+                    <option value="noite"    style="background:#1e293b;color:#f1f5f9">Noite — 18:00 às 22:00</option>
+                  </select>
+                </div>
+
+                <!-- Motivo -->
+                <div>
+                  <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Motivo</label>
+                  <input type="text" id="ccbjMotivo" placeholder="Ex: Feriado, Recesso, Manutenção..."
+                    class="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl text-sm text-white outline-none focus:border-red-500 font-medium placeholder:text-slate-600">
+                </div>
+
+                <!-- Separador -->
+                <div class="flex items-center gap-3">
+                  <div class="flex-1 h-px bg-white/10"></div>
+                  <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest shrink-0">Modo de seleção</span>
+                  <div class="flex-1 h-px bg-white/10"></div>
+                </div>
+
+                <!-- Contador -->
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-2">
+                    <div class="w-1.5 h-1.5 bg-red-400 rounded-full animate-pulse"></div>
+                    <span class="text-[10px] font-black text-red-300 uppercase tracking-widest">Recorrência</span>
+                  </div>
+                  <span id="ccbjContadorDatas" class="text-[10px] font-black text-slate-400 bg-white/5 px-2 py-1 rounded-lg">0 datas selecionadas</span>
+                </div>
+
+                <!-- Botões de modo -->
+                <div class="grid grid-cols-2 gap-2">
+                  <button type="button" onclick="_ccbjSelecionarModo('manual')" id="ccbj-btn-manual"
+                    class="lote-modo-btn lote-modo-ativo flex flex-col items-center gap-1.5 p-3 rounded-xl border border-white/10 bg-white/5 hover:bg-red-600/20 hover:border-red-500/40 transition-all text-center">
+                    <i class="fas fa-hand-pointer text-red-400 text-sm"></i>
+                    <span class="text-[9px] font-black text-slate-300 uppercase tracking-wider leading-tight">Manual<br><span class="text-slate-500 normal-case font-normal">clique no calendário</span></span>
+                  </button>
+                  <button type="button" onclick="_ccbjSelecionarModo('semanal')" id="ccbj-btn-semanal"
+                    class="lote-modo-btn flex flex-col items-center gap-1.5 p-3 rounded-xl border border-white/10 bg-white/5 hover:bg-red-600/20 hover:border-red-500/40 transition-all text-center">
+                    <i class="fas fa-calendar-week text-red-400 text-sm"></i>
+                    <span class="text-[9px] font-black text-slate-300 uppercase tracking-wider leading-tight">Semanal<br><span class="text-slate-500 normal-case font-normal">dias da semana</span></span>
+                  </button>
+                  <button type="button" onclick="_ccbjSelecionarModo('intervalo')" id="ccbj-btn-intervalo"
+                    class="lote-modo-btn flex flex-col items-center gap-1.5 p-3 rounded-xl border border-white/10 bg-white/5 hover:bg-red-600/20 hover:border-red-500/40 transition-all text-center">
+                    <i class="fas fa-repeat text-red-400 text-sm"></i>
+                    <span class="text-[9px] font-black text-slate-300 uppercase tracking-wider leading-tight">Intervalo<br><span class="text-slate-500 normal-case font-normal">a cada X dias</span></span>
+                  </button>
+                  <button type="button" onclick="_ccbjSelecionarModo('mensal')" id="ccbj-btn-mensal"
+                    class="lote-modo-btn flex flex-col items-center gap-1.5 p-3 rounded-xl border border-white/10 bg-white/5 hover:bg-red-600/20 hover:border-red-500/40 transition-all text-center">
+                    <i class="fas fa-calendar-days text-red-400 text-sm"></i>
+                    <span class="text-[9px] font-black text-slate-300 uppercase tracking-wider leading-tight">Mensal<br><span class="text-slate-500 normal-case font-normal">mesmo dia do mês</span></span>
+                  </button>
+                </div>
+
+                <!-- Painel Manual -->
+                <div id="ccbj-painel-manual" class="lote-painel">
+                  <p class="text-[11px] text-slate-400 text-center py-2">
+                    <i class="fas fa-info-circle mr-1 text-red-400"></i>
+                    Clique diretamente no calendário para selecionar múltiplas datas.
+                  </p>
+                </div>
+
+                <!-- Painel Semanal -->
+                <div id="ccbj-painel-semanal" class="lote-painel hidden space-y-3">
+                  <div>
+                    <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Dias da semana</p>
+                    <div class="flex flex-wrap gap-2">
+                      <label class="lote-dia-check"><input type="checkbox" value="1" class="sr-only peer"><span class="lote-chip">Seg</span></label>
+                      <label class="lote-dia-check"><input type="checkbox" value="2" class="sr-only peer"><span class="lote-chip">Ter</span></label>
+                      <label class="lote-dia-check"><input type="checkbox" value="3" class="sr-only peer"><span class="lote-chip">Qua</span></label>
+                      <label class="lote-dia-check"><input type="checkbox" value="4" class="sr-only peer"><span class="lote-chip">Qui</span></label>
+                      <label class="lote-dia-check"><input type="checkbox" value="5" class="sr-only peer"><span class="lote-chip">Sex</span></label>
+                      <label class="lote-dia-check"><input type="checkbox" value="6" class="sr-only peer"><span class="lote-chip">Sáb</span></label>
+                      <label class="lote-dia-check"><input type="checkbox" value="0" class="sr-only peer"><span class="lote-chip">Dom</span></label>
+                    </div>
+                  </div>
+                  <div class="grid grid-cols-2 gap-3">
+                    <div>
+                      <label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Data início</label>
+                      <input type="date" id="ccbjSemanalInicio" class="w-full px-3 py-2 bg-white/10 border border-white/10 rounded-xl text-sm text-white outline-none focus:border-red-500 font-medium">
+                    </div>
+                    <div>
+                      <label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Data fim</label>
+                      <input type="date" id="ccbjSemanalFim" class="w-full px-3 py-2 bg-white/10 border border-white/10 rounded-xl text-sm text-white outline-none focus:border-red-500 font-medium">
+                    </div>
+                  </div>
+                  <button type="button" onclick="_ccbjGerarDatas('semanal')"
+                    class="w-full py-2.5 bg-red-700 hover:bg-red-600 text-white text-xs font-black rounded-xl uppercase tracking-widest transition-all">
+                    <i class="fas fa-magic mr-1"></i> Gerar Datas
+                  </button>
+                </div>
+
+                <!-- Painel Intervalo -->
+                <div id="ccbj-painel-intervalo" class="lote-painel hidden space-y-3">
+                  <div class="grid grid-cols-3 gap-3">
+                    <div>
+                      <label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">A cada</label>
+                      <div class="flex items-center gap-1">
+                        <input type="number" id="ccbjIntervaloN" value="7" min="1" max="365"
+                          class="w-full px-3 py-2 bg-white/10 border border-white/10 rounded-xl text-sm text-white outline-none focus:border-red-500 font-bold text-center">
+                        <span class="text-slate-400 text-xs font-bold shrink-0">dias</span>
+                      </div>
+                    </div>
+                    <div>
+                      <label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Data início</label>
+                      <input type="date" id="ccbjIntervaloInicio" class="w-full px-3 py-2 bg-white/10 border border-white/10 rounded-xl text-sm text-white outline-none focus:border-red-500 font-medium">
+                    </div>
+                    <div>
+                      <label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Repetir</label>
+                      <div class="flex items-center gap-1">
+                        <input type="number" id="ccbjIntervaloQtd" value="4" min="1" max="52"
+                          class="w-full px-3 py-2 bg-white/10 border border-white/10 rounded-xl text-sm text-white outline-none focus:border-red-500 font-bold text-center">
+                        <span class="text-slate-400 text-xs font-bold shrink-0">×</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div>
+                    <label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Ou até a data</label>
+                    <input type="date" id="ccbjIntervaloFim" class="w-full px-3 py-2 bg-white/10 border border-white/10 rounded-xl text-sm text-white outline-none focus:border-red-500 font-medium">
+                    <p class="text-[9px] text-slate-500 mt-1">Se preenchida, ignora o campo "Repetir"</p>
+                  </div>
+                  <button type="button" onclick="_ccbjGerarDatas('intervalo')"
+                    class="w-full py-2.5 bg-red-700 hover:bg-red-600 text-white text-xs font-black rounded-xl uppercase tracking-widest transition-all">
+                    <i class="fas fa-magic mr-1"></i> Gerar Datas
+                  </button>
+                </div>
+
+                <!-- Painel Mensal -->
+                <div id="ccbj-painel-mensal" class="lote-painel hidden space-y-3">
+                  <div class="flex gap-2">
+                    <button type="button" onclick="_ccbjSelecionarSubModoMensal('diaFixo')" id="ccbj-mensal-btn-diaFixo"
+                      class="mensal-sub-btn mensal-sub-ativo flex-1 py-2 text-[9px] font-black text-slate-300 bg-white/5 border border-white/10 rounded-xl hover:bg-red-600/20 transition-all uppercase">Dia fixo</button>
+                    <button type="button" onclick="_ccbjSelecionarSubModoMensal('diaUtil')" id="ccbj-mensal-btn-diaUtil"
+                      class="mensal-sub-btn flex-1 py-2 text-[9px] font-black text-slate-300 bg-white/5 border border-white/10 rounded-xl hover:bg-red-600/20 transition-all uppercase">Dia útil</button>
+                    <button type="button" onclick="_ccbjSelecionarSubModoMensal('semanaMes')" id="ccbj-mensal-btn-semanaMes"
+                      class="mensal-sub-btn flex-1 py-2 text-[9px] font-black text-slate-300 bg-white/5 border border-white/10 rounded-xl hover:bg-red-600/20 transition-all uppercase">Nth semana</button>
+                  </div>
+                  <div id="ccbj-sub-mensal-diaFixo" class="sub-mensal space-y-3">
+                    <div class="grid grid-cols-2 gap-3">
+                      <div>
+                        <label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Dia do mês</label>
+                        <input type="number" id="ccbjMensalDia" value="1" min="1" max="31"
+                          class="w-full px-3 py-2 bg-white/10 border border-white/10 rounded-xl text-sm text-white outline-none focus:border-red-500 font-bold text-center">
+                      </div>
+                      <div>
+                        <label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Nº de meses</label>
+                        <input type="number" id="ccbjMensalQtd" value="3" min="1" max="24"
+                          class="w-full px-3 py-2 bg-white/10 border border-white/10 rounded-xl text-sm text-white outline-none focus:border-red-500 font-bold text-center">
+                      </div>
+                    </div>
+                    <div>
+                      <label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Mês inicial</label>
+                      <input type="date" id="ccbjMensalInicio" class="w-full px-3 py-2 bg-white/10 border border-white/10 rounded-xl text-sm text-white outline-none focus:border-red-500 font-medium">
+                    </div>
+                  </div>
+                  <div id="ccbj-sub-mensal-diaUtil" class="sub-mensal hidden space-y-3">
+                    <div class="grid grid-cols-2 gap-3">
+                      <div>
+                        <label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Nº do dia útil</label>
+                        <input type="number" id="ccbjMensalNUtil" value="1" min="1" max="23"
+                          class="w-full px-3 py-2 bg-white/10 border border-white/10 rounded-xl text-sm text-white outline-none focus:border-red-500 font-bold text-center">
+                      </div>
+                      <div>
+                        <label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Nº de meses</label>
+                        <input type="number" id="ccbjMensalUtilQtd" value="3" min="1" max="24"
+                          class="w-full px-3 py-2 bg-white/10 border border-white/10 rounded-xl text-sm text-white outline-none focus:border-red-500 font-bold text-center">
+                      </div>
+                    </div>
+                    <div>
+                      <label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Mês inicial</label>
+                      <input type="date" id="ccbjMensalUtilInicio" class="w-full px-3 py-2 bg-white/10 border border-white/10 rounded-xl text-sm text-white outline-none focus:border-red-500 font-medium">
+                    </div>
+                  </div>
+                  <div id="ccbj-sub-mensal-semanaMes" class="sub-mensal hidden space-y-3">
+                    <div class="grid grid-cols-3 gap-2">
+                      <div>
+                        <label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Semana</label>
+                        <select id="ccbjMensalNSemana" class="w-full px-2 py-2 bg-white/10 border border-white/10 rounded-xl text-xs text-white outline-none focus:border-red-500 font-bold">
+                          <option value="1">1ª</option><option value="2">2ª</option><option value="3">3ª</option><option value="4">4ª</option><option value="-1">Última</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Dia</label>
+                        <select id="ccbjMensalDiaSemana" class="w-full px-2 py-2 bg-white/10 border border-white/10 rounded-xl text-xs text-white outline-none focus:border-red-500 font-bold">
+                          <option value="1">Seg</option><option value="2">Ter</option><option value="3">Qua</option>
+                          <option value="4">Qui</option><option value="5">Sex</option><option value="6">Sáb</option><option value="0">Dom</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Meses</label>
+                        <input type="number" id="ccbjMensalSemanaQtd" value="3" min="1" max="24"
+                          class="w-full px-2 py-2 bg-white/10 border border-white/10 rounded-xl text-xs text-white outline-none focus:border-red-500 font-bold text-center">
+                      </div>
+                    </div>
+                    <div>
+                      <label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Mês inicial</label>
+                      <input type="date" id="ccbjMensalSemanaInicio" class="w-full px-3 py-2 bg-white/10 border border-white/10 rounded-xl text-sm text-white outline-none focus:border-red-500 font-medium">
+                    </div>
+                  </div>
+                  <button type="button" onclick="_ccbjGerarDatas('mensal')"
+                    class="w-full py-2.5 bg-red-700 hover:bg-red-600 text-white text-xs font-black rounded-xl uppercase tracking-widest transition-all">
+                    <i class="fas fa-magic mr-1"></i> Gerar Datas
+                  </button>
+                </div>
+
+              </div>
+              <!-- /Coluna esquerda -->
+
+              <!-- Coluna direita: Calendário + Preview -->
+              <div class="flex flex-col gap-4">
+                <div>
+                  <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">
+                    <i class="fas fa-calendar-alt text-red-400 mr-1"></i>Selecione as datas
+                  </label>
+                  <div class="rounded-xl overflow-hidden border border-white/10 bg-white/3">
+                    <input type="text" id="ccbjCalInput" class="opacity-0 absolute w-0 h-0 pointer-events-none">
+                  </div>
+                </div>
+                <div id="ccbjPreviewDatas" class="hidden">
+                  <div class="flex items-center justify-between mb-2">
+                    <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Datas selecionadas</span>
+                    <button type="button" onclick="_ccbjLimparDatas()"
+                      class="text-[9px] font-black text-red-400 hover:text-red-300 uppercase tracking-wider transition-colors">
+                      <i class="fas fa-trash mr-1"></i>Limpar
+                    </button>
+                  </div>
+                  <div id="ccbjListaDatas" class="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto pr-1"></div>
+                </div>
+              </div>
+              <!-- /Coluna direita -->
+
+            </div>
+
+            <!-- Info salas -->
+            <div class="p-3 bg-red-900/20 border border-red-500/20 rounded-xl">
+              <p class="text-[10px] font-black text-red-400 uppercase tracking-wide mb-1">
+                <i class="fas fa-info-circle mr-1"></i>Espaços que serão bloqueados
+              </p>
+              <p id="ccbjSalasInfo" class="text-xs text-red-300/70 leading-relaxed"></p>
+            </div>
+          </div>
+
+          <!-- Footer -->
+          <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-white/10">
+            <button type="button" onclick="_ccbjFecharModal()"
+              class="px-5 py-2.5 bg-white/5 hover:bg-white/10 text-slate-300 text-sm font-bold rounded-xl transition-all">
+              Cancelar
+            </button>
+            <button type="button" onclick="_ccbjConfirmar()"
+              class="px-6 py-2.5 bg-red-700 hover:bg-red-600 text-white text-sm font-black rounded-xl uppercase tracking-wider transition-all flex items-center gap-2">
+              <i class="fas fa-lock text-sm"></i>Bloquear
+            </button>
+          </div>
+
+        </div>
+      </div>

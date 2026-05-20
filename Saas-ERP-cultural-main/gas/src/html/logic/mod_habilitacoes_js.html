@@ -1,0 +1,443 @@
+<!--
+@file mod_habilitacoes_js.html
+@layer frontend/logic
+@description Lógica do módulo de Habilitações: carregamento, filtros, formulário e ações de status.
+@responsibility Gerenciar o ciclo de vida do relatório de habilitações no frontend.
+@dependencies GAS.habilitacoes (server_bridge_js), mod_ui_componentes_js (showLoader),
+              SweetAlert2 (Swal)
+-->
+<script>
+
+/**
+ * ========================================
+ * BLOCO: Estado local do módulo
+ * ========================================
+ */
+var _habState = {
+  dados:          [],
+  filtroStatus:   '',
+  filtroBusca:    '',
+  carregado:      false
+};
+
+window._onShow_aba_habilitacoes = function() {
+  if (!_habState.carregado) _habCarregar();
+};
+
+window._onSync_aba_habilitacoes = function() { _habCarregar(); };
+
+/**
+ * ========================================
+ * BLOCO: Labels e cores
+ * ========================================
+ */
+var _HAB_STATUS_LABEL = {
+  pendente:   'Pendente',
+  em_analise: 'Em Análise',
+  habilitado: 'Habilitado',
+  rejeitado:  'Rejeitado',
+  suspenso:   'Suspenso'
+};
+
+var _HAB_STATUS_COR = {
+  pendente:   'bg-amber-100 text-amber-700',
+  em_analise: 'bg-indigo-100 text-indigo-700',
+  habilitado: 'bg-emerald-100 text-emerald-700',
+  rejeitado:  'bg-red-100 text-red-700',
+  suspenso:   'bg-slate-100 text-slate-600'
+};
+
+var _HAB_TIPO_LABEL = {
+  grupo:           'Grupo',
+  pessoa_fisica:   'Pessoa Física',
+  pessoa_juridica: 'Pessoa Jurídica',
+  coletivo:        'Coletivo',
+  instituicao:     'Instituição'
+};
+
+var _HAB_AREA_LABEL = {
+  teatro:         'Teatro',
+  danca:          'Dança',
+  musica:         'Música',
+  artes_visuais:  'Artes Visuais',
+  literatura:     'Literatura',
+  circo:          'Circo',
+  audiovisual:    'Audiovisual',
+  patrimonio:     'Patrimônio',
+  cultura_popular:'Cultura Popular',
+  outro:          'Outro'
+};
+
+/**
+ * ========================================
+ * BLOCO: Carregamento de dados
+ * ========================================
+ */
+
+/**
+ * Carrega a lista de habilitações do backend e renderiza.
+ * Exibido automaticamente ao navegar para a aba.
+ */
+function _habCarregar() {
+  var el = document.getElementById('hab-lista');
+  var elLoad = document.getElementById('hab-lista-loading');
+  var elVazia = document.getElementById('hab-lista-vazia');
+
+  if (el)      el.innerHTML = '';
+  if (elVazia) elVazia.classList.add('hidden');
+  if (elLoad)  elLoad.classList.remove('hidden');
+
+  GAS.habilitacoes.listar(function(res) {
+    if (elLoad) elLoad.classList.add('hidden');
+
+    if (!res || !res.ok) {
+      if (typeof _handleServerError === 'function') _handleServerError(res && res.erro);
+      return;
+    }
+
+    _habState.dados    = res.dados || [];
+    _habState.carregado = true;
+
+    _habAtualizarMetricas(res.metricas || {});
+    _habRenderizar();
+  }, function(e) {
+    if (elLoad) elLoad.classList.add('hidden');
+    if (typeof _handleServerError === 'function') _handleServerError(e);
+  });
+}
+
+/**
+ * ========================================
+ * BLOCO: Renderização da lista
+ * ========================================
+ */
+
+function _habRenderizar() {
+  var el = document.getElementById('hab-lista');
+  var elVazia = document.getElementById('hab-lista-vazia');
+  if (!el) return;
+
+  var lista = _habFiltrarDados();
+
+  if (lista.length === 0) {
+    el.innerHTML = '';
+    if (elVazia) elVazia.classList.remove('hidden');
+    return;
+  }
+  if (elVazia) elVazia.classList.add('hidden');
+
+  el.innerHTML = lista.map(_habRenderCard).join('');
+}
+
+function _habRenderCard(h) {
+  var cor   = _HAB_STATUS_COR[h.status]   || 'bg-slate-100 text-slate-600';
+  var label = _HAB_STATUS_LABEL[h.status] || h.status;
+  var area  = _HAB_AREA_LABEL[h.area_cultural] || h.area_cultural || '—';
+  var tipo  = _HAB_TIPO_LABEL[h.proponente_tipo] || h.proponente_tipo || '—';
+  var data  = h.data_envio ? h.data_envio.slice(0, 10) : '—';
+
+  return '<div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 hover:shadow-md transition-shadow cursor-pointer" onclick="_habVerDetalhe(\'' + h.id + '\')">' +
+    '<div class="flex items-start justify-between gap-3">' +
+      '<div class="flex-1 min-w-0">' +
+        '<p class="text-sm font-black text-slate-800 truncate">' + _escaparHTML(h.proponente_nome) + '</p>' +
+        '<p class="text-[10px] text-slate-400 mt-0.5">' + _escaparHTML(h.proponente_email) + '</p>' +
+        '<div class="flex flex-wrap gap-1.5 mt-2">' +
+          '<span class="px-2 py-0.5 text-[9px] font-black rounded-full bg-slate-100 text-slate-500 uppercase">' + area + '</span>' +
+          '<span class="px-2 py-0.5 text-[9px] font-black rounded-full bg-slate-100 text-slate-500 uppercase">' + tipo + '</span>' +
+        '</div>' +
+      '</div>' +
+      '<div class="flex flex-col items-end gap-2 shrink-0">' +
+        '<span class="px-2 py-0.5 text-[9px] font-black rounded-full uppercase ' + cor + '">' + label + '</span>' +
+        '<span class="text-[9px] text-slate-400">' + data + '</span>' +
+      '</div>' +
+    '</div>' +
+    (_habPodeAlterar() ? '<div class="flex gap-1.5 mt-3 pt-3 border-t border-slate-100">' + _habBotoesAcao(h) + '</div>' : '') +
+  '</div>';
+}
+
+function _habBotoesAcao(h) {
+  var btns = '';
+  btns += '<button onclick="event.stopPropagation(); _habAbrirForm(\'' + h.id + '\')" class="flex-1 py-1 text-[9px] font-bold text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition-all">Editar</button>';
+
+  if (h.status === 'pendente') {
+    btns += '<button onclick="event.stopPropagation(); _habMudarStatus(\'' + h.id + '\', \'em_analise\')" class="flex-1 py-1 text-[9px] font-bold text-white bg-indigo-500 rounded-lg hover:bg-indigo-600 transition-all">Iniciar Análise</button>';
+    btns += '<button onclick="event.stopPropagation(); _habMudarStatus(\'' + h.id + '\', \'rejeitado\')" class="flex-1 py-1 text-[9px] font-bold text-white bg-red-400 rounded-lg hover:bg-red-500 transition-all">Rejeitar</button>';
+  } else if (h.status === 'em_analise') {
+    btns += '<button onclick="event.stopPropagation(); _habMudarStatus(\'' + h.id + '\', \'habilitado\')" class="flex-1 py-1 text-[9px] font-bold text-white bg-emerald-500 rounded-lg hover:bg-emerald-600 transition-all">Habilitar</button>';
+    btns += '<button onclick="event.stopPropagation(); _habMudarStatus(\'' + h.id + '\', \'rejeitado\')" class="flex-1 py-1 text-[9px] font-bold text-white bg-red-400 rounded-lg hover:bg-red-500 transition-all">Rejeitar</button>';
+  } else if (h.status === 'habilitado') {
+    btns += '<button onclick="event.stopPropagation(); _habMudarStatus(\'' + h.id + '\', \'suspenso\')" class="flex-1 py-1 text-[9px] font-bold text-slate-600 bg-slate-200 rounded-lg hover:bg-slate-300 transition-all">Suspender</button>';
+  } else if (h.status === 'suspenso') {
+    btns += '<button onclick="event.stopPropagation(); _habMudarStatus(\'' + h.id + '\', \'habilitado\')" class="flex-1 py-1 text-[9px] font-bold text-white bg-emerald-500 rounded-lg hover:bg-emerald-600 transition-all">Reativar</button>';
+    btns += '<button onclick="event.stopPropagation(); _habMudarStatus(\'' + h.id + '\', \'rejeitado\')" class="flex-1 py-1 text-[9px] font-bold text-white bg-red-400 rounded-lg hover:bg-red-500 transition-all">Rejeitar</button>';
+  } else if (h.status === 'rejeitado') {
+    btns += '<button onclick="event.stopPropagation(); _habMudarStatus(\'' + h.id + '\', \'pendente\')" class="flex-1 py-1 text-[9px] font-bold text-white bg-amber-500 rounded-lg hover:bg-amber-600 transition-all">Reabrir</button>';
+  }
+
+  return btns;
+}
+
+function _habPodeAlterar() {
+  if (typeof temPermissao !== 'function') return false;
+  return temPermissao('reservas', 'editar');
+}
+
+/**
+ * ========================================
+ * BLOCO: Filtros
+ * ========================================
+ */
+
+function _habFiltrarDados() {
+  return _habState.dados.filter(function(h) {
+    if (_habState.filtroStatus && h.status !== _habState.filtroStatus) return false;
+    if (_habState.filtroBusca) {
+      var busca = _habState.filtroBusca.toLowerCase();
+      return (h.proponente_nome  || '').toLowerCase().includes(busca) ||
+             (h.proponente_email || '').toLowerCase().includes(busca) ||
+             (h.area_cultural    || '').toLowerCase().includes(busca);
+    }
+    return true;
+  });
+}
+
+function _habFiltrar(status) {
+  _habState.filtroStatus = status;
+
+  document.querySelectorAll('.hab-filtro').forEach(function(btn) {
+    btn.classList.remove('bg-slate-900', 'text-white', 'hab-filtro-ativo');
+    btn.classList.add('bg-slate-100', 'text-slate-500');
+  });
+  var id = 'hab-f-' + (status || 'todos');
+  var ativo = document.getElementById(id);
+  if (ativo) {
+    ativo.classList.add('bg-slate-900', 'text-white', 'hab-filtro-ativo');
+    ativo.classList.remove('bg-slate-100', 'text-slate-500');
+  }
+
+  _habRenderizar();
+}
+
+function _habBuscar(termo) {
+  _habState.filtroBusca = termo.trim();
+  _habRenderizar();
+}
+
+/**
+ * ========================================
+ * BLOCO: Painel lateral — formulário
+ * ========================================
+ */
+
+function _habAbrirForm(id) {
+  var painel    = document.getElementById('hab-painel');
+  var formEl    = document.getElementById('hab-form-container');
+  var detalheEl = document.getElementById('hab-detalhe-container');
+  var titulo    = document.getElementById('hab-form-titulo');
+  var formId    = document.getElementById('hab-form-id');
+
+  if (!painel || !formEl) return;
+
+  document.getElementById('hab-form').reset();
+  formId.value = id || '';
+
+  if (id) {
+    var h = _habState.dados.find(function(x) { return x.id === id; });
+    if (h) {
+      titulo.textContent = 'Editar Habilitação';
+      document.getElementById('hab-f-nome').value      = h.proponente_nome    || '';
+      document.getElementById('hab-f-email').value     = h.proponente_email   || '';
+      document.getElementById('hab-f-tipo').value      = h.proponente_tipo    || '';
+      document.getElementById('hab-f-area').value      = h.area_cultural      || '';
+      document.getElementById('hab-f-descricao').value = h.descricao          || '';
+      document.getElementById('hab-f-documentos').value= h.documentos         || '';
+      document.getElementById('hab-f-obs').value       = h.observacoes        || '';
+    }
+  } else {
+    titulo.textContent = 'Nova Habilitação';
+  }
+
+  painel.classList.remove('hidden');
+  if (detalheEl) detalheEl.classList.add('hidden');
+  formEl.classList.remove('hidden');
+}
+
+function _habPainelFechar() {
+  var painel = document.getElementById('hab-painel');
+  if (painel) painel.classList.add('hidden');
+}
+
+/**
+ * ========================================
+ * BLOCO: Painel lateral — detalhe
+ * ========================================
+ */
+
+function _habVerDetalhe(id) {
+  var h = _habState.dados.find(function(x) { return x.id === id; });
+  if (!h) return;
+
+  var painel    = document.getElementById('hab-painel');
+  var formEl    = document.getElementById('hab-form-container');
+  var detalheEl = document.getElementById('hab-detalhe-container');
+  var corpo     = document.getElementById('hab-detalhe-corpo');
+
+  if (!painel || !detalheEl || !corpo) return;
+
+  var cor   = _HAB_STATUS_COR[h.status]   || 'bg-slate-100 text-slate-600';
+  var label = _HAB_STATUS_LABEL[h.status] || h.status;
+
+  corpo.innerHTML =
+    '<div class="space-y-3">' +
+      '<div>' +
+        '<span class="px-2 py-0.5 text-[9px] font-black rounded-full uppercase ' + cor + '">' + label + '</span>' +
+      '</div>' +
+      '<div><p class="text-[9px] font-black text-slate-400 uppercase tracking-wide">Proponente</p>' +
+        '<p class="text-sm font-bold text-slate-800 mt-0.5">' + _escaparHTML(h.proponente_nome) + '</p>' +
+        '<p class="text-xs text-slate-500">' + _escaparHTML(h.proponente_email) + '</p>' +
+      '</div>' +
+      '<div class="grid grid-cols-2 gap-2">' +
+        '<div><p class="text-[9px] font-black text-slate-400 uppercase tracking-wide">Tipo</p>' +
+          '<p class="text-xs text-slate-700 mt-0.5">' + (_HAB_TIPO_LABEL[h.proponente_tipo] || '—') + '</p></div>' +
+        '<div><p class="text-[9px] font-black text-slate-400 uppercase tracking-wide">Área</p>' +
+          '<p class="text-xs text-slate-700 mt-0.5">' + (_HAB_AREA_LABEL[h.area_cultural] || '—') + '</p></div>' +
+      '</div>' +
+      (h.descricao ? '<div><p class="text-[9px] font-black text-slate-400 uppercase tracking-wide">Descrição</p>' +
+        '<p class="text-xs text-slate-700 mt-0.5">' + _escaparHTML(h.descricao) + '</p></div>' : '') +
+      (h.documentos ? '<div><p class="text-[9px] font-black text-slate-400 uppercase tracking-wide">Documentos</p>' +
+        '<p class="text-xs text-slate-700 mt-0.5">' + _escaparHTML(h.documentos) + '</p></div>' : '') +
+      (h.responsavel_analise ? '<div><p class="text-[9px] font-black text-slate-400 uppercase tracking-wide">Analisado por</p>' +
+        '<p class="text-xs text-slate-700 mt-0.5">' + _escaparHTML(h.responsavel_analise) + '</p></div>' : '') +
+      (h.observacoes ? '<div><p class="text-[9px] font-black text-slate-400 uppercase tracking-wide">Observações</p>' +
+        '<p class="text-xs text-slate-700 mt-0.5">' + _escaparHTML(h.observacoes) + '</p></div>' : '') +
+      '<div><p class="text-[9px] font-black text-slate-400 uppercase tracking-wide">Enviado em</p>' +
+        '<p class="text-xs text-slate-700 mt-0.5">' + (h.data_envio ? h.data_envio.slice(0, 10) : '—') + '</p></div>' +
+    '</div>';
+
+  painel.classList.remove('hidden');
+  if (formEl) formEl.classList.add('hidden');
+  detalheEl.classList.remove('hidden');
+}
+
+/**
+ * ========================================
+ * BLOCO: Submissão do formulário
+ * ========================================
+ */
+
+function _habSubmit() {
+  if (BtnGuard.isLocked('hab-submit')) return;
+  var editando = document.getElementById('hab-form-id').value;
+  var dados = {
+    proponente_nome:  document.getElementById('hab-f-nome').value.trim(),
+    proponente_email: document.getElementById('hab-f-email').value.trim(),
+    proponente_tipo:  document.getElementById('hab-f-tipo').value,
+    area_cultural:    document.getElementById('hab-f-area').value,
+    descricao:        document.getElementById('hab-f-descricao').value.trim(),
+    documentos:       document.getElementById('hab-f-documentos').value.trim(),
+    observacoes:      document.getElementById('hab-f-obs').value.trim()
+  };
+
+  if (!dados.proponente_nome)  { Swal.fire({ icon: 'warning', title: 'Campo obrigatório', text: 'Informe o nome do proponente.', timer: 2000, showConfirmButton: false }); return; }
+  if (!dados.proponente_email) { Swal.fire({ icon: 'warning', title: 'Campo obrigatório', text: 'Informe o e-mail do proponente.', timer: 2000, showConfirmButton: false }); return; }
+  if (!dados.proponente_tipo)  { Swal.fire({ icon: 'warning', title: 'Campo obrigatório', text: 'Selecione o tipo de proponente.', timer: 2000, showConfirmButton: false }); return; }
+  if (!dados.area_cultural)    { Swal.fire({ icon: 'warning', title: 'Campo obrigatório', text: 'Selecione a área cultural.', timer: 2000, showConfirmButton: false }); return; }
+
+  BtnGuard.gas('hab-form-btn', 'hab-submit', 'Salvando...', function(ok, fail) {
+    if (editando) {
+      GAS.habilitacoes.atualizar(editando, dados, ok, fail);
+    } else {
+      GAS.habilitacoes.criar(dados, ok, fail);
+    }
+  }, function(res) {
+    if (!res || !res.ok) {
+      Swal.fire({ icon: 'error', title: 'Erro', text: res && res.erro ? res.erro : 'Falha desconhecida' });
+      return;
+    }
+    Toast.success(editando ? 'Habilitação atualizada!' : 'Habilitação registrada!');
+    _habPainelFechar();
+    _habCarregar();
+  }, function(e) {
+    Swal.fire({ icon: 'error', title: 'Erro ao salvar', text: e.message || String(e) });
+  });
+}
+
+/**
+ * ========================================
+ * BLOCO: Mudança de status
+ * ========================================
+ */
+
+function _habMudarStatus(id, novoStatus) {
+  var lockId = 'hab-status-' + id;
+  if (BtnGuard.isLocked(lockId)) return;
+  var labelNovo = _HAB_STATUS_LABEL[novoStatus] || novoStatus;
+
+  Swal.fire({
+    title: 'Confirmar transição?',
+    html: 'O status será alterado para <b>' + labelNovo + '</b>.',
+    icon: 'question',
+    showCancelButton: true,
+    confirmButtonColor: '#7c3aed',
+    confirmButtonText: 'Confirmar',
+    cancelButtonText: 'Cancelar',
+    input: (novoStatus === 'rejeitado' || novoStatus === 'suspenso') ? 'textarea' : undefined,
+    inputLabel: (novoStatus === 'rejeitado' || novoStatus === 'suspenso') ? 'Observação (opcional)' : undefined,
+    inputPlaceholder: 'Descreva o motivo...'
+  }).then(function(result) {
+    if (!result.isConfirmed) return;
+    var obs = result.value || '';
+    BtnGuard.lock(lockId);
+    showLoader(true);
+    GAS.habilitacoes.mudarStatus(id, novoStatus, obs, function(res) {
+      BtnGuard.unlock(lockId);
+      showLoader(false);
+      if (!res || !res.ok) {
+        Swal.fire({ icon: 'error', title: 'Erro', text: res && res.erro ? res.erro : 'Falha desconhecida' });
+        return;
+      }
+      Toast.success('Status atualizado para ' + labelNovo + '.');
+      _habPainelFechar();
+      _habCarregar();
+    }, function(e) {
+      BtnGuard.unlock(lockId);
+      showLoader(false);
+      Swal.fire({ icon: 'error', title: 'Erro', text: e.message || String(e) });
+    });
+  }).catch(function() { BtnGuard.unlock(lockId); });
+}
+
+/**
+ * ========================================
+ * BLOCO: Métricas
+ * ========================================
+ */
+
+function _habAtualizarMetricas(m) {
+  var total     = document.getElementById('hab-m-total');
+  var pendente  = document.getElementById('hab-m-pendente');
+  var analise   = document.getElementById('hab-m-em_analise');
+  var hab       = document.getElementById('hab-m-habilitado');
+  var rej       = document.getElementById('hab-m-rejeitado');
+  var taxa      = document.getElementById('hab-m-taxa');
+
+  if (total)    total.textContent    = m.total        != null ? m.total        : '0';
+  if (pendente) pendente.textContent = m.pendente      != null ? m.pendente      : '0';
+  if (analise)  analise.textContent  = m.em_analise    != null ? m.em_analise    : '0';
+  if (hab)      hab.textContent      = m.habilitado    != null ? m.habilitado    : '0';
+  if (rej)      rej.textContent      = m.rejeitado     != null ? m.rejeitado     : '0';
+  if (taxa)     taxa.textContent     = m.taxa_aprovacao != null ? m.taxa_aprovacao + '%' : '0%';
+}
+
+/**
+ * ========================================
+ * BLOCO: Lazy load via EventBus
+ * ========================================
+ */
+if (typeof EventBus !== 'undefined') {
+  EventBus.on('aba:aba-habilitacoes:show', function() {
+    if (!_habState.carregado) _habCarregar();
+  });
+}
+
+</script>

@@ -1,0 +1,1158 @@
+<!--
+@file mod_nova_reserva.html
+@type module
+@description Formulário completo de criação e edição de reservas: dados básicos,
+             seleção de sala/horário/setor, modo lote, carrinho de itens (fixos e volantes),
+             campos RECE, campos CODIP e upload de imagem.
+@responsibility Estrutura HTML do formulário de agendamento (#aba-nova-reserva).
+@dependencies salvarAgendamento, resetarFormulario, alternarModoLote, alternarModoRece,
+              adicionarItemVolante, configurarCalendario (mod_reservas_js + mod_ui_estado_js)
+-->
+      <section id="aba-nova-reserva" class="tab-content animate-fadeIn hidden pb-20">
+        <form id="formReserva" onsubmit="event.preventDefault(); salvarAgendamento();">
+          <input type="hidden" id="inputReservaId">
+
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+
+            <!-- Coluna principal -->
+            <div class="lg:col-span-2 space-y-6">
+
+              <!-- Card: Informações Básicas -->
+              <div class="bg-white rounded-3xl shadow-sm border border-slate-200 p-6 md:p-8">
+
+                <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+                  <h3 class="text-lg font-black text-slate-800 uppercase tracking-tighter">
+                    <i class="fas fa-info-circle text-purple-500 mr-2"></i>Informações Básicas
+                  </h3>
+                  <div class="flex flex-wrap items-center gap-3">
+                    <label class="relative inline-flex items-center cursor-pointer">
+                      <input type="checkbox" id="checkLote" class="sr-only peer" onchange="alternarModoLote(this.checked)">
+                      <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
+                      <span class="ml-2 text-xs font-black text-slate-500 uppercase tracking-widest whitespace-nowrap">Agendar em Lote</span>
+                    </label>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                      <input type="checkbox" id="checkRece" class="sr-only peer" onchange="alternarModoRece(this.checked)">
+                      <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-yellow-500"></div>
+                      <span class="ml-2 text-xs font-black text-yellow-600 uppercase tracking-widest whitespace-nowrap">Agenda RECE</span>
+                    </label>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" id="checkCodip" class="sr-only peer" onchange="alternarModoCodip(this.checked)">
+                    <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full 
+                      peer peer-checked:after:translate-x-full peer-checked:after:border-white 
+                      after:content-[''] after:absolute after:top-[2px] after:left-[2px] 
+                      after:bg-white after:border-gray-300 after:border after:rounded-full 
+                      after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600">
+                    </div>
+                    <span class="ml-2 text-xs font-black text-indigo-600 uppercase tracking-widest whitespace-nowrap">
+                      Relatório CODIP
+                    </span>
+                  </label>
+                  <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" id="checkComunicacao" class="sr-only peer" onchange="alternarModoComunicacao(this.checked)">
+                    <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-orange-500"></div>
+                    <span class="ml-2 text-xs font-black text-orange-600 uppercase tracking-widest whitespace-nowrap">Demanda Com.</span>
+                  </label>
+                  </div>
+                </div>
+
+                <!-- PAINEL DE RECORRÊNCIA -->
+                <div id="painelLoteAvancado" class="hidden mb-6 p-4 md:p-5 bg-slate-900 rounded-2xl border border-white/10 space-y-4">
+
+                  <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                      <div class="w-2 h-2 bg-purple-400 rounded-full animate-pulse"></div>
+                      <span class="text-[10px] font-black text-purple-300 uppercase tracking-widest">Modo de Recorrência</span>
+                    </div>
+                    <span id="loteContadorDatas" class="text-[10px] font-black text-slate-400 bg-white/5 px-2 py-1 rounded-lg">
+                      0 datas selecionadas
+                    </span>
+                  </div>
+
+                  <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    <button type="button" onclick="selecionarModoLote('manual')" id="lote-btn-manual"
+                      class="lote-modo-btn lote-modo-ativo flex flex-col items-center gap-1.5 p-3 rounded-xl border border-white/10 bg-white/5 hover:bg-purple-600/30 hover:border-purple-500/50 transition-all text-center">
+                      <i class="fas fa-hand-pointer text-purple-400 text-sm"></i>
+                      <span class="text-[9px] font-black text-slate-300 uppercase tracking-wider leading-tight">Manual<br><span class="text-slate-500 normal-case font-normal">clique no calendário</span></span>
+                    </button>
+                    <button type="button" onclick="selecionarModoLote('semanal')" id="lote-btn-semanal"
+                      class="lote-modo-btn flex flex-col items-center gap-1.5 p-3 rounded-xl border border-white/10 bg-white/5 hover:bg-purple-600/30 hover:border-purple-500/50 transition-all text-center">
+                      <i class="fas fa-calendar-week text-purple-400 text-sm"></i>
+                      <span class="text-[9px] font-black text-slate-300 uppercase tracking-wider leading-tight">Semanal<br><span class="text-slate-500 normal-case font-normal">dias da semana</span></span>
+                    </button>
+                    <button type="button" onclick="selecionarModoLote('intervalo')" id="lote-btn-intervalo"
+                      class="lote-modo-btn flex flex-col items-center gap-1.5 p-3 rounded-xl border border-white/10 bg-white/5 hover:bg-purple-600/30 hover:border-purple-500/50 transition-all text-center">
+                      <i class="fas fa-repeat text-purple-400 text-sm"></i>
+                      <span class="text-[9px] font-black text-slate-300 uppercase tracking-wider leading-tight">Intervalo<br><span class="text-slate-500 normal-case font-normal">a cada X dias</span></span>
+                    </button>
+                    <button type="button" onclick="selecionarModoLote('mensal')" id="lote-btn-mensal"
+                      class="lote-modo-btn flex flex-col items-center gap-1.5 p-3 rounded-xl border border-white/10 bg-white/5 hover:bg-purple-600/30 hover:border-purple-500/50 transition-all text-center">
+                      <i class="fas fa-calendar-days text-purple-400 text-sm"></i>
+                      <span class="text-[9px] font-black text-slate-300 uppercase tracking-wider leading-tight">Mensal<br><span class="text-slate-500 normal-case font-normal">mesmo dia do mês</span></span>
+                    </button>
+                  </div>
+
+                  <div id="painel-lote-manual" class="lote-painel">
+                    <p class="text-[11px] text-slate-400 text-center py-2">
+                      <i class="fas fa-info-circle mr-1 text-purple-400"></i>
+                      Clique diretamente no calendário para selecionar múltiplas datas.
+                    </p>
+                  </div>
+
+                  <div id="painel-lote-semanal" class="lote-painel hidden space-y-3">
+                    <div>
+                      <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Dias da semana</p>
+                      <div class="flex flex-wrap gap-2">
+                        <label class="lote-dia-check"><input type="checkbox" value="1" class="sr-only peer"><span class="lote-chip">Seg</span></label>
+                        <label class="lote-dia-check"><input type="checkbox" value="2" class="sr-only peer"><span class="lote-chip">Ter</span></label>
+                        <label class="lote-dia-check"><input type="checkbox" value="3" class="sr-only peer"><span class="lote-chip">Qua</span></label>
+                        <label class="lote-dia-check"><input type="checkbox" value="4" class="sr-only peer"><span class="lote-chip">Qui</span></label>
+                        <label class="lote-dia-check"><input type="checkbox" value="5" class="sr-only peer"><span class="lote-chip">Sex</span></label>
+                        <label class="lote-dia-check"><input type="checkbox" value="6" class="sr-only peer"><span class="lote-chip">Sáb</span></label>
+                        <label class="lote-dia-check"><input type="checkbox" value="0" class="sr-only peer"><span class="lote-chip">Dom</span></label>
+                      </div>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Data início</label>
+                        <input type="date" id="loteSemanalInicio" class="w-full px-3 py-2 bg-white/10 border border-white/10 rounded-xl text-sm text-white outline-none focus:border-purple-400 font-medium">
+                      </div>
+                      <div>
+                        <label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Data fim</label>
+                        <input type="date" id="loteSemanalFim" class="w-full px-3 py-2 bg-white/10 border border-white/10 rounded-xl text-sm text-white outline-none focus:border-purple-400 font-medium">
+                      </div>
+                    </div>
+                    <button type="button" onclick="gerarDatasLote('semanal')"
+                      class="w-full py-2.5 bg-purple-600 hover:bg-purple-500 text-white text-xs font-black rounded-xl uppercase tracking-widest transition-all">
+                      <i class="fas fa-magic mr-1"></i> Gerar Datas
+                    </button>
+                  </div>
+
+                  <div id="painel-lote-intervalo" class="lote-painel hidden space-y-3">
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div>
+                        <label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">A cada</label>
+                        <div class="flex items-center gap-1">
+                          <input type="number" id="loteIntervaloN" value="7" min="1" max="365"
+                            class="w-full px-3 py-2 bg-white/10 border border-white/10 rounded-xl text-sm text-white outline-none focus:border-purple-400 font-bold text-center">
+                          <span class="text-slate-400 text-xs font-bold shrink-0">dias</span>
+                        </div>
+                      </div>
+                      <div>
+                        <label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Data início</label>
+                        <input type="date" id="loteIntervaloInicio" class="w-full px-3 py-2 bg-white/10 border border-white/10 rounded-xl text-sm text-white outline-none focus:border-purple-400 font-medium">
+                      </div>
+                      <div>
+                        <label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Repetir</label>
+                        <div class="flex items-center gap-1">
+                          <input type="number" id="loteIntervaloQtd" value="4" min="1" max="52"
+                            class="w-full px-3 py-2 bg-white/10 border border-white/10 rounded-xl text-sm text-white outline-none focus:border-purple-400 font-bold text-center">
+                          <span class="text-slate-400 text-xs font-bold shrink-0">×</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div>
+                      <label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Ou até a data</label>
+                      <input type="date" id="loteIntervaloFim" class="w-full px-3 py-2 bg-white/10 border border-white/10 rounded-xl text-sm text-white outline-none focus:border-purple-400 font-medium">
+                      <p class="text-[9px] text-slate-500 mt-1">Se preenchida, ignora o campo "Repetir"</p>
+                    </div>
+                    <button type="button" onclick="gerarDatasLote('intervalo')"
+                      class="w-full py-2.5 bg-purple-600 hover:bg-purple-500 text-white text-xs font-black rounded-xl uppercase tracking-widest transition-all">
+                      <i class="fas fa-magic mr-1"></i> Gerar Datas
+                    </button>
+                  </div>
+
+                  <div id="painel-lote-mensal" class="lote-painel hidden space-y-3">
+                    <div class="flex flex-col sm:flex-row gap-2">
+                      <button type="button" onclick="selecionarSubModoMensal('diaFixo')" id="mensal-btn-diaFixo"
+                        class="mensal-sub-btn mensal-sub-ativo flex-1 py-2 text-[9px] font-black text-slate-300 bg-white/5 border border-white/10 rounded-xl hover:bg-purple-600/30 transition-all uppercase">
+                        Dia fixo do mês
+                      </button>
+                      <button type="button" onclick="selecionarSubModoMensal('diaUtil')" id="mensal-btn-diaUtil"
+                        class="mensal-sub-btn flex-1 py-2 text-[9px] font-black text-slate-300 bg-white/5 border border-white/10 rounded-xl hover:bg-purple-600/30 transition-all uppercase">
+                        Dia útil do mês
+                      </button>
+                      <button type="button" onclick="selecionarSubModoMensal('semanaMes')" id="mensal-btn-semanaMes"
+                        class="mensal-sub-btn flex-1 py-2 text-[9px] font-black text-slate-300 bg-white/5 border border-white/10 rounded-xl hover:bg-purple-600/30 transition-all uppercase">
+                        Nth semana
+                      </button>
+                    </div>
+
+                    <div id="sub-mensal-diaFixo" class="sub-mensal space-y-3">
+                      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Dia do mês</label>
+                          <input type="number" id="loteMensalDia" value="1" min="1" max="31"
+                            class="w-full px-3 py-2 bg-white/10 border border-white/10 rounded-xl text-sm text-white outline-none focus:border-purple-400 font-bold text-center">
+                        </div>
+                        <div>
+                          <label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Nº de meses</label>
+                          <input type="number" id="loteMensalQtd" value="3" min="1" max="24"
+                            class="w-full px-3 py-2 bg-white/10 border border-white/10 rounded-xl text-sm text-white outline-none focus:border-purple-400 font-bold text-center">
+                        </div>
+                      </div>
+                      <div>
+                        <label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Mês inicial</label>
+                        <input type="date" id="loteMensalInicio" class="w-full px-3 py-2 bg-white/10 border border-white/10 rounded-xl text-sm text-white outline-none focus:border-purple-400 font-medium">
+                      </div>
+                    </div>
+
+                    <div id="sub-mensal-diaUtil" class="sub-mensal hidden space-y-3">
+                      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Nº do dia útil</label>
+                          <input type="number" id="loteMensalNUtil" value="1" min="1" max="23"
+                            class="w-full px-3 py-2 bg-white/10 border border-white/10 rounded-xl text-sm text-white outline-none focus:border-purple-400 font-bold text-center">
+                        </div>
+                        <div>
+                          <label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Nº de meses</label>
+                          <input type="number" id="loteMensalUtilQtd" value="3" min="1" max="24"
+                            class="w-full px-3 py-2 bg-white/10 border border-white/10 rounded-xl text-sm text-white outline-none focus:border-purple-400 font-bold text-center">
+                        </div>
+                      </div>
+                      <div>
+                        <label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Mês inicial</label>
+                        <input type="date" id="loteMensalUtilInicio" class="w-full px-3 py-2 bg-white/10 border border-white/10 rounded-xl text-sm text-white outline-none focus:border-purple-400 font-medium">
+                      </div>
+                    </div>
+
+                    <div id="sub-mensal-semanaMes" class="sub-mensal hidden space-y-3">
+                      <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        <div>
+                          <label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Semana</label>
+                          <select id="loteMensalNSemana" class="w-full px-2 py-2 bg-white/10 border border-white/10 rounded-xl text-xs text-white outline-none focus:border-purple-400 font-bold">
+                            <option value="1">1ª</option>
+                            <option value="2">2ª</option>
+                            <option value="3">3ª</option>
+                            <option value="4">4ª</option>
+                            <option value="-1">Última</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Dia</label>
+                          <select id="loteMensalDiaSemana" class="w-full px-2 py-2 bg-white/10 border border-white/10 rounded-xl text-xs text-white outline-none focus:border-purple-400 font-bold">
+                            <option value="1">Seg</option>
+                            <option value="2">Ter</option>
+                            <option value="3">Qua</option>
+                            <option value="4">Qui</option>
+                            <option value="5">Sex</option>
+                            <option value="6">Sáb</option>
+                            <option value="0">Dom</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Meses</label>
+                          <input type="number" id="loteMensalSemanaQtd" value="3" min="1" max="24"
+                            class="w-full px-2 py-2 bg-white/10 border border-white/10 rounded-xl text-xs text-white outline-none focus:border-purple-400 font-bold text-center">
+                        </div>
+                      </div>
+                      <div>
+                        <label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Mês inicial</label>
+                        <input type="date" id="loteMensalSemanaInicio" class="w-full px-3 py-2 bg-white/10 border border-white/10 rounded-xl text-sm text-white outline-none focus:border-purple-400 font-medium">
+                      </div>
+                    </div>
+
+                    <button type="button" onclick="gerarDatasLote('mensal')"
+                      class="w-full py-2.5 bg-purple-600 hover:bg-purple-500 text-white text-xs font-black rounded-xl uppercase tracking-widest transition-all">
+                      <i class="fas fa-magic mr-1"></i> Gerar Datas
+                    </button>
+                  </div>
+
+                  <div id="lotePreviewDatas" class="hidden">
+                    <div class="flex items-center justify-between mb-2">
+                      <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Datas geradas</span>
+                      <button type="button" onclick="limparDatasLote()"
+                        class="text-[9px] font-black text-red-400 hover:text-red-300 uppercase tracking-wider transition-colors">
+                        <i class="fas fa-trash mr-1"></i>Limpar
+                      </button>
+                    </div>
+                    <div id="loteListaDatas" class="flex flex-wrap gap-1.5 max-h-28 sm:max-h-36 overflow-y-auto pr-1 custom-scrollbar"></div>
+                  </div>
+
+                </div>
+                <!-- FIM PAINEL DE RECORRÊNCIA -->
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+                  <div class="md:col-span-2">
+                    <label class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">Título da Atividade / Ação</label>
+                    <input type="text" id="inputNomeAcao" required placeholder="Ex: Oficina de Dança Contemporânea"
+                      class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 outline-none transition-all font-semibold">
+                  </div>
+
+                  <div>
+                    <label id="labelData" class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">Data do Evento</label>
+                    <div class="relative">
+                      <i class="fas fa-calendar-day absolute left-4 top-4 text-slate-300"></i>
+                      <input type="text" id="inputData" required placeholder="Selecione a(s) data(s)"
+                        class="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:border-purple-500 outline-none font-bold">
+                    </div>
+                  </div>
+
+                  <div>
+                    <label class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">Espaço / Sala</label>
+                    <select id="selectSala" required
+                      onchange="validarConflitoTempoReal(); mostrarHorariosDisponiveisUI();"
+                      class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:border-purple-500 outline-none font-bold">
+                      <option value="">Selecione um local...</option>
+                    </select>
+                  </div>
+
+                  <div class="grid grid-cols-2 gap-4 md:col-span-2">
+                    <div>
+                      <label class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">Início</label>
+                      <input type="time" id="horaInicio" required min="08:00" max="21:30"
+                        onchange="validarHorarios(); validarConflitoTempoReal(); mostrarHorariosDisponiveisUI();"
+                        class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:border-purple-500 outline-none font-bold">
+                    </div>
+                    <div>
+                      <label class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">Término</label>
+                      <input type="time" id="horaTermino" required min="08:00" max="21:30"
+                        onchange="validarHorarios(); validarConflitoTempoReal(); mostrarHorariosDisponiveisUI();"
+                        class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:border-purple-500 outline-none font-bold">
+                    </div>
+                    <div id="avisoHorarioOcupado"
+                      class="hidden col-span-2 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-3 py-2 rounded-xl">
+                    </div>
+                  </div>
+
+                </div>
+
+                <div class="mt-3">
+                  <div id="labelSalasDisponiveis" class="text-[10px] font-bold text-slate-500">Salas disponíveis neste horário</div>
+                  <div id="salasDisponiveis" class="flex flex-wrap mt-1 gap-1"></div>
+                </div>
+
+                <div class="mt-3">
+                  <div id="labelHorariosDisponiveis" class="text-[10px] font-bold text-slate-500">Horários livres neste espaço</div>
+                  <div id="horariosDisponiveis" class="flex flex-wrap mt-1 gap-1"></div>
+                </div>
+
+                <div class="mt-4">
+                  <label class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">Turno Calculado</label>
+                  <input type="text" id="inputTurnoCalculado" readonly placeholder="Calculado pelo horário"
+                    class="w-full px-4 py-3 bg-slate-100 border border-slate-200 rounded-xl text-slate-500 font-black text-xs cursor-not-allowed">
+                </div>
+              </div>
+
+              <!-- Card: Release e Produção -->
+              <div class="bg-white rounded-3xl shadow-sm border border-slate-200 p-6 md:p-8">
+                <h3 class="text-lg font-black text-slate-800 uppercase tracking-tighter mb-6">
+                  <i class="fas fa-tools text-purple-500 mr-2"></i>Release e Produção
+                </h3>
+                <div class="space-y-4">
+                  <div>
+                    <label class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">Release Técnico / Descrição da Ação</label>
+                    <textarea id="inputRelease" rows="4"
+                      placeholder="Descreva necessidades de som, luz, disposição de cadeiras, ou a descrição da ação para relatório..."
+                      class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:border-purple-500 outline-none transition-all text-sm"></textarea>
+                    <div class="flex justify-end mt-1.5">
+                    </div>
+                  </div>
+
+                  <!-- Bloco endereço externo -->
+                  <div id="blocoExterno" class="hidden">
+                    <div class="bg-cyan-50 border border-cyan-200 rounded-2xl p-4 space-y-3">
+                      <div class="flex items-center gap-2">
+                        <div class="w-8 h-8 bg-cyan-100 text-cyan-600 rounded-xl flex items-center justify-center shrink-0">
+                          <i class="fas fa-map-marker-alt text-sm"></i>
+                        </div>
+                        <div>
+                          <p class="text-xs font-black text-cyan-700 uppercase tracking-tight">Local Externo</p>
+                          <p class="text-[10px] text-cyan-500">Informe o endereço completo do local</p>
+                        </div>
+                      </div>
+                      <input id="inputEnderecoExterno" type="text"
+                        placeholder="Ex: Rua das Flores, 123, Bairro, Fortaleza/CE"
+                        oninput="_atualizarMapaExterno()"
+                        class="w-full px-4 py-2.5 bg-white border border-cyan-200 rounded-xl text-sm outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-200 transition-all">
+                      <div id="blocoRotaExterna" class="hidden space-y-2">
+                        <div class="flex gap-2">
+                          <a id="linkMapaExterno" href="#" target="_blank"
+                            class="flex-1 flex items-center justify-center gap-2 py-2 bg-cyan-600 hover:bg-cyan-700 text-white text-xs font-black rounded-xl transition-all">
+                            <i class="fas fa-map text-xs"></i> Ver no mapa
+                          </a>
+                          <a id="linkRotaExterna" href="#" target="_blank"
+                            class="flex-1 flex items-center justify-center gap-2 py-2 bg-white border border-cyan-300 hover:bg-cyan-50 text-cyan-700 text-xs font-black rounded-xl transition-all">
+                            <i class="fas fa-route text-xs"></i> Rota do CCBJ
+                          </a>
+                        </div>
+                        <div class="rounded-xl overflow-hidden border border-cyan-200" style="height:180px">
+                          <iframe id="iframeMapaExterno" src="" width="100%" height="180" style="border:0" allowfullscreen loading="lazy"></iframe>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Bloco RECE -->
+                  <div id="blocoRece" class="hidden bg-white rounded-3xl shadow-sm border-2 border-yellow-400 p-6 md:p-8">
+                    <div class="flex items-center gap-3 mb-6">
+                      <span class="w-3 h-3 bg-yellow-400 rounded-full"></span>
+                      <h3 class="text-lg font-black text-slate-800 uppercase tracking-tighter">Dados para Agenda RECE</h3>
+                      <span class="text-[9px] bg-yellow-100 text-yellow-700 font-black px-2 py-1 rounded-full uppercase">Campos opcionais</span>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div>
+                        <label class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">Categorias</label>
+                        <input type="text" id="receCategorias" placeholder="Ex: Teatro, Dança, Música..."
+                          class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:border-yellow-400 outline-none font-semibold text-sm">
+                      </div>
+                      <div>
+                        <label class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">Parceiros / Organizadores</label>
+                        <input type="text" id="receParceiros" placeholder="Ex: Secretaria de Cultura, ONG X..."
+                          class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:border-yellow-400 outline-none font-semibold text-sm">
+                      </div>
+                      <div>
+                        <label class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">Acessibilidades</label>
+                        <input type="text" id="receAcessibilidades" placeholder="Ex: Libras, Audiodescrição..."
+                          class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:border-yellow-400 outline-none font-semibold text-sm">
+                      </div>
+                      <div>
+                        <label class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">Classificação Indicativa</label>
+                        <select id="receClassificacao" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:border-yellow-400 outline-none font-bold text-sm">
+                          <option value="">Não informada</option>
+                          <option value="Livre">Livre</option>
+                          <option value="10 anos">10 anos</option>
+                          <option value="12 anos">12 anos</option>
+                          <option value="14 anos">14 anos</option>
+                          <option value="16 anos">16 anos</option>
+                          <option value="18 anos">18 anos</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">Público Alvo</label>
+                        <input type="text" id="recePublicoAlvo" placeholder="Ex: Crianças, Adultos, Todos..."
+                          class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:border-yellow-400 outline-none font-semibold text-sm">
+                      </div>
+                      <div>
+                        <label class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">Artista / Grupo</label>
+                        <input type="text" id="receArtista" placeholder="Nome do artista ou grupo"
+                          class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:border-yellow-400 outline-none font-semibold text-sm">
+                      </div>
+                      <div>
+                        <label class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">Link de Inscrição</label>
+                        <input type="text" id="receiveLinkInscricao" placeholder="https://..."
+                          class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:border-yellow-400 outline-none font-semibold text-sm">
+                      </div>
+                      <div>
+                        <label class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">Acesso</label>
+                        <select id="receAcesso" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:border-yellow-400 outline-none font-bold text-sm">
+                          <option value="">Não informado</option>
+                          <option value="Gratuito">Gratuito</option>
+                          <option value="Pago">Pago</option>
+                          <option value="Mediante inscrição">Mediante inscrição</option>
+                        </select>
+                      </div>
+                      <div class="md:col-span-2">
+                        <label class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">Descrição</label>
+                        <textarea id="receDescricao" rows="3" placeholder="Descrição do evento para divulgação..."
+                          class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:border-yellow-400 outline-none transition-all text-sm"></textarea>
+                      </div>
+                      <div class="md:col-span-2">
+                        <label class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">Observações</label>
+                        <textarea id="receObservacoes" rows="2" placeholder="Informações internas, pendências, etc."
+                          class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:border-yellow-400 outline-none transition-all text-sm"></textarea>
+                      </div>
+                      <div class="md:col-span-2">
+                        <label class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">
+                          Data Término do Evento
+                          <span class="font-normal normal-case text-slate-400 ml-1">(preenchida automaticamente — altere se o evento durar mais de um dia)</span>
+                        </label>
+                        <input type="text" id="receDataTermino" placeholder="DD/MM/AAAA"
+                          class="w-full px-4 py-3 bg-yellow-50 border border-yellow-200 rounded-xl focus:border-yellow-400 outline-none font-semibold text-sm">
+                      </div>
+                      <div class="md:col-span-2">
+                        <label class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">
+                          <i class="fas fa-image mr-1 text-yellow-500"></i>Imagem de Divulgação
+                        </label>
+                        <div class="flex items-start gap-4">
+                          <div class="flex-1">
+                            <input type="file" id="receImagemFile" accept="image/*" onchange="previewImagemRece(this)"
+                              class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm file:mr-4 file:py-1 file:px-3 file:rounded-lg file:border-0 file:bg-yellow-100 file:text-yellow-700 file:font-black file:text-xs">
+                            <p class="text-[9px] text-slate-400 mt-1 ml-1">Máx. 4MB. JPG, PNG ou WebP.</p>
+                          </div>
+                          <div id="receImagemPreview" class="hidden w-20 h-20 rounded-xl overflow-hidden border border-slate-200 shrink-0">
+                            <img id="receImagemPreviewImg" src="" alt="preview" class="w-full h-full object-cover">
+                          </div>
+                        </div>
+                        <input type="hidden" id="receImagemUrl">
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">Setor Solicitante</label>
+                      <select id="selectSetor" required class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none font-bold text-sm"></select>
+                    </div>
+                    <div class="md:col-span-2">
+                      <label class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">
+                        <i class="fas fa-users mr-1 text-indigo-400"></i>Convidados Internos
+                        <span class="font-normal normal-case text-slate-300 ml-1">(emails do sistema)</span>
+                      </label>
+                      <div class="flex gap-2">
+                        <div class="relative flex-1">
+                          <input type="email" id="inputConvidadoEmail"
+                            list="listEmailsSistema"
+                            placeholder="email@ccbj.org.br"
+                            class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none text-sm font-semibold focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all"
+                            onkeydown="if(event.key==='Enter'||event.key===','){ event.preventDefault(); adicionarConvidadoInterno(); }">
+                          <datalist id="listEmailsSistema"></datalist>
+                        </div>
+                        <button type="button" onclick="adicionarConvidadoInterno()"
+                          class="px-4 py-3 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black rounded-xl transition-all uppercase">
+                          <i class="fas fa-plus"></i>
+                        </button>
+                      </div>
+                      <div id="chipsConvidados" class="flex flex-wrap gap-2 mt-2 min-h-[28px]"></div>
+                      <input type="hidden" id="inputOutroResponsavel">
+                      <div class="flex items-center gap-3 mt-3">
+                        <label class="relative inline-flex items-center cursor-pointer">
+                          <input type="checkbox" id="checkConvidarCalendar" class="sr-only peer">
+                          <div class="w-9 h-5 bg-slate-200 rounded-full peer peer-checked:bg-indigo-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full"></div>
+                        </label>
+                        <span class="text-[10px] font-black text-slate-400 uppercase tracking-wide">Convidar para Google Calendar</span>
+                      </div>
+                    </div>
+                    <div class="md:col-span-2">
+                      <div class="flex items-center gap-3 mb-3">
+                        <label class="relative inline-flex items-center cursor-pointer">
+                          <input type="checkbox" id="checkEventoInstitucional" class="sr-only peer"
+                            onchange="alternarEventoInstitucional(this.checked)">
+                          <div class="w-11 h-6 bg-slate-200 rounded-full peer peer-checked:bg-slate-800 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:border-slate-300 after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
+                        </label>
+                        <span class="text-[10px] font-black text-slate-500 uppercase tracking-wider">
+                          <i class="fas fa-envelope-open-text mr-1 text-slate-400"></i>Evento Institucional (convite formal)
+                        </span>
+                      </div>
+                      <div id="blocoEventoInstitucional" class="hidden bg-slate-900 rounded-2xl p-5 space-y-4">
+                        <p class="text-[10px] text-slate-400 font-black uppercase tracking-widest">
+                          <i class="fas fa-paper-plane mr-1 text-slate-500"></i>Envio de convite formal
+                        </p>
+                        <div>
+                          <label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">E-mails externos (um por linha)</label>
+                          <textarea id="inputEmailsExternos" rows="3"
+                            placeholder="externo@email.com&#10;parceiro@org.com"
+                            class="w-full px-4 py-3 bg-white/10 border border-white/10 rounded-xl text-sm text-white outline-none focus:border-purple-400 resize-none placeholder:text-slate-600 font-mono"></textarea>
+                        </div>
+                        <div>
+                          <label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Texto do convite</label>
+                          <textarea id="inputTextoConvite" rows="5"
+                            placeholder="Prezado(a), convidamos V.Sa. para participar de..."
+                            class="w-full px-4 py-3 bg-white/10 border border-white/10 rounded-xl text-sm text-white outline-none focus:border-purple-400 resize-none placeholder:text-slate-600"></textarea>
+                        </div>
+                        <button type="button" onclick="dispararConviteInstitucional()"
+                          class="w-full py-3 bg-slate-700 hover:bg-slate-600 text-white text-xs font-black rounded-xl uppercase tracking-widest transition-all">
+                          <i class="fas fa-paper-plane mr-2"></i>Enviar convites (independente do agendamento)
+                        </button>
+                        <p class="text-[9px] text-slate-500 text-center">Os convites são enviados imediatamente ao clicar. O agendamento é salvo separadamente.</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Card: Relatório CODIP -->
+              <div id="blocoCodip" class="hidden bg-white rounded-3xl shadow-sm border-2 border-purple-600 p-6 md:p-8">
+                <h3 class="text-lg font-black text-slate-800 uppercase tracking-tighter mb-2">
+                  <i class="fas fa-chart-bar text-green-600 mr-2"></i>Relatório CODIP
+                </h3>
+                <p class="text-[10px] text-slate-400 mb-6 uppercase tracking-wide font-bold">
+                  Campos marcados com <span class="text-amber-500">★</span> podem ser preenchidos após a realização
+                </p>
+
+                <!-- BLOCO PRÉ: preenchidos no ato do agendamento -->
+                <div class="space-y-6">
+
+                  <!-- Seção 1: Classificação -->
+                  <div class="bg-slate-50 rounded-2xl p-4 space-y-4">
+                    <p class="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                      <i class="fas fa-tags mr-1 text-slate-400"></i>Classificação da Ação
+                    </p>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+                      <!-- Vínculo com Contrato/Meta/Indicador -->
+                      <div class="md:col-span-2 p-4 bg-indigo-50 border border-indigo-200 rounded-2xl space-y-3 mb-2">
+                        <p class="text-[10px] font-black text-indigo-600 uppercase tracking-widest">
+                          <i class="fas fa-link mr-1"></i>Vínculo com Contrato / Meta / Indicador
+                        </p>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                          <div>
+                            <label class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">Contrato / Fonte</label>
+                            <select id="codipSelectContrato" onchange="codipCarregarMetas(this.value)"
+                              class="w-full px-3 py-2.5 bg-white border border-indigo-200 rounded-xl outline-none font-bold text-sm focus:border-indigo-500">
+                              <option value="">Selecione...</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">Meta</label>
+                            <select id="codipSelectMeta" onchange="codipCarregarIndicadores(this.value)"
+                              class="w-full px-3 py-2.5 bg-white border border-indigo-200 rounded-xl outline-none font-bold text-sm focus:border-indigo-500">
+                              <option value="">Selecione uma meta...</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">Indicador</label>
+                            <select id="codipSelectIndicador"
+                              class="w-full px-3 py-2.5 bg-white border border-indigo-200 rounded-xl outline-none font-bold text-sm focus:border-indigo-500">
+                              <option value="">Selecione um indicador...</option>
+                            </select>
+                          </div>
+                        </div>
+                        <div id="codipIndicadorPreview" class="hidden p-3 bg-white border border-indigo-100 rounded-xl">
+                          <p class="text-[9px] font-black text-indigo-500 uppercase tracking-widest mb-2">Metas mensais do indicador selecionado</p>
+                          <div id="codipIndicadorMesesGrid" class="grid grid-cols-6 md:grid-cols-12 gap-1"></div>
+                          <div class="flex gap-4 mt-2 text-[10px] font-black">
+                            <span class="text-slate-500">T1: <b id="codipIndQ1" class="text-indigo-600">—</b></span>
+                            <span class="text-slate-500">T2: <b id="codipIndQ2" class="text-indigo-600">—</b></span>
+                            <span class="text-slate-500">T3: <b id="codipIndQ3" class="text-indigo-600">—</b></span>
+                            <span class="text-slate-500">T4: <b id="codipIndQ4" class="text-indigo-600">—</b></span>
+                            <span class="text-slate-500">Anual: <b id="codipIndAnual" class="text-indigo-700">—</b></span>
+                          </div>
+                        </div>
+                      </div>
+                      <div>
+                        <label class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">Programa / Projeto</label>
+                        <input type="text" id="codipPrograma" placeholder="Nome do programa ou projeto cultural"
+                          class="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl outline-none text-sm focus:border-green-400 transition-all">
+                      </div>
+                      <div>
+                        <label class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">Mês de Referência</label>
+                        <select id="codipMesRef" class="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl outline-none font-bold text-sm focus:border-green-400">
+                          <option value="">Selecione...</option>
+                          <option>01/2026</option><option>02/2026</option><option>03/2026</option>
+                          <option>04/2026</option><option>05/2026</option><option>06/2026</option>
+                          <option>07/2026</option><option>08/2026</option><option>09/2026</option>
+                          <option>10/2026</option><option>11/2026</option><option>12/2026</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">Tipo de Ação</label>
+                        <select id="codipTipoAcao" class="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl outline-none font-bold text-sm focus:border-green-400">
+                          <option value="">Selecione...</option>
+                          <option>Apresentação</option><option>Curso/Oficina</option><option>Exposição</option>
+                          <option>Formação</option><option>Festival</option><option>Residência Artística</option>
+                          <option>Sarau</option><option>Seminário/Palestra</option><option>Visita Mediada</option>
+                          <option>Visita Espontânea</option><option>Lançamento</option><option>Mostra</option>
+                          <option>Espetáculo</option><option>Intervenção Urbana</option><option>Publicação</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">Eixo da Política</label>
+                        <select id="codipEixo" class="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl outline-none font-bold text-sm focus:border-green-400">
+                          <option value="">Selecione...</option>
+                          <option>1 - Economia da Cultura</option>
+                          <option>2 - Diversidade e Cidadania</option>
+                          <option>3 - Patrimônio Cultural e Memória</option>
+                          <option>4 - Política para as Artes</option>
+                          <option>5 - Livro, leitura e literatura</option>
+                          <option>6 - Conhecimento e formação</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">Segmento Cultural I</label>
+                        <input type="text" id="codipSegmento1" placeholder="Ex: Teatro, Música, Artes Visuais..."
+                          class="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl outline-none text-sm focus:border-green-400 transition-all">
+                      </div>
+                      <div>
+                        <label class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">Segmento Cultural II <span class="text-slate-300 font-normal">(opcional)</span></label>
+                        <input type="text" id="codipSegmento2" placeholder="Segundo segmento, se houver"
+                          class="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl outline-none text-sm focus:border-green-400 transition-all">
+                      </div>
+                      <div>
+                        <label class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">Linguagem Artística I</label>
+                        <select id="codipLinguagem1" class="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl outline-none font-bold text-sm focus:border-green-400">
+                          <option value="">Selecione...</option>
+                          <option>Artes Cênicas</option><option>Artes Circenses</option><option>Artes Visuais</option>
+                          <option>Audiovisual</option><option>Dança</option><option>Design</option>
+                          <option>Fotografia</option><option>Literatura</option><option>Moda</option>
+                          <option>Música</option><option>Patrimônio Cultural</option><option>Quadrinhos</option>
+                          <option>Rádio</option><option>Teatro</option><option>Não se aplica</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">Linguagem Artística II <span class="text-slate-300 font-normal">(opcional)</span></label>
+                        <select id="codipLinguagem2" class="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl outline-none font-bold text-sm focus:border-green-400">
+                          <option value="">--</option>
+                          <option>Artes Cênicas</option><option>Artes Circenses</option><option>Artes Visuais</option>
+                          <option>Audiovisual</option><option>Dança</option><option>Design</option>
+                          <option>Fotografia</option><option>Literatura</option><option>Moda</option>
+                          <option>Música</option><option>Patrimônio Cultural</option><option>Quadrinhos</option>
+                          <option>Rádio</option><option>Teatro</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Seção 2: Modalidade e Recursos -->
+                  <div class="bg-slate-50 rounded-2xl p-4 space-y-4">
+                    <p class="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                      <i class="fas fa-sliders-h mr-1 text-slate-400"></i>Modalidade e Recursos
+                    </p>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">Modalidade de Realização</label>
+                        <select id="codipModalidade" class="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl outline-none font-bold text-sm focus:border-green-400">
+                          <option value="">Selecione...</option>
+                          <option>Realização e consumo presencial</option>
+                          <option>Realização presencial/consumo presencial e virtual</option>
+                          <option>Realização presencial/consumo virtual</option>
+                          <option>Realização presencial sem consumo</option>
+                          <option>Realização e consumo virtual</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">Origem de Recursos</label>
+                        <select id="codipRecursos" class="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl outline-none font-bold text-sm focus:border-green-400">
+                          <option value="">Selecione...</option>
+                          <option>Contrato de Gestão</option><option>Edital Público</option>
+                          <option>Emenda Parlamentar</option><option>Patrocínio Privado</option>
+                          <option>Recursos Próprios</option><option>Convênio</option>
+                        </select>
+                      </div>
+                      <div class="md:col-span-2">
+                        <label class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">É ação em Rede (outro equipamento RECE)?</label>
+                        <div class="flex gap-3 mt-1">
+                          <label class="flex items-center gap-2 cursor-pointer">
+                            <input type="radio" name="codipRede" value="SIM" class="accent-green-600"> <span class="text-sm font-semibold text-slate-700">Sim</span>
+                          </label>
+                          <label class="flex items-center gap-2 cursor-pointer">
+                            <input type="radio" name="codipRede" value="NÃO" checked class="accent-green-600"> <span class="text-sm font-semibold text-slate-700">Não</span>
+                          </label>
+                        </div>
+                      </div>
+                      <div class="md:col-span-2">
+                        <label class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">Medidas de Acessibilidade</label>
+                        <div class="flex flex-wrap gap-3 mt-1">
+                          <label class="flex items-center gap-2 cursor-pointer text-sm text-slate-600 font-semibold">
+                            <input type="checkbox" id="codipAcessFisica" class="accent-green-600"> Física/Arquitetônica
+                          </label>
+                          <label class="flex items-center gap-2 cursor-pointer text-sm text-slate-600 font-semibold">
+                            <input type="checkbox" id="codipAcessComun" class="accent-green-600"> Comunicacional
+                          </label>
+                          <label class="flex items-center gap-2 cursor-pointer text-sm text-slate-600 font-semibold">
+                            <input type="checkbox" id="codipAcessAtit" class="accent-green-600"> Atitudinal
+                          </label>
+                          <label class="flex items-center gap-2 cursor-pointer text-sm text-slate-600 font-semibold">
+                            <input type="checkbox" id="codipAcessNenhuma" class="accent-green-600"> Nenhuma
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- BLOCO PÓS: preenchidos após realização -->
+                  <div class="border-t-2 border-dashed border-amber-200 pt-6">
+                    <div class="flex items-center gap-2 mb-4">
+                      <span class="text-amber-500 text-lg">★</span>
+                      <p class="text-[10px] font-black text-amber-600 uppercase tracking-widest">Campos pós-realização — podem ser preenchidos após o evento</p>
+                    </div>
+
+                    <!-- Público -->
+                    <div class="bg-amber-50 border border-amber-100 rounded-2xl p-4 space-y-4 mb-4">
+                      <p class="text-[10px] font-black text-amber-700 uppercase tracking-widest">
+                        <i class="fas fa-users mr-1"></i>Público e Alcance
+                      </p>
+                      <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div>
+                          <label class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">Público Presencial</label>
+                          <input type="number" id="codipPubPresencial" min="0" placeholder="0"
+                            class="w-full px-4 py-3 bg-white border border-amber-200 rounded-xl outline-none text-sm focus:border-amber-400 transition-all text-center font-bold">
+                        </div>
+                        <div>
+                          <label class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">Audiência Virtual</label>
+                          <input type="number" id="codipPubVirtual" min="0" placeholder="0"
+                            class="w-full px-4 py-3 bg-white border border-amber-200 rounded-xl outline-none text-sm focus:border-amber-400 transition-all text-center font-bold">
+                        </div>
+                        <div>
+                          <label class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">Visualizações</label>
+                          <input type="number" id="codipVisualizacoes" min="0" placeholder="0"
+                            class="w-full px-4 py-3 bg-white border border-amber-200 rounded-xl outline-none text-sm focus:border-amber-400 transition-all text-center font-bold">
+                        </div>
+                        <div>
+                          <label class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">Total (auto)</label>
+                          <div id="codipTotalAcessos" class="w-full px-4 py-3 bg-amber-100 border border-amber-200 rounded-xl text-sm text-center font-black text-amber-700">0</div>
+                        </div>
+                        <div>
+                          <label class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">PCDs</label>
+                          <input type="number" id="codipPCD" min="0" placeholder="0"
+                            class="w-full px-4 py-3 bg-white border border-amber-200 rounded-xl outline-none text-sm focus:border-amber-400 transition-all text-center font-bold">
+                        </div>
+                        <div>
+                          <label class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">Idosos (60+)</label>
+                          <input type="number" id="codipIdosos" min="0" placeholder="0"
+                            class="w-full px-4 py-3 bg-white border border-amber-200 rounded-xl outline-none text-sm focus:border-amber-400 transition-all text-center font-bold">
+                        </div>
+                        <div>
+                          <label class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">Prof. Externos</label>
+                          <input type="number" id="codipProfExternos" min="0" placeholder="0"
+                            class="w-full px-4 py-3 bg-white border border-amber-200 rounded-xl outline-none text-sm focus:border-amber-400 transition-all text-center font-bold">
+                        </div>
+                        <div>
+                          <label class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">Voluntários</label>
+                          <input type="number" id="codipVoluntarios" min="0" placeholder="0"
+                            class="w-full px-4 py-3 bg-white border border-amber-200 rounded-xl outline-none text-sm focus:border-amber-400 transition-all text-center font-bold">
+                        </div>
+                      </div>
+                      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">Atendeu predominantemente vulnerabilidade social?</label>
+                          <select id="codipVulnerabilidade" class="w-full px-4 py-3 bg-white border border-amber-200 rounded-xl outline-none font-bold text-sm focus:border-amber-400">
+                            <option value="">Selecione...</option>
+                            <option>Sim</option><option>Não</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">Público Específico</label>
+                          <input type="text" id="codipPubEspecifico" placeholder="Ex: Indígenas, LGBTQIA+, Jovens..."
+                            class="w-full px-4 py-3 bg-white border border-amber-200 rounded-xl outline-none text-sm focus:border-amber-400 transition-all">
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Duração -->
+                    <div class="bg-amber-50 border border-amber-100 rounded-2xl p-4 space-y-4 mb-4">
+                      <p class="text-[10px] font-black text-amber-700 uppercase tracking-widest">
+                        <i class="fas fa-clock mr-1"></i>Duração (em horas)
+                      </p>
+                      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                          <label class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">Antes do mês de ref.</label>
+                          <input type="number" id="codipHorasAntes" min="0" step="0.5" placeholder="0"
+                            class="w-full px-4 py-3 bg-white border border-amber-200 rounded-xl outline-none text-sm focus:border-amber-400 transition-all text-center font-bold">
+                        </div>
+                        <div>
+                          <label class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">No mês de referência</label>
+                          <input type="number" id="codipHorasMes" min="0" step="0.5" placeholder="0"
+                            class="w-full px-4 py-3 bg-white border border-amber-200 rounded-xl outline-none text-sm focus:border-amber-400 transition-all text-center font-bold">
+                        </div>
+                        <div>
+                          <label class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">Total previsto</label>
+                          <input type="number" id="codipHorasTotal" min="0" step="0.5" placeholder="0"
+                            class="w-full px-4 py-3 bg-white border border-amber-200 rounded-xl outline-none text-sm focus:border-amber-400 transition-all text-center font-bold">
+                        </div>
+                      </div>
+                      <div id="codipExecucaoBar" class="hidden">
+                        <div class="flex justify-between mb-1">
+                          <span class="text-[10px] font-black text-slate-500 uppercase">Execução</span>
+                          <span id="codipExecPct" class="text-[10px] font-black text-green-700">0%</span>
+                        </div>
+                        <div class="bg-slate-200 rounded-full h-2"><div id="codipExecFill" class="bg-green-500 h-2 rounded-full transition-all" style="width:0%"></div></div>
+                      </div>
+                    </div>
+
+                    <!-- Produtos e Avaliação -->
+                    <div class="bg-amber-50 border border-amber-100 rounded-2xl p-4 space-y-4 mb-4">
+                      <p class="text-[10px] font-black text-amber-700 uppercase tracking-widest">
+                        <i class="fas fa-box-open mr-1"></i>Produtos e Avaliação
+                      </p>
+                      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">Produto(s) Gerado(s)</label>
+                          <input type="text" id="codipProdutos" placeholder="Ex: Vídeo, Publicação, Gravação..."
+                            class="w-full px-4 py-3 bg-white border border-amber-200 rounded-xl outline-none text-sm focus:border-amber-400 transition-all">
+                        </div>
+                        <div>
+                          <label class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">Disponibilidade do Produto</label>
+                          <select id="codipDisponibilidade" class="w-full px-4 py-3 bg-white border border-amber-200 rounded-xl outline-none font-bold text-sm focus:border-amber-400">
+                            <option value="">Selecione...</option>
+                            <option>Acesso livre</option><option>Acesso restrito</option>
+                            <option>Disponível mediante solicitação</option><option>Não disponível</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">Instrumento de Avaliação de Satisfação</label>
+                          <input type="text" id="codipAvalSatisfacao" placeholder="Ex: Formulário Google, pesquisa física..."
+                            class="w-full px-4 py-3 bg-white border border-amber-200 rounded-xl outline-none text-sm focus:border-amber-400 transition-all">
+                        </div>
+                        <div>
+                          <label class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">Desafios na Execução</label>
+                          <select id="codipDesafios" class="w-full px-4 py-3 bg-white border border-amber-200 rounded-xl outline-none font-bold text-sm focus:border-amber-400">
+                            <option value="">Selecione...</option>
+                            <option>Executar o orçamento</option>
+                            <option>Cumprir o cronograma inicialmente proposto</option>
+                            <option>Encontrar profissionais com experiência</option>
+                            <option>Integração e comunicação da equipe</option>
+                            <option>Divulgar o projeto na comunidade</option>
+                            <option>Outros</option>
+                          </select>
+                        </div>
+                        <div class="md:col-span-2">
+                          <label class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">Outras dificuldades / Observações finais</label>
+                          <textarea id="codipObservacoes" rows="3" placeholder="Observações gerais sobre a realização da ação..."
+                            class="w-full px-4 py-3 bg-white border border-amber-200 rounded-xl outline-none text-sm focus:border-amber-400 transition-all resize-none"></textarea>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Evidências -->
+                    <div class="bg-green-50 border border-green-200 rounded-2xl p-4 space-y-3">
+                      <p class="text-[10px] font-black text-green-700 uppercase tracking-widest">
+                        <i class="fas fa-link mr-1"></i>Evidências e Comprovações
+                      </p>
+                      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">Link de Evidências (Google Drive)</label>
+                          <input type="url" id="codipLinkEvidencias" placeholder="https://drive.google.com/..."
+                            class="w-full px-4 py-3 bg-white border border-green-200 rounded-xl outline-none text-sm focus:border-green-500 transition-all font-mono">
+                        </div>
+                        <div>
+                          <label class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">Link de Relatório / Comprovação Oficial</label>
+                          <input type="url" id="codipLinkRelatorio" placeholder="https://..."
+                            class="w-full px-4 py-3 bg-white border border-green-200 rounded-xl outline-none text-sm focus:border-green-500 transition-all font-mono">
+                        </div>
+                      </div>
+                      <p class="text-[9px] text-green-600">Compartilhe o link com acesso de leitura. Fotos, listas de presença, formulários de avaliação, etc.</p>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Descrição da Ação para Relatório -->
+                <div class="border-t-2 border-dashed border-purple-200 pt-5 mt-2">
+                  <div class="flex items-center justify-between mb-2">
+                    <div class="flex items-center gap-2">
+                      <i class="fas fa-align-left text-purple-500 text-sm"></i>
+                      <p class="text-[10px] font-black text-purple-700 uppercase tracking-widest">
+                        Descrição da Ação
+                        <span class="text-slate-400 font-normal normal-case ml-1">— para relatório institucional</span>
+                      </p>
+                    </div>
+                    <button type="button" id="btnDescricaoIA"
+                      onclick="reescreverDescricaoComIA()"
+                      class="flex items-center gap-1.5 px-3 py-1.5 bg-purple-100 hover:bg-purple-600 text-purple-700 hover:text-white text-[10px] font-black rounded-xl transition-all uppercase tracking-wide">
+                      <i class="fas fa-brain text-[9px]"></i>Reescrever com IA
+                    </button>
+                  </div>
+                  <textarea id="codipDescricaoAcao" rows="4"
+                    maxlength="600"
+                    oninput="document.getElementById('codipDescricaoContador').textContent=this.value.length+'/600'"
+                    placeholder="Descreva a proposta conceitual da ação, abordagem adotada, linguagem artística e relação com o público. Escrita impessoal e atemporal, máximo 600 caracteres."
+                    class="w-full px-4 py-3 bg-purple-50 border border-purple-200 rounded-xl outline-none text-sm focus:border-purple-500 transition-all resize-none leading-relaxed"></textarea>
+                  <div class="flex justify-between mt-1">
+                    <p class="text-[9px] text-slate-400">Impessoal · Atemporal · Máx. 600 caracteres</p>
+                    <span id="codipDescricaoContador" class="text-[9px] font-black text-purple-500">0/600</span>
+                  </div>
+                </div>
+
+              </div>
+
+            <!-- Card: Demanda de Comunicação -->
+            <div id="blocoComunicacao" class="hidden bg-white rounded-3xl shadow-sm border-2 border-orange-400 p-6 md:p-8">
+              <div class="flex items-center gap-3 mb-6">
+                <span class="w-3 h-3 bg-orange-400 rounded-full"></span>
+                <h3 class="text-lg font-black text-slate-800 uppercase tracking-tighter">Demanda de Comunicação</h3>
+                <span class="text-[9px] bg-orange-100 text-orange-700 font-black px-2 py-1 rounded-full uppercase">Vinculada à reserva</span>
+              </div>
+
+              <div class="space-y-4">
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div class="md:col-span-2">
+                    <label class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">Título da Demanda *</label>
+                    <input type="text" id="rcComTitulo" placeholder="Ex: Divulgação do espetáculo X"
+                      class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:border-orange-400 outline-none font-semibold text-sm">
+                  </div>
+
+                  <div>
+                    <label class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">Tipo de Demanda</label>
+                    <select id="rcComTipo" onchange="_rcSugerirEntregas(this.value)"
+                      class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:border-orange-400 outline-none font-bold text-sm">
+                      <option value="release">Release / Texto</option>
+                      <option value="grafico">Design gráfico</option>
+                      <option value="foto">Fotografia</option>
+                      <option value="video">Audiovisual</option>
+                      <option value="rece">Publicação RECE</option>
+                      <option value="cobertura">Cobertura</option>
+                      <option value="campanha">Campanha</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">Prioridade</label>
+                    <select id="rcComPrioridade"
+                      class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:border-orange-400 outline-none font-bold text-sm">
+                      <option value="Baixa">Baixa</option>
+                      <option value="Média" selected>Média</option>
+                      <option value="Alta">Alta</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">Data desejada de publicação</label>
+                    <input type="date" id="rcComPrazo"
+                      class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:border-orange-400 outline-none font-semibold text-sm">
+                  </div>
+
+                  <div class="md:col-span-2">
+                    <label class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">Descrição da Demanda</label>
+                    <textarea id="rcComDescricao" rows="3"
+                      placeholder="Detalhe a necessidade de comunicação, contexto e referências..."
+                      class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:border-orange-400 outline-none transition-all text-sm resize-none"></textarea>
+                  </div>
+                </div>
+
+                <div>
+                  <label class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-2 block">Entregas necessárias</label>
+                  <div class="flex gap-2 flex-wrap" id="rcEntregasGrid">
+                    <label style="font-size:11px;display:flex;align-items:center;gap:5px;background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:8px;padding:4px 10px;cursor:pointer" class="rcEntregaLabel"><input type="checkbox" class="rcEntrega" value="design"> Peça gráfica</label>
+                    <label style="font-size:11px;display:flex;align-items:center;gap:5px;background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:8px;padding:4px 10px;cursor:pointer" class="rcEntregaLabel"><input type="checkbox" class="rcEntrega" value="diagramacao"> Diagramação</label>
+                    <label style="font-size:11px;display:flex;align-items:center;gap:5px;background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:8px;padding:4px 10px;cursor:pointer" class="rcEntregaLabel"><input type="checkbox" class="rcEntrega" value="foto"> Fotografia</label>
+                    <label style="font-size:11px;display:flex;align-items:center;gap:5px;background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:8px;padding:4px 10px;cursor:pointer" class="rcEntregaLabel"><input type="checkbox" class="rcEntrega" value="ensaio_fotografico"> Ensaio fotográfico</label>
+                    <label style="font-size:11px;display:flex;align-items:center;gap:5px;background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:8px;padding:4px 10px;cursor:pointer" class="rcEntregaLabel"><input type="checkbox" class="rcEntrega" value="video"> Captação de vídeo</label>
+                    <label style="font-size:11px;display:flex;align-items:center;gap:5px;background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:8px;padding:4px 10px;cursor:pointer" class="rcEntregaLabel"><input type="checkbox" class="rcEntrega" value="edicao_video"> Edição de vídeo</label>
+                    <label style="font-size:11px;display:flex;align-items:center;gap:5px;background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:8px;padding:4px 10px;cursor:pointer" class="rcEntregaLabel"><input type="checkbox" class="rcEntrega" value="stories"> Cobertura (stories)</label>
+                    <label style="font-size:11px;display:flex;align-items:center;gap:5px;background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:8px;padding:4px 10px;cursor:pointer" class="rcEntregaLabel"><input type="checkbox" class="rcEntrega" value="materia"> Matéria / texto</label>
+                    <label style="font-size:11px;display:flex;align-items:center;gap:5px;background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:8px;padding:4px 10px;cursor:pointer" class="rcEntregaLabel"><input type="checkbox" class="rcEntrega" value="divulgacao"> Publicação / divulgação</label>
+                  </div>
+                </div>
+
+                <div>
+                  <label class="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">Observações</label>
+                  <textarea id="rcComObs" rows="2"
+                    placeholder="Informações complementares para a equipe de comunicação..."
+                    class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:border-orange-400 outline-none transition-all text-sm resize-none"></textarea>
+                </div>
+
+              </div>
+
+              <script>
+              document.querySelectorAll('#blocoComunicacao .rcEntregaLabel').forEach(function(lbl){
+                var cb = lbl.querySelector('input');
+                if (!cb) return;
+                cb.addEventListener('change', function(){
+                  lbl.style.borderColor = cb.checked ? '#f97316' : '#e2e8f0';
+                  lbl.style.background  = cb.checked ? '#fff7ed' : '#f8fafc';
+                });
+              });
+              </script>
+            </div>
+
+            </div>
+            <!-- Fim coluna principal -->
+
+            <!-- Coluna lateral: Almoxarifado + botões -->
+            <div class="space-y-6 lg:sticky lg:top-20 lg:self-start">
+              <div class="bg-slate-900 rounded-3xl shadow-xl p-4 md:p-6 text-white">
+                <div class="flex items-center justify-between mb-4">
+                  <h3 class="text-sm font-black uppercase tracking-tighter">
+                    <i class="fas fa-boxes mr-2 text-purple-400"></i>Almoxarifado
+                  </h3>
+                  <span class="text-[9px] bg-purple-500/30 text-purple-300 px-2 py-1 rounded-full font-black uppercase">Itens Volantes</span>
+                </div>
+                <div id="avisoDisponibilidade" class="hidden mb-3 text-[10px] font-bold text-amber-300 bg-amber-500/20 border border-amber-500/30 px-3 py-2 rounded-xl">
+                  <i class="fas fa-clock mr-1"></i>
+                  Selecione data e horário para ver a disponibilidade real dos itens.
+                </div>
+                <div class="space-y-3">
+                  <div>
+                    <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Item do Almoxarifado</label>
+                    <select id="selectVolantes"
+                      class="w-full bg-white text-slate-800 border border-slate-300 rounded-xl px-3 py-2.5 text-xs outline-none focus:ring-2 focus:ring-purple-500/30 focus:border-purple-400 shadow-sm">
+                      <option value="">Selecionar item...</option>
+                    </select>
+                  </div>
+                  <div class="flex items-end gap-2">
+                    <div class="flex-1">
+                      <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Quantidade</label>
+                      <input type="number" id="qtdVolante" value="1" min="1"
+                        class="w-full bg-white/10 border border-white/20 rounded-xl px-3 py-2.5 text-center text-sm outline-none text-white font-bold focus:ring-2 focus:ring-purple-500/30">
+                    </div>
+                    <button type="button" onclick="adicionarItemVolante()"
+                      class="flex items-center gap-2 bg-purple-600 hover:bg-purple-500 active:scale-95 text-white font-black text-[10px] uppercase tracking-widest px-3 py-2.5 rounded-xl transition-all shadow-lg shadow-purple-900/30 whitespace-nowrap shrink-0">
+                      <i class="fas fa-cart-plus text-xs"></i><span class="hidden sm:inline">Adicionar</span><span class="sm:hidden">+</span>
+                    </button>
+                  </div>
+                  <div id="blocoItensFixos" class="hidden">
+                    <p class="text-[9px] text-slate-400 uppercase font-black tracking-widest mb-2">
+                      <i class="fas fa-thumbtack mr-1 text-purple-400"></i>Itens fixos desta sala
+                    </p>
+                    <div id="itensFixosSala" class="space-y-1"></div>
+                    <div class="border-t border-white/10 pt-2 mt-2">
+                      <p class="text-[9px] text-slate-400 uppercase font-black tracking-widest mb-1">
+                        <i class="fas fa-check-square mr-1 text-indigo-400"></i>Fixos selecionados
+                      </p>
+                      <ul id="carrinhoFixos" class="space-y-1 max-h-32 overflow-y-auto pr-1 custom-scrollbar">
+                        <li class="text-[10px] text-slate-500 text-center py-1 italic">Nenhum item fixo selecionado.</li>
+                      </ul>
+                    </div>
+                  </div>
+                  <div class="border-t border-white/10 pt-3">
+                    <p class="text-[9px] text-slate-400 uppercase font-black tracking-widest mb-2">
+                      <i class="fas fa-list-check mr-1 text-purple-400"></i>Itens selecionados
+                    </p>
+                    <ul id="carrinhoVolantes" class="space-y-2 max-h-32 lg:max-h-48 overflow-y-auto pr-1 custom-scrollbar">
+                      <li class="text-[10px] text-slate-500 text-center py-2 italic">Nenhum item selecionado.</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Card: Vinculação Institucional -->
+              <div class="bg-white rounded-3xl shadow-sm border border-slate-200 p-6">
+                <h3 class="text-lg font-black text-slate-800 uppercase tracking-tighter mb-4">
+                  <i class="fas fa-link text-indigo-500 mr-2"></i>Vinculação Institucional
+                </h3>
+                <p class="text-[10px] text-slate-400 mb-4">Esta reserva está relacionada a alguma iniciativa em andamento?</p>
+
+                <!-- Radio: tipo de vínculo -->
+                <div class="flex flex-col gap-2 mb-4">
+                  <label class="flex items-center gap-2 cursor-pointer group">
+                    <input type="radio" name="tipoVinculo" value="independente" id="vinculoIndependente" checked
+                      onchange="alternarVinculo('independente')"
+                      class="w-4 h-4 accent-slate-500">
+                    <span class="text-xs font-bold text-slate-600 group-hover:text-slate-800">Agendamento independente</span>
+                  </label>
+                  <label class="flex items-center gap-2 cursor-pointer group">
+                    <input type="radio" name="tipoVinculo" value="acao" id="vinculoAcao"
+                      onchange="alternarVinculo('acao')"
+                      class="w-4 h-4 accent-purple-600">
+                    <span class="text-xs font-bold text-purple-700 group-hover:text-purple-900">Vinculado a uma Ação</span>
+                  </label>
+                  <label class="flex items-center gap-2 cursor-pointer group">
+                    <input type="radio" name="tipoVinculo" value="tarefa" id="vinculoTarefa"
+                      onchange="alternarVinculo('tarefa')"
+                      class="w-4 h-4 accent-teal-600">
+                    <span class="text-xs font-bold text-teal-700 group-hover:text-teal-900">Vinculado a uma Tarefa</span>
+                  </label>
+                </div>
+
+                <!-- Painel Ação -->
+                <div id="painelVinculoAcao" class="hidden space-y-2">
+                  <label class="text-[10px] font-black text-slate-500 uppercase tracking-wide">Buscar Ação</label>
+                  <input type="text" id="inputVinculoAcaoBusca" placeholder="Digite para buscar..."
+                    oninput="buscarAcoesVinculo(this.value)"
+                    class="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-400">
+                  <div id="vinculoAcaoResultados" class="hidden bg-white border border-slate-200 rounded-xl shadow-lg max-h-40 overflow-y-auto divide-y divide-slate-100"></div>
+                  <div id="vinculoAcaoSelecionada" class="hidden flex items-center gap-2 bg-purple-50 border border-purple-200 rounded-xl px-3 py-2">
+                    <i class="fas fa-theater-masks text-purple-500 text-xs"></i>
+                    <span id="vinculoAcaoNome" class="text-xs font-bold text-purple-700 flex-1 truncate"></span>
+                    <button type="button" onclick="limparVinculoAcao()" class="text-purple-400 hover:text-purple-700 text-xs"><i class="fas fa-times"></i></button>
+                  </div>
+                  <input type="hidden" id="inputVinculoAcaoId">
+                </div>
+
+                <!-- Painel Tarefa -->
+                <div id="painelVinculoTarefa" class="hidden space-y-2">
+                  <label class="text-[10px] font-black text-slate-500 uppercase tracking-wide">Selecionar Tarefa</label>
+                  <select id="selectVinculoTarefaId"
+                    class="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-400">
+                    <option value="">Carregando suas tarefas...</option>
+                  </select>
+                  <p class="text-[9px] text-slate-400">Apenas tarefas em andamento da sua fila são exibidas.</p>
+                </div>
+              </div>
+
+              <div class="flex flex-col gap-3">
+                <button type="submit"
+                  class="w-full bg-purple-600 hover:bg-purple-700 text-white font-black py-4 rounded-2xl shadow-lg shadow-purple-500/30 transition-all flex items-center justify-center gap-3 uppercase tracking-widest text-sm">
+                  <i class="fas fa-check-double"></i> Confirmar Agendamento
+                </button>
+                <button type="button" onclick="resetarFormulario(); mostrarAba('aba-lista-reservas')"
+                  class="w-full bg-white text-slate-400 font-bold py-4 rounded-2xl border border-slate-200 hover:bg-slate-50 transition-all uppercase tracking-widest text-[10px]">
+                  Cancelar e Voltar
+                </button>
+              </div>
+            </div>
+
+          </div>
+        </form>
+      </section>

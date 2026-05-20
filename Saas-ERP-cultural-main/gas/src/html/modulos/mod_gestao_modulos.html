@@ -1,0 +1,147 @@
+<!--
+@file html/modulos/mod_gestao_modulos.html
+@type module
+@description Painel SUPERADMIN de ativação e desativação de módulos do sistema.
+             Acesso restrito: apenas perfil superadmin visualiza e opera esta tela.
+@responsibility Listagem de módulos; toggle ativo/inativo; toggle superadmin_only;
+                salvamento em lote; visualização em grid ou lista simples.
+@dependencies mod_gestao_modulos_js.html (lógica), AppState.usuario.isSuperadmin
+-->
+
+<section id="aba-gestao-modulos"
+  class="tab-content hidden animate-fadeIn pb-20">
+
+  <!-- ── Header ───────────────────────────────────────────── -->
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+    <div>
+      <h2 class="text-2xl font-black text-slate-800 uppercase tracking-tight flex items-center gap-3">
+        <span class="w-10 h-10 bg-purple-600 rounded-xl flex items-center justify-center shrink-0">
+          <i class="fas fa-cubes text-white text-sm"></i>
+        </span>
+        Gestão de Módulos
+      </h2>
+      <p class="text-slate-500 text-sm mt-1 ml-[52px]">
+        Ative ou desative módulos do sistema. Clique em Salvar para aplicar as alterações.
+      </p>
+    </div>
+    <div class="flex gap-2 shrink-0 items-center flex-wrap justify-end">
+      <!-- Toggle de modo de visualização -->
+      <div class="flex bg-slate-100 rounded-xl p-1 gap-0.5">
+        <button onclick="_modSetModo('grid')" id="mod-btn-modo-grid"
+          title="Visualização em cards"
+          class="px-3 py-1.5 rounded-lg bg-white text-purple-600 shadow-sm font-bold text-xs transition-all">
+          <i class="fas fa-th-large text-xs"></i>
+        </button>
+        <button onclick="_modSetModo('lista')" id="mod-btn-modo-lista"
+          title="Visualização em lista simples"
+          class="px-3 py-1.5 rounded-lg text-slate-500 hover:text-slate-700 font-bold text-xs transition-all">
+          <i class="fas fa-list text-xs"></i>
+        </button>
+      </div>
+      <button onclick="_modAtualizarLista()"
+        class="flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-all">
+        <i class="fas fa-sync-alt text-xs"></i> Atualizar
+      </button>
+      <button id="mod-btn-salvar-header" onclick="_modSalvarLote()" disabled
+        class="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-400 font-bold text-xs rounded-xl cursor-not-allowed">
+        <i class="fas fa-save text-xs"></i> Salvar
+      </button>
+      <button onclick="_modConfirmarReset()"
+        class="flex items-center gap-2 px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 font-bold text-xs rounded-xl transition-all border border-red-200">
+        <i class="fas fa-undo text-xs"></i> Resetar Padrões
+      </button>
+    </div>
+  </div>
+
+  <!-- ── Filtros ───────────────────────────────────────────── -->
+  <div class="flex flex-wrap gap-2 mb-5">
+    <button onclick="_modFiltrarCategoria('')"
+      id="mod-filtro-todos"
+      class="mod-filtro-btn px-3 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-full border transition-all bg-purple-600 text-white border-purple-600">
+      Todos
+    </button>
+    <button onclick="_modFiltrarCategoria('espacos')"        id="mod-filtro-espacos"        class="mod-filtro-btn px-3 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-full border transition-all bg-white text-slate-500 border-slate-200 hover:border-purple-300 hover:text-purple-600">Espaços</button>
+    <button onclick="_modFiltrarCategoria('operacional')"    id="mod-filtro-operacional"    class="mod-filtro-btn px-3 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-full border transition-all bg-white text-slate-500 border-slate-200 hover:border-purple-300 hover:text-purple-600">Operacional</button>
+    <button onclick="_modFiltrarCategoria('comunicacao')"    id="mod-filtro-comunicacao"    class="mod-filtro-btn px-3 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-full border transition-all bg-white text-slate-500 border-slate-200 hover:border-purple-300 hover:text-purple-600">Comunicação</button>
+    <button onclick="_modFiltrarCategoria('estrategia')"     id="mod-filtro-estrategia"     class="mod-filtro-btn px-3 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-full border transition-all bg-white text-slate-500 border-slate-200 hover:border-purple-300 hover:text-purple-600">Estratégia</button>
+    <button onclick="_modFiltrarCategoria('infraestrutura')" id="mod-filtro-infraestrutura" class="mod-filtro-btn px-3 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-full border transition-all bg-white text-slate-500 border-slate-200 hover:border-purple-300 hover:text-purple-600">Infraestrutura</button>
+    <button onclick="_modFiltrarCategoria('financeiro')"     id="mod-filtro-financeiro"     class="mod-filtro-btn px-3 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-full border transition-all bg-white text-slate-500 border-slate-200 hover:border-purple-300 hover:text-purple-600">Financeiro</button>
+    <button onclick="_modFiltrarCategoria('pessoal')"        id="mod-filtro-pessoal"        class="mod-filtro-btn px-3 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-full border transition-all bg-white text-slate-500 border-slate-200 hover:border-purple-300 hover:text-purple-600">Pessoal</button>
+    <button onclick="_modFiltrarCategoria('institucional')"  id="mod-filtro-institucional"  class="mod-filtro-btn px-3 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-full border transition-all bg-white text-slate-500 border-slate-200 hover:border-purple-300 hover:text-purple-600">Institucional</button>
+    <button onclick="_modFiltrarCategoria('relatorios')"     id="mod-filtro-relatorios"     class="mod-filtro-btn px-3 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-full border transition-all bg-white text-slate-500 border-slate-200 hover:border-purple-300 hover:text-purple-600">Relatórios</button>
+    <button onclick="_modFiltrarCategoria('sistema')"        id="mod-filtro-sistema"        class="mod-filtro-btn px-3 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-full border transition-all bg-white text-slate-500 border-slate-200 hover:border-purple-300 hover:text-purple-600">Sistema</button>
+  </div>
+
+  <!-- ── Banner superadmin ─────────────────────────────────── -->
+  <div id="mod-superadmin-banner" class="hidden mb-4 flex items-center gap-2 px-4 py-2.5 bg-violet-50 border border-violet-200 rounded-xl">
+    <i class="fas fa-shield-alt text-violet-500 text-xs"></i>
+    <span class="text-[11px] font-black text-violet-700 uppercase tracking-widest">Modo Superadmin</span>
+    <span class="text-[11px] text-violet-500">— visão completa do registro. Módulos de núcleo não podem ser desativados.</span>
+    <span class="ml-auto flex items-center gap-1 text-[10px] text-violet-500 font-semibold shrink-0">
+      <i class="fas fa-shield-alt text-violet-400 text-[9px]"></i> = restrito ao superadmin
+    </span>
+  </div>
+
+  <!-- ── Barra de salvamento pendente ─────────────────────── -->
+  <div id="mod-barra-salvar" class="hidden mb-4 flex items-center justify-between gap-4 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl">
+    <div class="flex items-center gap-2">
+      <i class="fas fa-exclamation-circle text-amber-500 text-sm"></i>
+      <span id="mod-barra-texto" class="text-[12px] font-bold text-amber-700">0 alterações pendentes</span>
+    </div>
+    <div class="flex gap-2 shrink-0">
+      <button onclick="_modDescartarPendentes()"
+        class="flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-600 font-bold text-xs rounded-lg transition-all border border-slate-200">
+        <i class="fas fa-times text-xs"></i> Descartar
+      </button>
+      <button onclick="_modSalvarLote()" id="mod-btn-salvar-lote"
+        class="flex items-center gap-1.5 px-4 py-1.5 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-lg transition-all shadow-sm">
+        <i class="fas fa-save text-xs"></i> Salvar alterações
+      </button>
+    </div>
+  </div>
+
+  <!-- ── Stats ─────────────────────────────────────────────── -->
+  <div class="grid grid-cols-3 gap-3 mb-6">
+    <div class="bg-white rounded-2xl border border-slate-100 p-4 text-center shadow-sm">
+      <div id="mod-stat-total" class="text-2xl font-black text-slate-800">—</div>
+      <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-0.5">Total</div>
+    </div>
+    <div class="bg-white rounded-2xl border border-emerald-100 p-4 text-center shadow-sm">
+      <div id="mod-stat-ativos" class="text-2xl font-black text-emerald-600">—</div>
+      <div class="text-[10px] font-black text-emerald-400 uppercase tracking-widest mt-0.5">Ativos</div>
+    </div>
+    <div class="bg-white rounded-2xl border border-slate-100 p-4 text-center shadow-sm">
+      <div id="mod-stat-inativos" class="text-2xl font-black text-slate-400">—</div>
+      <div class="text-[10px] font-black text-slate-300 uppercase tracking-widest mt-0.5">Inativos</div>
+    </div>
+  </div>
+
+  <!-- ── Lista de módulos ───────────────────────────────────── -->
+  <div id="mod-lista-container">
+
+    <!-- Loader -->
+    <div id="mod-loader" class="flex flex-col items-center justify-center py-16 gap-4">
+      <div class="relative w-12 h-12">
+        <div class="absolute inset-0 border-4 border-purple-200 rounded-full"></div>
+        <div class="absolute inset-0 border-4 border-purple-600 rounded-full border-t-transparent animate-spin"></div>
+      </div>
+      <p class="text-slate-400 text-sm font-semibold animate-pulse">Carregando módulos...</p>
+    </div>
+
+    <!-- Grid de cards (modo grid) -->
+    <div id="mod-grid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 hidden">
+    </div>
+
+    <!-- Lista simples (modo lista) -->
+    <div id="mod-lista" class="hidden space-y-1">
+    </div>
+
+    <!-- Estado vazio -->
+    <div id="mod-vazio" class="hidden flex flex-col items-center justify-center py-16 gap-3 text-center">
+      <i class="fas fa-inbox text-4xl text-slate-300"></i>
+      <p class="text-slate-400 text-sm font-semibold">Nenhum módulo encontrado.</p>
+    </div>
+
+  </div>
+
+</section>

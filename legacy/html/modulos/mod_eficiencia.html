@@ -1,0 +1,134 @@
+<!--
+@file mod_eficiencia.html
+@type module
+@description Painel de eficiência operacional — métricas derivadas das reservas existentes.
+@responsibility Estrutura HTML + JS da aba #aba-eficiencia.
+@dependencies GAS.eficiencia, escaparHTML, temPermissao
+-->
+<section id="aba-eficiencia" class="tab-content hidden pb-20">
+
+  <div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+
+    <!-- HEADER -->
+    <div class="p-5 border-b border-slate-100 bg-slate-50/50 flex flex-wrap justify-between items-center gap-3">
+      <div>
+        <h3 class="font-black text-slate-800 uppercase tracking-tighter text-sm">
+          <i class="fas fa-gauge-high text-violet-500 mr-2"></i>Eficiência Operacional
+        </h3>
+        <p class="text-[10px] text-slate-400 font-medium">Indicadores de uso e ocupação dos espaços</p>
+      </div>
+      <button onclick="mostrarAba('aba-lista-reservas')"
+        class="bg-violet-100 hover:bg-violet-200 text-violet-700 text-[10px] font-black px-4 py-2 rounded-xl transition-all uppercase flex items-center gap-1.5">
+        <i class="fas fa-calendar-alt text-[9px]"></i>Ver Agenda
+      </button>
+      <button onclick="carregarEficiencia()"
+        class="bg-violet-600 hover:bg-violet-700 text-white text-[10px] font-black px-4 py-2 rounded-xl transition-all uppercase flex items-center gap-1.5">
+        <i class="fas fa-sync-alt text-[9px]"></i>Atualizar
+      </button>
+    </div>
+
+    <!-- CARDS KPI -->
+    <div id="eficienciaKPIs" class="p-5 grid grid-cols-2 md:grid-cols-4 gap-4"></div>
+
+    <!-- GRÁFICO SALAS + MENSAL -->
+    <div class="px-5 pb-6 grid md:grid-cols-2 gap-5">
+
+      <div style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:16px;padding:16px">
+        <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">
+          <i class="fas fa-door-open text-violet-300 mr-1"></i>Uso por Espaço
+        </p>
+        <div id="eficienciaSalas"></div>
+      </div>
+
+      <div style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:16px;padding:16px">
+        <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">
+          <i class="fas fa-calendar-alt text-violet-300 mr-1"></i>Agendamentos por Mês
+        </p>
+        <div id="eficienciaMensal"></div>
+      </div>
+
+    </div>
+
+  </div>
+
+</section>
+
+<script>
+var _eficienciaCache = null;
+
+function carregarEficiencia() {
+  var kpis = document.getElementById('eficienciaKPIs');
+  if (kpis) kpis.innerHTML = '<div class="col-span-4 text-center py-4"><i class="fas fa-spinner animate-spin text-violet-300 text-xl"></i></div>';
+  GAS.eficiencia.obterMetricas(function(data) {
+    _eficienciaCache = data || {};
+    _eficienciaRenderizar();
+  }, function() {
+    if (kpis) kpis.innerHTML = '<div class="col-span-4 text-center py-4 text-red-400 text-sm"><i class="fas fa-exclamation-triangle mr-2"></i>Erro ao carregar métricas.</div>';
+  });
+}
+
+function _eficienciaRenderizar() {
+  var d = _eficienciaCache || {};
+  _eficienciaKPIs(d);
+  _eficienciaSalas(d.porSala || []);
+  _eficienciaMensal(d.porMes || []);
+}
+
+function _eficienciaKPIs(d) {
+  var el = document.getElementById('eficienciaKPIs');
+  if (!el) return;
+  var cards = [
+    { icon:'fa-calendar-check', label:'Total de Reservas', valor: d.total||0, cor:'#6d28d9', bg:'#ede9fe' },
+    { icon:'fa-circle-check',   label:'Confirmadas',       valor: d.confirmadas||0, cor:'#059669', bg:'#d1fae5' },
+    { icon:'fa-circle-xmark',   label:'Canceladas',        valor: d.canceladas||0, cor:'#dc2626', bg:'#fee2e2' },
+    { icon:'fa-percent',        label:'Taxa de Cancelamento', valor: (d.taxaCancelamento||0)+'%', cor:'#d97706', bg:'#fef3c7' }
+  ];
+  el.innerHTML = cards.map(function(k) {
+    return '<div style="background:#fff;border:1.5px solid #e2e8f0;border-radius:16px;padding:16px">'
+      + '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">'
+      + '<div style="width:32px;height:32px;border-radius:10px;background:'+k.bg+';display:flex;align-items:center;justify-content:center">'
+      + '<i class="fas '+k.icon+'" style="color:'+k.cor+';font-size:12px"></i></div>'
+      + '<span style="font-size:10px;font-weight:700;color:#64748b">'+k.label+'</span></div>'
+      + '<p style="font-size:24px;font-weight:900;color:#1e293b">'+k.valor+'</p>'
+      + '</div>';
+  }).join('');
+}
+
+function _eficienciaSalas(salas) {
+  var el = document.getElementById('eficienciaSalas');
+  if (!el) return;
+  if (!salas.length) { el.innerHTML = '<p style="text-align:center;color:#94a3b8;font-size:11px;padding:12px">Sem dados de reservas.</p>'; return; }
+  var max = salas[0].total || 1;
+  el.innerHTML = salas.slice(0,8).map(function(s) {
+    var pct = Math.round(s.total / max * 100);
+    return '<div style="margin-bottom:8px">'
+      + '<div style="display:flex;justify-content:space-between;margin-bottom:3px">'
+      + '<span style="font-size:11px;font-weight:700;color:#334155;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:60%">' + escaparHTML(s.sala) + '</span>'
+      + '<span style="font-size:10px;font-weight:900;color:#6d28d9">' + s.total + ' (' + s.pct + '%)</span></div>'
+      + '<div style="height:6px;background:#f1f5f9;border-radius:99px;overflow:hidden">'
+      + '<div style="height:100%;width:'+pct+'%;background:linear-gradient(90deg,#8b5cf6,#6d28d9);border-radius:99px;transition:width .5s ease"></div></div></div>';
+  }).join('');
+}
+
+function _eficienciaMensal(meses) {
+  var el = document.getElementById('eficienciaMensal');
+  if (!el) return;
+  if (!meses.length) { el.innerHTML = '<p style="text-align:center;color:#94a3b8;font-size:11px;padding:12px">Sem dados mensais.</p>'; return; }
+  var max = Math.max.apply(null, meses.map(function(m){ return m.total; })) || 1;
+  var ultimos = meses.slice(-12);
+  el.innerHTML = '<div style="display:flex;align-items:flex-end;gap:4px;height:80px;padding-bottom:18px;position:relative">'
+    + ultimos.map(function(m) {
+        var h = Math.round(m.total / max * 72);
+        var label = m.mes ? m.mes.substring(5) : '';
+        return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px">'
+          + '<span style="font-size:8px;font-weight:900;color:#6d28d9;margin-bottom:1px">' + m.total + '</span>'
+          + '<div style="width:100%;height:'+h+'px;background:linear-gradient(180deg,#8b5cf6,#6d28d9);border-radius:4px 4px 0 0;min-height:2px"></div>'
+          + '<span style="font-size:8px;color:#94a3b8;margin-top:3px">' + escaparHTML(label) + '</span></div>';
+      }).join('')
+    + '</div>';
+}
+
+window._onShow_aba_eficiencia = function() {
+  if (!_eficienciaCache) carregarEficiencia();
+};
+</script>

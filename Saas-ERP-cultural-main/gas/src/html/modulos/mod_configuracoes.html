@@ -1,0 +1,222 @@
+<!--
+@file mod_configuracoes.html
+@type module
+@description Painel de configurações do sistema com navegação por categorias.
+             Categorias: Espaços, Recursos, Setores, Usuários, Sistema.
+@responsibility Estrutura HTML + JS inline da aba de administração (#aba-gestao-admin).
+@dependencies renderizarEspacosAdmin, renderizarItensAdmin, renderizarSetoresAdmin,
+              renderizarAdmins, salvarConfiguracao (mod_admin_js), salvarConfigGlobal
+-->
+<section id="aba-gestao-admin" class="tab-content animate-fadeIn hidden pb-20">
+
+  <!-- Cabeçalho -->
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+    <div>
+      <h2 class="text-xl font-black text-slate-800 flex items-center gap-2">
+        <i class="fas fa-cog text-purple-600"></i>Configurações do Sistema
+      </h2>
+      <p class="text-xs text-slate-500 mt-0.5">Espaços, recursos, setores, usuários e parâmetros globais</p>
+    </div>
+  </div>
+
+  <!-- Navegação por categoria -->
+  <div class="flex gap-2 mb-5 flex-wrap">
+    <button onclick="cfgNav('espacos')"   id="cfg-tab-espacos"
+      class="cfg-nav-btn active px-4 py-2 bg-purple-600 text-white text-[10px] font-black rounded-xl uppercase">
+      <i class="fas fa-door-open mr-1"></i>Espaços
+    </button>
+    <button onclick="cfgNav('recursos')"  id="cfg-tab-recursos"
+      class="cfg-nav-btn px-4 py-2 bg-slate-200 text-slate-600 text-[10px] font-black rounded-xl uppercase">
+      <i class="fas fa-box mr-1"></i>Recursos
+    </button>
+    <button onclick="cfgNav('setores')"   id="cfg-tab-setores"
+      class="cfg-nav-btn px-4 py-2 bg-slate-200 text-slate-600 text-[10px] font-black rounded-xl uppercase">
+      <i class="fas fa-tags mr-1"></i>Setores
+    </button>
+    <button onclick="cfgNav('usuarios')"  id="cfg-tab-usuarios"
+      class="cfg-nav-btn px-4 py-2 bg-slate-200 text-slate-600 text-[10px] font-black rounded-xl uppercase">
+      <i class="fas fa-users mr-1"></i>Usuários
+    </button>
+    <button onclick="cfgNav('sistema')"   id="cfg-tab-sistema"
+      class="cfg-nav-btn px-4 py-2 bg-slate-200 text-slate-600 text-[10px] font-black rounded-xl uppercase">
+      <i class="fas fa-sliders mr-1"></i>Sistema
+    </button>
+  </div>
+
+  <!-- ── ESPAÇOS ────────────────────────────────────────────── -->
+  <div id="cfg-painel-espacos" class="cfg-painel">
+    <div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+      <div class="p-5 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
+        <div>
+          <h3 class="font-black text-slate-800 uppercase tracking-tighter text-sm">Configuração de Espaços</h3>
+          <input type="text" onkeyup="filtrarLista('tabelaAdminEspacos', this.value)"
+            placeholder="🔍 Buscar sala..."
+            class="mt-2 p-1 text-[10px] border rounded w-40 outline-none focus:border-purple-500">
+        </div>
+        <div class="flex gap-2">
+          <button onclick="abrirModalConfig('espaco')"
+            class="bg-purple-600 text-white text-[10px] font-black px-4 py-2 rounded-xl hover:bg-purple-700 shadow-lg shadow-purple-200 transition-all uppercase">
+            <i class="fas fa-plus mr-1"></i> Novo
+          </button>
+          <button onclick="toggleCard('tabelaAdminEspacos', this)"
+            class="text-slate-400 hover:text-slate-600 px-2 transition-colors" title="Expandir/Recolher">
+            <i class="fas fa-chevron-up"></i>
+          </button>
+        </div>
+      </div>
+      <div id="tabelaAdminEspacos" class="p-2 max-h-[450px] overflow-y-auto custom-scrollbar bg-white"></div>
+    </div>
+  </div>
+
+  <!-- ── RECURSOS ───────────────────────────────────────────── -->
+  <div id="cfg-painel-recursos" class="cfg-painel hidden">
+    <div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+      <div class="p-5 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
+        <div>
+          <h3 class="font-black text-slate-800 uppercase tracking-tighter text-sm">Recursos de Almoxarifado</h3>
+          <input type="text" onkeyup="filtrarLista('listaAdminItens', this.value)"
+            placeholder="🔍 Buscar item..."
+            class="mt-2 p-1 text-[10px] border rounded w-40 outline-none focus:border-indigo-500">
+        </div>
+        <div class="flex gap-2">
+          <button onclick="abrirModalConfig('item')"
+            class="bg-indigo-600 text-white text-[10px] font-black px-4 py-2 rounded-xl hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition-all uppercase">
+            <i class="fas fa-box mr-1"></i> Novo
+          </button>
+          <button onclick="toggleCard('listaAdminItens', this)"
+            class="text-slate-400 hover:text-slate-600 px-2 transition-colors" title="Expandir/Recolher">
+            <i class="fas fa-chevron-up"></i>
+          </button>
+        </div>
+      </div>
+      <div id="listaAdminItens" class="p-2 max-h-[450px] overflow-y-auto custom-scrollbar bg-white"></div>
+    </div>
+  </div>
+
+  <!-- ── SETORES ─────────────────────────────────────────────── -->
+  <div id="cfg-painel-setores" class="cfg-painel hidden">
+    <div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+      <div class="p-5 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
+        <div>
+          <h3 class="font-black text-slate-800 uppercase tracking-tighter text-sm">Setores Institucionais</h3>
+          <p class="text-[10px] text-slate-400 font-medium mt-0.5">Usados em agendamentos e mapeamento de permissões</p>
+        </div>
+        <div class="flex gap-2">
+          <button onclick="abrirModalConfig('setor')"
+            class="bg-emerald-600 text-white text-[10px] font-black px-4 py-2 rounded-xl hover:bg-emerald-700 shadow-lg transition-all uppercase">
+            <i class="fas fa-tags mr-1"></i> Novo
+          </button>
+          <button onclick="toggleCard('listaAdminSetores', this)"
+            class="text-slate-400 hover:text-slate-600 px-2 transition-colors" title="Expandir/Recolher">
+            <i class="fas fa-chevron-up"></i>
+          </button>
+        </div>
+      </div>
+      <div id="listaAdminSetores" class="p-2 max-h-[450px] overflow-y-auto custom-scrollbar bg-white"></div>
+    </div>
+  </div>
+
+  <!-- ── USUÁRIOS ───────────────────────────────────────────── -->
+  <div id="cfg-painel-usuarios" class="cfg-painel hidden">
+    <div class="bg-amber-50 border border-amber-200 rounded-2xl p-3 mb-4 flex items-start gap-2">
+      <i class="fas fa-triangle-exclamation text-amber-500 mt-0.5 text-sm flex-shrink-0"></i>
+      <div>
+        <p class="text-xs font-black text-amber-700">Atenção — área sensível</p>
+        <p class="text-[10px] text-amber-600 mt-0.5">
+          Alterações de perfil entram em vigor imediatamente e são registradas em auditoria.
+          Para gestão avançada de permissões por módulo, use a aba <strong>Permissões</strong>.
+        </p>
+      </div>
+    </div>
+    <div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+      <div class="p-5 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
+        <div>
+          <h3 class="font-black text-slate-800 uppercase tracking-tighter text-sm">Usuários e Permissões</h3>
+          <p class="text-[10px] text-slate-400 font-medium mt-0.5">Controle de nível de acesso</p>
+        </div>
+        <button onclick="carregarUsuariosPermissoes()"
+          class="bg-purple-600 text-white text-[10px] font-black px-4 py-2 rounded-xl hover:bg-purple-700 uppercase">
+          <i class="fas fa-sync-alt mr-1"></i> Atualizar
+        </button>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 p-4">
+        <div class="border rounded-xl p-2 max-h-[450px] overflow-y-auto" id="listaUsuariosPermissoes"></div>
+        <div class="md:col-span-2 border rounded-xl p-4" id="editorPermissoes">
+          <p class="text-xs text-slate-400">Selecione um usuário</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SISTEMA ────────────────────────────────────────────── -->
+  <div id="cfg-painel-sistema" class="cfg-painel hidden">
+
+    <!-- Warning de configuração global -->
+    <div class="bg-red-50 border border-red-200 rounded-2xl p-3 mb-4 flex items-start gap-2">
+      <i class="fas fa-circle-exclamation text-red-500 mt-0.5 text-sm flex-shrink-0"></i>
+      <div>
+        <p class="text-xs font-black text-red-700">Configurações globais — impacto imediato em todos os usuários</p>
+        <p class="text-[10px] text-red-600 mt-0.5">
+          Alterações de horário afetam validação de reservas, alertas de turno e conflitos.
+          Salve apenas após confirmar os novos valores.
+        </p>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <h3 class="font-black text-slate-800 uppercase tracking-tighter text-sm">Parâmetros Globais do Sistema</h3>
+          <p class="text-[10px] text-slate-400 mt-0.5">Horários padrão e turnos institucionais</p>
+        </div>
+        <button onclick="cfgSalvarGlobal()"
+          class="bg-slate-800 text-white text-[10px] font-black px-4 py-2 rounded-xl hover:bg-slate-700 shadow transition-all uppercase">
+          <i class="fas fa-save mr-1"></i> Salvar
+        </button>
+      </div>
+
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4" id="formConfigGlobal">
+        <div>
+          <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Abertura (mín.)</label>
+          <input type="time" id="cfg-reservaHoraInicio" class="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm">
+        </div>
+        <div>
+          <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Encerramento (máx.)</label>
+          <input type="time" id="cfg-reservaHoraFim" class="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm">
+        </div>
+
+        <div class="col-span-2 md:col-span-4 border-t border-slate-100 pt-3 mt-1">
+          <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Turnos padrão</p>
+          <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <div>
+              <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Manhã — início</label>
+              <input type="time" id="cfg-turnoManhaIni" class="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm">
+            </div>
+            <div>
+              <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Manhã — fim</label>
+              <input type="time" id="cfg-turnoManhaTer" class="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm">
+            </div>
+            <div>
+              <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Tarde — início</label>
+              <input type="time" id="cfg-turnoTardeIni" class="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm">
+            </div>
+            <div>
+              <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Tarde — fim</label>
+              <input type="time" id="cfg-turnoTardeTer" class="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm">
+            </div>
+            <div>
+              <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Noite — início</label>
+              <input type="time" id="cfg-turnoNoiteIni" class="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm">
+            </div>
+            <div>
+              <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Noite — fim</label>
+              <input type="time" id="cfg-turnoNoiteTer" class="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm">
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</section>
+

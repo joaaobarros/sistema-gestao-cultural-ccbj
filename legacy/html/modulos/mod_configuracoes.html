@@ -1,0 +1,92 @@
+<!--
+@file mod_configuracoes.html
+@type module
+@description Painel de configurações do sistema (admin/superadmin): gerenciamento de espaços,
+             itens do almoxarifado, setores, usuários administradores e contratos.
+@responsibility Estrutura HTML da aba de administração (#aba-gestao-admin).
+@dependencies renderizarEspacosAdmin, renderizarItensAdmin, renderizarSetoresAdmin,
+              renderizarAdmins, salvarConfiguracao (mod_admin_js)
+-->
+      <section id="aba-gestao-admin" class="tab-content animate-fadeIn hidden pb-20">
+        <div class="flex flex-col gap-6">
+          <div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+            <div class="p-6 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
+              <div>
+                <h3 class="font-black text-slate-800 uppercase tracking-tighter text-sm">Configuração de Espaços</h3>
+                <input type="text" onkeyup="filtrarLista('tabelaAdminEspacos', this.value)" placeholder="🔍 Buscar sala..." class="mt-2 p-1 text-[10px] border rounded w-32 outline-none focus:border-purple-500">
+              </div>
+              <div class="flex gap-2">
+                <button onclick="abrirModalConfig('espaco')" class="bg-purple-600 text-white text-[10px] font-black px-4 py-2 rounded-xl hover:bg-purple-700 shadow-lg shadow-purple-200 transition-all uppercase">
+                  <i class="fas fa-plus mr-1"></i> Novo
+                </button>
+                <button onclick="toggleCard('tabelaAdminEspacos', this)" class="text-slate-400 px-2"><i class="fas fa-chevron-up"></i></button>
+              </div>
+            </div>
+            <div id="tabelaAdminEspacos" class="p-2 max-h-[400px] overflow-y-auto custom-scrollbar bg-white"></div>
+          </div>
+
+          <div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+            <div class="p-6 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
+              <div>
+                <h3 class="font-black text-slate-800 uppercase tracking-tighter text-sm">Recursos de Almoxarifado</h3>
+                <input type="text" onkeyup="filtrarLista('listaAdminItens', this.value)" placeholder="🔍 Buscar item..." class="mt-2 p-1 text-[10px] border rounded w-32 outline-none focus:border-purple-500">
+              </div>
+              <div class="flex gap-2">
+                <button onclick="abrirModalConfig('item')" class="bg-indigo-600 text-white text-[10px] font-black px-4 py-2 rounded-xl hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition-all uppercase">
+                  <i class="fas fa-box mr-1"></i> Novo
+                </button>
+                <button onclick="toggleCard('listaAdminItens', this)" class="text-slate-400 px-2"><i class="fas fa-chevron-up"></i></button>
+              </div>
+            </div>
+            <div id="listaAdminItens" class="p-2 max-h-[400px] overflow-y-auto custom-scrollbar bg-white"></div>
+          </div>
+
+          <div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+            <div class="p-6 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
+              <div>
+                <h3 class="font-black text-slate-800 uppercase tracking-tighter text-sm">Setores Institucionais</h3>
+                <p class="text-[10px] text-slate-400 font-medium">Lista para agendamentos</p>
+              </div>
+              <div class="flex gap-2">
+                <button onclick="abrirModalConfig('setor')" class="bg-emerald-600 text-white text-[10px] font-black px-4 py-2 rounded-xl hover:bg-emerald-700 shadow-lg transition-all uppercase">
+                  <i class="fas fa-tags mr-1"></i> Novo
+                </button>
+                <button onclick="toggleCard('listaAdminSetores', this)" class="text-slate-400 px-2"><i class="fas fa-chevron-up"></i></button>
+              </div>
+            </div>
+            <div id="listaAdminSetores" class="p-2 max-h-[400px] overflow-y-auto custom-scrollbar bg-white"></div>
+          </div>
+
+          <!-- ── USUÁRIOS E PERMISSÕES ─────────────────────────── -->
+          <div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+
+            <div class="p-6 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
+              <div>
+                <h3 class="font-black text-slate-800 uppercase tracking-tighter text-sm">
+                  Usuários e Permissões
+                </h3>
+                <p class="text-[10px] text-slate-400 font-medium">
+                  Controle estrutural (nível) + permissões detalhadas
+                </p>
+              </div>
+
+              <button onclick="carregarUsuariosPermissoes()"
+                class="bg-purple-600 text-white text-[10px] font-black px-4 py-2 rounded-xl hover:bg-purple-700 uppercase">
+                Atualizar
+              </button>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 p-4">
+
+              <!-- LISTA -->
+              <div class="border rounded-xl p-2 max-h-[450px] overflow-y-auto" id="listaUsuariosPermissoes"></div>
+
+              <!-- EDITOR -->
+              <div class="md:col-span-2 border rounded-xl p-4" id="editorPermissoes">
+                <p class="text-xs text-slate-400">Selecione um usuário</p>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      </section>

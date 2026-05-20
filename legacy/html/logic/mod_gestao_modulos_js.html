@@ -1,0 +1,579 @@
+<!--
+@file html/logic/mod_gestao_modulos_js.html
+@layer frontend/domain
+@description Lógica do painel SUPERADMIN de gestão de módulos.
+             Carregamento lazy via _onShow_aba_gestao_modulos.
+             Toggles operam apenas no estado local — salvar em lote via _modSalvarLote().
+             Aplica estado de ativação na sidebar e nas rotas após salvar.
+@responsibility CRUD de ativação; toggle superadmin_only; salvamento em lote;
+                renderização em grid e lista; filtros; aplicação de estado na UI.
+@dependencies GAS.modulos, AppState.modulos, navegacao_ui_js (mostrarAba)
+-->
+<script>
+
+// ══════════════════════════════════════════════════════════════════
+// BLOCO: Estado local do painel
+// ══════════════════════════════════════════════════════════════════
+
+var _modState = {
+  modulos: [],
+  categoriaAtiva: '',
+  carregado: false,
+  modoVisualizacao: (function() {
+    try { return localStorage.getItem('modulos_modo_view') || 'grid'; } catch(e) { return 'grid'; }
+  })()
+};
+
+// Snapshot dos valores originais carregados do backend
+var _modOriginal = {};
+// Mudanças locais ainda não salvas: { moduleId: { ativo?, superadmin_only? } }
+var _modPendentes = {};
+// Auto-save
+var _modSaveTimer = null;
+var _modSaving    = false;
+
+// ══════════════════════════════════════════════════════════════════
+// BLOCO: Lazy-load — disparado por mostrarAba('aba-gestao-modulos')
+// ══════════════════════════════════════════════════════════════════
+
+window._onShow_aba_gestao_modulos = function() {
+  _modAplicarEstiloModo(_modState.modoVisualizacao);
+  if (!_modState.carregado) _modCarregarDoBanco();
+};
+
+// ══════════════════════════════════════════════════════════════════
+// BLOCO: Carregamento da lista
+// ══════════════════════════════════════════════════════════════════
+
+function _modAtualizarLista() {
+  var nPend = Object.keys(_modPendentes).length;
+  if (nPend > 0) {
+    Swal.fire({
+      title: 'Alterações não salvas',
+      html: '<span class="text-sm text-gray-500">Há ' + nPend + ' alteraç' + (nPend === 1 ? 'ão' : 'ões') + ' pendente' + (nPend === 1 ? '' : 's') + '. Descartar e atualizar?</span>',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Descartar e atualizar',
+      cancelButtonText: 'Cancelar',
+      confirmButtonColor: '#dc2626',
+      cancelButtonColor: '#6b7280'
+    }).then(function(r) {
+      if (r.isConfirmed) { _modPendentes = {}; _modCarregarDoBanco(); }
+    });
+    return;
+  }
+  _modCarregarDoBanco();
+}
+
+function _modCarregarDoBanco() {
+  _modSetLoader(true);
+
+  GAS.modulos.obterRegistro(function(res) {
+    _modSetLoader(false);
+    if (!res || !res.ok) {
+      Swal.fire({ icon:'error', title:'Erro', text: (res && res.msg) || 'Falha ao carregar módulos.', confirmButtonColor:'#7c3aed' });
+      return;
+    }
+    _modState.modulos  = res.modulos || [];
+    _modState.carregado = true;
+
+    // Snapshot dos valores originais
+    _modOriginal = {};
+    _modPendentes = {};
+    _modState.modulos.forEach(function(m) {
+      _modOriginal[m.moduleId] = { ativo: !!m.ativo, superadmin_only: !!m.superadmin_only };
+    });
+
+    _modAtualizarBarraSalvar();
+    _modAtualizarStats();
+    _modRenderizar();
+  }, function(e) {
+    _modSetLoader(false);
+    Swal.fire({ icon:'error', title:'Erro de conexão', text: String(e), confirmButtonColor:'#7c3aed' });
+  });
+}
+
+// ══════════════════════════════════════════════════════════════════
+// BLOCO: Toggles locais (sem chamar GAS)
+// ══════════════════════════════════════════════════════════════════
+
+function _modToggleAtivo(moduleId) {
+  var mod = _modState.modulos.find(function(m) { return m.moduleId === moduleId; });
+  if (!mod || mod.nucleo) return;
+  mod.ativo = !mod.ativo;
+  _modMarcarPendente(moduleId, 'ativo', mod.ativo);
+  _modAtualizarStats();
+  _modRenderizar();
+  _modAgendarAutoSave();
+}
+
+function _modToggleSuperadminOnly(moduleId) {
+  var mod = _modState.modulos.find(function(m) { return m.moduleId === moduleId; });
+  if (!mod) return;
+  mod.superadmin_only = !mod.superadmin_only;
+  _modMarcarPendente(moduleId, 'superadmin_only', mod.superadmin_only);
+  _modRenderizar();
+  _modAgendarAutoSave();
+}
+
+// ══════════════════════════════════════════════════════════════════
+// BLOCO: Rastreamento de mudanças pendentes
+// ══════════════════════════════════════════════════════════════════
+
+function _modMarcarPendente(moduleId, campo, valor) {
+  var orig = _modOriginal[moduleId];
+  if (!orig) return;
+  if (!_modPendentes[moduleId]) _modPendentes[moduleId] = {};
+  _modPendentes[moduleId][campo] = valor;
+
+  // Remove da lista de pendentes se voltou ao original
+  var p = _modPendentes[moduleId];
+  var temDiff = false;
+  if ('ativo' in p && p.ativo !== orig.ativo) temDiff = true;
+  if ('superadmin_only' in p && p.superadmin_only !== orig.superadmin_only) temDiff = true;
+  if (!temDiff) delete _modPendentes[moduleId];
+
+  _modAtualizarBarraSalvar();
+}
+
+function _modAtualizarBarraSalvar() {
+  var n = Object.keys(_modPendentes).length;
+  var barra = document.getElementById('mod-barra-salvar');
+  var texto = document.getElementById('mod-barra-texto');
+  if (barra) barra.classList.toggle('hidden', n === 0 && !_modSaving);
+  if (texto && !_modSaving) texto.textContent = n + ' alteraç' + (n === 1 ? 'ão' : 'ões') + ' pendente' + (n === 1 ? '' : 's');
+}
+
+// ══════════════════════════════════════════════════════════════════
+// BLOCO: Salvamento em lote (manual e auto-save)
+// ══════════════════════════════════════════════════════════════════
+
+function _modAgendarAutoSave() {
+  clearTimeout(_modSaveTimer);
+  _modSaveTimer = setTimeout(function() {
+    if (Object.keys(_modPendentes).length > 0) _modExecutarSave(true);
+  }, 1500);
+}
+
+// silencioso=true: auto-save (sem Swal de sucesso); silencioso=false: botão manual
+function _modExecutarSave(silencioso) {
+  var ids = Object.keys(_modPendentes);
+  if (ids.length === 0) return;
+  if (_modSaving) return;
+  _modSaving = true;
+
+  var alteracoes = [];
+  ids.forEach(function(moduleId) {
+    var mod = _modState.modulos.find(function(m) { return m.moduleId === moduleId; });
+    if (!mod) return;
+    var alt = { moduleId: moduleId };
+    var p = _modPendentes[moduleId];
+    if ('ativo' in p) alt.ativo = mod.ativo;
+    if ('superadmin_only' in p) alt.superadmin_only = mod.superadmin_only;
+    alteracoes.push(alt);
+  });
+
+  var btn   = document.getElementById('mod-btn-salvar-lote');
+  var texto = document.getElementById('mod-barra-texto');
+  var barra = document.getElementById('mod-barra-salvar');
+  if (btn)   { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin text-xs"></i> Salvando...'; }
+  if (texto) texto.textContent = 'Salvando...';
+  if (barra) barra.classList.remove('hidden');
+
+  GAS.modulos.salvarLote(alteracoes, function(res) {
+    _modSaving = false;
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save text-xs"></i> Salvar alterações'; }
+    if (!res || !res.ok) {
+      _modAtualizarBarraSalvar();
+      if (!silencioso) Swal.fire({ icon:'error', title:'Erro', text:(res && res.msg)||'Falha ao salvar.', confirmButtonColor:'#7c3aed' });
+      return;
+    }
+
+    // Atualiza snapshot e limpa pendentes
+    _modState.modulos.forEach(function(m) {
+      _modOriginal[m.moduleId] = { ativo: !!m.ativo, superadmin_only: !!m.superadmin_only };
+    });
+    _modPendentes = {};
+    _modAtualizarBarraSalvar();
+
+    // Propaga para AppState
+    if (typeof AppState !== 'undefined') {
+      if (!AppState.modulosSuperadmin) AppState.modulosSuperadmin = {};
+      _modState.modulos.forEach(function(m) {
+        AppState.modulos[m.moduleId] = !!m.ativo;
+        AppState.modulosSuperadmin[m.moduleId] = !!m.superadmin_only;
+      });
+    }
+    if (typeof aplicarEstadoModulos === 'function') aplicarEstadoModulos();
+
+    _modAtualizarStats();
+    _modRenderizar();
+
+    if (!silencioso) Swal.fire({ icon:'success', title:'Alterações salvas', timer:1800, showConfirmButton:false });
+  }, function(e) {
+    _modSaving = false;
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save text-xs"></i> Salvar alterações'; }
+    _modAtualizarBarraSalvar();
+    if (!silencioso) Swal.fire({ icon:'error', title:'Erro de conexão', text:String(e), confirmButtonColor:'#7c3aed' });
+  });
+}
+
+function _modSalvarLote() {
+  clearTimeout(_modSaveTimer);
+  _modExecutarSave(false);
+}
+
+function _modDescartarPendentes() {
+  clearTimeout(_modSaveTimer);
+  _modSaveTimer = null;
+  _modState.modulos.forEach(function(m) {
+    var orig = _modOriginal[m.moduleId];
+    if (orig) {
+      m.ativo = orig.ativo;
+      m.superadmin_only = orig.superadmin_only;
+    }
+  });
+  _modPendentes = {};
+  _modAtualizarBarraSalvar();
+  _modAtualizarStats();
+  _modRenderizar();
+}
+
+// ══════════════════════════════════════════════════════════════════
+// BLOCO: Modo de visualização (grid / lista)
+// ══════════════════════════════════════════════════════════════════
+
+function _modSetModo(modo) {
+  _modState.modoVisualizacao = modo;
+  try { localStorage.setItem('modulos_modo_view', modo); } catch(e) {}
+  _modAplicarEstiloModo(modo);
+  _modRenderizar();
+}
+
+function _modAplicarEstiloModo(modo) {
+  var ativo   = 'px-3 py-1.5 rounded-lg bg-white text-purple-600 shadow-sm font-bold text-xs transition-all';
+  var inativo = 'px-3 py-1.5 rounded-lg text-slate-500 hover:text-slate-700 font-bold text-xs transition-all';
+  var btnGrid  = document.getElementById('mod-btn-modo-grid');
+  var btnLista = document.getElementById('mod-btn-modo-lista');
+  if (btnGrid)  btnGrid.className  = modo === 'grid'  ? ativo : inativo;
+  if (btnLista) btnLista.className = modo === 'lista' ? ativo : inativo;
+}
+
+// ══════════════════════════════════════════════════════════════════
+// BLOCO: Renderização unificada
+// ══════════════════════════════════════════════════════════════════
+
+function _modRenderizar() {
+  if (_modState.modoVisualizacao === 'lista') {
+    _modRenderizarLista(_modState.categoriaAtiva);
+  } else {
+    _modRenderizarGrid(_modState.categoriaAtiva);
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// BLOCO: Renderização — Grid de cards
+// ══════════════════════════════════════════════════════════════════
+
+var _corCategoria = {
+  espacos:        { bg:'bg-blue-50',      text:'text-blue-700',   badge:'bg-blue-100 text-blue-700',   icon:'fa-building' },
+  operacional:    { bg:'bg-amber-50',     text:'text-amber-700',  badge:'bg-amber-100 text-amber-700', icon:'fa-clipboard-check' },
+  comunicacao:    { bg:'bg-sky-50',       text:'text-sky-700',    badge:'bg-sky-100 text-sky-700',     icon:'fa-bullhorn' },
+  estrategia:     { bg:'bg-purple-50',    text:'text-purple-700', badge:'bg-purple-100 text-purple-700',icon:'fa-chess-king' },
+  infraestrutura: { bg:'bg-slate-50',     text:'text-slate-700',  badge:'bg-slate-100 text-slate-600', icon:'fa-tools' },
+  financeiro:     { bg:'bg-emerald-50',   text:'text-emerald-700',badge:'bg-emerald-100 text-emerald-700',icon:'fa-dollar-sign' },
+  pessoal:        { bg:'bg-rose-50',      text:'text-rose-700',   badge:'bg-rose-100 text-rose-700',   icon:'fa-users' },
+  sistema:        { bg:'bg-violet-50',    text:'text-violet-700', badge:'bg-violet-100 text-violet-700',icon:'fa-server' },
+  institucional:  { bg:'bg-indigo-50',    text:'text-indigo-700', badge:'bg-indigo-100 text-indigo-700',icon:'fa-landmark' },
+  relatorios:     { bg:'bg-orange-50',    text:'text-orange-700', badge:'bg-orange-100 text-orange-700',icon:'fa-file-alt' }
+};
+
+var _corStatus = {
+  stable: { label:'Estável',  cls:'bg-emerald-100 text-emerald-700' },
+  beta:   { label:'Beta',     cls:'bg-amber-100 text-amber-700' },
+  alpha:  { label:'Alpha',    cls:'bg-red-100 text-red-600' }
+};
+
+function _modRenderizarGrid(categoria) {
+  var grid  = document.getElementById('mod-grid');
+  var lista = document.getElementById('mod-lista');
+  var vazio = document.getElementById('mod-vazio');
+  if (!grid) return;
+
+  if (lista) lista.classList.add('hidden');
+
+  var itens = _modState.modulos;
+  if (categoria) itens = itens.filter(function(m) { return m.categoria === categoria; });
+
+  if (!itens.length) {
+    grid.classList.add('hidden');
+    if (vazio) vazio.classList.remove('hidden');
+    return;
+  }
+
+  if (vazio) vazio.classList.add('hidden');
+  grid.classList.remove('hidden');
+  grid.innerHTML = itens.map(_modCardHTML).join('');
+}
+
+function _modCardHTML(m) {
+  var cor  = _corCategoria[m.categoria] || _corCategoria['operacional'];
+  var sta  = _corStatus[m.status_operacional] || _corStatus['alpha'];
+  var deps = (m.dependencias || []).join(', ') || '—';
+  var isPending = _modPendentes.hasOwnProperty(m.moduleId);
+  var isSA = !!m.superadmin_only;
+
+  var cardBorder = isPending ? 'border-amber-300 ring-1 ring-amber-200' : 'border-slate-100';
+  var toggleDisabled = m.nucleo ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer';
+  var toggleTitle    = m.nucleo ? 'Módulo de núcleo — não pode ser desativado' : (m.ativo ? 'Desativar módulo' : 'Ativar módulo');
+  var shieldCls = isSA
+    ? 'bg-violet-100 text-violet-500 hover:bg-violet-200'
+    : 'text-slate-300 hover:text-violet-400 hover:bg-violet-50';
+  var shieldTitle = isSA
+    ? 'Restrito ao superadmin — clique para liberar a todos'
+    : 'Clique para restringir ao superadmin';
+
+  return [
+    '<div class="bg-white rounded-2xl border ' + cardBorder + ' shadow-sm overflow-hidden mod-card" data-categoria="' + m.categoria + '">',
+
+      '<div class="h-1.5 ' + cor.bg.replace('-50','-400') + '"></div>',
+
+      '<div class="p-5">',
+
+        '<div class="flex items-start justify-between gap-3 mb-3">',
+          '<div class="flex items-center gap-3 min-w-0">',
+            '<div class="w-10 h-10 ' + cor.bg + ' rounded-xl flex items-center justify-center shrink-0">',
+              '<i class="fas ' + cor.icon + ' ' + cor.text + ' text-sm"></i>',
+            '</div>',
+            '<div class="min-w-0">',
+              '<div class="flex items-center gap-1.5">',
+                '<h3 class="font-black text-slate-800 text-sm leading-tight truncate">' + _escHTML(m.nome) + '</h3>',
+                (isPending ? '<span class="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" title="Alteração pendente"></span>' : ''),
+              '</div>',
+              '<div class="flex items-center gap-1.5 mt-0.5 flex-wrap">',
+                '<span class="text-[10px] font-bold px-2 py-0.5 rounded-full ' + cor.badge + '">' + m.categoria + '</span>',
+                '<span class="text-[10px] font-bold px-2 py-0.5 rounded-full ' + sta.cls + '">' + sta.label + '</span>',
+                '<span class="text-[9px] text-slate-400 font-mono">v' + (m.versao || '?') + '</span>',
+                (m.nucleo ? '<span class="text-[9px] font-black px-1.5 py-0.5 rounded bg-slate-100 text-slate-500">NÚCLEO</span>' : ''),
+              '</div>',
+            '</div>',
+          '</div>',
+
+          '<div class="shrink-0 flex items-center gap-1.5">',
+            // Shield (superadmin_only)
+            '<button',
+              ' onclick="_modToggleSuperadminOnly(\'' + m.moduleId + '\')"',
+              ' title="' + shieldTitle + '"',
+              ' class="w-7 h-7 flex items-center justify-center rounded-lg transition-colors ' + shieldCls + '">',
+              '<i class="fas fa-shield-alt text-xs"></i>',
+            '</button>',
+            // Toggle ativo
+            '<button',
+              ' onclick="' + (m.nucleo ? '' : '_modToggleAtivo(\'' + m.moduleId + '\')') + '"',
+              ' title="' + toggleTitle + '"',
+              ' class="relative w-11 h-6 rounded-full overflow-hidden transition-colors duration-200 focus:outline-none ' + toggleDisabled + ' ' + (m.ativo ? 'bg-emerald-500' : 'bg-slate-300') + '">',
+              '<span class="absolute top-0.5 left-0.5 transition-transform duration-200 w-5 h-5 bg-white rounded-full ' + (m.ativo ? 'translate-x-5' : 'translate-x-0') + '"></span>',
+            '</button>',
+          '</div>',
+
+        '</div>',
+
+        '<p class="text-xs text-slate-500 leading-relaxed mb-3">' + _escHTML(m.descricao || '') + '</p>',
+
+        '<div class="bg-slate-50 rounded-xl p-3 space-y-1.5 text-[10px]">',
+          '<div class="flex justify-between">',
+            '<span class="text-slate-400 font-semibold">Rotas</span>',
+            '<span class="text-slate-600 font-mono">' + (m.rotas || []).join(', ') + '</span>',
+          '</div>',
+          '<div class="flex justify-between">',
+            '<span class="text-slate-400 font-semibold">Dependências</span>',
+            '<span class="text-slate-600">' + _escHTML(deps) + '</span>',
+          '</div>',
+        '</div>',
+
+        '<div class="mt-3 flex items-center gap-2">',
+          '<div class="w-2 h-2 rounded-full ' + (m.ativo ? 'bg-emerald-500' : 'bg-slate-300') + '"></div>',
+          '<span class="text-[10px] font-bold ' + (m.ativo ? 'text-emerald-600' : 'text-slate-400') + '">',
+            (m.ativo ? 'Ativo' : 'Inativo'),
+          '</span>',
+          (isSA ? '<span class="ml-auto flex items-center gap-1 text-[9px] text-violet-500 font-bold"><i class="fas fa-shield-alt text-[9px]"></i> apenas superadmin</span>' : ''),
+        '</div>',
+
+      '</div>',
+    '</div>'
+  ].join('');
+}
+
+// ══════════════════════════════════════════════════════════════════
+// BLOCO: Renderização — Lista simples
+// ══════════════════════════════════════════════════════════════════
+
+function _modRenderizarLista(categoria) {
+  var lista_el = document.getElementById('mod-lista');
+  var grid_el  = document.getElementById('mod-grid');
+  var vazio    = document.getElementById('mod-vazio');
+  if (!lista_el) return;
+
+  if (grid_el) grid_el.classList.add('hidden');
+
+  var itens = _modState.modulos;
+  if (categoria) itens = itens.filter(function(m) { return m.categoria === categoria; });
+
+  if (!itens.length) {
+    lista_el.classList.add('hidden');
+    if (vazio) vazio.classList.remove('hidden');
+    return;
+  }
+
+  if (vazio) vazio.classList.add('hidden');
+  lista_el.classList.remove('hidden');
+  lista_el.innerHTML = itens.map(_modListaRowHTML).join('');
+}
+
+function _modListaRowHTML(m) {
+  var cor = _corCategoria[m.categoria] || _corCategoria['operacional'];
+  var sta = _corStatus[m.status_operacional] || _corStatus['alpha'];
+  var isPending = _modPendentes.hasOwnProperty(m.moduleId);
+  var isSA = !!m.superadmin_only;
+
+  var rowBorder = isPending ? 'border-amber-300 bg-amber-50/40' : 'border-slate-100 bg-white';
+  var toggleDisabled = m.nucleo ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer';
+  var shieldCls = isSA
+    ? 'bg-violet-100 text-violet-500 hover:bg-violet-200'
+    : 'text-slate-300 hover:text-violet-400 hover:bg-violet-50';
+
+  return [
+    '<div class="flex items-center gap-3 px-4 py-2.5 rounded-xl border ' + rowBorder + ' hover:border-slate-200 transition-all mod-card" data-categoria="' + m.categoria + '">',
+
+      '<div class="w-8 h-8 ' + cor.bg + ' rounded-lg flex items-center justify-center shrink-0">',
+        '<i class="fas ' + cor.icon + ' ' + cor.text + ' text-xs"></i>',
+      '</div>',
+
+      '<div class="flex-1 min-w-0">',
+        '<div class="flex items-center gap-1.5">',
+          '<span class="font-bold text-slate-800 text-sm truncate">' + _escHTML(m.nome) + '</span>',
+          (m.nucleo ? '<span class="text-[8px] font-black px-1 py-0.5 rounded bg-slate-100 text-slate-500 shrink-0">NÚCLEO</span>' : ''),
+          (isPending ? '<span class="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" title="Alteração pendente"></span>' : ''),
+        '</div>',
+        '<div class="flex items-center gap-1 mt-0.5">',
+          '<span class="text-[9px] font-bold px-1.5 py-0.5 rounded-full ' + cor.badge + '">' + m.categoria + '</span>',
+          '<span class="text-[9px] font-bold px-1.5 py-0.5 rounded-full ' + sta.cls + '">' + sta.label + '</span>',
+          '<span class="text-[8px] text-slate-400 font-mono ml-1">v' + (m.versao || '?') + '</span>',
+        '</div>',
+      '</div>',
+
+      // Shield
+      '<button',
+        ' onclick="_modToggleSuperadminOnly(\'' + m.moduleId + '\')"',
+        ' title="' + (isSA ? 'Restrito ao superadmin — clique para liberar' : 'Restringir ao superadmin') + '"',
+        ' class="w-8 h-8 flex items-center justify-center rounded-lg transition-colors ' + shieldCls + '">',
+        '<i class="fas fa-shield-alt text-xs"></i>',
+      '</button>',
+
+      // Toggle ativo
+      '<button',
+        ' onclick="' + (m.nucleo ? '' : '_modToggleAtivo(\'' + m.moduleId + '\')') + '"',
+        ' title="' + (m.nucleo ? 'Módulo de núcleo' : (m.ativo ? 'Desativar' : 'Ativar')) + '"',
+        ' class="relative w-10 h-5 rounded-full overflow-hidden transition-colors duration-200 focus:outline-none shrink-0 ' + toggleDisabled + ' ' + (m.ativo ? 'bg-emerald-500' : 'bg-slate-300') + '">',
+        '<span class="absolute top-0.5 left-0.5 transition-transform duration-200 w-4 h-4 bg-white rounded-full ' + (m.ativo ? 'translate-x-5' : 'translate-x-0') + '"></span>',
+      '</button>',
+
+    '</div>'
+  ].join('');
+}
+
+// ══════════════════════════════════════════════════════════════════
+// BLOCO: Filtros por categoria
+// ══════════════════════════════════════════════════════════════════
+
+function _modFiltrarCategoria(categoria) {
+  _modState.categoriaAtiva = categoria;
+
+  document.querySelectorAll('.mod-filtro-btn').forEach(function(btn) {
+    btn.classList.remove('bg-purple-600','text-white','border-purple-600');
+    btn.classList.add('bg-white','text-slate-500','border-slate-200');
+  });
+
+  var idAlvo = categoria ? ('mod-filtro-' + categoria) : 'mod-filtro-todos';
+  var btnAlvo = document.getElementById(idAlvo);
+  if (btnAlvo) {
+    btnAlvo.classList.add('bg-purple-600','text-white','border-purple-600');
+    btnAlvo.classList.remove('bg-white','text-slate-500','border-slate-200');
+  }
+
+  _modRenderizar();
+}
+
+// ══════════════════════════════════════════════════════════════════
+// BLOCO: Reset para padrões
+// ══════════════════════════════════════════════════════════════════
+
+function _modConfirmarReset() {
+  Swal.fire({
+    title: 'Resetar todos os módulos?',
+    text: 'Os módulos voltarão para o estado padrão do sistema.',
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonText: 'Resetar',
+    cancelButtonText:  'Cancelar',
+    confirmButtonColor: '#dc2626',
+    cancelButtonColor: '#6b7280'
+  }).then(function(result) {
+    if (!result.isConfirmed) return;
+
+    GAS.modulos.resetar(function(res) {
+      if (!res || !res.ok) {
+        Swal.fire({ icon:'error', title:'Erro', text:(res && res.msg)||'Falha ao resetar.', confirmButtonColor:'#7c3aed' });
+        return;
+      }
+      _modState.carregado = false;
+      _modPendentes = {};
+      _modCarregarDoBanco();
+      Swal.fire({ icon:'success', title:'Módulos resetados', timer:1800, showConfirmButton:false });
+    });
+  });
+}
+
+// ══════════════════════════════════════════════════════════════════
+// BLOCO: Loader e stats
+// ══════════════════════════════════════════════════════════════════
+
+function _modSetLoader(show) {
+  var loader = document.getElementById('mod-loader');
+  var grid   = document.getElementById('mod-grid');
+  var lista  = document.getElementById('mod-lista');
+  if (loader) loader.classList.toggle('hidden', !show);
+  if (show && grid)  grid.classList.add('hidden');
+  if (show && lista) lista.classList.add('hidden');
+}
+
+function _modAtualizarStats() {
+  var todos   = _modState.modulos.length;
+  var ativos  = _modState.modulos.filter(function(m) { return m.ativo; }).length;
+  var inativ  = todos - ativos;
+
+  var elTotal  = document.getElementById('mod-stat-total');
+  var elAtivos = document.getElementById('mod-stat-ativos');
+  var elInativ = document.getElementById('mod-stat-inativos');
+
+  if (elTotal)  elTotal.textContent  = todos;
+  if (elAtivos) elAtivos.textContent = ativos;
+  if (elInativ) elInativ.textContent = inativ;
+
+  var banner = document.getElementById('mod-superadmin-banner');
+  if (banner) {
+    var isSA = typeof AppState !== 'undefined' && AppState.usuario && AppState.usuario.isSuperadmin;
+    banner.classList.toggle('hidden', !isSA);
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// BLOCO: Utilitário de escape HTML
+// ══════════════════════════════════════════════════════════════════
+
+function _escHTML(str) {
+  if (typeof escaparHTML === 'function') return escaparHTML(str);
+  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+</script>

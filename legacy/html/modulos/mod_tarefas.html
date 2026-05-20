@@ -1,0 +1,207 @@
+<!--
+@file mod_tarefas.html
+@type module
+@description Gestão de tarefas internas — listagem, criação e edição.
+@responsibility Estrutura HTML + JS da aba #aba-tarefas.
+@dependencies GAS.tarefas, showLoader, escaparHTML, temPermissao
+-->
+<section id="aba-tarefas" class="tab-content hidden pb-20">
+
+  <div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+
+    <!-- HEADER -->
+    <div class="p-5 border-b border-slate-100 bg-slate-50/50 flex flex-wrap justify-between items-center gap-3">
+      <div>
+        <h3 class="font-black text-slate-800 uppercase tracking-tighter text-sm">
+          <i class="fas fa-list-check text-indigo-400 mr-2"></i>Tarefas
+        </h3>
+        <p class="text-[10px] text-slate-400 font-medium">Tarefas internas da equipe</p>
+      </div>
+      <div class="flex gap-2 items-center flex-wrap">
+        <div class="relative">
+          <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 text-xs"></i>
+          <input type="text" id="tarefaBusca" placeholder="Buscar..."
+            oninput="_tarefaFiltrar()"
+            style="padding:8px 12px 8px 30px;border:1.5px solid #e2e8f0;border-radius:12px;font-size:12px;outline:none;width:160px"
+            onfocus="this.style.borderColor='#6366f1'" onblur="this.style.borderColor='#e2e8f0'">
+        </div>
+        <select id="tarefaFiltroStatus" onchange="_tarefaFiltrar()"
+          style="padding:8px 12px;border:1.5px solid #e2e8f0;border-radius:12px;font-size:12px;outline:none;color:#475569">
+          <option value="">Todos os status</option>
+          <option value="Aberta">Aberta</option>
+          <option value="Em Andamento">Em Andamento</option>
+          <option value="Concluída">Concluída</option>
+          <option value="Cancelada">Cancelada</option>
+        </select>
+        <select id="tarefaFiltroPrioridade" onchange="_tarefaFiltrar()"
+          style="padding:8px 12px;border:1.5px solid #e2e8f0;border-radius:12px;font-size:12px;outline:none;color:#475569">
+          <option value="">Todas as prioridades</option>
+          <option value="Alta">Alta</option>
+          <option value="Média">Média</option>
+          <option value="Baixa">Baixa</option>
+        </select>
+        <button onclick="abrirModalTarefa()" data-requer-permissao="tarefas:editar"
+          class="bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-black px-4 py-2 rounded-xl transition-all uppercase flex items-center gap-1.5">
+          <i class="fas fa-plus text-[9px]"></i>Nova Tarefa
+        </button>
+      </div>
+    </div>
+
+    <!-- TABELA -->
+    <div id="tarefasContainer" class="overflow-x-auto">
+      <div class="p-8 text-center">
+        <i class="fas fa-spinner animate-spin text-indigo-300 text-xl"></i>
+        <p class="text-[11px] text-slate-400 mt-2">Carregando...</p>
+      </div>
+    </div>
+
+  </div>
+
+</section>
+
+<script>
+var _tarefasCache = [];
+
+function _tarefaStatusCls(s) {
+  return {
+    'Aberta':       'background:#eff6ff;color:#1d4ed8',
+    'Em Andamento': 'background:#fef3c7;color:#92400e',
+    'Concluída':    'background:#d1fae5;color:#065f46',
+    'Cancelada':    'background:#fee2e2;color:#991b1b'
+  }[s] || 'background:#f1f5f9;color:#475569';
+}
+
+function _tarefaPrioridadeCls(p) {
+  return { 'Alta':'color:#ef4444', 'Média':'color:#f59e0b', 'Baixa':'color:#6b7280' }[p] || '';
+}
+
+function carregarTarefas() {
+  var container = document.getElementById('tarefasContainer');
+  if (container) container.innerHTML = '<div class="p-8 text-center"><i class="fas fa-spinner animate-spin text-indigo-300 text-xl"></i></div>';
+  GAS.tarefas.listar(function(lista) {
+    _tarefasCache = lista || [];
+    _tarefaRenderizar();
+  }, function(e) {
+    if (container) container.innerHTML = '<div class="p-8 text-center text-red-400 text-sm"><i class="fas fa-exclamation-triangle mr-2"></i>Erro ao carregar tarefas.</div>';
+  });
+}
+
+function _tarefaFiltrar() {
+  _tarefaRenderizar();
+}
+
+function _tarefaRenderizar() {
+  var busca     = (document.getElementById('tarefaBusca')?.value || '').toLowerCase();
+  var filtroSt  = document.getElementById('tarefaFiltroStatus')?.value || '';
+  var filtroPri = document.getElementById('tarefaFiltroPrioridade')?.value || '';
+  var container = document.getElementById('tarefasContainer');
+  if (!container) return;
+
+  var lista = _tarefasCache.filter(function(t) {
+    if (busca && !String(t.titulo||'').toLowerCase().includes(busca) &&
+                 !String(t.responsavel||'').toLowerCase().includes(busca)) return false;
+    if (filtroSt  && t.status     !== filtroSt)  return false;
+    if (filtroPri && t.prioridade !== filtroPri) return false;
+    return true;
+  });
+
+  if (!lista.length) {
+    container.innerHTML = '<div class="p-12 text-center"><i class="fas fa-list-check text-slate-200 text-4xl mb-3"></i>'
+      + '<p class="text-slate-400 font-bold text-sm">' + (_tarefasCache.length ? 'Nenhuma tarefa encontrada.' : 'Nenhuma tarefa cadastrada.') + '</p>'
+      + (temPermissao('tarefas','editar') ? '<button onclick="abrirModalTarefa()" class="mt-4 bg-indigo-600 text-white text-xs font-black px-4 py-2 rounded-xl">+ Nova Tarefa</button>' : '')
+      + '</div>';
+    return;
+  }
+
+  container.innerHTML = '<table class="w-full text-sm"><thead>'
+    + '<tr class="border-b border-slate-100 bg-slate-50/50 text-left">'
+    + '<th class="px-5 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Título</th>'
+    + '<th class="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Prioridade</th>'
+    + '<th class="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Status</th>'
+    + '<th class="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Responsável</th>'
+    + '<th class="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Prazo</th>'
+    + '<th class="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest"></th>'
+    + '</tr></thead><tbody>'
+    + lista.map(function(t) {
+        return '<tr class="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">'
+          + '<td class="px-5 py-3 font-semibold text-slate-700 text-xs">' + escaparHTML(t.titulo||'') + '</td>'
+          + '<td class="px-4 py-3"><span style="font-size:10px;font-weight:900;' + _tarefaPrioridadeCls(t.prioridade) + '">' + escaparHTML(t.prioridade||'—') + '</span></td>'
+          + '<td class="px-4 py-3"><span style="font-size:9px;font-weight:900;padding:2px 8px;border-radius:99px;' + _tarefaStatusCls(t.status) + '">' + escaparHTML(t.status||'') + '</span></td>'
+          + '<td class="px-4 py-3 text-[11px] text-slate-500">' + escaparHTML(t.responsavel||'—') + '</td>'
+          + '<td class="px-4 py-3 text-[11px] text-slate-500">' + escaparHTML(t.prazo||'—') + '</td>'
+          + '<td class="px-4 py-3">'
+          + (temPermissao('tarefas','editar') ? '<button onclick="abrirModalTarefa(\'' + escaparHTML(t.id) + '\')" class="text-indigo-400 hover:text-indigo-600 mr-2" title="Editar"><i class="fas fa-edit text-xs"></i></button>' : '')
+          + (temPermissao('tarefas','excluir') ? '<button onclick="_excluirTarefa(\'' + escaparHTML(t.id) + '\')" class="text-red-300 hover:text-red-500" title="Excluir"><i class="fas fa-trash text-xs"></i></button>' : '')
+          + '</td></tr>';
+      }).join('')
+    + '</tbody></table>';
+}
+
+function abrirModalTarefa(id) {
+  var dado = id ? _tarefasCache.find(function(t) { return t.id === id; }) : {};
+  dado = dado || {};
+  var _rhOpts = (typeof _rhCache !== 'undefined' ? _rhCache : [])
+    .map(function(p){ return '<option value="' + escaparHTML(p.nome||'') + '">'; }).join('');
+  Swal.fire({
+    title: id ? 'Editar Tarefa' : 'Nova Tarefa',
+    width: Math.min(520, window.innerWidth - 32),
+    showCancelButton: true,
+    confirmButtonText: '<i class="fas fa-save mr-1"></i>Salvar',
+    cancelButtonText: 'Cancelar',
+    confirmButtonColor: '#6366f1',
+    customClass: { popup:'rounded-3xl', confirmButton:'rounded-xl font-black text-sm', cancelButton:'rounded-xl font-bold text-sm' },
+    html: '<div class="text-left" style="padding:0 20px 16px">'
+      + '<div style="margin-bottom:10px"><label style="display:block;font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">Título *</label>'
+      + '<input id="tarTitulo" style="width:100%;padding:9px 13px;font-size:13px;border:1.5px solid #e2e8f0;border-radius:12px;outline:none;box-sizing:border-box" value="' + escaparHTML(dado.titulo||'') + '" placeholder="Descrição da tarefa"></div>'
+      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">'
+      + '<div><label style="display:block;font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">Prioridade</label>'
+      + '<select id="tarPrioridade" style="width:100%;padding:9px 13px;font-size:12px;border:1.5px solid #e2e8f0;border-radius:12px;outline:none">'
+      + ['Alta','Média','Baixa'].map(function(p){ return '<option' + (dado.prioridade===p?' selected':'') + '>' + p + '</option>'; }).join('')
+      + '</select></div>'
+      + '<div><label style="display:block;font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">Status</label>'
+      + '<select id="tarStatus" style="width:100%;padding:9px 13px;font-size:12px;border:1.5px solid #e2e8f0;border-radius:12px;outline:none">'
+      + ['Aberta','Em Andamento','Concluída','Cancelada'].map(function(s){ return '<option' + (dado.status===s?' selected':'') + '>' + s + '</option>'; }).join('')
+      + '</select></div></div>'
+      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'
+      + '<div><label style="display:block;font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">Responsável</label>'
+      + '<datalist id="rh-dl-tar">' + _rhOpts + '</datalist>'
+      + '<input id="tarResp" list="rh-dl-tar" style="width:100%;padding:9px 13px;font-size:12px;border:1.5px solid #e2e8f0;border-radius:12px;outline:none;box-sizing:border-box" value="' + escaparHTML(dado.responsavel||'') + '" placeholder="Nome do colaborador"></div>'
+      + '<div><label style="display:block;font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">Prazo</label>'
+      + '<input id="tarPrazo" type="date" style="width:100%;padding:9px 13px;font-size:12px;border:1.5px solid #e2e8f0;border-radius:12px;outline:none;box-sizing:border-box" value="' + escaparHTML(dado.prazo||'') + '"></div>'
+      + '</div></div>',
+    preConfirm: function() {
+      var t = (document.getElementById('tarTitulo')?.value || '').trim();
+      if (!t) { Swal.showValidationMessage('Título obrigatório'); return false; }
+      return { id: dado.id||null, titulo:t,
+               prioridade: document.getElementById('tarPrioridade')?.value,
+               status: document.getElementById('tarStatus')?.value,
+               responsavel: document.getElementById('tarResp')?.value.trim(),
+               prazo: document.getElementById('tarPrazo')?.value };
+    }
+  }).then(function(r) {
+    if (!r.isConfirmed) return;
+    showLoader(true);
+    GAS.tarefas.salvar(r.value, function() {
+      showLoader(false);
+      carregarTarefas();
+    }, function(e) { showLoader(false); Swal.fire('Erro', e.message, 'error'); });
+  });
+}
+
+function _excluirTarefa(id) {
+  Swal.fire({ title:'Excluir tarefa?', icon:'warning', showCancelButton:true,
+    confirmButtonColor:'#ef4444', confirmButtonText:'Excluir', cancelButtonText:'Cancelar',
+    customClass:{popup:'rounded-3xl',confirmButton:'rounded-xl font-black text-sm',cancelButton:'rounded-xl font-bold text-sm'}
+  }).then(function(r) {
+    if (!r.isConfirmed) return;
+    showLoader(true);
+    GAS.tarefas.excluir(id, function() {
+      showLoader(false); carregarTarefas();
+    }, function(e) { showLoader(false); Swal.fire('Erro', e.message, 'error'); });
+  });
+}
+
+window._onShow_aba_tarefas = function() {
+  if (!_tarefasCache.length) carregarTarefas();
+};
+</script>

@@ -1,0 +1,175 @@
+<!--
+@file mod_relatorios_financeiros.html
+@type module
+@description Relatórios financeiros — consolidação de contratos, rubricas e pagamentos.
+@responsibility Estrutura HTML + JS da aba #aba-rel-financeiros.
+@dependencies GAS.contratos, GAS.contratacoes, escaparHTML, _fmtMoeda, temPermissao
+-->
+<section id="aba-rel-financeiros" class="tab-content hidden pb-20">
+
+  <div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+
+    <!-- HEADER -->
+    <div class="p-5 border-b border-slate-100 bg-slate-50/50 flex flex-wrap justify-between items-center gap-3">
+      <div>
+        <h3 class="font-black text-slate-800 uppercase tracking-tighter text-sm">
+          <i class="fas fa-file-invoice-dollar text-emerald-500 mr-2"></i>Relatórios Financeiros
+        </h3>
+        <p class="text-[10px] text-slate-400 font-medium">Consolidação de contratos, rubricas e execução orçamentária</p>
+      </div>
+      <button onclick="carregarRelFinanceiros()"
+        class="bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black px-4 py-2 rounded-xl transition-all uppercase flex items-center gap-1.5">
+        <i class="fas fa-sync-alt text-[9px]"></i>Atualizar
+      </button>
+    </div>
+
+    <!-- CARDS RESUMO -->
+    <div id="relFinKPIs" class="p-5 grid grid-cols-2 md:grid-cols-4 gap-4 border-b border-slate-100"></div>
+
+    <!-- TABELA DE CONTRATOS COM EXECUÇÃO -->
+    <div class="p-5">
+      <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">
+        <i class="fas fa-file-contract text-emerald-300 mr-1"></i>Execução por Contrato
+      </p>
+      <div id="relFinContratos" class="overflow-x-auto">
+        <div class="p-8 text-center">
+          <i class="fas fa-spinner animate-spin text-emerald-300 text-xl"></i>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+</section>
+
+<script>
+var _relFinCache = null;
+
+function _relFmt(v) {
+  if (typeof _fmtMoeda === 'function') return _fmtMoeda(v);
+  return 'R$ ' + (Number(v)||0).toLocaleString('pt-BR',{minimumFractionDigits:2});
+}
+
+function carregarRelFinanceiros() {
+  var kpis = document.getElementById('relFinKPIs');
+  var tbl  = document.getElementById('relFinContratos');
+  if (kpis) kpis.innerHTML = '<div class="col-span-4 py-4 text-center"><i class="fas fa-spinner animate-spin text-emerald-300 text-xl"></i></div>';
+  if (tbl)  tbl.innerHTML  = '<div class="py-4 text-center"><i class="fas fa-spinner animate-spin text-emerald-300 text-xl"></i></div>';
+
+  // Carrega dados de contratos (rubrics + metas) em paralelo com contratações
+  var contratosData = null;
+  var fluxoData     = null;
+  var pendente = 2;
+
+  function _tentar() {
+    if (--pendente > 0) return;
+    _relFinCache = { contratos: contratosData, fluxo: fluxoData };
+    _relFinRenderizar();
+  }
+
+  GAS.contratos.obterDados(function(d) {
+    contratosData = d || {};
+    _tentar();
+  }, function() { contratosData = {}; _tentar(); });
+
+  GAS.contratacoes.fluxoCaixa(function(d) {
+    fluxoData = d || {};
+    _tentar();
+  }, function() { fluxoData = {}; _tentar(); });
+}
+
+function _relFinRenderizar() {
+  var d = _relFinCache || {};
+  var contratos  = (d.contratos && d.contratos.contratos)  || [];
+  var metas      = (d.contratos && d.contratos.metas)      || [];
+  var rubricas   = (d.contratos && d.contratos.rubricas)   || [];
+  var fluxo      = d.fluxo || {};
+
+  var totalContratos  = contratos.reduce(function(s, c) { return s + (Number(c.valorTotal)||0); }, 0);
+  var totalRubricas   = rubricas.reduce(function(s, r)  { return s + (Number(r.valor)||0); }, 0);
+  var totalContratado = fluxo.totalContratado || 0;
+  var totalPago       = fluxo.totalSaidas     || 0;
+
+  _relFinKPIs({ totalContratos, totalRubricas, totalContratado, totalPago, nContratos: contratos.length });
+  _relFinTabela(contratos, metas, rubricas);
+}
+
+function _relFinKPIs(d) {
+  var el = document.getElementById('relFinKPIs');
+  if (!el) return;
+  var cards = [
+    { label:'Contratos Ativos',     valor: d.nContratos, sub:'contratos',    cor:'#059669', bg:'#d1fae5', icon:'fa-file-contract' },
+    { label:'Total Orçado',         valor: _relFmt(d.totalContratos), sub:'valor total', cor:'#1d4ed8', bg:'#dbeafe', icon:'fa-coins' },
+    { label:'Alocado em Rubricas',  valor: _relFmt(d.totalRubricas),  sub:'em rubricas', cor:'#7c3aed', bg:'#ede9fe', icon:'fa-tags' },
+    { label:'Pago (Contratações)',  valor: _relFmt(d.totalPago),      sub:'executado',   cor:'#d97706', bg:'#fef3c7', icon:'fa-receipt' }
+  ];
+  el.innerHTML = cards.map(function(k) {
+    return '<div style="background:#fff;border:1.5px solid #e2e8f0;border-radius:16px;padding:14px">'
+      + '<div style="display:flex;align-items:center;gap:7px;margin-bottom:8px">'
+      + '<div style="width:28px;height:28px;border-radius:8px;background:'+k.bg+';display:flex;align-items:center;justify-content:center">'
+      + '<i class="fas '+k.icon+'" style="color:'+k.cor+';font-size:11px"></i></div>'
+      + '<span style="font-size:9px;font-weight:700;color:#64748b">'+k.label+'</span></div>'
+      + '<p style="font-size:18px;font-weight:900;color:#1e293b;line-height:1.2">'+k.valor+'</p>'
+      + '<p style="font-size:9px;color:#94a3b8">'+k.sub+'</p></div>';
+  }).join('');
+}
+
+function _relFinTabela(contratos, metas, rubricas) {
+  var el = document.getElementById('relFinContratos');
+  if (!el) return;
+  if (!contratos.length) {
+    el.innerHTML = '<div class="p-8 text-center"><i class="fas fa-file-invoice-dollar text-slate-200 text-3xl mb-2"></i>'
+      + '<p class="text-slate-400 text-sm">Nenhum contrato cadastrado.</p>'
+      + (temPermissao('contratos','editar') ? '<button onclick="mostrarAba(\'aba-contratos-fin\')" class="mt-3 text-xs text-indigo-600 underline">Ir para Contratos</button>' : '')
+      + '</div>';
+    return;
+  }
+
+  function _totalMetas(idContrato) {
+    return metas.filter(function(m){ return m.idContrato===idContrato; })
+      .reduce(function(s, m) {
+        return s + rubricas.filter(function(r){ return r.idMeta===m.id; })
+          .reduce(function(sr, r){ return sr + (Number(r.valor)||0); }, 0);
+      }, 0);
+  }
+
+  el.innerHTML = '<table class="w-full text-sm"><thead>'
+    + '<tr class="border-b border-slate-100 bg-slate-50/50 text-left">'
+    + '<th class="px-5 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Contrato</th>'
+    + '<th class="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Status</th>'
+    + '<th class="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Valor Total</th>'
+    + '<th class="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Alocado</th>'
+    + '<th class="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Saldo</th>'
+    + '<th class="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">% Exec.</th>'
+    + '</tr></thead><tbody>'
+    + contratos.map(function(c) {
+        var total   = Number(c.valorTotal)||0;
+        var alocado = _totalMetas(c.id);
+        var saldo   = total - alocado;
+        var pct     = total > 0 ? Math.min(100, Math.round(alocado/total*100)) : 0;
+        var barCor  = pct>=90?'#ef4444':pct>=70?'#f59e0b':'#059669';
+        var stCls   = {
+          'Ativo':    'background:#d1fae5;color:#065f46',
+          'Encerrado':'background:#fee2e2;color:#991b1b',
+          'Suspenso': 'background:#fef3c7;color:#92400e',
+          'Vencendo': 'background:#fed7aa;color:#9a3412'
+        }[c.status] || 'background:#f1f5f9;color:#475569';
+        return '<tr class="border-b border-slate-50 hover:bg-slate-50/50">'
+          + '<td class="px-5 py-3"><p class="font-semibold text-slate-700 text-xs">' + escaparHTML(c.nome||'') + '</p>'
+          + (c.fonteRecurso ? '<p class="text-[10px] text-slate-400">' + escaparHTML(c.fonteRecurso) + '</p>' : '') + '</td>'
+          + '<td class="px-4 py-3"><span style="font-size:9px;font-weight:900;padding:2px 8px;border-radius:99px;'+stCls+'">' + escaparHTML(c.status||'—') + '</span></td>'
+          + '<td class="px-4 py-3 font-black text-slate-700 text-xs">' + _relFmt(total) + '</td>'
+          + '<td class="px-4 py-3 font-black text-emerald-600 text-xs">' + _relFmt(alocado) + '</td>'
+          + '<td class="px-4 py-3 font-black text-xs" style="color:' + (saldo<0?'#ef4444':'#64748b') + '">' + _relFmt(saldo) + '</td>'
+          + '<td class="px-4 py-3"><div style="display:flex;align-items:center;gap:6px">'
+          + '<div style="flex:1;height:5px;background:#f1f5f9;border-radius:99px;overflow:hidden">'
+          + '<div style="height:100%;width:'+pct+'%;background:'+barCor+';border-radius:99px"></div></div>'
+          + '<span style="font-size:9px;font-weight:900;color:'+barCor+';min-width:28px;text-align:right">'+pct+'%</span></div></td>'
+          + '</tr>';
+      }).join('') + '</tbody></table>';
+}
+
+window._onShow_aba_rel_financeiros = function() {
+  if (!_relFinCache) carregarRelFinanceiros();
+};
+</script>

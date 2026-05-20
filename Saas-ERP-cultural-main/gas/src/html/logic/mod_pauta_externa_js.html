@@ -1,0 +1,348 @@
+<script>
+// @file mod_pauta_externa_js.html
+// @dependencies GAS.pautaExterna (server_bridge_js), AppState
+
+// ── Estado ────────────────────────────────────────────────────────────────────
+var _pautaCache         = [];
+var _pautaCacheFiltered = [];
+var _pautaAtual         = null;
+
+// ── Bootstrap ─────────────────────────────────────────────────────────────────
+
+function pautaInit() {
+  pautaCarregar();
+}
+
+function pautaCarregar() {
+  var lista = document.getElementById('pauta-lista');
+  if (lista) lista.innerHTML = '<div class="text-center py-8 text-teal-300"><i class="fas fa-spinner fa-spin text-2xl"></i></div>';
+
+  var filtros = {
+    status: document.getElementById('pauta-filtro-status') ? document.getElementById('pauta-filtro-status').value : ''
+  };
+
+  GAS.pautaExterna.listar(filtros,
+    function(r) {
+      if (!r.ok) { _pautaErro(r.error && r.error.message); return; }
+      _pautaCache         = r.data || [];
+      _pautaCacheFiltered = _pautaCache.slice();
+      _pautaRenderizarLista();
+      _pautaRenderizarStats();
+    },
+    function(e) { _pautaErro(e.message); }
+  );
+}
+
+// ── Filtros ───────────────────────────────────────────────────────────────────
+
+function pautaFiltrarLista() {
+  var busca  = (document.getElementById('pauta-busca') ? document.getElementById('pauta-busca').value : '').toLowerCase();
+  var status = document.getElementById('pauta-filtro-status') ? document.getElementById('pauta-filtro-status').value : '';
+
+  _pautaCacheFiltered = _pautaCache.filter(function(p) {
+    var matchBusca  = !busca ||
+      (p.protocolo || '').toLowerCase().indexOf(busca) !== -1 ||
+      (p.solicitante && (p.solicitante.nome || '').toLowerCase().indexOf(busca) !== -1) ||
+      (p.proposta && (p.proposta.titulo || '').toLowerCase().indexOf(busca) !== -1);
+    var matchStatus = !status || p.status === status;
+    return matchBusca && matchStatus;
+  });
+  _pautaRenderizarLista();
+}
+
+// ── Renderização ──────────────────────────────────────────────────────────────
+
+function _pautaRenderizarLista() {
+  var lista = document.getElementById('pauta-lista');
+  if (!lista) return;
+
+  if (!_pautaCacheFiltered.length) {
+    lista.innerHTML = '<div class="text-center text-gray-400 py-10 text-sm">Nenhuma pauta encontrada.</div>';
+    return;
+  }
+
+  lista.innerHTML = _pautaCacheFiltered.map(function(p) {
+    var cor = _pautaCorStatus(p.status);
+    var isAtiva = _pautaAtual && _pautaAtual.id === p.id;
+    var nome = p.solicitante ? p.solicitante.nome : '-';
+    var proposta = p.proposta ? p.proposta.titulo : '-';
+    return '<div onclick="pautaSelecionarPauta(\'' + p.id + '\')" class="cursor-pointer rounded-xl border p-3 hover:shadow-sm transition ' +
+      (isAtiva ? 'border-teal-300 bg-teal-50' : 'border-gray-200 bg-white hover:border-teal-200') + '">' +
+      '<div class="flex items-start justify-between gap-2">' +
+        '<div class="flex-1 min-w-0">' +
+          '<p class="text-xs text-gray-400 font-mono">' + _esc(p.protocolo || '-') + '</p>' +
+          '<p class="font-semibold text-gray-800 text-sm truncate">' + _esc(proposta) + '</p>' +
+          '<p class="text-xs text-gray-500 mt-0.5">' + _esc(nome) + '</p>' +
+        '</div>' +
+        '<span class="text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0" style="' + cor.style + '">' + cor.label + '</span>' +
+      '</div>' +
+      '<p class="text-xs text-gray-400 mt-1.5">' + _pautaFmtData(p.criadoEm) + '</p>' +
+    '</div>';
+  }).join('');
+}
+
+function _pautaRenderizarStats() {
+  var bar = document.getElementById('pauta-stats-bar');
+  if (!bar) return;
+  var total     = _pautaCache.length;
+  var recebidas = _pautaCache.filter(function(p) { return p.status === 'recebida'; }).length;
+  var analise   = _pautaCache.filter(function(p) { return p.status === 'em_analise'; }).length;
+  var aprovadas = _pautaCache.filter(function(p) { return p.status === 'aprovada'; }).length;
+  var indefrid  = _pautaCache.filter(function(p) { return p.status === 'indeferida'; }).length;
+
+  bar.innerHTML = [
+    ['Total', total, '#0d9488', '#ccfbf1'],
+    ['Novas', recebidas, '#d97706', '#fef3c7'],
+    ['Em Análise', analise, '#2563eb', '#dbeafe'],
+    ['Aprovadas', aprovadas, '#059669', '#d1fae5'],
+    ['Indeferidas', indefrid, '#dc2626', '#fee2e2']
+  ].map(function(i) {
+    return '<div class="flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold" style="background:' + i[3] + ';color:' + i[2] + '">' +
+      '<span>' + i[0] + ':</span><span class="text-sm">' + i[1] + '</span></div>';
+  }).join('');
+
+  // Badge na sidebar
+  var badge = document.getElementById('badgePautasPendentes');
+  if (badge) {
+    var pendentes = recebidas + analise;
+    if (pendentes > 0) {
+      badge.textContent = pendentes;
+      badge.classList.remove('hidden');
+    } else {
+      badge.classList.add('hidden');
+    }
+  }
+
+  // Badge total no header da aba
+  var badgeTotal = document.getElementById('pauta-badge-total');
+  if (badgeTotal && total > 0) {
+    badgeTotal.textContent = total;
+    badgeTotal.classList.remove('hidden');
+  }
+}
+
+// ── Detalhe ───────────────────────────────────────────────────────────────────
+
+function pautaSelecionarPauta(id) {
+  var p = _pautaCache.find(function(x) { return x.id === id; });
+  if (!p) return;
+  _pautaAtual = p;
+  _pautaRenderizarLista();
+  _pautaRenderizarDetalhe(p);
+}
+
+function _pautaRenderizarDetalhe(p) {
+  var det = document.getElementById('pauta-detalhe');
+  if (!det) return;
+
+  var cor  = _pautaCorStatus(p.status);
+  var sol  = p.solicitante || {};
+  var prop = p.proposta    || {};
+  var rider = p.rider      || {};
+  var isGestor = AppState.usuario && (AppState.usuario.isAdmin || AppState.usuario.isSuperadmin || AppState.usuario.isGestor);
+  var podeAprovar   = isGestor && (p.status === 'em_analise' || p.status === 'recebida');
+  var podeIndefirir = isGestor && (p.status === 'em_analise' || p.status === 'recebida');
+  var podeAjuste    = isGestor && p.status === 'em_analise';
+
+  det.innerHTML =
+    '<div class="p-5 h-full overflow-y-auto">' +
+
+    // Header
+    '<div class="flex items-start justify-between gap-3 mb-4">' +
+      '<div>' +
+        '<p class="text-xs text-gray-400 font-mono">' + _esc(p.protocolo) + '</p>' +
+        '<h3 class="text-lg font-bold text-gray-800">' + _esc(prop.titulo || 'Sem título') + '</h3>' +
+        '<p class="text-sm text-gray-500">' + _esc(prop.linguagem || '') + ' — ' + _esc(sol.nome || '') + '</p>' +
+      '</div>' +
+      '<span class="text-xs font-bold px-3 py-1 rounded-full" style="' + cor.style + '">' + cor.label + '</span>' +
+    '</div>' +
+
+    // Ações rápidas
+    '<div class="flex flex-wrap gap-2 mb-4">' +
+      (p.status === 'recebida' ?
+        '<button onclick="pautaIniciarAnalise(\'' + p.id + '\')" class="text-xs px-3 py-1.5 bg-teal-600 text-white rounded-lg hover:bg-teal-700 font-medium"><i class="fas fa-search mr-1"></i>Iniciar Análise</button>' : '') +
+      (podeAprovar ? '<button onclick="pautaAbrirModal(\'' + p.id + '\',\'aprovar\',\'Aprovação de Pauta\')" class="text-xs px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium"><i class="fas fa-check mr-1"></i>Aprovar</button>' : '') +
+      (podeAjuste  ? '<button onclick="pautaAbrirModal(\'' + p.id + '\',\'ajuste\',\'Solicitar Ajuste\')" class="text-xs px-3 py-1.5 bg-amber-500 text-white rounded-lg hover:bg-amber-600 font-medium"><i class="fas fa-edit mr-1"></i>Solicitar Ajuste</button>' : '') +
+      (podeIndefirir ? '<button onclick="pautaAbrirModal(\'' + p.id + '\',\'indeferir\',\'Indeferir Pauta\')" class="text-xs px-3 py-1.5 border border-red-300 text-red-600 rounded-lg hover:bg-red-50 font-medium"><i class="fas fa-ban mr-1"></i>Indeferir</button>' : '') +
+    '</div>' +
+
+    // Solicitante
+    '<div class="bg-slate-50 border border-slate-200 rounded-xl p-3 mb-3">' +
+      '<p class="text-xs font-bold text-slate-600 uppercase mb-2">Dados do Solicitante</p>' +
+      '<div class="grid grid-cols-2 gap-2 text-sm">' +
+        _pautaMeta('Nome', sol.nome) +
+        _pautaMeta('E-mail', sol.email) +
+        _pautaMeta('Telefone', sol.telefone) +
+        _pautaMeta('Organização', sol.organizacao) +
+        (sol.mapaCultural ? _pautaMeta('Mapa Cultural', sol.mapaCultural) : '') +
+      '</div>' +
+    '</div>' +
+
+    // Proposta
+    '<div class="bg-teal-50 border border-teal-200 rounded-xl p-3 mb-3">' +
+      '<p class="text-xs font-bold text-teal-700 uppercase mb-2">Proposta Artística</p>' +
+      '<div class="text-sm space-y-1">' +
+        _pautaMeta('Linguagem', prop.linguagem) +
+        _pautaMeta('Classif.', prop.classificacaoIndicativa) +
+        _pautaMeta('Público-alvo', prop.publicoAlvo) +
+        _pautaMeta('Gratuito', prop.gratuito !== false ? 'Sim' : 'Não') +
+        _pautaMeta('Acessibilidade', prop.acessibilidade ? 'Sim' : 'Não') +
+        (prop.sinopse ? '<div class="col-span-2 mt-1"><p class="text-xs text-gray-400">Sinopse</p><p class="text-gray-700 text-xs">' + _esc(prop.sinopse) + '</p></div>' : '') +
+      '</div>' +
+    '</div>' +
+
+    // Rider técnico
+    '<div class="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-3">' +
+      '<p class="text-xs font-bold text-amber-700 uppercase mb-2">Rider Técnico</p>' +
+      '<div class="flex flex-wrap gap-2 text-xs">' +
+        (rider.palco      ? '<span class="bg-amber-100 text-amber-700 px-2 py-1 rounded-lg">Palco</span>' : '') +
+        (rider.iluminacao ? '<span class="bg-amber-100 text-amber-700 px-2 py-1 rounded-lg">Iluminação</span>' : '') +
+        (rider.sonorizacao ? '<span class="bg-amber-100 text-amber-700 px-2 py-1 rounded-lg">Sonorização</span>' : '') +
+        (rider.camerim    ? '<span class="bg-amber-100 text-amber-700 px-2 py-1 rounded-lg">Camarim</span>' : '') +
+        (rider.projecao   ? '<span class="bg-amber-100 text-amber-700 px-2 py-1 rounded-lg">Projeção</span>' : '') +
+        (!rider.palco && !rider.iluminacao && !rider.sonorizacao && !rider.camerim ? '<span class="text-gray-400">Nenhum item técnico informado</span>' : '') +
+      '</div>' +
+      (rider.observacoes ? '<p class="text-xs text-gray-500 mt-2">' + _esc(rider.observacoes) + '</p>' : '') +
+    '</div>' +
+
+    // Datas e espaços
+    (p.datasSolicitadas && p.datasSolicitadas.length ? '<div class="mb-3"><p class="text-xs font-bold text-gray-600 uppercase mb-2">Datas e Espaços</p>' +
+      '<div class="space-y-1">' +
+        p.datasSolicitadas.map(function(d) {
+          return '<div class="text-xs bg-gray-50 border border-gray-100 rounded-lg px-3 py-2">' +
+            '<span class="font-medium">' + _esc(d.data) + '</span>' +
+            (d.horaInicio ? ' — ' + _esc(d.horaInicio) + ' às ' + _esc(d.horaFim) : '') +
+          '</div>';
+        }).join('') +
+      '</div>' +
+      (p.conflitosDetectados && p.conflitosDetectados.length ? '<div class="mt-2 bg-red-50 border border-red-200 rounded-lg px-3 py-2">' +
+        '<p class="text-xs font-bold text-red-700">⚠️ Conflitos detectados:</p>' +
+        p.conflitosDetectados.map(function(c) {
+          return '<p class="text-xs text-red-600">' + _esc(c.data) + ' — ' + _esc(c.mensagem) + '</p>';
+        }).join('') + '</div>' : '') +
+    '</div>' : '') +
+
+    // Parecer final
+    (p.parecerFinal ? '<div class="bg-gray-50 border border-gray-200 rounded-xl p-3 mb-3">' +
+      '<p class="text-xs font-bold text-gray-600 uppercase mb-1">Parecer Institucional</p>' +
+      '<p class="text-sm text-gray-700">' + _esc(p.parecerFinal) + '</p></div>' : '') +
+
+    // Timeline
+    '<div>' +
+      '<p class="text-xs font-bold text-gray-600 uppercase mb-2">Timeline</p>' +
+      '<div class="space-y-1.5">' +
+        (p.timeline || []).slice(-10).reverse().map(function(ev) {
+          return '<div class="flex gap-2 text-xs">' +
+            '<span class="text-gray-400 flex-shrink-0 w-28">' + _pautaFmtDataHora(ev.timestamp) + '</span>' +
+            '<span class="text-gray-600">' + _esc(ev.descricao) + '</span>' +
+          '</div>';
+        }).join('') +
+      '</div>' +
+    '</div>' +
+
+    '</div>';
+}
+
+function _pautaMeta(label, valor) {
+  if (!valor) return '';
+  return '<div><p class="text-xs text-gray-400">' + label + '</p><p class="text-gray-700 truncate">' + _esc(String(valor)) + '</p></div>';
+}
+
+// ── Ações ─────────────────────────────────────────────────────────────────────
+
+function pautaIniciarAnalise(id) {
+  GAS.pautaExterna.iniciarAnalise(id, '',
+    function(r) {
+      if (!r.ok) { alert('Erro: ' + (r.error && r.error.message)); return; }
+      _pautaAtual = r.data;
+      pautaCarregar();
+    },
+    function(e) { alert('Erro: ' + e.message); }
+  );
+}
+
+function pautaAbrirModal(id, tipo, titulo) {
+  document.getElementById('pauta-acao-id').value   = id;
+  document.getElementById('pauta-acao-tipo').value  = tipo;
+  document.getElementById('pauta-modal-acao-titulo').textContent = titulo;
+  document.getElementById('pauta-acao-texto').value = '';
+  document.getElementById('pauta-acao-texto').placeholder = tipo === 'aprovar' ? 'Parecer de aprovação (opcional)…' :
+    tipo === 'ajuste' ? 'Descreva os ajustes necessários…' : 'Motivo do indeferimento *';
+  document.getElementById('pauta-modal-acao').classList.remove('hidden');
+}
+
+function pautaExecutarAcao() {
+  var id    = document.getElementById('pauta-acao-id').value;
+  var tipo  = document.getElementById('pauta-acao-tipo').value;
+  var texto = document.getElementById('pauta-acao-texto').value.trim();
+
+  if ((tipo === 'indeferir' || tipo === 'ajuste') && !texto) {
+    alert('O campo de parecer/motivo é obrigatório.');
+    return;
+  }
+
+  function ok(r) {
+    if (!r.ok) { alert('Erro: ' + (r.error && r.error.message)); return; }
+    document.getElementById('pauta-modal-acao').classList.add('hidden');
+    pautaCarregar();
+  }
+  function err(e) { alert('Erro: ' + e.message); }
+
+  var fnMap = {
+    aprovar:   function() { GAS.pautaExterna.aprovar(id, texto, ok, err); },
+    indeferir: function() { GAS.pautaExterna.indeferir(id, texto, ok, err); },
+    ajuste:    function() { GAS.pautaExterna.solicitarAjuste(id, texto, ok, err); }
+  };
+
+  if (fnMap[tipo]) fnMap[tipo]();
+}
+
+function pautaCopiarLink() {
+  var url = (typeof AppState !== 'undefined' && AppState.appUrl) ? AppState.appUrl :
+            (typeof window.__APP_URL__ !== 'undefined' ? window.__APP_URL__ : window.location.href.split('?')[0]);
+  var link = url + '?secao=pauta';
+  navigator.clipboard.writeText(link).then(function() {
+    alert('Link copiado:\n' + link + '\n\nCompartilhe este link com os solicitantes externos.');
+  }).catch(function() {
+    prompt('Copie o link abaixo:', link);
+  });
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function _pautaCorStatus(status) {
+  var map = {
+    recebida:              { label:'Recebida',       style:'background:#fef3c7;color:#92400e' },
+    em_analise:            { label:'Em Análise',      style:'background:#dbeafe;color:#1d4ed8' },
+    aguardando_ajuste:     { label:'Aguard. Ajuste',  style:'background:#fde68a;color:#b45309' },
+    parcialmente_aprovada: { label:'Parc. Aprovada',  style:'background:#bbf7d0;color:#065f46' },
+    aprovada:              { label:'Aprovada',        style:'background:#d1fae5;color:#065f46' },
+    indeferida:            { label:'Indeferida',      style:'background:#fee2e2;color:#991b1b' },
+    cancelada:             { label:'Cancelada',       style:'background:#f1f5f9;color:#475569' },
+    concluida:             { label:'Concluída',       style:'background:#d1fae5;color:#166534' }
+  };
+  return map[status] || { label: status, style: 'background:#f1f5f9;color:#475569' };
+}
+
+function _pautaFmtData(iso) {
+  if (!iso) return '-';
+  try { return new Date(iso).toLocaleDateString('pt-BR'); } catch(e) { return iso; }
+}
+
+function _pautaFmtDataHora(iso) {
+  if (!iso) return '';
+  try {
+    var d = new Date(iso);
+    return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'});
+  } catch(e) { return iso; }
+}
+
+function _esc(str) {
+  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function _pautaErro(msg) {
+  var lista = document.getElementById('pauta-lista');
+  if (lista) lista.innerHTML = '<div class="text-center text-red-400 py-8 text-sm"><i class="fas fa-triangle-exclamation mb-2"></i><p>' + _esc(msg || 'Erro') + '</p></div>';
+}
+</script>

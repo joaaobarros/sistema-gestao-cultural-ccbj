@@ -1,0 +1,170 @@
+<!--
+@file logic/mod_contratacoes_js.html
+@type logic
+@description Lógica de frontend do módulo de Contratações — fluxo de caixa e contratos financeiros.
+@dependencies GAS.contratacoes, GAS.contratos, escaparHTML, temPermissao, AppState
+-->
+<script>
+var _cttCache = [];
+
+function _cttStatusCls(s) {
+  return {
+    'Em Análise':  'background:#eff6ff;color:#1d4ed8',
+    'Aprovado':    'background:#d1fae5;color:#065f46',
+    'Em Execução': 'background:#fef3c7;color:#92400e',
+    'Concluído':   'background:#f0fdf4;color:#166534',
+    'Cancelado':   'background:#fee2e2;color:#991b1b'
+  }[s] || 'background:#f1f5f9;color:#475569';
+}
+
+function _cttFmt(v) {
+  if (typeof _fmtMoeda === 'function') return _fmtMoeda(v);
+  return 'R$ ' + (Number(v)||0).toFixed(2).replace('.',',');
+}
+
+function carregarContratacoes() {
+  var c = document.getElementById('contratacaoContainer');
+  if (c) c.innerHTML = '<div class="p-8 text-center"><i class="fas fa-spinner animate-spin text-amber-300 text-xl"></i></div>';
+  GAS.contratacoes.listar(function(lista) {
+    _cttCache = lista || [];
+    _cttFiltrar();
+  }, function() {
+    if (c) c.innerHTML = '<div class="p-8 text-center text-red-400 text-sm"><i class="fas fa-exclamation-triangle mr-2"></i>Erro ao carregar contratações.</div>';
+  });
+}
+
+function _cttFiltrar() {
+  var busca = (document.getElementById('cttBusca')?.value||'').toLowerCase();
+  var tipo  = document.getElementById('cttFiltroTipo')?.value || '';
+  var st    = document.getElementById('cttFiltroStatus')?.value || '';
+  var c     = document.getElementById('contratacaoContainer');
+  if (!c) return;
+
+  var lista = _cttCache.filter(function(ct) {
+    if (busca && !String(ct.fornecedor||'').toLowerCase().includes(busca) &&
+                 !String(ct.objeto||'').toLowerCase().includes(busca)) return false;
+    if (tipo) {
+      var _PJ_TIPOS = ['PJ', 'MEI', 'ME'];
+      if (tipo === '_PJ') { if (_PJ_TIPOS.indexOf(ct.tipo) === -1) return false; }
+      else if (ct.tipo !== tipo) return false;
+    }
+    if (st   && ct.status !== st) return false;
+    return true;
+  });
+
+  var totalFiltrado = lista.reduce(function(s, ct) { return s + (Number(ct.valor)||0); }, 0);
+
+  if (!lista.length) {
+    c.innerHTML = '<div class="p-12 text-center"><i class="fas fa-handshake text-slate-200 text-4xl mb-3"></i>'
+      + '<p class="text-slate-400 font-bold text-sm">' + (_cttCache.length ? 'Nenhuma contratação encontrada.' : 'Nenhuma contratação cadastrada.') + '</p>'
+      + (temPermissao('contratacoes','editar') ? '<button onclick="abrirModalContratacao()" class="mt-4 bg-amber-500 text-white text-xs font-black px-4 py-2 rounded-xl">+ Nova Contratação</button>' : '')
+      + '</div>';
+    return;
+  }
+
+  c.innerHTML = (lista.length ? '<div style="padding:10px 20px;background:#fffbeb;border-bottom:1px solid #fef3c7;font-size:10px;font-weight:900;color:#92400e">'
+    + '<i class="fas fa-coins mr-1"></i>' + lista.length + ' contratações — Total: ' + _cttFmt(totalFiltrado) + '</div>' : '')
+    + '<table class="w-full text-sm"><thead>'
+    + '<tr class="border-b border-slate-100 bg-slate-50/50 text-left">'
+    + '<th class="px-5 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Fornecedor / Objeto</th>'
+    + '<th class="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Tipo</th>'
+    + '<th class="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Modalidade</th>'
+    + '<th class="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Valor</th>'
+    + '<th class="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Status</th>'
+    + '<th class="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Vigência</th>'
+    + '<th class="px-4 py-3"></th></tr></thead><tbody>'
+    + lista.map(function(ct) {
+        return '<tr class="border-b border-slate-50 hover:bg-slate-50/50">'
+          + '<td class="px-5 py-3"><p class="font-semibold text-slate-700 text-xs">' + escaparHTML(ct.fornecedor||'') + '</p>'
+          + (ct.objeto ? '<p class="text-[10px] text-slate-400 truncate max-w-xs">' + escaparHTML(ct.objeto) + '</p>' : '') + '</td>'
+          + '<td class="px-4 py-3 text-[11px] text-slate-500">' + escaparHTML(ct.tipo||'—') + '</td>'
+          + '<td class="px-4 py-3 text-[11px] text-slate-500">' + escaparHTML(ct.modalidade||'—') + '</td>'
+          + '<td class="px-4 py-3 font-black text-emerald-600 text-xs">' + _cttFmt(ct.valor) + '</td>'
+          + '<td class="px-4 py-3"><span style="font-size:9px;font-weight:900;padding:2px 8px;border-radius:99px;' + _cttStatusCls(ct.status) + '">' + escaparHTML(ct.status||'—') + '</span></td>'
+          + '<td class="px-4 py-3 text-[10px] text-slate-400">' + escaparHTML(ct.vigenciaIni||'') + (ct.vigenciaFim ? ' — ' + escaparHTML(ct.vigenciaFim) : '') + '</td>'
+          + '<td class="px-4 py-3">'
+          + (temPermissao('contratacoes','editar') ? '<button onclick="abrirModalContratacao(\'' + escaparHTML(ct.id) + '\')" class="text-amber-400 hover:text-amber-600 mr-2"><i class="fas fa-edit text-xs"></i></button>' : '')
+          + (temPermissao('contratacoes','excluir') ? '<button onclick="_excluirContratacao(\'' + escaparHTML(ct.id) + '\')" class="text-red-300 hover:text-red-500"><i class="fas fa-trash text-xs"></i></button>' : '')
+          + '</td></tr>';
+      }).join('') + '</tbody></table>';
+}
+
+function abrirModalContratacao(id) {
+  var dado = id ? _cttCache.find(function(ct){ return ct.id===id; }) : {};
+  dado = dado || {};
+  Swal.fire({
+    title: id ? 'Editar Contratação' : 'Nova Contratação',
+    width: Math.min(580, window.innerWidth-32),
+    showCancelButton: true,
+    confirmButtonText: '<i class="fas fa-save mr-1"></i>Salvar',
+    cancelButtonText: 'Cancelar',
+    confirmButtonColor: '#f59e0b',
+    customClass:{ popup:'rounded-3xl', confirmButton:'rounded-xl font-black text-sm', cancelButton:'rounded-xl font-bold text-sm' },
+    html: '<div class="text-left" style="padding:0 20px 16px">'
+      + '<div style="margin-bottom:10px"><label style="display:block;font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">Fornecedor / Prestador *</label>'
+      + '<input id="cttFornecedor" style="width:100%;padding:9px 13px;font-size:13px;border:1.5px solid #e2e8f0;border-radius:12px;outline:none;box-sizing:border-box" value="' + escaparHTML(dado.fornecedor||'') + '" placeholder="Nome do fornecedor ou CPF/CNPJ"></div>'
+      + '<div style="margin-bottom:10px"><label style="display:block;font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">Objeto / Serviço</label>'
+      + '<input id="cttObjeto" style="width:100%;padding:9px 13px;font-size:12px;border:1.5px solid #e2e8f0;border-radius:12px;outline:none;box-sizing:border-box" value="' + escaparHTML(dado.objeto||'') + '" placeholder="Descrição do serviço ou produto"></div>'
+      + '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px">'
+      + '<div><label style="display:block;font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">Tipo</label>'
+      + '<select id="cttTipo" style="width:100%;padding:9px 13px;font-size:12px;border:1.5px solid #e2e8f0;border-radius:12px;outline:none">'
+      + [
+          { v:'PF',  l:'PF — Pessoa Física' },
+          { v:'PJ',  l:'PJ — Empresa Genérica' },
+          { v:'MEI', l:'MEI — Microempreendedor Individual' },
+          { v:'ME',  l:'ME — Microempresa' }
+        ].map(function(o){ return '<option value="'+o.v+'"'+(dado.tipo===o.v?' selected':'')+'>'+o.l+'</option>'; }).join('')
+      + '</select></div>'
+      + '<div><label style="display:block;font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">Modalidade</label>'
+      + '<select id="cttModalidade" style="width:100%;padding:9px 13px;font-size:12px;border:1.5px solid #e2e8f0;border-radius:12px;outline:none">'
+      + ['Dispensa','Inexigibilidade','Pregão','Convite','Outro'].map(function(m){ return '<option'+(dado.modalidade===m?' selected':'')+'>'+m+'</option>'; }).join('')
+      + '</select></div>'
+      + '<div><label style="display:block;font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">Status</label>'
+      + '<select id="cttStatus" style="width:100%;padding:9px 13px;font-size:12px;border:1.5px solid #e2e8f0;border-radius:12px;outline:none">'
+      + ['Em Análise','Aprovado','Em Execução','Concluído','Cancelado'].map(function(s){ return '<option'+(dado.status===s?' selected':'')+'>'+s+'</option>'; }).join('')
+      + '</select></div></div>'
+      + '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">'
+      + '<div><label style="display:block;font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">Valor (R$)</label>'
+      + '<input id="cttValor" type="number" min="0" step="0.01" style="width:100%;padding:9px 13px;font-size:12px;border:1.5px solid #e2e8f0;border-radius:12px;outline:none;box-sizing:border-box" value="' + (Number(dado.valor)||'') + '" placeholder="0,00"></div>'
+      + '<div><label style="display:block;font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">Início</label>'
+      + '<input id="cttIni" type="date" style="width:100%;padding:9px 13px;font-size:12px;border:1.5px solid #e2e8f0;border-radius:12px;outline:none;box-sizing:border-box" value="' + escaparHTML(dado.vigenciaIni||'') + '"></div>'
+      + '<div><label style="display:block;font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">Fim</label>'
+      + '<input id="cttFim" type="date" style="width:100%;padding:9px 13px;font-size:12px;border:1.5px solid #e2e8f0;border-radius:12px;outline:none;box-sizing:border-box" value="' + escaparHTML(dado.vigenciaFim||'') + '"></div></div></div>',
+    preConfirm: function() {
+      var f = (document.getElementById('cttFornecedor')?.value||'').trim();
+      if (!f) { Swal.showValidationMessage('Fornecedor obrigatório'); return false; }
+      return { id:dado.id||null, fornecedor:f,
+               objeto:document.getElementById('cttObjeto')?.value.trim(),
+               tipo:document.getElementById('cttTipo')?.value,
+               modalidade:document.getElementById('cttModalidade')?.value,
+               status:document.getElementById('cttStatus')?.value,
+               valor:Number(document.getElementById('cttValor')?.value)||0,
+               vigenciaIni:document.getElementById('cttIni')?.value,
+               vigenciaFim:document.getElementById('cttFim')?.value };
+    }
+  }).then(function(r) {
+    if (!r.isConfirmed) return;
+    showLoader(true);
+    GAS.contratacoes.salvar(r.value, function() {
+      showLoader(false); carregarContratacoes();
+    }, function(e) { showLoader(false); Swal.fire('Erro', e.message,'error'); });
+  });
+}
+
+function _excluirContratacao(id) {
+  Swal.fire({ title:'Excluir contratação?', icon:'warning', showCancelButton:true,
+    confirmButtonColor:'#ef4444', confirmButtonText:'Excluir', cancelButtonText:'Cancelar',
+    customClass:{popup:'rounded-3xl',confirmButton:'rounded-xl font-black text-sm',cancelButton:'rounded-xl font-bold text-sm'}
+  }).then(function(r) {
+    if (!r.isConfirmed) return;
+    showLoader(true);
+    GAS.contratacoes.excluir(id, function() {
+      showLoader(false); carregarContratacoes();
+    }, function(e) { showLoader(false); Swal.fire('Erro', e.message,'error'); });
+  });
+}
+
+window._onShow_aba_contratacoes = function() {
+  if (!_cttCache.length) carregarContratacoes();
+};
+</script>

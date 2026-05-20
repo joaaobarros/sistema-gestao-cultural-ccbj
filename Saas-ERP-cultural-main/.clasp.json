@@ -1,7 +1,8 @@
 {
-  "scriptId": "1MnQh5Qv7Pl3USY7vmPjr3tAOYcghWWKOA-QdkL36QcRaERDJ8TWCPG6l",
-  "rootDir": "Saas-ERP-cultural-main/gas/src",
+  "scriptId": "1VQOR6FPbOmb-DKd64BAnpQkoTnxKyTXeW8cbB9uVlwiXktePTw4K-47K",
+"rootDir": "gas/src",
   "scriptExtensions": [
+    ".js",
     ".gs"
   ],
   "htmlExtensions": [

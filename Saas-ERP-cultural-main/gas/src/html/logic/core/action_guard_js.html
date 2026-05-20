@@ -1,0 +1,328 @@
+<!--
+@file html/logic/core/action_guard_js.html
+@layer frontend/core
+@description Infraestrutura global de proteção de botões e feedback visual.
+             Resolve duplo clique, loading states, race conditions e toasts
+             de forma consistente em todo o sistema.
+@responsibility BtnGuard (lock transacional), Toast (notificações leves).
+@dependencies event_bus_js (carregado antes deste arquivo).
+@loadOrder Deve ser carregado APÓS event_bus_js e ANTES de qualquer módulo.
+-->
+<script>
+
+/**
+ * ========================================
+ * BLOCO: BtnGuard — lock transacional global
+ * ========================================
+ * @description Proteção universal contra duplo clique, spam click e race conditions.
+ *              Desabilita o botão, exibe spinner, restaura automaticamente ao final.
+ *              API idêntica ao _reunBtn local para migração transparente.
+ * @context Usado por todos os módulos que disparam operações assíncronas.
+ * @pattern BtnGuard.wrap(btnId, lockId, label, fn(done))
+ *          BtnGuard.gas(btnId, lockId, label, gasFn, onSuccess, onError)
+ */
+var BtnGuard = (function() {
+  var _locks = {};
+  var _gasCounter = 0;
+
+  function _applyLoading(btn, label) {
+    if (!btn) return;
+    btn.disabled = true;
+    btn._guardOrigHTML     = btn.innerHTML;
+    btn._guardOrigDisabled = btn.disabled; // será false (acabou de ser setado, guarda intencional)
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>' + (label || 'Aguarde...');
+  }
+
+  function _restoreBtn(btn) {
+    if (!btn) return;
+    btn.disabled  = false;
+    btn.innerHTML = btn._guardOrigHTML || btn.innerHTML;
+    delete btn._guardOrigHTML;
+    delete btn._guardOrigDisabled;
+  }
+
+  return {
+    /** Retorna true se a operação já está em curso. */
+    isLocked: function(lockId) {
+      return !!_locks[lockId];
+    },
+
+    /** Adquire lock manualmente (usar quando wrap não se aplica). */
+    lock: function(lockId) {
+      _locks[lockId] = true;
+    },
+
+    /** Libera lock manualmente. */
+    unlock: function(lockId) {
+      delete _locks[lockId];
+    },
+
+    /**
+     * Executa fn(done) com proteção total contra duplo clique.
+     * done() deve ser chamado ao concluir (sucesso ou erro).
+     *
+     * @param {string|null} btnId        — ID do botão (null = sem feedback visual)
+     * @param {string}      lockId       — chave única da operação
+     * @param {string}      label        — texto exibido durante loading
+     * @param {Function}    fn(done)     — função executada; done() libera o lock
+     */
+    wrap: function(btnId, lockId, label, fn) {
+      if (_locks[lockId]) return;
+      _locks[lockId] = true;
+
+      var btn = btnId ? document.getElementById(btnId) : null;
+      _applyLoading(btn, label);
+
+      function done() {
+        delete _locks[lockId];
+        _restoreBtn(btn);
+      }
+
+      try {
+        fn(done);
+      } catch(e) {
+        done();
+        throw e;
+      }
+    },
+
+    /**
+     * Wrapper específico para chamadas GAS — garante unlock no success E no failure.
+     * Suporta duas convenções de chamada:
+     *
+     * Convenção A (legada — gasFn manual):
+     *   BtnGuard.gas(btnId, lockId, label, function(ok, fail){ GAS.ns.fn(args, ok, fail); }, onSuccess, onError)
+     *
+     * Convenção B (nova — referência direta ao método GAS):
+     *   BtnGuard.gas(btnId, GAS.ns.fn, [arg1, arg2], { onSuccess, onError, lockId?, label? })
+     *   O método GAS recebe (...args, successCb, errorCb) automaticamente.
+     *
+     * A convenção é detectada pelo tipo do 2º argumento:
+     *   string  → Convenção A   |   function → Convenção B
+     */
+    gas: function(btnId, lockIdOrGasFnRef, labelOrArgs, gasFnOrOpts, onSuccess, onError) {
+      var self = this;
+
+      // ── Convenção B: gas(btnId, gasFnRef, args, opts) ───────────────────────
+      if (typeof lockIdOrGasFnRef === 'function') {
+        var gasFnRef = lockIdOrGasFnRef;
+        var args     = Array.isArray(labelOrArgs) ? labelOrArgs
+                       : (labelOrArgs != null ? [labelOrArgs] : []);
+        var opts     = (gasFnOrOpts && typeof gasFnOrOpts === 'object') ? gasFnOrOpts : {};
+        var lockId   = opts.lockId || (btnId ? ('gas-btn-' + btnId) : ('gas-' + (++_gasCounter)));
+        var label    = opts.label  || 'Aguarde...';
+
+        self.wrap(btnId, lockId, label, function(done) {
+          var ok = function(data) {
+            done();
+            if (typeof opts.onSuccess === 'function') opts.onSuccess(data);
+          };
+          var fail = function(err) {
+            done();
+            if (typeof opts.onError === 'function') {
+              opts.onError(err);
+            } else if (typeof _handleServerError === 'function') {
+              _handleServerError(err);
+            } else {
+              console.error('[BtnGuard.gas]', err);
+            }
+          };
+          try {
+            gasFnRef.apply(null, args.concat([ok, fail]));
+          } catch(e) {
+            done();
+            console.error('[BtnGuard.gas] falha ao invocar gasFnRef:', e);
+            throw e;
+          }
+        });
+        return;
+      }
+
+      // ── Convenção A: gas(btnId, lockId, label, gasFn, onSuccess, onError) ───
+      var lockId  = lockIdOrGasFnRef;
+      var label   = labelOrArgs;
+      var gasFn   = gasFnOrOpts;
+
+      if (typeof gasFn !== 'function') {
+        console.error('[BtnGuard.gas] gasFn não é uma função. Verifique os argumentos.', {
+          btnId: btnId, lockId: lockId, label: label, gasFn: gasFn
+        });
+        return;
+      }
+
+      self.wrap(btnId, lockId, label, function(done) {
+        var ok = function(data) {
+          done();
+          if (typeof onSuccess === 'function') onSuccess(data);
+        };
+        var fail = function(err) {
+          done();
+          if (typeof onError === 'function') {
+            onError(err);
+          } else if (typeof _handleServerError === 'function') {
+            _handleServerError(err);
+          } else {
+            console.error('[BtnGuard.gas]', err);
+          }
+        };
+        try {
+          gasFn(ok, fail);
+        } catch(e) {
+          done();
+          throw e;
+        }
+      });
+    }
+  };
+})();
+
+
+/**
+ * ========================================
+ * BLOCO: Toast — notificações leves não-bloqueantes
+ * ========================================
+ * @description Sistema de toast flutuante para feedback imediato ao usuário.
+ *              Usa Swal apenas para erros críticos; sucesso/info usam Toast.
+ * @context Complementa SweetAlert2 para operações frequentes que não precisam
+ *          de confirmação modal.
+ * @pattern Toast.success('Mensagem'), Toast.error('Erro'), Toast.info('Info'), Toast.warning('Aviso')
+ */
+var Toast = (function() {
+  var _container = null;
+
+  var _COLORS = {
+    success: '#10b981',
+    error:   '#ef4444',
+    info:    '#3b82f6',
+    warning: '#f59e0b'
+  };
+  var _ICONS = {
+    success: 'fa-check-circle',
+    error:   'fa-times-circle',
+    info:    'fa-info-circle',
+    warning: 'fa-exclamation-triangle'
+  };
+
+  function _getContainer() {
+    if (_container && document.body.contains(_container)) return _container;
+    _container = document.createElement('div');
+    _container.id = 'ccbj-toast-container';
+    _container.style.cssText = [
+      'position:fixed',
+      'bottom:24px',
+      'right:24px',
+      'z-index:99999',
+      'display:flex',
+      'flex-direction:column-reverse',
+      'gap:8px',
+      'pointer-events:none',
+      'max-width:380px'
+    ].join(';');
+    document.body.appendChild(_container);
+    return _container;
+  }
+
+  return {
+    show: function(msg, type, duration) {
+      var c     = _getContainer();
+      var color = _COLORS[type]  || _COLORS.info;
+      var icon  = _ICONS[type]   || _ICONS.info;
+      var dur   = duration || 3500;
+
+      var el = document.createElement('div');
+      el.style.cssText = [
+        'background:white',
+        'border-left:4px solid ' + color,
+        'padding:11px 16px',
+        'border-radius:10px',
+        'box-shadow:0 4px 16px rgba(0,0,0,0.13)',
+        'font-size:13px',
+        'font-family:inherit',
+        'color:#1e293b',
+        'display:flex',
+        'align-items:center',
+        'gap:10px',
+        'pointer-events:auto',
+        'min-width:240px',
+        'max-width:100%',
+        'opacity:1',
+        'transition:opacity 0.3s ease, transform 0.3s ease',
+        'transform:translateX(0)'
+      ].join(';');
+
+      el.innerHTML = '<i class="fas ' + icon + '" style="color:' + color + ';flex-shrink:0;font-size:15px"></i>' +
+                     '<span style="flex:1;line-height:1.4">' + msg + '</span>' +
+                     '<button onclick="this.parentNode.remove()" style="background:none;border:none;color:#94a3b8;cursor:pointer;padding:0;font-size:14px;line-height:1;flex-shrink:0" title="Fechar">&times;</button>';
+
+      c.appendChild(el);
+
+      setTimeout(function() {
+        el.style.opacity   = '0';
+        el.style.transform = 'translateX(20px)';
+        setTimeout(function() {
+          if (el.parentNode) el.parentNode.removeChild(el);
+        }, 320);
+      }, dur);
+    },
+
+    success: function(msg, dur) { this.show(msg, 'success', dur); },
+    error:   function(msg, dur) { this.show(msg, 'error',   dur); },
+    info:    function(msg, dur) { this.show(msg, 'info',    dur); },
+    warning: function(msg, dur) { this.show(msg, 'warning', dur); }
+  };
+})();
+
+
+/**
+ * ========================================
+ * BLOCO: SubmitGuard — proteção de formulários
+ * ========================================
+ * @description Guard para formulários HTML nativos.
+ *              Previne duplo submit e fornece feedback visual no botão de envio.
+ * @pattern SubmitGuard.protect('form-id', handler(e, done))
+ */
+var SubmitGuard = (function() {
+  var _processing = {};
+
+  return {
+    /**
+     * Protege um formulário contra duplo submit.
+     * @param {string}   formId   — ID do formulário
+     * @param {Function} handler(e, done) — handler do submit; done() libera o guard
+     */
+    protect: function(formId, handler) {
+      var form = document.getElementById(formId);
+      if (!form) return;
+
+      form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        if (_processing[formId]) return;
+        _processing[formId] = true;
+
+        var btn = form.querySelector('[type="submit"]');
+        var originalHTML = btn ? btn.innerHTML : '';
+        if (btn) {
+          btn.disabled  = true;
+          btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Processando...';
+        }
+
+        function done() {
+          delete _processing[formId];
+          if (btn) {
+            btn.disabled  = false;
+            btn.innerHTML = originalHTML;
+          }
+        }
+
+        try {
+          handler(e, done);
+        } catch(ex) {
+          done();
+          throw ex;
+        }
+      });
+    }
+  };
+})();
+
+</script>

@@ -1,0 +1,328 @@
+<!--
+@file mod_balcao.html
+@type module
+@description Balcão da Comunicação — pipeline editorial institucional.
+             Processa de comunicação são tarefas do TarefaEngine (modulo='comunicacao').
+             Entregas são subtarefas (tipo='entrega_comunicacao').
+             Revisões são comentários estruturados (tipo='revisao').
+@responsibility HTML + CSS + JS da aba #aba-balcao.
+@dependencies GAS.tarefas.listarComunicacao, GAS.tarefas.criarProcessoComunicacao,
+              GAS.tarefas.sobrecarga, GAS.admin.obterDados,
+              showLoader, escaparHTML, temPermissao
+-->
+
+<style>
+/* ── Botões de modo (Pipeline / Lista / Sobrecarga) ── */
+.balcao-modo-btn {
+  font-size:10px; padding:6px 12px; border-radius:8px;
+  background:#f1f5f9; color:#64748b;
+  transition:all .15s ease; border:none; cursor:pointer;
+  display:inline-flex; align-items:center; gap:4px; font-weight:600;
+}
+.balcao-modo-btn:hover  { background:#6366f1; color:#fff; }
+.balcao-modo-btn.ativo  { background:#1e293b; color:#fff; }
+
+/* ── Filtros de função ── */
+.balcao-func-btn {
+  padding:5px 12px; border-radius:8px; font-size:10px; font-weight:700;
+  border:1.5px solid #e2e8f0; background:#fff; color:#64748b;
+  cursor:pointer; transition:all .15s; white-space:nowrap;
+}
+.balcao-func-btn.ativo { background:#1e293b; color:#fff; border-color:#1e293b; }
+.balcao-func-btn:hover:not(.ativo) { border-color:#6366f1; color:#6366f1; }
+
+/* ── Pipeline Kanban ── */
+.balcao-pipeline {
+  display:grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap:14px;
+}
+.pipeline-col {
+  background:#f8fafc; border-radius:16px;
+  border:1.5px solid #e2e8f0; padding:12px; min-height:180px;
+  transition:background .2s, border-color .2s;
+}
+.pipeline-col.drag-over { border-color:#a5b4fc; background:#eef2ff; }
+.pipeline-col-header {
+  font-size:10px; font-weight:800; text-transform:uppercase;
+  letter-spacing:.06em; margin-bottom:10px;
+  display:flex; justify-content:space-between; align-items:center;
+}
+.pipeline-badge {
+  font-size:10px; font-weight:700; padding:2px 8px;
+  border-radius:99px; min-width:20px; text-align:center;
+}
+
+/* ── Cards de processo ── */
+.processo-card {
+  background:#fff; border-radius:12px; padding:12px;
+  border:1.5px solid #e2e8f0; margin-bottom:8px;
+  cursor:pointer; transition:all .15s ease;
+  user-select:none; position:relative;
+}
+.processo-card:hover {
+  border-color:#6366f1; box-shadow:0 4px 16px rgba(99,102,241,.1);
+  transform:translateY(-1px);
+}
+.processo-card.sla-violado { border-left:3px solid #ef4444; }
+.processo-card.atrasado    { border-left:3px solid #f59e0b; }
+.processo-card.revisao-pendente { border-top:2px solid #8b5cf6; }
+
+/* ── Avatar de responsável ── */
+.avatar-chip {
+  width:22px; height:22px; border-radius:50%;
+  font-size:8px; font-weight:700; color:#fff;
+  display:inline-flex; align-items:center; justify-content:center;
+  border:2px solid #fff; margin-right:-4px; flex-shrink:0;
+  cursor:default;
+}
+
+/* ── Indicadores de sobrecarga ── */
+.sobrecarga-bar {
+  height:6px; border-radius:3px; transition:width .4s ease;
+  background:linear-gradient(to right, #6366f1, #8b5cf6);
+}
+.sobrecarga-bar.critico { background:linear-gradient(to right, #ef4444, #f97316); }
+.sobrecarga-bar.alto    { background:linear-gradient(to right, #f59e0b, #fbbf24); }
+
+/* ── Modal de detalhe ── */
+/*
+ * display:none como padrão — evita conflito com Tailwind .hidden
+ * (mesma especificidade 0,1,0; este <style> é carregado depois do CDN Tailwind)
+ * :not(.hidden) tem especificidade 0,2,0 e garante display:flex no overlay ativo.
+ */
+.balcao-modal-overlay {
+  position:fixed; inset:0; background:rgba(0,0,0,.45);
+  z-index:200; align-items:center; justify-content:center;
+  padding:16px; display:none;
+}
+.balcao-modal-overlay:not(.hidden) { display:flex; }
+.balcao-modal {
+  background:#fff; border-radius:20px; width:100%; max-width:720px;
+  max-height:90vh; overflow-y:auto; box-shadow:0 20px 60px rgba(0,0,0,.2);
+  animation:balcao-modal-in .2s ease;
+}
+@keyframes balcao-modal-in {
+  from { transform:scale(.95) translateY(10px); opacity:0; }
+  to   { transform:scale(1)   translateY(0);    opacity:1; }
+}
+
+/* ── Etapas visuais dentro do modal ── */
+.etapa-timeline {
+  display:flex; align-items:center; gap:0; overflow-x:auto; padding:4px 0;
+}
+.etapa-step {
+  display:flex; flex-direction:column; align-items:center;
+  min-width:80px; position:relative;
+}
+.etapa-step:not(:last-child)::after {
+  content:''; position:absolute; top:14px; left:calc(50% + 14px);
+  width:calc(100% - 28px); height:2px; background:#e2e8f0; z-index:0;
+}
+.etapa-step.ativo::after { background:#6366f1; }
+.etapa-dot {
+  width:28px; height:28px; border-radius:50%;
+  border:2px solid #e2e8f0; background:#fff;
+  display:flex; align-items:center; justify-content:center;
+  font-size:10px; position:relative; z-index:1; transition:all .2s;
+}
+.etapa-step.ativo   .etapa-dot { background:#6366f1; border-color:#6366f1; color:#fff; }
+.etapa-step.concluido .etapa-dot { background:#10b981; border-color:#10b981; color:#fff; }
+.etapa-label { font-size:8px; font-weight:600; color:#94a3b8; margin-top:4px; text-align:center; }
+.etapa-step.ativo   .etapa-label { color:#6366f1; }
+.etapa-step.concluido .etapa-label { color:#10b981; }
+</style>
+
+<section id="aba-balcao" class="tab-content hidden pb-20">
+
+  <!-- HEADER PRINCIPAL -->
+  <div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden mb-4">
+    <div class="p-5 border-b border-slate-100 bg-slate-50/50 flex flex-wrap justify-between items-center gap-3">
+      <div>
+        <h3 class="font-black text-slate-800 uppercase text-sm">
+          <i class="fas fa-bullhorn text-orange-400 mr-2"></i>Balcão da Comunicação
+        </h3>
+        <p class="text-[10px] text-slate-400">Pipeline editorial institucional — demandas, produção e publicização</p>
+      </div>
+      <div class="flex gap-2 flex-wrap items-center">
+        <button onclick="_balcao.nova()"
+          class="bg-orange-500 hover:bg-orange-600 text-white text-[10px] font-black px-4 py-2 rounded-xl transition-all uppercase flex items-center gap-1.5">
+          <i class="fas fa-plus text-[9px]"></i>Nova Demanda
+        </button>
+        <button onclick="_balcao.atualizar()"
+          class="bg-slate-100 hover:bg-slate-200 text-slate-600 text-[10px] font-black px-3 py-2 rounded-xl transition-all">
+          <i class="fas fa-sync-alt text-[9px]"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- MÉTRICAS RÁPIDAS -->
+    <div id="balcao-metricas" class="p-4 grid grid-cols-2 sm:grid-cols-5 gap-3 border-b border-slate-100 bg-white">
+      <div class="text-center">
+        <div id="bm-total"     class="text-2xl font-black text-slate-800">—</div>
+        <div class="text-[9px] text-slate-400 uppercase font-semibold">Total</div>
+      </div>
+      <div class="text-center">
+        <div id="bm-andamento" class="text-2xl font-black text-blue-600">—</div>
+        <div class="text-[9px] text-slate-400 uppercase font-semibold">Em Produção</div>
+      </div>
+      <div class="text-center">
+        <div id="bm-revisao"   class="text-2xl font-black text-purple-600">—</div>
+        <div class="text-[9px] text-slate-400 uppercase font-semibold">Revisões</div>
+      </div>
+      <div class="text-center">
+        <div id="bm-atrasadas" class="text-2xl font-black text-red-500">—</div>
+        <div class="text-[9px] text-slate-400 uppercase font-semibold">Atrasadas</div>
+      </div>
+      <div class="text-center">
+        <div id="bm-concluidas" class="text-2xl font-black text-green-600">—</div>
+        <div class="text-[9px] text-slate-400 uppercase font-semibold">Concluídas</div>
+      </div>
+    </div>
+
+    <!-- FILTROS + MODOS -->
+    <div class="p-4 flex gap-3 flex-wrap border-b border-slate-100 items-center">
+      <div class="relative">
+        <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 text-xs"></i>
+        <input id="balcaoBusca" placeholder="Buscar demanda..."
+          oninput="_balcao.renderizar()"
+          class="pl-9 pr-3 py-2 text-xs rounded-xl border border-slate-200 bg-slate-50 w-48 focus:outline-none focus:border-indigo-400">
+      </div>
+      <div class="flex gap-2 flex-wrap">
+        <button class="balcao-func-btn ativo" data-func="todos" onclick="_balcao.filtrarFuncao(this)">Todos</button>
+        <button class="balcao-func-btn" data-func="design"      onclick="_balcao.filtrarFuncao(this)"><i class="fas fa-palette mr-1"></i>Design</button>
+        <button class="balcao-func-btn" data-func="fotografia"  onclick="_balcao.filtrarFuncao(this)"><i class="fas fa-camera mr-1"></i>Foto</button>
+        <button class="balcao-func-btn" data-func="audiovisual" onclick="_balcao.filtrarFuncao(this)"><i class="fas fa-video mr-1"></i>AV</button>
+        <button class="balcao-func-btn" data-func="redacao"     onclick="_balcao.filtrarFuncao(this)"><i class="fas fa-pen mr-1"></i>Texto</button>
+        <button class="balcao-func-btn" data-func="comunicacao" onclick="_balcao.filtrarFuncao(this)"><i class="fas fa-share-alt mr-1"></i>Social</button>
+      </div>
+      <div class="flex gap-1 ml-auto flex-wrap">
+        <button class="balcao-modo-btn ativo" data-modo="pipeline" onclick="_balcao.setModo(this)">
+          <i class="fas fa-columns text-[9px]"></i>Pipeline
+        </button>
+        <button class="balcao-modo-btn" data-modo="lista" onclick="_balcao.setModo(this)">
+          <i class="fas fa-list text-[9px]"></i>Lista
+        </button>
+        <button class="balcao-modo-btn" data-modo="sobrecarga" onclick="_balcao.setModo(this)">
+          <i class="fas fa-fire text-[9px]"></i>Carga
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ÁREA PRINCIPAL DE CONTEÚDO -->
+  <div id="balcao-conteudo" class="min-h-64">
+    <div class="flex items-center justify-center h-40">
+      <div class="text-slate-400 text-sm"><i class="fas fa-spinner fa-spin mr-2"></i>Carregando...</div>
+    </div>
+  </div>
+
+</section>
+
+<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+<!-- MODAL DE DETALHE DO PROCESSO                        -->
+<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+<div id="balcao-modal-overlay" class="balcao-modal-overlay hidden" onclick="_balcaoFecharModal(event)">
+  <div class="balcao-modal" onclick="event.stopPropagation()">
+    <div id="balcao-modal-body" class="p-6">
+      <div class="flex items-center justify-center h-32 text-slate-400 text-sm">
+        <i class="fas fa-spinner fa-spin mr-2"></i>Carregando...
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+<!-- MODAL DE NOVA DEMANDA                               -->
+<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+<div id="balcao-form-overlay" class="balcao-modal-overlay hidden" onclick="_balcaoFecharForm(event)">
+  <div class="balcao-modal" onclick="event.stopPropagation()">
+    <div class="p-6">
+      <div class="flex justify-between items-center mb-5">
+        <h3 class="font-black text-slate-800 text-base">
+          <i class="fas fa-plus-circle text-orange-400 mr-2"></i>Nova Demanda de Comunicação
+        </h3>
+        <button onclick="_balcaoFecharForm()" class="text-slate-400 hover:text-slate-700 text-lg">&times;</button>
+      </div>
+
+      <!-- CAMPOS -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+        <div class="sm:col-span-2">
+          <label class="text-[10px] font-bold text-slate-600 uppercase tracking-wide">Título da Demanda *</label>
+          <input id="bForm-titulo" type="text" placeholder="Ex: Arte para Mostra de Cinema 2026"
+            class="w-full mt-1 px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-400">
+        </div>
+        <div>
+          <label class="text-[10px] font-bold text-slate-600 uppercase tracking-wide">Prioridade</label>
+          <select id="bForm-prioridade" class="w-full mt-1 px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-400">
+            <option value="baixa">Baixa</option>
+            <option value="media" selected>Média</option>
+            <option value="alta">Alta</option>
+            <option value="critica">Crítica</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-[10px] font-bold text-slate-600 uppercase tracking-wide">Prazo</label>
+          <input id="bForm-prazo" type="date" class="w-full mt-1 px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-400">
+        </div>
+        <div class="sm:col-span-2">
+          <label class="text-[10px] font-bold text-slate-600 uppercase tracking-wide">Responsável</label>
+          <div class="relative mt-1">
+            <input id="bForm-responsavel" type="text" placeholder="Nome ou e-mail do responsável"
+              oninput="_balcaoAutocompletar(this)"
+              class="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-400">
+            <div id="bForm-responsavel-list" class="absolute z-50 w-full bg-white border border-slate-200 rounded-xl shadow-lg mt-1 hidden max-h-40 overflow-y-auto text-xs"></div>
+          </div>
+        </div>
+        <div class="sm:col-span-2">
+          <label class="text-[10px] font-bold text-slate-600 uppercase tracking-wide">Descrição / Briefing</label>
+          <textarea id="bForm-descricao" rows="3" placeholder="Detalhes da demanda, contexto, referências..."
+            class="w-full mt-1 px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-400 resize-none"></textarea>
+        </div>
+        <div class="sm:col-span-2">
+          <label class="text-[10px] font-bold text-slate-600 uppercase tracking-wide mb-2 block">Tipos de entrega necessários</label>
+          <div id="bForm-entregas" class="flex flex-wrap gap-2">
+            <label class="flex items-center gap-1.5 text-xs cursor-pointer px-3 py-1.5 rounded-lg border border-slate-200 hover:border-indigo-300 has-[:checked]:bg-indigo-50 has-[:checked]:border-indigo-400 transition-all">
+              <input type="checkbox" value="design" class="bform-entrega accent-indigo-500"> <i class="fas fa-palette text-purple-500 text-[9px]"></i> Design
+            </label>
+            <label class="flex items-center gap-1.5 text-xs cursor-pointer px-3 py-1.5 rounded-lg border border-slate-200 hover:border-indigo-300 has-[:checked]:bg-indigo-50 has-[:checked]:border-indigo-400 transition-all">
+              <input type="checkbox" value="foto" class="bform-entrega accent-indigo-500"> <i class="fas fa-camera text-blue-500 text-[9px]"></i> Foto
+            </label>
+            <label class="flex items-center gap-1.5 text-xs cursor-pointer px-3 py-1.5 rounded-lg border border-slate-200 hover:border-indigo-300 has-[:checked]:bg-indigo-50 has-[:checked]:border-indigo-400 transition-all">
+              <input type="checkbox" value="video" class="bform-entrega accent-indigo-500"> <i class="fas fa-video text-red-500 text-[9px]"></i> Vídeo
+            </label>
+            <label class="flex items-center gap-1.5 text-xs cursor-pointer px-3 py-1.5 rounded-lg border border-slate-200 hover:border-indigo-300 has-[:checked]:bg-indigo-50 has-[:checked]:border-indigo-400 transition-all">
+              <input type="checkbox" value="release" class="bform-entrega accent-indigo-500"> <i class="fas fa-newspaper text-green-500 text-[9px]"></i> Release
+            </label>
+            <label class="flex items-center gap-1.5 text-xs cursor-pointer px-3 py-1.5 rounded-lg border border-slate-200 hover:border-indigo-300 has-[:checked]:bg-indigo-50 has-[:checked]:border-indigo-400 transition-all">
+              <input type="checkbox" value="divulgacao" class="bform-entrega accent-indigo-500"> <i class="fas fa-share-alt text-orange-500 text-[9px]"></i> Redes sociais
+            </label>
+            <label class="flex items-center gap-1.5 text-xs cursor-pointer px-3 py-1.5 rounded-lg border border-slate-200 hover:border-indigo-300 has-[:checked]:bg-indigo-50 has-[:checked]:border-indigo-400 transition-all">
+              <input type="checkbox" value="cobertura" class="bform-entrega accent-indigo-500"> <i class="fas fa-broadcast-tower text-pink-500 text-[9px]"></i> Cobertura
+            </label>
+          </div>
+        </div>
+        <div class="sm:col-span-2">
+          <label class="text-[10px] font-bold text-slate-600 uppercase tracking-wide">Observações</label>
+          <input id="bForm-obs" type="text" placeholder="Informações adicionais (opcional)"
+            class="w-full mt-1 px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-400">
+        </div>
+      </div>
+
+      <div class="flex justify-end gap-2">
+        <button onclick="_balcaoFecharForm()"
+          class="px-4 py-2 text-xs font-bold text-slate-500 hover:text-slate-800 rounded-xl border border-slate-200 hover:bg-slate-50 transition-all">
+          Cancelar
+        </button>
+        <button onclick="_balcao.salvarNova()"
+          class="px-5 py-2 text-xs font-black bg-orange-500 hover:bg-orange-600 text-white rounded-xl transition-all">
+          <i class="fas fa-save mr-1"></i>Criar Demanda
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+<!-- JAVASCRIPT DO BALCÃO                                -->
+<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->

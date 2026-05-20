@@ -1,0 +1,2143 @@
+<!--
+@file mod_ui_estado_js.html
+@type logic
+@layer frontend
+@description Orquestração de formulário, disponibilidade de itens, salvar agendamento e lógica de IA.
+             Estado global e navegação foram extraídos para core/ e ui/.
+             Funções de conflito/horários foram extraídas para modules/disponibilidade_module_js.
+@responsibility Validar horários no formulário, gerenciar carrinho de itens, salvarAgendamento,
+                inicializar app (inicializarApp), indexar cache (indexarReservas),
+                consultar disponibilidade de itens via backend, lógica de IA.
+@dependencies core/app_state_js (AppState), modules/disponibilidade_module_js (verificarConflitoFrontend),
+              modules/itens_module_js (obterItensFixosDaSala), mod_ui_componentes_js (escaparHTML, showLoader),
+              services/server_bridge_js (GAS), Flatpickr (calendarInstance), SweetAlert2 (Swal)
+-->
+<script>
+
+
+/**
+ * ========================================
+ * BLOCO: Modo RECE — toggle de campos extras
+ * ========================================
+ * @description Exibe/esconde o bloco de campos específicos da Agenda RECE no formulário
+ * @context Ativado pelo checkbox #checkRece no formulário de nova reserva
+ * @inputs Boolean ativado
+ * @sideEffects Atualiza variável modoRece, manipula classList de #blocoRece
+ */
+function alternarModoRece(ativado) {
+  modoRece = ativado;
+  const bloco = document.getElementById('blocoRece');
+  if (bloco) ativado ? bloco.classList.remove('hidden') : bloco.classList.add('hidden');
+}
+
+/**
+ * ========================================
+ * BLOCO: Validação e cálculo de horários
+ * ========================================
+ * @description Valida os horários do formulário (limites 08:00–21:30), calcula o turno
+ *              automaticamente e oferece sugestão de horário livre.
+ *              NOTA: os limites de horário (08:00, 21:30) estão hardcoded aqui; se mudarem
+ *              nas regras de negócio, precisam ser atualizados neste bloco.
+ * @context validarHorarios: listener de change em #horaInicio e #horaTermino
+ *          adicionar1Hora: usada por aplicarSugestaoHorario
+ * @inputs Valores dos inputs #horaInicio e #horaTermino
+ * @outputs Preenche #inputTurnoCalculado; exibe alertas de erro via Swal
+ * @sideEffects Pode limpar os campos de horário se inválidos
+ */
+function validarHorarios() {
+  const inputInicio  = document.getElementById('horaInicio');
+  const inputTermino = document.getElementById('horaTermino');
+  const inputTurno   = document.getElementById('inputTurnoCalculado');
+  const hIni = inputInicio?.value;
+  const hTer = inputTermino?.value;
+  if (!hIni || !hTer) return;
+
+  const toMin = h => { const [hh, mm] = h.split(':').map(Number); return hh * 60 + mm; };
+  const ini = toMin(hIni), ter = toMin(hTer);
+  const MIN = toMin('08:00'), MAX = toMin('21:30');
+
+  if (ini < MIN) { Swal.fire('Horário Inválido', 'Início não pode ser antes das 08:00.', 'warning'); inputInicio.value = ''; inputTurno.value = ''; return; }
+  if (ini >= MAX) { Swal.fire('Horário Inválido', 'Início deve ser anterior a 21:30.', 'warning'); inputInicio.value = ''; inputTurno.value = ''; return; }
+  if (ter > MAX)  { Swal.fire('Horário Inválido', 'Término não pode ultrapassar 21:30.', 'warning'); inputTermino.value = ''; inputTurno.value = ''; return; }
+  if (ter <= ini) { Swal.fire('Horário Inválido', 'Término deve ser posterior ao início.', 'warning'); inputTermino.value = ''; inputTurno.value = ''; return; }
+
+  const horaIni = parseInt(hIni.split(':')[0], 10);
+  const horaFim = parseInt(hTer.split(':')[0], 10);
+  let turno;
+  if      (horaIni < 12  && horaFim <= 12) turno = 'MANHÃ';
+  else if (horaIni >= 12 && horaFim <= 18) turno = 'TARDE';
+  else if (horaIni >= 18)                  turno = 'NOITE';
+  else if (horaIni < 12  && horaFim <= 18) turno = 'MANHÃ/TARDE';
+  else if (horaIni >= 12 && horaFim > 18)  turno = 'TARDE/NOITE';
+  else                                      turno = 'MULTITURNO';
+  inputTurno.value = turno;
+}
+
+
+
+
+function obterSalasDisponiveisBackend(dados, data, callback) {
+
+  const salas = AppState.colecoes.salas || [];
+  const resultado = [];
+
+  let processadas = 0;
+
+  if (!salas.length) {
+    callback([]);
+    return;
+  }
+
+  salas.forEach(s => {
+
+    const payload = {
+      sala: s[0],
+      horaInicio: dados.horaInicio,
+      horaTermino: dados.horaTermino,
+      datas: [data]
+    };
+
+    GAS.reservas.analisarDisponibilidade(payload, function(res) {
+
+        if (!res.conflito) {
+          resultado.push({
+            id: s[0],
+            nome: s[1]
+          });
+        }
+
+        processadas++;
+
+        if (processadas === salas.length) {
+          callback(resultado);
+        }
+
+      }, function() {
+        processadas++;
+        if (processadas === salas.length) {
+          callback(resultado);
+        }
+      });
+
+  });
+}
+
+
+
+/**
+ * ========================================
+ * BLOCO: Disponibilidade de itens do almoxarifado
+ * ========================================
+ * @description Atualiza o select de itens volantes com disponibilidade real para o horário selecionado,
+ *              consultando o backend. Tem timeout de 10s com fallback para estoque total.
+ *              popularSelectVolantesComEstoque é o fallback simples (sem disponibilidade por horário).
+ * @context Chamado ao alterar data, hora ou sala no formulário de reserva
+ * @inputs calendarInstance.selectedDates, #horaInicio, #horaTermino, #selectSala
+ * @outputs Atualiza opções de #selectVolantes com disponibilidade por horário
+ * @sideEffects Chama google.script.run.obterDisponibilidadeItensPorHorario
+ */
+function atualizarDisponibilidadeItens() {
+  const selVolantes = document.getElementById('selectVolantes');
+  const avisoDisp   = document.getElementById('avisoDisponibilidade');
+  if (!selVolantes) return;
+
+  const datasSel = (typeof calendarInstance !== 'undefined' && calendarInstance?.selectedDates) || [];
+  const data     = datasSel[0] || null;
+  const inicio   = document.getElementById('horaInicio')?.value;
+  const termino  = document.getElementById('horaTermino')?.value;
+
+  if (!data || !inicio || !termino) {
+    if (avisoDisp) avisoDisp.classList.remove('hidden');
+    popularSelectVolantesComEstoque();
+    return;
+  }
+
+  if (avisoDisp) avisoDisp.classList.add('hidden');
+  selVolantes.innerHTML = '<option value="">Calculando disponibilidade...</option>';
+  selVolantes.disabled  = true;
+
+  // Formata a data como string DD/MM/YYYY para evitar o TypeError no servidor
+  const dataFormatada = flatpickr.formatDate(data, "d/m/Y");
+  const idSalaAtual = document.getElementById('selectSala')?.value || null;
+
+  const timeoutId = setTimeout(() => {
+    if (selVolantes.disabled) {
+      selVolantes.disabled = false;
+      popularSelectVolantesComEstoque();
+    }
+  }, 10000);
+
+  GAS.reservas.obterDisponibilidadeItens(
+    dataFormatada, inicio, termino, idSalaAtual,
+    function(disponibilidade) {
+      clearTimeout(timeoutId);
+      selVolantes.disabled = false;
+
+      const itens = (typeof AppState !== 'undefined' ? AppState.colecoes.itens : []) || [];
+      const nomesVistos   = new Set();
+      const itensParaExibir = [];
+
+      itens.filter(i => Number(i?.[3]) > 0).forEach(i => {
+        const nome = String(i?.[1] || '').trim();
+        if (!nome || nomesVistos.has(nome)) return;
+        nomesVistos.add(nome);
+        const total     = Number(i?.[3] || 0);
+        const disponivel = Math.max(0, disponibilidade[nome] ?? total);
+        itensParaExibir.push({ nome, total, disponivel: Math.max(0, disponivel), bloqueado: disponivel <= 0 });
+      });
+
+      itensParaExibir.sort((a, b) => {
+        if (a.bloqueado && !b.bloqueado) return 1;
+        if (!a.bloqueado && b.bloqueado) return -1;
+        return a.nome.localeCompare(b.nome);
+      });
+
+      selVolantes.innerHTML =
+        '<option value="">Selecionar item...</option>' +
+        itensParaExibir.map(i => `
+          <option value="${escaparHTML(i.nome)}" data-max="${i.disponivel}" ${i.bloqueado ? 'disabled' : ''}>
+            ${escaparHTML(i.nome)} — ${i.bloqueado
+              ? `🔴 Indisponível neste horário (total: ${i.total})`
+              : `✅ Livre: ${i.disponivel} / ${i.total}`}
+          </option>
+        `).join('');
+
+      if (typeof atualizarMaxQuantidade === 'function') atualizarMaxQuantidade();
+      if (typeof atualizarAvisosCarrinho === 'function') atualizarAvisosCarrinho(disponibilidade);
+    },
+    function() {
+      clearTimeout(timeoutId);
+      selVolantes.disabled = false;
+      popularSelectVolantesComEstoque();
+    }
+  );
+}
+
+function popularSelectVolantesComEstoque() {
+  const selVolantes = document.getElementById('selectVolantes');
+  if (!selVolantes) return;
+  const itens = (typeof AppState !== 'undefined' ? AppState.colecoes.itens : []) || [];
+  const nomesVistos = new Set();
+  const itensUnicos = [];
+  itens.filter(i => Number(i?.[3]) > 0).forEach(i => {
+    const nome = String(i?.[1] || '').trim();
+    if (!nome || nomesVistos.has(nome)) return;
+    nomesVistos.add(nome);
+    itensUnicos.push({ nome, qtd: Number(i?.[3] || 0) });
+  });
+  selVolantes.innerHTML =
+    '<option value="">Selecionar item...</option>' +
+    itensUnicos.map(i => `<option value="${escaparHTML(i.nome)}" data-max="${i.qtd}">${escaparHTML(i.nome)} (Estoque: ${i.qtd})</option>`).join('');
+}
+
+
+/**
+ * ========================================
+ * BLOCO: Exportação da agenda
+ * ========================================
+ * @description Gera e dispara download de CSV com todas as reservas da view atual.
+ *              Usa BOM UTF-8 para compatibilidade com Excel brasileiro.
+ * @context Botão "Exportar CSV" na Agenda Geral
+ * @inputs AppState.colecoes.reservas, AppState.mapaSalas
+ * @outputs Download de arquivo .csv no navegador
+ * @sideEffects Cria e revoga URL temporária no navegador
+ */
+function exportarAgendaCSV() {
+  const todasReservas = AppState.colecoes.reservas || [];
+  if (!todasReservas.length) { Swal.fire('Sem dados', 'Nenhuma reserva para exportar.', 'info'); return; }
+
+  const termoBusca   = (document.getElementById('filtroBusca')?.value  || '').toLowerCase().trim();
+  const setor        = document.getElementById('filtroSetor')?.value    || '';
+  const status       = document.getElementById('filtroStatus')?.value   || '';
+  const turno        = document.getElementById('filtroTurno')?.value    || '';
+  const salaId       = document.getElementById('filtroSala')?.value     || '';
+  const apenasMinhas = document.getElementById('filtroMinhas')?.checked;
+
+  const _parseDataObjCSV = r => {
+    try {
+      const raw = r[1];
+      if (raw instanceof Date) { const d = new Date(raw); d.setHours(0,0,0,0); return d; }
+      const s = String(raw||'').trim();
+      if (s.includes('/')) { const p=s.split('/'); if(p.length===3){ const d=new Date(p[2],p[1]-1,p[0]); d.setHours(0,0,0,0); return d; } }
+      else if (s.includes('-')) { const d=new Date(s); d.setHours(0,0,0,0); return d; }
+    } catch(e) {}
+    return null;
+  };
+
+  const reservas = todasReservas.filter(r => {
+    const nomeAcao    = (r[6]||'').toString().toLowerCase();
+    const idReserva   = (r[0]||'').toString().toLowerCase();
+    const responsavel = (r[8]||'').toString().toLowerCase();
+    const nomeSala    = (AppState.mapaSalas?.[r[4]]||r[4]||'').toString().toLowerCase();
+    const matchBusca  = !termoBusca || nomeAcao.includes(termoBusca) || idReserva.includes(termoBusca) || responsavel.includes(termoBusca) || nomeSala.includes(termoBusca);
+    const matchSala   = !salaId || String(r[4]).trim() === String(salaId).trim();
+    const matchSetor  = !setor  || r[9] === setor;
+    const matchStatus = !status || r[13] === status;
+    const matchTurno  = !turno  || r[5] === turno;
+    const matchUsuario = !apenasMinhas || String(r[8]||'').trim().toLowerCase() === String(AppState.usuario.email||'').trim().toLowerCase();
+    const data = _parseDataObjCSV(r);
+    let matchPeriodo = true;
+    if (data) {
+      const ini = AppState.filtros?.dataInicio;
+      const fim = AppState.filtros?.dataFim;
+      if (ini && fim) matchPeriodo = data >= ini && data <= fim;
+      else if (ini)   matchPeriodo = data >= ini;
+      else if (fim)   matchPeriodo = data <= fim;
+    }
+    return matchBusca && matchSala && matchSetor && matchStatus && matchTurno && matchUsuario && matchPeriodo;
+  });
+
+  if (!reservas.length) { Swal.fire('Sem dados', 'Nenhuma reserva para os filtros aplicados.', 'info'); return; }
+
+  const cab = ['ID','Data','Início','Término','Sala','Turno','Ação','Tipo','Responsável','Setor','Co-resp','Release','Itens','Status','Solicitação','Lote'];
+  const linhas = [cab.join(';')];
+
+  reservas.forEach(r => {
+    const sala = (AppState.mapaSalas && AppState.mapaSalas[r[4]]) || r[4];
+    const linha = [...r];
+    linha[4] = sala;
+    linhas.push(linha.map(v => `"${String(v||'').replace(/"/g,'""')}"`).join(';'));
+  });
+
+  const blob = new Blob(["\uFEFF" + linhas.join('\n')], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `agenda_geral_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+/**
+ * ========================================
+ * BLOCO: Filtros da agenda
+ * ========================================
+ * @description Limpa os campos de filtro e re-renderiza a lista de reservas.
+ *              limparFiltros: para a Agenda Geral.
+ *              limparFiltrosRece: para a Agenda RECE.
+ * @context Botão "Limpar filtros" nas abas de agenda
+ * @sideEffects Chama renderizarReservas ou renderizarTabelaRece
+ */
+function limparFiltros() {
+  const ids = ['filtroBusca','filtroSetor','filtroStatus','filtroSala','filtroTurno'];
+  ids.forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  const selPeriodo = document.getElementById('filtroIntervalo');
+  if (selPeriodo) selPeriodo.value = 'apartir';
+  if (typeof aplicarAtalhoPeriodo === 'function') aplicarAtalhoPeriodo();
+  else if (typeof renderizarReservas === 'function') renderizarReservas();
+}
+
+function limparFiltrosRece() {
+  const ids = ['receBusca','receFiltroInicio','receFiltroFim'];
+  ids.forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  if (typeof renderizarTabelaRece === 'function') renderizarTabelaRece();
+}
+
+
+if (!window.renderizarTabelaRece) {
+  window.renderizarTabelaRece = function() {
+    if (typeof carregarReservasRece === 'function') carregarReservasRece();
+  };
+}
+
+if (!window.limparFiltrosRece) {
+  window.limparFiltrosRece = function() {
+    ['receBusca','receFiltroInicio','receFiltroFim'].forEach(function(id) {
+      var el = document.getElementById(id); if (el) el.value = '';
+    });
+    if (typeof renderizarTabelaRece === 'function') renderizarTabelaRece();
+  };
+}
+
+/**
+ * ========================================
+ * BLOCO: Carrinho de itens (fixos e volantes)
+ * ========================================
+ * @description Gerencia os arrays itensSelecionados e itensFixosSelecionados e
+ *              renderiza os carrinhos visuais no formulário de reserva.
+ *              Itens fixos: vinculados à sala, adicionados ao trocar o espaço.
+ *              Itens volantes: do almoxarifado, adicionados manualmente.
+ * @context Formulário de nova reserva — #carrinhoFixos e #carrinhoVolantes
+ * @inputs Arrays de estado local (itensSelecionados, itensFixosSelecionados)
+ * @outputs HTML injetado nos containers de carrinho
+ * @sideEffects Modifica DOM; arrays modificados por adicionarItemVolante/removerItemFixoCarrinho
+ */
+function renderizarCarrinhoFixos() {
+  const lista = document.getElementById('carrinhoFixos');
+  if (!lista) return;
+  if (!itensFixosSelecionados || itensFixosSelecionados.length === 0) {
+    lista.innerHTML = '<p class="text-[10px] text-slate-500 text-center py-1 italic">Nenhum item fixo selecionado.</p>';
+    return;
+  }
+  lista.innerHTML = itensFixosSelecionados.map((item, index) => `
+    <li class="flex justify-between items-center bg-slate-50 p-2 rounded-xl border border-slate-100 group transition-all hover:bg-white hover:shadow-sm">
+      <span class="text-[11px] font-bold text-slate-700 truncate">
+        <b class="text-indigo-600 mr-1">${escaparHTML(String(item.qtd))}x</b>
+        ${escaparHTML(item.nome)}
+        <span class="text-[9px] text-slate-400">(fixo)</span>
+      </span>
+      <button type="button"
+        onclick="removerItemFixoCarrinho(${index})"
+        class="ml-2 p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg opacity-0 group-hover:opacity-100 transition-all">
+        <i class="fas fa-trash-alt text-xs"></i>
+      </button>
+    </li>
+  `).join('');
+}
+
+function removerItemFixoCarrinho(index) {
+  itensFixosSelecionados.splice(index, 1);
+  renderizarCarrinhoFixos();
+}
+
+// ── Almoxarifado ──────────────────────────────────────────────────────────────
+function adicionarItemVolante() {
+
+  const select   = document.getElementById('selectVolantes');
+  const qtdInput = document.getElementById('qtdVolante');
+
+  if (!select || !qtdInput) return;
+
+  let itemNome = select.value;
+  const quantidade = parseInt(qtdInput.value) || 1;
+
+  // 🔴 NORMALIZAÇÃO REAL (corrige IA e DOM)
+  if (typeof itemNome === 'object') {
+    itemNome = itemNome.nome || itemNome.label || '';
+  }
+
+  itemNome = String(itemNome || '').trim();
+
+  if (!itemNome) {
+    Swal.fire('Atenção', 'Selecione um item antes de adicionar.', 'warning');
+    return;
+  }
+
+  if (quantidade < 1) {
+    Swal.fire('Atenção', 'A quantidade deve ser maior que zero.', 'warning');
+    return;
+  }
+
+  const indexExistente = itensSelecionados.findIndex(i => i.nome === itemNome);
+
+  if (indexExistente > -1) {
+    itensSelecionados[indexExistente].qtd += quantidade;
+  } else {
+    itensSelecionados.push({
+      nome: itemNome,
+      qtd: quantidade
+    });
+  }
+
+  if (typeof renderizarCarrinhoItens === 'function') {
+    renderizarCarrinhoItens();
+  }
+
+  qtdInput.value = 1;
+  select.value   = '';
+}
+
+/**
+ * ========================================
+ * BLOCO: Salvar agendamento
+ * ========================================
+ * @description Ponto de entrada para criação e edição de reservas.
+ *              Coleta todos os dados do formulário, valida campos obrigatórios,
+ *              trata o fluxo de edição RECE separadamente do fluxo padrão,
+ *              e chama o backend. Após sucesso, reseta o formulário e recarrega reservas.
+ * @context Botão "Confirmar Agendamento" / "Salvar" do #formReserva
+ * @inputs DOM: #inputNomeAcao, #selectSala, #horaInicio, #horaTermino, #selectSetor,
+ *              calendarInstance.selectedDates, itensSelecionados, itensFixosSelecionados
+ * @outputs Chama criarReservaController() ou salvarReservaRece() no backend
+ * @sideEffects showLoader, resetarFormulario, mostrarAba, renderizarReservas
+ */
+function _precisaAprovacaoResponsavel(salaId) {
+  if (AppState.usuario.isAdmin) return false;
+  if (!salaId || salaId === 'EXTERNO') return false;
+  const salas = AppState.colecoes.salas || [];
+  const sala = salas.find(function(s) { return String(s[0]).trim() === String(salaId).trim(); });
+  if (!sala) return false;
+  const emailEspacoStr = String(sala[4] || '').trim();
+  if (!emailEspacoStr) return false;
+  let donos = [];
+  try { donos = JSON.parse(emailEspacoStr); } catch(e) { return false; }
+  if (!Array.isArray(donos) || !donos.length) return false;
+  const emailUsuario = String(AppState.usuario.email || '').toLowerCase().trim();
+  const ehResponsavel = donos.some(function(d) {
+    return String(d.email || d || '').toLowerCase().trim() === emailUsuario;
+  });
+  return !ehResponsavel;
+}
+
+async function salvarAgendamento() {
+
+  if (typeof calendarInstance === 'undefined' || !calendarInstance) {
+    Swal.fire('Erro', 'Calendário não inicializado. Recarregue a página.', 'error');
+    return;
+  }
+
+  const datas = calendarInstance.selectedDates.map(d =>
+    flatpickr.formatDate(d, "d/m/Y")
+  );
+
+  if (datas.length === 0) {
+    Swal.fire('Calendário Vazio', 'Selecione ao menos uma data.', 'warning');
+    return;
+  }
+
+  const nomeAcaoEl = document.getElementById('inputNomeAcao');
+  const selectSala = document.getElementById('selectSala');
+  const horaIni    = document.getElementById('horaInicio');
+  const horaTer    = document.getElementById('horaTermino');
+  const turnoEl    = document.getElementById('inputTurnoCalculado');
+  const setorEl    = document.getElementById('selectSetor');
+
+  if (!nomeAcaoEl?.value.trim()) { Swal.fire('Atenção', 'Informe o título.', 'warning'); return; }
+  if (!selectSala?.value)        { Swal.fire('Atenção', 'Selecione um espaço.', 'warning'); return; }
+
+  if (selectSala?.value === 'EXTERNO') {
+    const _endExt = document.getElementById('inputEnderecoExterno')?.value.trim() || '';
+    if (_endExt.length < 8) {
+      Swal.fire('Atenção', 'Informe o endereço completo do local externo.', 'warning');
+      return;
+    }
+  }
+
+  if (!horaIni?.value) { Swal.fire('Atenção', 'Informe início.', 'warning'); return; }
+  if (!horaTer?.value) { Swal.fire('Atenção', 'Informe término.', 'warning'); return; }
+  // Para não-admins, o select está desabilitado; usa AppState como fallback
+  const setorValor = (setorEl?.value) || (!AppState.usuario.isAdmin ? AppState.usuario.setor : '');
+  if (!setorValor) { Swal.fire('Atenção', 'Selecione o setor.', 'warning'); return; }
+
+  const todosItens = [
+    ...(itensFixosSelecionados || []).map(i => `${i.qtd}x ${i.nome} (fixo)`),
+    ...(itensSelecionados      || []).map(i => `${i.qtd}x ${i.nome}`)
+  ];
+
+  const stringItens = todosItens.length > 0 ? todosItens.join(' | ') : 'Nenhum';
+
+  const imagemInput = document.getElementById('inputImagem');
+
+  // 🟣 CODIP SEGURO (não quebra e não interfere no RECE)
+  const codipData =
+  (typeof _codipColetarPayload === 'function'
+    ? _codipColetarPayload()
+    : {});
+
+  const dados = {
+    id:            document.getElementById('inputReservaId')?.value || null,
+    nomeAcao:      nomeAcaoEl.value.trim().toUpperCase(),
+    sala:          selectSala.value,
+    horaInicio:    horaIni.value,
+    horaTermino:   horaTer.value,
+    turno:         turnoEl?.value || '',
+    setor:         setorValor.toUpperCase(),
+    responsavel:   AppState?.usuario?.email || '',
+    coresponsavel: document.getElementById('inputOutroResponsavel')?.value.trim() || 'Não informado',
+    enderecoExterno: selectSala?.value === 'EXTERNO'
+      ? (document.getElementById('inputEnderecoExterno')?.value.trim() || '')
+      : '',
+    release:       document.getElementById('inputRelease')?.value.trim() || '',
+    itensVolantes: stringItens,
+    tipoAcao:      'EVENTO/ATIVIDADE',
+    imagem:        imagemInput?.value?.trim() || '',
+    modoRece:      typeof modoRece !== 'undefined' ? modoRece : false,
+    acaoId:        document.getElementById('inputAcaoVinculadaId')?.value || null,
+
+    ...codipData
+  };
+
+  if (!dados.responsavel) {
+    Swal.fire('Erro', 'Usuário não identificado.', 'error');
+    return;
+  }
+
+  showLoader(true);
+
+  const btnSubmit = document.querySelector('#formReserva button[type="submit"]');
+  if (btnSubmit) btnSubmit.disabled = true;
+
+  // EDIÇÃO RECE
+  if (typeof modoEdicao !== 'undefined' && modoEdicao === "RECE") {
+
+    if (!dados.id) {
+      showLoader(false);
+      Swal.fire('Erro', 'ID da reserva RECE não encontrado.', 'error');
+      if (btnSubmit) btnSubmit.disabled = false;
+      return;
+    }
+
+    const dadosReceCopy = coletarDadosRece() || {};
+    const datasSel = calendarInstance?.selectedDates || [];
+    const dataInicio = datasSel.length > 0 ? flatpickr.formatDate(datasSel[0], 'd/m/Y') : '';
+
+    const realizarSaveRece = (imagemUrl) => {
+
+      const payload = {
+        id: dados.id,
+        titulo: dados.nomeAcao,
+        dataInicio: dataInicio,
+        dataTermino: dadosReceCopy.dataTermino || dataInicio,
+        horaInicio: dados.horaInicio,
+        horaTermino: dados.horaTermino,
+        espaco: (AppState.mapaSalas && AppState.mapaSalas[dados.sala]) || dados.sala || '',
+        responsavel: dados.responsavel,
+        categorias: dadosReceCopy.categorias || '',
+        parceiros: dadosReceCopy.parceiros || '',
+        acessibilidades: dadosReceCopy.acessibilidades || '',
+        classificacao: dadosReceCopy.classificacao || '',
+        publicoAlvo: dadosReceCopy.publicoAlvo || '',
+        artista: dadosReceCopy.artista || '',
+        linkInscricao: dadosReceCopy.linkInscricao || '',
+        acesso: dadosReceCopy.acesso || '',
+        descricao: dadosReceCopy.descricao || '',
+        observacoes: dadosReceCopy.observacoes || '',
+        imagemUrl: imagemUrl || dadosReceCopy.imagemUrl || '',
+        convidadosInternos: dadosReceCopy.convidadosInternos || '',
+        eventoInstitucional: dadosReceCopy.eventoInstitucional || false,
+        convidadosExternos: dadosReceCopy.convidadosExternos || ''
+      };
+
+      GAS.rece.salvar(payload, () => {
+          showLoader(false);
+          window.modoEdicao = null;
+          AppState.editandoReceId = null;
+          Swal.fire('Sucesso', 'Agenda RECE atualizada!', 'success');
+          resetarFormulario();
+          mostrarAba('aba-agenda-rece');
+          if (typeof carregarReservasRece === 'function') carregarReservasRece();
+          if (btnSubmit) btnSubmit.disabled = false;
+        }, err => {
+          showLoader(false);
+          Swal.fire('Erro', err.message, 'error');
+          if (btnSubmit) btnSubmit.disabled = false;
+        });
+    };
+
+    uploadImagemSeNecessario()
+      .then(realizarSaveRece)
+      .catch(() => realizarSaveRece(''));
+
+    return;
+  }
+
+  // 🔍 NOVA RESERVA — verifica se precisa de aprovação do responsável
+  if (_precisaAprovacaoResponsavel(dados.sala)) {
+    showLoader(false);
+    if (btnSubmit) btnSubmit.disabled = false;
+
+    const swalResult = await Swal.fire({
+      title: 'Solicitação de reserva',
+      html: '<p style="font-size:13px;color:#64748b;margin-bottom:8px">Este espaço possui responsável configurado. Sua solicitação será enviada para aprovação.</p>' +
+            '<textarea id="swal-justif" class="swal2-textarea" placeholder="Justificativa (mínimo 10 caracteres)" rows="3" style="width:100%"></textarea>',
+      showCancelButton: true,
+      confirmButtonText: 'Enviar solicitação',
+      cancelButtonText: 'Cancelar',
+      preConfirm: function() {
+        const val = (document.getElementById('swal-justif')?.value || '').trim();
+        if (val.length < 10) {
+          Swal.showValidationMessage('Justificativa muito curta (mínimo 10 caracteres).');
+          return false;
+        }
+        return val;
+      }
+    });
+
+    if (!swalResult.isConfirmed || !swalResult.value) return;
+
+    showLoader(true);
+    if (btnSubmit) btnSubmit.disabled = true;
+
+    const payload = { sala: dados.sala, datas: datas, dados: dados };
+    GAS.solicitacoes.criar('RESERVA', 'ESPACO', payload, dados.responsavel, swalResult.value,
+      function() {
+        showLoader(false);
+        if (btnSubmit) btnSubmit.disabled = false;
+        resetarFormulario();
+        mostrarAba('aba-lista-reservas');
+        Swal.mixin({ toast: true, position: 'top-end', showConfirmButton: false, timer: 4000 })
+          .fire({ icon: 'info', title: 'Solicitação enviada! Aguarde aprovação do responsável.' });
+      },
+      function(err) {
+        showLoader(false);
+        if (btnSubmit) btnSubmit.disabled = false;
+        Swal.fire('Erro', err?.message || 'Erro ao criar solicitação', 'error');
+      }
+    );
+    return;
+  }
+
+  GAS.reservas.criar(dados, datas, function(res) {
+      showLoader(false);
+      if (btnSubmit) btnSubmit.disabled = false;
+
+      // Integração: demanda de comunicação vinculada à reserva
+      if (res && res.ids && res.ids.length) {
+        var dadosCom = (typeof coletarDadosDemandaComunicacao === 'function')
+          ? coletarDadosDemandaComunicacao() : null;
+        if (dadosCom) {
+          var dadosReserva = { responsavel: dados.responsavel };
+          criarDemandasComunicacaoAposReserva(res.ids, dadosReserva, dadosCom);
+        }
+      }
+
+      resetarFormulario();
+      mostrarAba('aba-lista-reservas');
+
+      Swal.mixin({
+        toast:true,
+        position:'top-end',
+        showConfirmButton:false,
+        timer:3000
+      }).fire({
+        icon:'success',
+        title:'Agendamento realizado!'
+      });
+
+      GAS.reservas.obter(function(reservas) {
+        AppState.colecoes.reservas = reservas || [];
+        indexarReservas();
+        renderizarReservas();
+      });
+
+    }, function(err) {
+      showLoader(false);
+      Swal.fire('Erro', err?.message || 'Erro ao criar reserva', 'error');
+      if (btnSubmit) btnSubmit.disabled = false;
+    });
+}
+
+
+
+/* REMOVIDO: processarMensagemIA, melhorarConteudoRelatorio, abrirEditorApresentacao,
+   gerarInsightsAutomaticos — funcionalidades de IA/relatório removidas por não estarem
+   integradas ao fluxo atual e dependerem de funções inexistentes (chamarIAUnificada,
+   chamarIAComFallback). Ver histórico git para o código original.
+
+async function processarMensagemIA(textoUsuario) {
+
+const sala = document.getElementById('selectSala')?.value;
+const horaInicio = document.getElementById('horaInicio')?.value;
+const horaTermino = document.getElementById('horaTermino')?.value;
+
+const dataSelecionada = calendarInstance?.selectedDates?.[0];
+
+// 🔒 BLOCO SEGURO DE VERIFICAÇÃO DE CONFLITO
+if (sala && horaInicio && horaTermino && dataSelecionada) {
+
+const dadosConsulta = {
+  sala,
+  data: flatpickr.formatDate(dataSelecionada, "d/m/Y"),
+  horaInicio,
+  horaTermino
+};
+
+let resultadoBackend = null;
+
+try {
+  resultadoBackend = await consultarConflitoIA(dadosConsulta);
+  console.log("DEBUG CONFLITO:", resultadoBackend);
+} catch (e) {
+  console.error("Erro ao consultar backend:", e);
+}
+
+// 🔴 FALHA NO BACKEND → NÃO DEIXA IA INVENTAR
+if (!resultadoBackend || resultadoBackend.temConflito === undefined) {
+
+  executarIAReserva({
+    mensagem: "Não foi possível verificar conflito agora. Tente novamente."
+  });
+
+  return;
+}
+
+// SEM CONFLITO → BLOQUEIA IA
+if (resultadoBackend.temConflito === false) {
+
+  executarIAReserva({
+    mensagem: "Não há sobreposição de horário para essa reserva."
+  });
+
+  return;
+}
+
+// COM CONFLITO → RESPOSTA DIRETA (SEM IA)
+if (resultadoBackend.temConflito === true) {
+
+  const c = resultadoBackend;
+
+  executarIAReserva({
+    mensagem: `
+    Existe sobreposição de horário.
+
+Solicitado: ${c.solicitado?.inicio || horaInicio}–${c.solicitado?.fim || horaTermino}
+Já existe: ${c.reservaExistente?.inicio}–${c.reservaExistente?.fim}
+Atividade: ${c.reservaExistente?.nome || 'Não informado'}
+`
+});
+
+  return;
+}
+
+}
+
+// A PARTIR DAQUI IA PODE RODAR (SEM RISCO)
+
+const texto = String(textoUsuario || '').toLowerCase();
+
+// DETECÇÃO DE ANÁLISE / RELATÓRIO
+if (
+texto.includes('gráfico') ||
+texto.includes('grafico') ||
+texto.includes('análise') ||
+texto.includes('analise') ||
+texto.includes('relatório') ||
+texto.includes('dados')
+) {
+
+try {
+
+  GAS.admin.obterDadosGrafico(async function(dados) {
+
+      executarIAReserva({
+        tipo: 'ANALISE',
+        mensagem: textoUsuario,
+        grafico: dados,
+        textoAnalise: 'Análise gerada com base nos dados do sistema.'
+      });
+
+      const resposta = await Swal.fire({
+        icon: 'question',
+        title: 'Gerar relatório?',
+        text: 'Deseja transformar essa análise em apresentação ou documento?',
+        showCancelButton: true,
+        confirmButtonText: 'Sim',
+        cancelButtonText: 'Não'
+      });
+
+      if (!resposta.isConfirmed) return;
+
+      const escolha = await Swal.fire({
+        title: 'Formato do relatório',
+        input: 'select',
+        inputOptions: {
+          ppt: 'Slides (Drive)',
+          ppt_ai: 'IA (Gamma)',
+          doc: 'Documento',
+          pdf: 'PDF'
+        },
+        showCancelButton: true
+      });
+
+      if (!escolha.value) return;
+
+      if (escolha.value === 'ppt_ai') {
+
+        window.open("https://gamma.app", "_blank");
+
+        await Swal.fire({
+          icon: 'info',
+          title: 'Cole na IA:',
+          html: `<textarea class="swal2-textarea">${textoUsuario}</textarea>`
+        });
+
+        return;
+      }
+
+      abrirEditorApresentacao({
+        titulo: 'Relatório',
+        secoes: [
+          { titulo: 'Resumo', conteudo: textoUsuario }
+        ]
+      }, escolha.value);
+
+    }, err => {
+      Swal.fire('Erro', err.message, 'error');
+    });
+
+  return;
+
+} catch(e) {
+  console.warn(e);
+}
+}
+
+// 🧠 IA NORMAL (SEM RISCO DE CONFLITO)
+try {
+
+const interpretacao = await chamarIAUnificada({
+  pergunta: textoUsuario,
+  sala,
+  horaInicio,
+  horaTermino
+});
+
+executarIAReserva({
+  mensagem: interpretacao?.texto || textoUsuario
+});
+
+} catch (e) {
+
+executarIAReserva({
+  mensagem: textoUsuario
+});
+
+}
+}
+
+async function melhorarConteudoRelatorio(estrutura) {
+
+  try {
+
+    const prompt = `
+Melhore o conteúdo de um relatório.
+
+REGRAS:
+- Não inventar dados
+- Melhorar clareza e organização
+- Linguagem profissional
+- Manter objetivo
+
+ENTRADA:
+${JSON.stringify(estrutura)}
+
+Responda JSON no mesmo formato:
+{
+  "titulo": "...",
+  "secoes": [
+    { "titulo": "...", "conteudo": "..." }
+  ]
+}
+`;
+
+    const resposta = await chamarIAComFallback(prompt);
+
+    return JSON.parse(resposta);
+
+  } catch (e) {
+    console.warn('IA falhou, mantendo original');
+    return estrutura;
+  }
+}
+
+async function abrirEditorApresentacao(estrutura, formato) {
+
+  if (!estrutura || !estrutura.secoes) {
+    Swal.fire('Erro', 'Estrutura inválida.', 'error');
+    return;
+  }
+
+  // ================= MELHORIA COM IA =================
+  let estruturaFinal = estrutura;
+
+  try {
+
+    const desejaMelhorar = await Swal.fire({
+      title: 'Melhorar conteúdo com IA?',
+      text: 'A IA pode reorganizar e melhorar o texto do relatório.',
+      showCancelButton: true,
+      confirmButtonText: 'Sim',
+      cancelButtonText: 'Não'
+    });
+
+    if (desejaMelhorar.isConfirmed) {
+
+      const prompt = `
+Melhore o conteúdo de um relatório.
+
+REGRAS:
+- Não inventar dados
+- Melhorar clareza e organização
+- Linguagem profissional
+- Manter objetivo
+
+ENTRADA:
+${JSON.stringify(estrutura)}
+
+Responda JSON no mesmo formato:
+{
+  "titulo": "...",
+  "secoes": [
+    { "titulo": "...", "conteudo": "..." }
+  ]
+}
+`;
+
+      const resposta = await chamarIAComFallback(prompt);
+      estruturaFinal = JSON.parse(resposta);
+
+    }
+
+  } catch (e) {
+    console.warn('IA falhou, mantendo original');
+    estruturaFinal = estrutura;
+  }
+
+  // ================= INSIGHTS AUTOMÁTICOS =================
+  let insights = [];
+
+  try {
+
+    const desejaInsights = await Swal.fire({
+      title: 'Gerar insights automáticos?',
+      text: 'A IA pode identificar padrões e pontos relevantes.',
+      showCancelButton: true,
+      confirmButtonText: 'Sim',
+      cancelButtonText: 'Não'
+    });
+
+    if (desejaInsights.isConfirmed) {
+
+      const dados = await new Promise((resolve, reject) => {
+        GAS.admin.obterDadosGrafico(resolve, reject);
+      });
+
+      const promptInsights = `
+Analise os dados abaixo e gere insights objetivos.
+
+REGRAS:
+- Não inventar dados
+- Máximo 5 insights
+- Foco em padrões e decisões
+
+DADOS:
+${JSON.stringify(dados)}
+
+Responda JSON:
+{
+  "insights": ["..."]
+}
+`;
+
+      const resposta = await chamarIAComFallback(promptInsights);
+      const json = JSON.parse(resposta);
+
+      insights = json.insights || [];
+
+    }
+
+  } catch (e) {
+    console.warn('Erro ao gerar insights', e);
+  }
+
+  // 🔵 INSERIR INSIGHTS COMO SEÇÃO
+  if (insights.length) {
+    estruturaFinal.secoes.push({
+      titulo: 'Insights',
+      conteudo: insights.map(i => '• ' + i).join('\n')
+    });
+  }
+
+  // ================= CAPTURA DE GRÁFICOS =================
+  function obterImagemGrafico() {
+
+    const canvases = document.querySelectorAll('canvas');
+
+    if (!canvases || canvases.length === 0) return null;
+
+    if (canvases.length === 1) {
+      try {
+        return canvases[0].toDataURL('image/png');
+      } catch (e) {
+        console.warn('Erro ao capturar gráfico:', e);
+        return null;
+      }
+    }
+
+    const lista = [];
+
+    canvases.forEach((canvas, i) => {
+      try {
+        lista.push({
+          titulo: `Gráfico ${i + 1}`,
+          imagem: canvas.toDataURL('image/png')
+        });
+      } catch (e) {
+        console.warn('Erro ao capturar gráfico:', e);
+      }
+    });
+
+    return lista;
+  }
+
+  // ================= EDITOR =================
+  let html = `
+    <div style="text-align:left">
+      <label class="text-xs font-bold">Título</label>
+      <input id="pptTitulo" class="swal2-input" value="${escaparHTML(estruturaFinal.titulo || '')}">
+  `;
+
+  estruturaFinal.secoes.forEach((s, i) => {
+    html += `
+      <div class="mt-2">
+        <label class="text-xs font-bold">${escaparHTML(s.titulo)}</label>
+        <textarea id="secao_${i}" class="swal2-textarea" style="min-height:80px">
+${escaparHTML(s.conteudo || '')}
+        </textarea>
+      </div>
+    `;
+  });
+
+  html += `</div>`;
+
+  Swal.fire({
+    title: 'Revisar relatório',
+    html: html,
+    width: 800,
+    showCancelButton: true,
+    confirmButtonText: 'Continuar',
+    cancelButtonText: 'Cancelar',
+
+    preConfirm: () => {
+
+      const titulo = document.getElementById('pptTitulo')?.value || 'Relatório';
+
+      const secoes = estruturaFinal.secoes.map((s, i) => ({
+        titulo: s.titulo,
+        conteudo: document.getElementById(`secao_${i}`)?.value || ''
+      }));
+
+      const graficoCapturado = obterImagemGrafico();
+
+      return {
+        titulo,
+        secoes,
+        formato,
+        grafico: graficoCapturado,
+        graficos: Array.isArray(graficoCapturado) ? graficoCapturado : null
+      };
+    }
+
+  }).then(async result => {
+
+    if (!result.isConfirmed) return;
+
+    const conteudoFinal = result.value;
+
+    // ================= ESCOLHA FINAL =================
+    const escolha = await Swal.fire({
+      title: 'Como deseja o arquivo?',
+      text: 'Escolha entre salvar no Drive ou baixar diretamente',
+      showCancelButton: true,
+      confirmButtonText: 'Salvar no Drive',
+      cancelButtonText: 'Baixar',
+      reverseButtons: true
+    });
+
+    if (escolha.dismiss === Swal.DismissReason.cancel) {
+
+      gerarDocumentoDownload(conteudoFinal);
+
+    } else {
+
+      gerarDocumentoDrive(conteudoFinal);
+
+    }
+
+  });
+}
+
+async function gerarInsightsAutomaticos(dados) {
+
+  try {
+
+    const prompt = `
+Analise os dados abaixo e gere insights objetivos.
+
+REGRAS:
+- Não inventar dados
+- Seja direto
+- Máximo 5 insights
+- Foque em padrões e decisões
+
+DADOS:
+${JSON.stringify(dados)}
+
+Responda JSON:
+{
+  "insights": [
+    "Insight 1",
+    "Insight 2"
+  ]
+}
+`;
+
+    const resposta = await chamarIAComFallback(prompt);
+    const json = JSON.parse(resposta);
+
+    return json.insights || [];
+
+  } catch (e) {
+    console.warn('Erro ao gerar insights', e);
+    return [];
+  }
+}
+
+*/
+
+function gerarDocumentoDrive(conteudo) {
+  if (!conteudo || !conteudo.secoes) { Swal.fire('Erro', 'Conteúdo inválido.', 'error'); return; }
+  showLoader(true);
+  GAS.documentos.gerarDrive(conteudo, function(res) {
+    showLoader(false);
+    if (!res || !res.url) { Swal.fire('Erro', 'Não foi possível gerar o documento.', 'error'); return; }
+    Swal.fire({
+      icon: 'success',
+      title: 'Documento gerado!',
+      html: `<a href="${res.url}" target="_blank" class="text-purple-600 font-bold underline">Abrir no Drive</a>`,
+      confirmButtonText: 'Ok'
+    });
+  }, function(err) {
+    showLoader(false);
+    Swal.fire('Erro', err.message, 'error');
+  });
+}
+
+function gerarDocumentoDownloadPDF(conteudo) {
+  GAS.documentos.gerarDownload(conteudo, function(res) {
+    const link = document.createElement('a');
+    link.href = 'data:application/pdf;base64,' + res.base64;
+    link.download = res.nome;
+    link.click();
+    Swal.fire({ icon: 'success', title: 'Download iniciado' });
+  }, _handleServerError);
+}
+
+function gerarDocumentoDownload(conteudo) {
+  conteudo.formato = conteudo.formato || 'pdf';
+  gerarDocumentoDrive(conteudo);
+}
+
+/**
+ * ========================================
+ * BLOCO: Análise de disponibilidade com sugestões (IA)
+ * ========================================
+ * @description Consulta o backend para verificar conflitos e exibir sugestões inteligentes
+ *              de horário e sala ao usuário. Não modifica dados — apenas analisa e sugere.
+ *              analisarDisponibilidadeIA: verificação pontual (botão na UI).
+ *              processarIntencaoIA: orquestra a lógica de análise/sugestão.
+ *              inferirModoIA: detecta a intenção do usuário pelo texto e estado do formulário.
+ *              executarIAReserva: ponto de entrada principal — decide o comportamento final.
+ * @context Chamado pelo botão de análise no formulário de reserva e por processarIntencaoIA
+ * @inputs Valores de sala, horários e datas do formulário ativo
+ * @outputs Modal Swal com conflitos, sugestões ou confirmação de disponibilidade
+ * @sideEffects Chama google.script.run.analisarDisponibilidadeReal
+ */
+function analisarDisponibilidadeIA() {
+
+  const selectSala = document.getElementById('selectSala');
+  const horaIni    = document.getElementById('horaInicio');
+  const horaTer    = document.getElementById('horaTermino');
+
+  const datasSel = (typeof calendarInstance !== 'undefined' && calendarInstance?.selectedDates) || [];
+  const datas = datasSel.map(d => flatpickr.formatDate(d, "d/m/Y"));
+
+  if (!selectSala?.value || !horaIni?.value || !horaTer?.value || datas.length === 0) {
+    Swal.fire('Atenção', 'Preencha sala, datas e horários para analisar.', 'warning');
+    return;
+  }
+
+  const payload = {
+    sala: selectSala.value,
+    horaInicio: horaIni.value,
+    horaTermino: horaTer.value,
+    datas: datas
+  };
+
+  showLoader(true);
+
+  GAS.reservas.analisarDisponibilidade(payload, function(res) {
+
+    showLoader(false);
+
+    if (!res) return;
+
+    // ❌ CONFLITO REAL
+    if (res && res.conflito) {
+
+      if (btnSubmit) btnSubmit.disabled = false;
+
+      const existente = res.existente || res.reserva || {};
+
+      const mensagem = existente.inicio
+        ? `Já existe "<b>${(typeof escaparHTML === 'function' ? escaparHTML(existente.nome || 'reserva') : (existente.nome || 'reserva'))}</b>" das ${existente.inicio}–${existente.fim}`
+        : 'Conflito de horário detectado.';
+
+      // SUGESTÃO DE HORÁRIO (segura)
+      let sugestaoHorarioHTML = '';
+
+      try {
+
+        if (typeof sugerirProximoHorarioLivre === 'function') {
+
+          const selectSala = document.getElementById('selectSala');
+          const horaInicio = document.getElementById('horaInicio');
+
+          const proximoHorario = sugerirProximoHorarioLivre(
+            selectSala?.value,
+            datas[0],
+            horaInicio?.value
+          );
+
+          if (proximoHorario) {
+
+            const horaFim = (typeof adicionar1Hora === 'function')
+              ? adicionar1Hora(proximoHorario)
+              : '';
+
+            sugestaoHorarioHTML = `
+              <div class="mt-3">
+                <b class="text-xs">Horário sugerido:</b><br>
+                <button onclick="typeof aplicarSugestaoHorario === 'function' && aplicarSugestaoHorario('${proximoHorario}')"
+                  class="px-2 py-1 bg-green-100 hover:bg-green-200 rounded text-xs font-bold mt-1">
+                  ${proximoHorario}${horaFim ? ' – ' + horaFim : ''}
+                </button>
+              </div>
+            `;
+          }
+        }
+
+      } catch(e) {
+        console.warn('Erro sugestão de horário:', e);
+      }
+
+      // SUGESTÃO DE SALAS (segura)
+      try {
+
+        if (typeof obterSalasDisponiveisBackend === 'function') {
+
+          const payloadSala = {
+            sala: selectSala?.value,
+            horaInicio: horaInicio?.value,
+            horaTermino: document.getElementById('horaTermino')?.value
+          };
+
+          obterSalasDisponiveisBackend(payloadSala, datas[0], function(salasLivres) {
+
+            const sugestoesSalas = (salasLivres && salasLivres.length)
+              ? salasLivres.map(s => `
+                  <button onclick="typeof trocarSalaSugestao === 'function' && trocarSalaSugestao('${s.id}')"
+                    class="px-2 py-1 bg-blue-100 hover:bg-blue-200 rounded text-xs font-bold mr-1 mb-1">
+                    ${typeof escaparHTML === 'function' ? escaparHTML(s.nome) : s.nome}
+                  </button>
+                `).join('')
+              : '<span class="text-xs text-slate-400">Nenhuma sala disponível neste horário</span>';
+
+            Swal.fire({
+              icon: 'error',
+              title: 'Conflito na agenda',
+              html: `
+                <p class="text-sm">${mensagem}</p>
+                <hr class="my-2">
+                <p class="text-xs font-bold text-slate-600">Outras salas disponíveis:</p>
+                <div class="mt-1">${sugestoesSalas}</div>
+                ${sugestaoHorarioHTML}
+              `
+            });
+
+          });
+
+        } else {
+
+          // fallback se função não existir
+          Swal.fire({
+            icon: 'error',
+            title: 'Conflito de horário',
+            html: `<p>${mensagem}</p>`
+          });
+
+        }
+
+      } catch(e) {
+
+        console.error('Erro ao buscar salas:', e);
+
+        Swal.fire({
+          icon: 'error',
+          title: 'Conflito de horário',
+          html: `<p>${mensagem}</p>`
+        });
+
+      }
+
+      return;
+    }
+
+    // SEM CONFLITO
+    Swal.fire({
+      icon: 'success',
+      title: 'Disponível',
+      text: 'Horário livre e válido.'
+    });
+
+  }, function(err) {
+
+    showLoader(false);
+
+    Swal.fire({
+      icon: 'error',
+      title: 'Erro',
+      text: err?.message || 'Falha ao verificar disponibilidade.'
+    });
+
+    if (btnSubmit) btnSubmit.disabled = false;
+
+  });
+}
+
+/**
+ * ORQUESTRADOR DA IA
+ * Decide comportamento: SUGESTÃO vs ANÁLISE
+ */
+function processarIntencaoIA(contexto, callback) {
+
+  const datasSel = calendarInstance?.selectedDates || [];
+  const datas = datasSel.map(d => flatpickr.formatDate(d, "d/m/Y"));
+
+  const sala        = contexto?.sala;
+  const horaInicio  = contexto?.horaInicio;
+  const horaTermino = contexto?.horaTermino;
+
+  // VALIDAÇÃO FORTE (EVITA ANÁLISE FALSA)
+  if (!sala || !horaInicio || !horaTermino || datas.length === 0) {
+
+    callback({
+      tipo: 'INCOMPLETO',
+      dados: {
+        faltando: {
+          sala: !sala,
+          horaInicio: !horaInicio,
+          horaTermino: !horaTermino,
+          data: datas.length === 0
+        }
+      }
+    });
+
+    return;
+  }
+
+  const payload = {
+    sala: sala,
+    horaInicio: horaInicio,
+    horaTermino: horaTermino,
+    datas: datas
+  };
+
+  GAS.reservas.analisarDisponibilidade(payload, function(res) {
+
+      // PROTEÇÃO EXTRA
+      if (!res || typeof res !== 'object') {
+        callback({
+          tipo: 'ERRO',
+          erro: 'Resposta inválida do backend'
+        });
+        return;
+      }
+
+      // CONFLITO REAL
+      if (res.conflito && res.conflitosDetalhados?.length) {
+
+        callback({
+          tipo: 'CONFLITO_REAL',
+          dados: res
+        });
+        return;
+      }
+
+      // SUGESTÕES DISPONÍVEIS
+      if (Array.isArray(res.sugestoes) && res.sugestoes.length > 0) {
+
+        callback({
+          tipo: 'SUGESTAO',
+          dados: res
+        });
+        return;
+      }
+
+      // DISPONÍVEL (SEM CONFLITO)
+      callback({
+        tipo: 'DISPONIVEL',
+        dados: res
+      });
+
+    }, function(err) {
+
+      console.error('Erro ao analisar disponibilidade:', err);
+
+      callback({
+        tipo: 'ERRO',
+        erro: err?.message || 'Erro desconhecido'
+      });
+    });
+}
+
+/**
+ * INFERIR INTENÇÃO AUTOMATICAMENTE
+ */
+function inferirModoIA(contexto) {
+
+  const texto = String(contexto?.mensagem || '').toLowerCase();
+
+  // 1. TEXTO DO USUÁRIO
+
+  if (texto) {
+
+    // intenção de sugestão
+    if (
+      texto.includes('sugere') ||
+      texto.includes('sugerir') ||
+      texto.includes('opção') ||
+      texto.includes('opcoes') ||
+      texto.includes('opções') ||
+      texto.includes('melhor horário') ||
+      texto.includes('quando dá')
+    ) {
+      return 'SUGESTAO';
+    }
+
+    // intenção de análise
+    if (
+      texto.includes('conflito') ||
+      texto.includes('disponível') ||
+      texto.includes('disponivel') ||
+      texto.includes('verifica') ||
+      texto.includes('status') ||
+      texto.includes('como está')
+    ) {
+      return 'ANALISE';
+    }
+
+    // IMPORTANTE: mesmo que diga "agendar"
+    // IA NÃO EXECUTA → apenas analisa
+    if (
+      texto.includes('agendar') ||
+      texto.includes('marcar') ||
+      texto.includes('reservar') ||
+      texto.includes('confirmar')
+    ) {
+      return 'ANALISE';
+    }
+  }
+
+  // 2. ESTADO DO SISTEMA
+
+  const temSala   = !!contexto?.sala;
+  const temInicio = !!contexto?.horaInicio;
+  const temFim    = !!contexto?.horaTermino;
+
+  const datasSel = calendarInstance?.selectedDates || [];
+
+  // dados incompletos → análise
+  if (!temSala || !temInicio || !temFim || datasSel.length === 0) {
+    return 'ANALISE';
+  }
+
+  // dados completos → sugestão (não execução!)
+  return 'SUGESTAO';
+}
+
+/**
+ * - IA FINAL — ORQUESTRA TUDO
+ * - Decide comportamento
+ * - Consulta backend
+ * - APENAS analisa ou sugere (NUNCA preenche automaticamente)
+ */
+function executarIAReserva(contexto) {
+
+  // ANÁLISE COM GRÁFICO (chat ou gerar análise)
+  if (contexto?.tipo === 'ANALISE') {
+
+    Swal.fire({
+      icon: 'info',
+      title: 'Análise inteligente',
+      html: `<p class="text-sm">${contexto.textoAnalise || 'Análise gerada com base nos dados do sistema.'}</p>`
+    });
+
+    if (contexto.grafico && typeof renderizarGraficoIA === 'function') {
+      setTimeout(() => renderizarGraficoIA(contexto.grafico), 300);
+    }
+
+    return;
+  }
+
+  processarIntencaoIA(contexto, function(resultado) {
+
+    if (!resultado) return;
+
+    const modo = inferirModoIA(contexto);
+
+    // DADOS INCOMPLETOS
+    if (resultado.tipo === 'INCOMPLETO') {
+
+      Swal.fire({
+        icon: 'info',
+        title: 'Dados insuficientes',
+        text: 'Informe sala, data e horário para análise precisa.'
+      });
+
+      return;
+    }
+
+    // 🔴 ERRO
+    if (resultado.tipo === 'ERRO') {
+
+      console.error(resultado.erro);
+
+      Swal.fire({
+        icon: 'error',
+        title: 'Erro na análise',
+        text: resultado.erro || 'Não foi possível processar a solicitação.'
+      });
+
+      return;
+    }
+
+    // GRAFICO DIRETO (futuro / backend)
+    if (resultado.tipo === 'GRAFICO') {
+
+      if (typeof renderizarGraficoIA === 'function') {
+        renderizarGraficoIA(resultado.dados);
+      }
+
+      Swal.fire({
+        icon: 'info',
+        title: 'Gráfico gerado',
+        text: 'Visualização criada com base nos dados.'
+      });
+
+      return;
+    }
+
+    // CONFLITO
+    if (resultado.tipo === 'CONFLITO_REAL') {
+
+      const conflitos = resultado.dados.conflitosDetalhados || [];
+      let sugestoes = resultado.dados.sugestoes || [];
+      sugestoes = ordenarSugestoesPorPreferencia(sugestoes, contexto);
+
+      let html = `<p class="text-sm">Conflitos encontrados:</p>`;
+
+      conflitos.forEach(c => {
+        html += `
+          <div class="text-xs mt-2">
+            <b>${c.data}</b> → ${c.inicio}–${c.fim}<br>
+            <span class="text-slate-500">${c.nome}</span>
+          </div>
+        `;
+      });
+
+      // BUFFER
+      if (conflitos.some(c => c.tipo === 'BUFFER')) {
+        html += `<p class="text-xs text-amber-600 mt-2">Intervalo mínimo de 5min entre reservas (limpeza do espaço)</p>`;
+      }
+
+      // SUGESTÕES CLICÁVEIS
+      if (sugestoes.length) {
+
+        html += `<hr class="my-2"><p class="text-xs font-bold">Clique em uma sugestão:</p>`;
+
+        html += sugestoes.map(s => {
+
+          const payload = encodeURIComponent(JSON.stringify(s));
+
+          return `
+            <div 
+              onclick="aplicarSugestaoCompleta(JSON.parse(decodeURIComponent('${payload}')))"
+              class="cursor-pointer text-xs mt-2 p-3 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg transition-all"
+            >
+              <b>${s.data}</b> ${s.horaInicio}–${s.horaTermino}
+            </div>
+          `;
+
+        }).join('');
+      }
+
+      Swal.fire({
+        icon: 'warning',
+        title: 'Conflito na agenda',
+        html: html
+      });
+
+      return;
+    }
+
+    // SUGESTÃO
+    if (resultado.tipo === 'SUGESTAO') {
+
+      let sugestoes = resultado.dados.sugestoes || [];
+      sugestoes = ordenarSugestoesPorPreferencia(sugestoes, contexto);
+
+      if (!sugestoes.length) return;
+
+      const itensSugeridos = sugerirItensParaReserva(contexto);
+
+      let html = `<p class="text-sm font-semibold">Clique em uma opção para aplicar automaticamente:</p>`;
+
+      html += sugestoes.map(s => {
+
+        const payload = encodeURIComponent(JSON.stringify(s));
+
+        return `
+          <div 
+            onclick="aplicarSugestaoCompleta(JSON.parse(decodeURIComponent('${payload}')))"
+            class="cursor-pointer text-xs mt-2 p-3 bg-green-50 hover:bg-green-100 border border-green-200 rounded-lg transition-all"
+          >
+            <b>${s.data}</b> ${s.horaInicio}–${s.horaTermino}
+          </div>
+        `;
+
+      }).join('');
+
+      // 🔵 ITENS SUGERIDOS
+      if (itensSugeridos.length) {
+
+        html += `<hr class="my-2"><p class="text-xs font-bold">Sugestão de itens:</p>`;
+
+        html += itensSugeridos.map(i => `
+          <div class="text-xs mt-1">
+            ${i.qtd}x ${i.nome} ${i.tipo === 'fixo' ? '(fixo)' : ''}
+          </div>
+        `).join('');
+      }
+
+      Swal.fire({
+        icon: 'info',
+        title: 'Sugestões disponíveis',
+        html: html
+      });
+
+      return;
+    }
+
+    // DISPONÍVEL
+    if (resultado.tipo === 'DISPONIVEL') {
+
+      const itensSugeridos = sugerirItensParaReserva(contexto);
+
+      let html = `<p>Horário livre e válido.</p>`;
+
+      if (itensSugeridos.length) {
+        html += `<hr class="my-2"><p class="text-xs font-bold">Sugestão de itens:</p>`;
+        html += itensSugeridos.map(i => `
+          <div class="text-xs mt-1">
+            ${i.qtd}x ${i.nome} ${i.tipo === 'fixo' ? '(fixo)' : ''}
+          </div>
+        `).join('');
+      }
+
+      html += `<p class="text-xs text-slate-500 mt-2">Você pode prosseguir com o agendamento.</p>`;
+
+      Swal.fire({
+        icon: 'success',
+        title: 'Disponível',
+        html: html
+      });
+
+      return;
+    }
+
+  });
+}
+
+/**
+ * APLICA SUGESTÃO COMPLETA (PADRÃO FINAL)
+ */
+function aplicarSugestaoIA(data, horaInicio, horaTermino) {
+  const horaIni = document.getElementById('horaInicio');
+  const horaTer = document.getElementById('horaTermino');
+  if (horaIni) horaIni.value = horaInicio;
+  if (horaTer) horaTer.value = horaTermino;
+  if (calendarInstance && data) {
+    const p = String(data).split('/');
+    if (p.length === 3) calendarInstance.setDate(new Date(p[2], p[1] - 1, p[0]), true);
+  }
+  if (typeof validarHorarios === 'function') validarHorarios();
+  if (typeof atualizarTudoTempoReal === 'function') atualizarTudoTempoReal();
+  Swal.close();
+}
+
+
+/**
+ * ========================================
+ * BLOCO: Inicialização da aplicação
+ * ========================================
+ * @description Orquestra o boot completo do sistema em duas fases:
+ *              1. obterDadosIniciais: usuário, salas, setores, itens, admins → libera UI
+ *              2. obterReservas: dados principais → indexa cache, renderiza agenda
+ *              Antes da fase 1, tenta carregar reservas do localStorage (cache de 5min)
+ *              para exibição imediata enquanto o backend responde.
+ * @context Chamado uma única vez em bootstrap_js (DOMContentLoaded)
+ * @inputs Email do usuário (fallback para obterDadosIniciais)
+ * @outputs Popula AppState, renderiza a agenda inicial, ativa polling de solicitações
+ * @sideEffects showLoader, google.script.run (duas chamadas encadeadas), localStorage
+ */
+function inicializarApp() {
+  if (typeof showLoader === 'function') showLoader(true);
+
+  const txtIdentificando = document.getElementById('statusUser');
+
+  // TENTA USAR CACHE PRIMEIRO
+  try {
+    const cache = localStorage.getItem('cacheReservas');
+    const ts = localStorage.getItem('cacheReservas_ts');
+
+    const CACHE_TEMPO = 1000 * 60 * 5; // 5 minutos
+
+    if (cache && ts && (Date.now() - Number(ts) < CACHE_TEMPO)) {
+
+      const reservasCache = JSON.parse(cache);
+      AppState.colecoes.reservas = reservasCache;
+
+      indexarReservas();
+
+      if (typeof renderizarReservas === 'function') {
+        setTimeout(() => {
+          try { renderizarReservas(); } catch(e) { console.warn(e); }
+        }, 0);
+      }
+
+      console.log('⚡ usando cache de reservas');
+
+    }
+
+  } catch(e) {
+    console.warn('Erro ao ler cache', e);
+  }
+
+  GAS.admin.obterDados(function(dados) {
+
+      if (dados.error) {
+        if (typeof showLoader === 'function') showLoader(false);
+        Swal.fire('Erro de Carregamento', dados.error, 'error');
+        return;
+      }
+
+      // ===== USUÁRIO =====
+      AppState.usuario.email = dados.usuarioEmail;
+      AppState.usuario.isAdmin = dados.isAdmin;
+      AppState.usuario.isComunicacao = dados.isComunicacao || false;
+      AppState.usuario.isHabilitador = dados.isHabilitador || false;
+      AppState.usuario.isSuperadmin = dados.isSuperadmin;
+      AppState.usuario.setor = dados.setorUsuario || '';
+
+      if (typeof EventBus !== 'undefined') {
+        EventBus.emit('app:usuario:carregado', { email: dados.usuarioEmail, isAdmin: dados.isAdmin, isSuperadmin: dados.isSuperadmin });
+      }
+
+      if (typeof carregarPerfilUsuario === 'function') {
+        try { carregarPerfilUsuario(); } catch (e) { console.warn(e); }
+      }
+
+      // ===== DADOS BASE =====
+      AppState.colecoes.salas = dados.salas || [];
+      AppState.colecoes.itens = dados.listaItens || [];
+      AppState.colecoes.setores = dados.setores || [];
+      AppState.colecoes.administradores = dados.administradores || [];
+      AppState.mapaSalas = dados.mapaSalas || {};
+      AppState.mapaNomes = dados.mapaNomes || {};
+      AppState.mapaSetoresAdmin = dados.mapaSetoresAdmin || {};
+      AppState.mapaFlagsEspacos = dados.mapaFlagsEspacos || {};
+      AppState.emailsSistema = [];
+
+      // ===== UI USUÁRIO =====
+      if (txtIdentificando) {
+        txtIdentificando.innerText = dados.usuarioEmail;
+        txtIdentificando.classList.remove('animate-pulse');
+      }
+
+      if (typeof configurarInterfacePorPermissao === 'function') {
+        try { configurarInterfacePorPermissao(); } catch (e) { console.warn(e); }
+      }
+
+      // ===== ADMIN RENDER =====
+      [
+        'renderizarEspacosAdmin',
+        'renderizarItensAdmin',
+        'renderizarSetoresAdmin',
+        'renderizarAdmins'
+      ].forEach(fn => {
+        if (typeof window[fn] === 'function') {
+          try { window[fn](); } catch (e) { console.warn(`Erro em ${fn}:`, e); }
+        }
+      });
+
+      // LIBERA UI IMEDIATAMENTE
+      if (typeof popularSelectsIniciais === 'function') {
+        try { popularSelectsIniciais(); } catch(e) { console.warn(e); }
+      }
+
+      if (typeof showLoader === 'function') showLoader(false);
+
+      // ===== CARREGAR RESERVAS =====
+      GAS.reservas.obter(function(reservas) {
+
+  // ===== RESERVAS =====
+  AppState.colecoes.reservas = Array.isArray(reservas) ? reservas : [];
+  try {
+    localStorage.setItem('cacheReservas', JSON.stringify(AppState.colecoes.reservas));
+    localStorage.setItem('cacheReservas_ts', Date.now());
+  } catch(e) { console.warn('Erro ao salvar cache', e); }
+  indexarReservas();
+  // Re-popula selects de setor com setores extraídos das reservas
+  if (typeof popularSelectsIniciais === 'function') {
+    try { popularSelectsIniciais(); } catch(e) { console.warn(e); }
+  }
+
+  GAS.admin.obterEmailsSistema(function(emails) {
+    AppState.emailsSistema = emails || [];
+    const dl = document.getElementById('listEmailsSistema');
+    if (dl) dl.innerHTML = (emails || []).map(e => `<option value="${escaparHTML(e)}">`).join('');
+  }, function() {});
+
+  // ===== RECE (paralelo, não bloqueia) =====
+  GAS.rece.obter(function(rece) {
+    AppState.colecoes.reservasRece = rece || [];
+  }, function() {
+    AppState.colecoes.reservasRece = [];
+  });
+
+      // ===== FILTRO PADRÃO =====
+      const selPeriodo = document.getElementById('filtroIntervalo');
+      if (selPeriodo) {
+        selPeriodo.value = 'apartir';
+        if (typeof aplicarAtalhoPeriodo === 'function') {
+          try { aplicarAtalhoPeriodo(); } catch(e) { console.warn(e); }
+        }
+      }
+
+      // ===== RENDER NÃO BLOQUEANTE =====
+      if (typeof renderizarReservas === 'function') {
+        setTimeout(() => {
+          try { renderizarReservas(); } catch(e) { console.warn(e); }
+        }, 0);
+      }
+
+      // ===== PÓS-INIT =====
+      if (typeof verificarExibirManualAutomatico === 'function') {
+        try { verificarExibirManualAutomatico(); } catch(e) {
+          console.warn('Erro ao abrir manual automático:', e);
+        }
+      }
+
+      console.log('Sistema pronto. Usuário:', AppState.usuario.email);
+      if (typeof EventBus !== 'undefined') {
+        EventBus.emit('app:pronto', { email: AppState.usuario.email });
+      }
+      // Carrega badge de solicitações pendentes + inicia polling em tempo real
+      setTimeout(function() { _pollSolicitacoes(true); }, 2000);
+      // ATIVA PREVISÃO AUTOMÁTICA NO FORM
+      setTimeout(() => {
+        try { ativarPrevisaoForm(); } catch(e) { console.warn(e); }
+      }, 500);
+      }, function(err) {
+        console.error('Erro ao carregar reservas:', err);
+        if (typeof showLoader === 'function') showLoader(false);
+        Swal.fire('Erro', 'Erro ao carregar reservas', 'error');
+      });
+
+    }, function(err) {
+      if (typeof showLoader === 'function') showLoader(false);
+      console.error('Erro ao obter dados iniciais:', err);
+      Swal.fire('Falha na Conexão', 'Não foi possível validar seu login.', 'error');
+    });
+
+  
+}
+
+
+/**
+ * ========================================
+ * BLOCO: Indexação do cache de reservas
+ * ========================================
+ * @description Constrói AppState.cacheReservasIndex a partir de AppState.colecoes.reservas.
+ *              Estrutura: { 'YYYY-MM-DD': { 'SALA-ID': [ [reserva], ... ] } }
+ *              Ignora reservas CANCELADAS para não bloquear horários incorretamente.
+ *              Também atualiza o badge "X hoje" no header e o localStorage.
+ * @context Chamado após cada carga ou atualização de AppState.colecoes.reservas
+ * @inputs AppState.colecoes.reservas
+ * @outputs AppState.cacheReservasIndex atualizado
+ * @sideEffects localStorage (cacheReservas), DOM (#badgeHoje)
+ */
+function indexarReservas() {
+  const reservas = AppState.colecoes.reservas || [];
+  if (!window.AppState || !AppState.colecoes) return;
+
+  const index = {};
+
+  reservas.forEach(r => {
+    // Inclui CANCELADO no índice para que verificarConflitoFrontend possa ignorá-los
+    // mas mantém apenas CONFIRMADO para evitar falsos bloqueios
+    if ((r[13] || '').toUpperCase() === 'CANCELADO') return;
+
+    const data = normalizarDataKey(r[1]);
+    const sala = String(r[4] || '').trim();
+
+    if (!data || !sala) return;
+
+    if (!index[data]) index[data] = {};
+    if (!index[data][sala]) index[data][sala] = [];
+
+    index[data][sala].push(r);
+  });
+
+  AppState.cacheReservasIndex = index;
+
+  // Salva cache local atualizado
+  try {
+    localStorage.setItem('cacheReservas', JSON.stringify(AppState.colecoes.reservas));
+    localStorage.setItem('cacheReservas_ts', Date.now());
+  } catch(e) {}
+
+// Atualiza badge do dia
+  const hojeKey = new Date().toISOString().slice(0, 10);
+  const totalHoje = Object.values(index[hojeKey] || {}).flat().length;
+  const badge = document.getElementById('badgeHoje');
+  if (badge) {
+    badge.textContent = totalHoje + ' hoje';
+    totalHoje > 0 ? badge.classList.remove('hidden') : badge.classList.add('hidden');
+  }
+
+}
+
+// ════════════════════════════════════════════════════════════════
+// BLOCO: Vínculo com Ação Institucional no formulário de reserva
+// ════════════════════════════════════════════════════════════════
+
+/**
+ * Inicializa o painel de vínculo de ação se o usuário tiver permissão.
+ * Chamado ao abrir a aba nova-reserva.
+ */
+function _novaReservaInicializarPainelAcao() {
+  var painel = document.getElementById('painelVinculoAcao');
+  if (!painel) return;
+
+  var temAcesso = (typeof temPermissao === 'function') && temPermissao('acoes', 'visualizar');
+  if (!temAcesso) {
+    painel.classList.add('hidden');
+    return;
+  }
+
+  painel.classList.remove('hidden');
+
+  // Carrega lista de ações para popular o select (apenas quando necessário)
+  if (!window._novaReservaAcoesCached) {
+    GAS.acoes.listar({}, function(lista) {
+      window._novaReservaAcoesCached = lista || [];
+      _novaReservaPopularSelectAcoes(lista || []);
+    }, function() {
+      window._novaReservaAcoesCached = [];
+    });
+  } else {
+    _novaReservaPopularSelectAcoes(window._novaReservaAcoesCached);
+  }
+}
+
+function _novaReservaPopularSelectAcoes(lista) {
+  var sel = document.getElementById('selectAcaoVinculada');
+  if (!sel) return;
+
+  var STATUS_VISIVEIS = ['planejamento', 'aprovado', 'em_execucao'];
+  var visiveis = lista.filter(function(a) {
+    return STATUS_VISIVEIS.indexOf(a.status) !== -1;
+  });
+
+  if (!visiveis.length) {
+    sel.innerHTML = '<option value="">Nenhuma ação disponível</option>';
+    return;
+  }
+
+  var TIPO_LABEL = {
+    curso:'Curso', oficina:'Oficina', espetaculo:'Espetáculo', evento:'Evento',
+    campanha:'Campanha', laboratorio:'Laboratório', projeto_formativo:'Projeto Formativo',
+    difusao:'Difusão', atividade_territorial:'Ativ. Territorial', outro:'Outro'
+  };
+
+  sel.innerHTML = '<option value="">Selecione uma ação...</option>' +
+    visiveis.map(function(a) {
+      var tipo = TIPO_LABEL[a.tipo] || a.tipo;
+      return '<option value="' + escaparHTML(a.id) + '" data-nome="' + escaparHTML(a.nome) +
+             '" data-desc="' + escaparHTML(a.descricao || '') + '">' +
+             escaparHTML(a.nome) + ' (' + tipo + ')</option>';
+    }).join('');
+}
+
+function _novaReservaToggleVinculo(ativo) {
+  var painelSel = document.getElementById('painelSelectAcao');
+  var inputId   = document.getElementById('inputAcaoVinculadaId');
+  var inputNome = document.getElementById('inputNomeAcao');
+  var desc      = document.getElementById('painelAcaoDescricao');
+
+  if (!ativo) {
+    if (painelSel) painelSel.classList.add('hidden');
+    if (inputId)   inputId.value = '';
+    if (desc)      desc.classList.add('hidden');
+    if (inputNome) inputNome.removeAttribute('readonly');
+    return;
+  }
+
+  if (painelSel) painelSel.classList.remove('hidden');
+  if (inputNome) inputNome.setAttribute('readonly', 'readonly');
+
+  // Limpa seleção prévia
+  var sel = document.getElementById('selectAcaoVinculada');
+  if (sel) sel.value = '';
+  if (inputId) inputId.value = '';
+  if (inputNome) inputNome.value = '';
+  if (desc) desc.classList.add('hidden');
+}
+
+function _novaReservaAcaoSelecionada(acaoId) {
+  var inputId   = document.getElementById('inputAcaoVinculadaId');
+  var inputNome = document.getElementById('inputNomeAcao');
+  var desc      = document.getElementById('painelAcaoDescricao');
+  var sel       = document.getElementById('selectAcaoVinculada');
+
+  if (!acaoId) {
+    if (inputId)   inputId.value = '';
+    if (inputNome) inputNome.value = '';
+    if (desc)      desc.classList.add('hidden');
+    return;
+  }
+
+  var opt = sel ? sel.querySelector('option[value="' + acaoId + '"]') : null;
+  var nome = opt ? (opt.dataset.nome || opt.text) : '';
+  var descTxt = opt ? (opt.dataset.desc || '') : '';
+
+  if (inputId)   inputId.value   = acaoId;
+  if (inputNome) inputNome.value = nome.toUpperCase();
+
+  if (desc) {
+    if (descTxt) {
+      desc.textContent = descTxt;
+      desc.classList.remove('hidden');
+    } else {
+      desc.classList.add('hidden');
+    }
+  }
+}
+
+/**
+ * Limpa o estado do painel de ação ao resetar o formulário.
+ * Chamado por resetarFormulario() ou ao abrir nova reserva limpa.
+ */
+function _novaReservaResetarPainelAcao() {
+  var check   = document.getElementById('checkVincularAcao');
+  var inputId = document.getElementById('inputAcaoVinculadaId');
+  var desc    = document.getElementById('painelAcaoDescricao');
+  var nome    = document.getElementById('inputNomeAcao');
+  var sel     = document.getElementById('selectAcaoVinculada');
+
+  if (check)   check.checked = false;
+  if (inputId) inputId.value = '';
+  if (desc)    desc.classList.add('hidden');
+  if (nome)    nome.removeAttribute('readonly');
+  if (sel)     sel.value = '';
+  _novaReservaToggleVinculo(false);
+}
+
+
+
+
+</script>
+
+</script>

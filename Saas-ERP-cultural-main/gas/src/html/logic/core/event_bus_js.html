@@ -1,0 +1,79 @@
+<!--
+@file core/event_bus_js.html
+@layer frontend/core
+@description Event Bus centralizado. Pub/sub singleton para desacoplamento de módulos.
+             Substitui chamadas diretas entre módulos por eventos rastreáveis.
+
+CONVENÇÃO DE NOMES:
+  <dominio>:<acao>           → 'reserva:criada', 'permissoes:prontas'
+  aba:<id>:show              → disparado por navegacao_ui_js antes de _onShow_aba_xxx
+  app:<fase>                 → 'app:pronto', 'app:usuario:carregado', 'app:modulos:carregados'
+
+EVENTOS DO SISTEMA:
+  app:pronto                 — boot completo, AppState.usuario disponível
+  app:usuario:carregado      — dados iniciais carregados do backend
+  app:modulos:carregados     — registro de módulos carregado e aplicado
+  permissoes:carregadas      — permissões obtidas do backend
+  permissoes:prontas         — permissões aplicadas na UI
+  aba:<id>:show              — aba específica exibida (substitui window._onShow_aba_xxx)
+  reserva:criada             — reserva criada com sucesso
+  reserva:atualizada         — reserva atualizada
+  reserva:cancelada          — reserva cancelada
+  chave:status_alterado      — status de protocolo de chave alterado
+  modulos:status_alterado    — módulo ativado ou desativado
+-->
+<script>
+
+const EventBus = (function() {
+
+  // mapa: evento → [{ cb, once }]
+  var _listeners = {};
+
+  function _listar(evento) {
+    if (!_listeners[evento]) _listeners[evento] = [];
+    return _listeners[evento];
+  }
+
+  return {
+
+    on: function(evento, cb) {
+      _listar(evento).push({ cb: cb, once: false });
+      return this;
+    },
+
+    once: function(evento, cb) {
+      _listar(evento).push({ cb: cb, once: true });
+      return this;
+    },
+
+    off: function(evento, cb) {
+      if (!_listeners[evento]) return this;
+      _listeners[evento] = _listeners[evento].filter(function(l) {
+        return l.cb !== cb;
+      });
+      return this;
+    },
+
+    emit: function(evento, dados) {
+      var lista = (_listeners[evento] || []).slice();
+      var restam = [];
+      lista.forEach(function(l) {
+        try { l.cb(dados); } catch(e) {
+          console.error('[EventBus] erro em listener de "' + evento + '":', e);
+        }
+        if (!l.once) restam.push(l);
+      });
+      _listeners[evento] = restam;
+      return this;
+    },
+
+    clear: function(evento) {
+      delete _listeners[evento];
+      return this;
+    }
+
+  };
+
+})();
+
+</script>

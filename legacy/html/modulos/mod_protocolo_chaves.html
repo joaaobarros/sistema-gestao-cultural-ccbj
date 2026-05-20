@@ -1,0 +1,696 @@
+<!--
+@file modulos/mod_protocolo_chaves.html
+@type modulo
+@description Módulo de Protocolo de Chaves — controle operacional de retirada,
+             entrega, devolução, transferência e rastreabilidade de chaves físicas.
+@responsibility UI completa com subabas: Painel, Solicitar, Gerenciar (infra), Relatórios, Admin.
+@dependencies mod_protocolo_chaves_js.html (lógica), GAS.chaves (bridge backend)
+-->
+
+<section id="aba-protocolo-chaves" class="tab-content hidden animate-fadeIn pb-20">
+
+  <!-- ── Cabeçalho do módulo ────────────────────────────────── -->
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+    <div>
+      <h2 class="text-xl font-black text-slate-800 flex items-center gap-2">
+        <i class="fas fa-key text-purple-600"></i>
+        Protocolo de Chaves
+      </h2>
+      <p class="text-xs text-slate-500 mt-0.5">Controle de retirada, devolução e rastreabilidade de chaves físicas</p>
+    </div>
+    <div class="flex items-center gap-2" id="chv-header-actions">
+      <span id="chv-ultima-atualizacao" class="text-[10px] text-slate-400 hidden sm:inline"></span>
+      <button id="chv-btn-atualizar" onclick="_chvAtualizarDados()" class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 active:scale-95 transition-all cursor-pointer">
+        <i class="fas fa-sync-alt text-[10px]"></i> Atualizar
+      </button>
+      <button id="chv-btn-solicitar" onclick="_chvAbrirModalSolicitar()"
+        class="flex items-center gap-1.5 px-4 py-1.5 text-xs font-black text-white bg-purple-600 hover:bg-purple-700 rounded-xl transition-all">
+        <i class="fas fa-plus text-[10px]"></i> Solicitar Chave
+      </button>
+      <button id="chv-btn-entrega-direta" onclick="_chvAbrirModalEntregaDireta()" class="hidden
+        flex items-center gap-1.5 px-4 py-1.5 text-xs font-black text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-all">
+        <i class="fas fa-hand-holding-medical text-[10px]"></i> Entrega Direta
+      </button>
+      <button id="chv-btn-retirada-op" onclick="_chvAbrirModalRetiradaOp()" class="hidden
+        flex items-center gap-1.5 px-4 py-1.5 text-xs font-black text-white bg-orange-600 hover:bg-orange-700 rounded-xl transition-all"
+        title="Registrar retirada por equipe sem acesso ao sistema (Zeladoria, Segurança, Elétrica)">
+        <i class="fas fa-hard-hat text-[10px]"></i> Retirada Op.
+      </button>
+    </div>
+  </div>
+
+  <!-- ── Indicadores rápidos ─────────────────────────────────── -->
+  <div id="chv-indicadores" class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3 mb-6">
+    <!-- Preenchido por _chvRenderizarIndicadores() -->
+    <div class="bg-white border border-slate-200 rounded-2xl p-3 animate-pulse h-16"></div>
+    <div class="bg-white border border-slate-200 rounded-2xl p-3 animate-pulse h-16"></div>
+    <div class="bg-white border border-slate-200 rounded-2xl p-3 animate-pulse h-16"></div>
+    <div class="bg-white border border-slate-200 rounded-2xl p-3 animate-pulse h-16"></div>
+    <div class="bg-white border border-slate-200 rounded-2xl p-3 animate-pulse h-16"></div>
+    <div class="bg-white border border-slate-200 rounded-2xl p-3 animate-pulse h-16"></div>
+  </div>
+
+  <!-- ── Subabas de navegação ────────────────────────────────── -->
+  <div class="flex gap-1 mb-5 border-b border-slate-200 overflow-x-auto pb-0">
+    <button onclick="_chvMostrarSubaba('painel')"   id="chv-tab-painel"   class="chv-tab-btn chv-tab-ativo">
+      <i class="fas fa-tachometer-alt mr-1.5"></i>Painel
+    </button>
+    <button onclick="_chvMostrarSubaba('solicitar')" id="chv-tab-solicitar" class="chv-tab-btn">
+      <i class="fas fa-hand-paper mr-1.5"></i>Minhas Chaves
+    </button>
+    <button onclick="_chvMostrarSubaba('gerenciar')" id="chv-tab-gerenciar" class="chv-tab-btn hidden" id-infra-only>
+      <i class="fas fa-tasks mr-1.5"></i>Gestão (Infra)
+      <span id="chv-badge-pendencias" class="hidden ml-1 min-w-[16px] h-4 bg-red-500 text-white text-[9px] font-black rounded-full inline-flex items-center justify-center px-1">0</span>
+    </button>
+    <button onclick="_chvMostrarSubaba('relatorios')" id="chv-tab-relatorios" class="chv-tab-btn">
+      <i class="fas fa-chart-line mr-1.5"></i>Relatórios
+    </button>
+    <button onclick="_chvMostrarSubaba('admin')" id="chv-tab-admin" class="chv-tab-btn hidden" id-admin-only>
+      <i class="fas fa-cog mr-1.5"></i>Admin
+    </button>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       SUBABA: Painel Operacional
+  ══════════════════════════════════════════ -->
+  <div id="chv-sub-painel" class="chv-subaba">
+
+    <!-- Alertas críticos -->
+    <div id="chv-alertas" class="mb-4 space-y-2"></div>
+
+    <!-- Seções separadas por tipo de pendência -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+
+      <div>
+        <h3 class="text-xs font-black text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+          <i class="fas fa-hourglass-half text-amber-500"></i>
+          Aguardando Confirmação
+          <span id="chv-count-aguardando" class="ml-1 text-amber-600 font-black"></span>
+        </h3>
+        <div id="chv-lista-aguardando" class="space-y-2">
+          <div class="text-xs text-slate-400 italic p-3 bg-slate-50 rounded-xl">Nenhuma pendência</div>
+        </div>
+      </div>
+
+      <div>
+        <h3 class="text-xs font-black text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+          <i class="fas fa-exclamation-triangle text-red-500"></i>
+          Chaves Atrasadas
+          <span id="chv-count-atrasadas" class="ml-1 text-red-600 font-black"></span>
+        </h3>
+        <div id="chv-lista-atrasadas" class="space-y-2">
+          <div class="text-xs text-slate-400 italic p-3 bg-slate-50 rounded-xl">Nenhuma chave atrasada</div>
+        </div>
+      </div>
+
+      <div>
+        <h3 class="text-xs font-black text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+          <i class="fas fa-key text-green-500"></i>
+          Chaves em Uso
+          <span id="chv-count-emuso" class="ml-1 text-green-600 font-black"></span>
+        </h3>
+        <div id="chv-lista-emuso" class="space-y-2">
+          <div class="text-xs text-slate-400 italic p-3 bg-slate-50 rounded-xl">Nenhuma chave retirada</div>
+        </div>
+      </div>
+
+      <div>
+        <h3 class="text-xs font-black text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+          <i class="fas fa-exchange-alt text-blue-500"></i>
+          Transferências Pendentes
+          <span id="chv-count-transferencias" class="ml-1 text-blue-600 font-black"></span>
+        </h3>
+        <div id="chv-lista-transferencias" class="space-y-2">
+          <div class="text-xs text-slate-400 italic p-3 bg-slate-50 rounded-xl">Nenhuma transferência pendente</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       SUBABA: Minhas Chaves
+  ══════════════════════════════════════════ -->
+  <div id="chv-sub-solicitar" class="chv-subaba hidden">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="text-sm font-black text-slate-700">Meus Protocolos</h3>
+      <div class="flex gap-2">
+        <select id="chv-filtro-meus-status" onchange="_chvFiltrarMeus()" class="text-xs border border-slate-200 rounded-xl px-3 py-1.5 bg-white text-slate-700 font-medium">
+          <option value="">Todos os status</option>
+          <option value="SOLICITADA">Solicitada</option>
+          <option value="AGUARDANDO_CONFIRMACAO_USUARIO">Ag. minha confirmação</option>
+          <option value="RETIRADA">Em meu poder</option>
+          <option value="AGUARDANDO_CONFIRMACAO_INFRA">Devolução pendente</option>
+          <option value="ATRASADA">Atrasada</option>
+          <option value="TRANSFERENCIA_PENDENTE">Transferência pendente</option>
+          <option value="TRANSFERIDA">Transferida</option>
+          <option value="DEVOLVIDA">Devolvida</option>
+          <option value="CANCELADA">Cancelada</option>
+          <option value="NEGADA">Negada</option>
+        </select>
+      </div>
+    </div>
+    <div id="chv-lista-meus" class="space-y-2">
+      <div class="text-xs text-slate-400 italic p-3 bg-slate-50 rounded-xl">Carregando...</div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       SUBABA: Gestão (Infra)
+  ══════════════════════════════════════════ -->
+  <div id="chv-sub-gerenciar" class="chv-subaba hidden">
+
+    <!-- Subtabs de gestão -->
+    <div class="flex gap-1 mb-4 overflow-x-auto">
+      <button onclick="_chvMostrarSubGerenciar('solicitadas')" id="chv-stab-solicitadas" class="chv-stab-btn chv-stab-ativo">
+        Solicitações <span id="chv-ct-solicitadas" class="ml-1 text-[10px] font-black text-amber-600"></span>
+      </button>
+      <button onclick="_chvMostrarSubGerenciar('aguardando-infra')" id="chv-stab-aguardando-infra" class="chv-stab-btn">
+        Devolução Pendente <span id="chv-ct-aguardando-infra" class="ml-1 text-[10px] font-black text-blue-600"></span>
+      </button>
+      <button onclick="_chvMostrarSubGerenciar('todos-ativos')" id="chv-stab-todos-ativos" class="chv-stab-btn">
+        Todos Ativos
+      </button>
+    </div>
+
+    <div id="chv-gerenciar-solicitadas" class="chv-sub-gerenciar-panel">
+      <div id="chv-lista-solicitadas" class="space-y-2">
+        <div class="text-xs text-slate-400 italic p-3 bg-slate-50 rounded-xl">Sem solicitações pendentes</div>
+      </div>
+    </div>
+
+    <div id="chv-gerenciar-aguardando-infra" class="chv-sub-gerenciar-panel hidden">
+      <div id="chv-lista-aguardando-infra" class="space-y-2">
+        <div class="text-xs text-slate-400 italic p-3 bg-slate-50 rounded-xl">Nenhuma devolução aguardando confirmação</div>
+      </div>
+    </div>
+
+    <div id="chv-gerenciar-todos-ativos" class="chv-sub-gerenciar-panel hidden">
+      <div class="flex gap-2 mb-3">
+        <input type="text" id="chv-busca-todos" oninput="_chvFiltrarTodosAtivos()" placeholder="Buscar protocolo, usuário, espaço..." class="flex-1 text-xs border border-slate-200 rounded-xl px-3 py-1.5 bg-white">
+        <select id="chv-filtro-todos-espaco" onchange="_chvFiltrarTodosAtivos()" class="text-xs border border-slate-200 rounded-xl px-3 py-1.5 bg-white">
+          <option value="">Todos espaços</option>
+        </select>
+      </div>
+      <div id="chv-lista-todos-ativos" class="space-y-2">
+        <div class="text-xs text-slate-400 italic p-3 bg-slate-50 rounded-xl">Carregando...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       SUBABA: Relatórios
+  ══════════════════════════════════════════ -->
+  <div id="chv-sub-relatorios" class="chv-subaba hidden">
+
+    <!-- Filtros -->
+    <div class="bg-white border border-slate-200 rounded-2xl p-4 mb-5">
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div>
+          <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Status</label>
+          <select id="chv-rel-status" onchange="_chvCarregarRelatorio()" class="w-full text-xs border border-slate-200 rounded-xl px-3 py-1.5">
+            <option value="">Todos</option>
+            <option value="RETIRADA">Retirada</option>
+            <option value="DEVOLVIDA">Devolvida</option>
+            <option value="ATRASADA">Atrasada</option>
+            <option value="CANCELADA">Cancelada</option>
+            <option value="NEGADA">Negada</option>
+            <option value="TRANSFERIDA">Transferida</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Espaço</label>
+          <select id="chv-rel-espaco" onchange="_chvCarregarRelatorio()" class="w-full text-xs border border-slate-200 rounded-xl px-3 py-1.5">
+            <option value="">Todos</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Data inicial</label>
+          <input type="date" id="chv-rel-data-ini" onchange="_chvCarregarRelatorio()" class="w-full text-xs border border-slate-200 rounded-xl px-3 py-1.5">
+        </div>
+        <div>
+          <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Data final</label>
+          <input type="date" id="chv-rel-data-fim" onchange="_chvCarregarRelatorio()" class="w-full text-xs border border-slate-200 rounded-xl px-3 py-1.5">
+        </div>
+      </div>
+      <div class="mt-3 flex justify-end">
+        <button onclick="_chvRedefinirRelatorio()" class="px-4 py-1.5 text-xs font-bold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-all">
+          <i class="fas fa-undo mr-1"></i>Redefinir
+        </button>
+      </div>
+    </div>
+
+    <!-- Timeline / tabela -->
+    <div id="chv-rel-conteudo" class="space-y-2">
+      <div class="text-xs text-slate-400 italic p-3 bg-slate-50 rounded-xl text-center animate-pulse">Carregando...</div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       SUBABA: Admin — Gerenciar Chaves e Espaços
+  ══════════════════════════════════════════ -->
+  <div id="chv-sub-admin" class="chv-subaba hidden">
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+
+      <!-- Cadastro de Chaves -->
+      <div class="bg-white border border-slate-200 rounded-2xl p-4">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="text-sm font-black text-slate-700 flex items-center gap-2">
+            <i class="fas fa-key text-purple-500"></i>Chaves Cadastradas
+          </h3>
+          <button onclick="_chvAbrirModalNovaChave()" class="text-xs font-black text-white bg-purple-600 hover:bg-purple-700 px-3 py-1.5 rounded-xl transition-all">
+            <i class="fas fa-plus mr-1"></i>Nova
+          </button>
+        </div>
+
+        <div class="mb-2">
+          <select id="chv-admin-espaco-filtro" onchange="_chvFiltrarChavesAdmin()" class="w-full text-xs border border-slate-200 rounded-xl px-3 py-1.5">
+            <option value="">Todos os espaços</option>
+          </select>
+        </div>
+
+        <div id="chv-admin-lista-chaves" class="space-y-2 max-h-80 overflow-y-auto custom-scrollbar">
+          <div class="text-xs text-slate-400 italic p-2">Carregando...</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</section>
+
+<!-- ══════════════════════════════════════════════
+     MODAIS
+══════════════════════════════════════════════ -->
+
+<!-- Modal: Solicitar Chave -->
+<div id="chv-modal-solicitar" class="fixed inset-0 z-[200] hidden items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+    <div class="flex items-center justify-between p-5 border-b border-slate-100">
+      <h3 class="text-base font-black text-slate-800 flex items-center gap-2">
+        <i class="fas fa-key text-purple-500"></i> Solicitar Chave
+      </h3>
+      <button onclick="_chvFecharModal('chv-modal-solicitar')" class="text-slate-400 hover:text-slate-700 transition-colors">
+        <i class="fas fa-times text-lg"></i>
+      </button>
+    </div>
+    <div class="p-5 space-y-4">
+      <div>
+        <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Espaço *</label>
+        <select id="chv-sol-espaco" onchange="_chvCarregarChavesDoEspaco()" class="w-full text-sm border border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-purple-300 outline-none">
+          <option value="">Selecione o espaço...</option>
+        </select>
+      </div>
+      <div>
+        <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Chave *</label>
+        <select id="chv-sol-chave" class="w-full text-sm border border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-purple-300 outline-none">
+          <option value="">Selecione o espaço primeiro</option>
+        </select>
+      </div>
+      <div>
+        <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Devolução prevista</label>
+        <input type="datetime-local" id="chv-sol-devolucao" class="w-full text-sm border border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-purple-300 outline-none">
+      </div>
+      <div>
+        <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Reserva vinculada</label>
+        <input type="text" id="chv-sol-reserva" placeholder="ID da reserva (opcional)" class="w-full text-sm border border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-purple-300 outline-none">
+      </div>
+      <div>
+        <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Observações</label>
+        <textarea id="chv-sol-obs" rows="2" class="w-full text-sm border border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-purple-300 outline-none resize-none"></textarea>
+      </div>
+    </div>
+    <div class="flex justify-end gap-2 px-5 pb-5">
+      <button onclick="_chvFecharModal('chv-modal-solicitar')" class="px-4 py-2 text-xs font-bold text-slate-600 bg-slate-100 rounded-xl hover:bg-slate-200 transition-all">Cancelar</button>
+      <button id="chv-btn-solicitar-submit" onclick="_chvEnviarSolicitacao()" class="px-5 py-2 text-xs font-black text-white bg-purple-600 hover:bg-purple-700 active:scale-95 rounded-xl transition-all cursor-pointer">
+        <i class="fas fa-paper-plane mr-1.5"></i>Solicitar
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Entrega Direta (Infra) -->
+<div id="chv-modal-entrega-direta" class="fixed inset-0 z-[200] hidden items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+    <div class="flex items-center justify-between p-5 border-b border-slate-100">
+      <h3 class="text-base font-black text-slate-800 flex items-center gap-2">
+        <i class="fas fa-hand-holding-medical text-blue-500"></i> Entrega Direta
+      </h3>
+      <button onclick="_chvFecharModal('chv-modal-entrega-direta')" class="text-slate-400 hover:text-slate-700 transition-colors">
+        <i class="fas fa-times text-lg"></i>
+      </button>
+    </div>
+    <div class="p-5 space-y-4">
+      <div>
+        <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Espaço *</label>
+        <select id="chv-ed-espaco" onchange="_chvCarregarChavesDoEspacoEd()" class="w-full text-sm border border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-purple-300 outline-none">
+          <option value="">Selecione o espaço...</option>
+        </select>
+      </div>
+      <div>
+        <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Chave *</label>
+        <select id="chv-ed-chave" class="w-full text-sm border border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-purple-300 outline-none">
+          <option value="">Selecione o espaço primeiro</option>
+        </select>
+      </div>
+      <div>
+        <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Usuário destinatário *</label>
+        <input type="email" id="chv-ed-destino" placeholder="email@dominio.com" class="w-full text-sm border border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-purple-300 outline-none">
+      </div>
+      <div>
+        <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Devolução prevista</label>
+        <input type="datetime-local" id="chv-ed-devolucao" class="w-full text-sm border border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-purple-300 outline-none">
+      </div>
+      <div>
+        <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Observações</label>
+        <textarea id="chv-ed-obs" rows="2" class="w-full text-sm border border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-purple-300 outline-none resize-none"></textarea>
+      </div>
+    </div>
+    <div class="flex justify-end gap-2 px-5 pb-5">
+      <button onclick="_chvFecharModal('chv-modal-entrega-direta')" class="px-4 py-2 text-xs font-bold text-slate-600 bg-slate-100 rounded-xl hover:bg-slate-200 transition-all">Cancelar</button>
+      <button id="chv-btn-entrega-submit" onclick="_chvEnviarEntregaDireta()" class="px-5 py-2 text-xs font-black text-white bg-blue-600 hover:bg-blue-700 active:scale-95 rounded-xl transition-all cursor-pointer">
+        <i class="fas fa-hand-holding-medical mr-1.5"></i>Registrar Entrega
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Transferência -->
+<div id="chv-modal-transferencia" class="fixed inset-0 z-[200] hidden items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+    <div class="flex items-center justify-between p-5 border-b border-slate-100">
+      <h3 class="text-base font-black text-slate-800 flex items-center gap-2">
+        <i class="fas fa-exchange-alt text-purple-500"></i> Solicitar Transferência
+      </h3>
+      <button onclick="_chvFecharModal('chv-modal-transferencia')" class="text-slate-400 hover:text-slate-700 transition-colors">
+        <i class="fas fa-times text-lg"></i>
+      </button>
+    </div>
+    <div class="p-5 space-y-4">
+      <input type="hidden" id="chv-tr-protocolo-id">
+      <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs text-slate-600">
+        <span class="font-black">Protocolo:</span> <span id="chv-tr-info"></span>
+      </div>
+      <div>
+        <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Email do destinatário *</label>
+        <input type="email" id="chv-tr-destino" placeholder="email@dominio.com" class="w-full text-sm border border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-purple-300 outline-none">
+      </div>
+      <div>
+        <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Motivo / Observações</label>
+        <textarea id="chv-tr-obs" rows="2" class="w-full text-sm border border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-purple-300 outline-none resize-none"></textarea>
+      </div>
+    </div>
+    <div class="flex justify-end gap-2 px-5 pb-5">
+      <button onclick="_chvFecharModal('chv-modal-transferencia')" class="px-4 py-2 text-xs font-bold text-slate-600 bg-slate-100 rounded-xl hover:bg-slate-200 transition-all">Cancelar</button>
+      <button id="chv-btn-transferencia-submit" onclick="_chvEnviarTransferencia()" class="px-5 py-2 text-xs font-black text-white bg-purple-600 hover:bg-purple-700 active:scale-95 rounded-xl transition-all cursor-pointer">
+        <i class="fas fa-exchange-alt mr-1.5"></i>Solicitar Transferência
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Nova Chave (Admin) -->
+<div id="chv-modal-nova-chave" class="fixed inset-0 z-[200] hidden items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+    <div class="flex items-center justify-between p-5 border-b border-slate-100">
+      <h3 class="text-base font-black text-slate-800 flex items-center gap-2">
+        <i class="fas fa-key text-purple-500"></i> <span id="chv-modal-chave-titulo">Nova Chave</span>
+      </h3>
+      <button onclick="_chvFecharModal('chv-modal-nova-chave')" class="text-slate-400 hover:text-slate-700 transition-colors">
+        <i class="fas fa-times text-lg"></i>
+      </button>
+    </div>
+    <div class="p-5 space-y-4">
+      <input type="hidden" id="chv-form-chave-id">
+      <div>
+        <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Espaço *</label>
+        <select id="chv-form-chave-espaco" class="w-full text-sm border border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-purple-300 outline-none">
+          <option value="">Selecione...</option>
+        </select>
+      </div>
+      <input type="hidden" id="chv-form-chave-codigo">
+      <div>
+        <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Tipo *</label>
+        <select id="chv-form-chave-tipo" class="w-full text-sm border border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-purple-300 outline-none">
+          <option value="CHAVE COMUM">Uso Comum</option>
+          <option value="CHAVE RESERVA">Reserva</option>
+        </select>
+      </div>
+      <div>
+        <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Observações</label>
+        <textarea id="chv-form-chave-obs" rows="2" class="w-full text-sm border border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-purple-300 outline-none resize-none"></textarea>
+      </div>
+    </div>
+    <div class="flex justify-end gap-2 px-5 pb-5">
+      <button onclick="_chvFecharModal('chv-modal-nova-chave')" class="px-4 py-2 text-xs font-bold text-slate-600 bg-slate-100 rounded-xl hover:bg-slate-200 transition-all">Cancelar</button>
+      <button id="chv-btn-nova-chave-submit" onclick="_chvSalvarChave()" class="px-5 py-2 text-xs font-black text-white bg-purple-600 hover:bg-purple-700 active:scale-95 rounded-xl transition-all cursor-pointer">
+        <i class="fas fa-save mr-1.5"></i>Salvar
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Detalhes do Protocolo -->
+<div id="chv-modal-detalhe" class="fixed inset-0 z-[200] hidden items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+    <div class="flex items-center justify-between p-5 border-b border-slate-100 sticky top-0 bg-white z-10">
+      <h3 class="text-base font-black text-slate-800">Detalhes do Protocolo</h3>
+      <button onclick="_chvFecharModal('chv-modal-detalhe')" class="text-slate-400 hover:text-slate-700 transition-colors">
+        <i class="fas fa-times text-lg"></i>
+      </button>
+    </div>
+    <div id="chv-modal-detalhe-conteudo" class="p-5"></div>
+  </div>
+</div>
+
+<!-- Modal: Retirada Operacional (Zeladoria / Segurança / Elétrica) -->
+<div id="chv-modal-retirada-op" class="fixed inset-0 z-[200] hidden items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+    <div class="flex items-center justify-between p-5 border-b border-slate-100">
+      <h3 class="text-base font-black text-slate-800 flex items-center gap-2">
+        <i class="fas fa-hard-hat text-orange-500"></i> Retirada Operacional
+      </h3>
+      <button onclick="_chvFecharModal('chv-modal-retirada-op')" class="text-slate-400 hover:text-slate-700 transition-colors">
+        <i class="fas fa-times text-lg"></i>
+      </button>
+    </div>
+    <div class="p-4 bg-orange-50 border-b border-orange-100 text-[10px] text-orange-700 flex items-start gap-2">
+      <i class="fas fa-info-circle mt-0.5 shrink-0"></i>
+      <span>Para equipes sem acesso ao sistema (Zeladoria, Segurança, Elétrica). O operador registra a retirada em nome do responsável físico — sem etapa de confirmação pelo receptor.</span>
+    </div>
+    <div class="p-5 space-y-4">
+      <div>
+        <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Espaço *</label>
+        <select id="chv-rop-espaco" onchange="_chvCarregarChavesDoEspacoRop()" class="w-full text-sm border border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-orange-300 outline-none">
+          <option value="">Selecione o espaço...</option>
+        </select>
+      </div>
+      <div>
+        <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Chave *</label>
+        <select id="chv-rop-chave" class="w-full text-sm border border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-orange-300 outline-none">
+          <option value="">Selecione o espaço primeiro</option>
+        </select>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Nome do responsável *</label>
+          <input type="text" id="chv-rop-nome" placeholder="Ex.: João da Zeladoria" class="w-full text-sm border border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-orange-300 outline-none">
+        </div>
+        <div>
+          <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Equipe / Setor</label>
+          <select id="chv-rop-setor" class="w-full text-sm border border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-orange-300 outline-none">
+            <option value="">Selecione...</option>
+            <option value="Zeladoria">Zeladoria</option>
+            <option value="Segurança">Segurança</option>
+            <option value="Elétrica">Elétrica</option>
+            <option value="Manutenção">Manutenção</option>
+            <option value="Outro">Outro</option>
+          </select>
+        </div>
+      </div>
+      <div>
+        <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Devolução prevista</label>
+        <input type="datetime-local" id="chv-rop-devolucao" class="w-full text-sm border border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-orange-300 outline-none">
+      </div>
+      <div>
+        <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Observações</label>
+        <textarea id="chv-rop-obs" rows="2" class="w-full text-sm border border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-orange-300 outline-none resize-none"></textarea>
+      </div>
+    </div>
+    <div class="flex justify-end gap-2 px-5 pb-5">
+      <button onclick="_chvFecharModal('chv-modal-retirada-op')" class="px-4 py-2 text-xs font-bold text-slate-600 bg-slate-100 rounded-xl hover:bg-slate-200 transition-all">Cancelar</button>
+      <button id="chv-btn-retirada-op-submit" onclick="_chvEnviarRetiradaOp()" class="px-5 py-2 text-xs font-black text-white bg-orange-600 hover:bg-orange-700 active:scale-95 rounded-xl transition-all cursor-pointer">
+        <i class="fas fa-hard-hat mr-1.5"></i>Registrar Retirada
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Transferência Operacional (Zeladoria / Segurança / Elétrica) -->
+<div id="chv-modal-transf-op" class="fixed inset-0 z-[200] hidden items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+    <div class="flex items-center justify-between p-5 border-b border-slate-100">
+      <h3 class="text-base font-black text-slate-800 flex items-center gap-2">
+        <i class="fas fa-people-arrows text-orange-500"></i> Transferência Operacional
+      </h3>
+      <button onclick="_chvFecharModal('chv-modal-transf-op')" class="text-slate-400 hover:text-slate-700 transition-colors">
+        <i class="fas fa-times text-lg"></i>
+      </button>
+    </div>
+    <div class="p-4 bg-orange-50 border-b border-orange-100 text-[10px] text-orange-700 flex items-start gap-2">
+      <i class="fas fa-info-circle mt-0.5 shrink-0"></i>
+      <span>Para equipes sem acesso ao sistema. O operador registra a mudança de responsável — sem etapa de confirmação pelo novo receptor.</span>
+    </div>
+    <div class="p-5 space-y-4">
+      <input type="hidden" id="chv-top-protocolo-id">
+      <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs text-slate-600">
+        <span class="font-black">Protocolo:</span> <span id="chv-top-info"></span>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Novo responsável *</label>
+          <input type="text" id="chv-top-nome" placeholder="Ex.: Maria da Segurança" class="w-full text-sm border border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-orange-300 outline-none">
+        </div>
+        <div>
+          <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Equipe / Setor</label>
+          <select id="chv-top-setor" class="w-full text-sm border border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-orange-300 outline-none">
+            <option value="">Selecione...</option>
+            <option value="Zeladoria">Zeladoria</option>
+            <option value="Segurança">Segurança</option>
+            <option value="Elétrica">Elétrica</option>
+            <option value="Manutenção">Manutenção</option>
+            <option value="Outro">Outro</option>
+          </select>
+        </div>
+      </div>
+      <div>
+        <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Motivo / Observações</label>
+        <textarea id="chv-top-obs" rows="2" class="w-full text-sm border border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-orange-300 outline-none resize-none"></textarea>
+      </div>
+    </div>
+    <div class="flex justify-end gap-2 px-5 pb-5">
+      <button onclick="_chvFecharModal('chv-modal-transf-op')" class="px-4 py-2 text-xs font-bold text-slate-600 bg-slate-100 rounded-xl hover:bg-slate-200 transition-all">Cancelar</button>
+      <button id="chv-btn-transf-op-submit" onclick="_chvEnviarTransferenciaOp()" class="px-5 py-2 text-xs font-black text-white bg-orange-600 hover:bg-orange-700 active:scale-95 rounded-xl transition-all cursor-pointer">
+        <i class="fas fa-people-arrows mr-1.5"></i>Registrar Transferência
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Alterar Status de Chave -->
+<div id="chv-modal-status-chave" class="fixed inset-0 z-[200] hidden items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
+    <div class="flex items-center justify-between p-5 border-b border-slate-100">
+      <h3 class="text-base font-black text-slate-800">Alterar Status da Chave</h3>
+      <button onclick="_chvFecharModal('chv-modal-status-chave')" class="text-slate-400 hover:text-slate-700 transition-colors">
+        <i class="fas fa-times text-lg"></i>
+      </button>
+    </div>
+    <div class="p-5 space-y-4">
+      <input type="hidden" id="chv-sc-id">
+      <div>
+        <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Novo Status</label>
+        <select id="chv-sc-status" class="w-full text-sm border border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-purple-300 outline-none">
+          <option value="DISPONIVEL">Disponível</option>
+          <option value="MANUTENCAO">Em Manutenção</option>
+          <option value="BLOQUEADA">Bloqueada</option>
+          <option value="EXTRAVIADA">Extraviada</option>
+        </select>
+      </div>
+      <div>
+        <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Observações</label>
+        <textarea id="chv-sc-obs" rows="2" class="w-full text-sm border border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-purple-300 outline-none resize-none"></textarea>
+      </div>
+    </div>
+    <div class="flex justify-end gap-2 px-5 pb-5">
+      <button onclick="_chvFecharModal('chv-modal-status-chave')" class="px-4 py-2 text-xs font-bold text-slate-600 bg-slate-100 rounded-xl hover:bg-slate-200 transition-all">Cancelar</button>
+      <button id="chv-btn-status-chave-submit" onclick="_chvEnviarStatusChave()" class="px-5 py-2 text-xs font-black text-white bg-orange-600 hover:bg-orange-700 active:scale-95 rounded-xl transition-all cursor-pointer">
+        Confirmar Alteração
+      </button>
+    </div>
+  </div>
+</div>
+
+<style>
+/* ── Subabas ─────────────────────────────────────────────── */
+.chv-tab-btn {
+  padding: 8px 14px;
+  font-size: 11px;
+  font-weight: 800;
+  color: #94a3b8;
+  border-bottom: 2px solid transparent;
+  transition: all 0.15s;
+  white-space: nowrap;
+  background: none;
+  border-top: none;
+  border-left: none;
+  border-right: none;
+  cursor: pointer;
+  user-select: none;
+}
+.chv-tab-btn:hover { color: #7c3aed; }
+.chv-tab-btn:active { opacity: 0.7; }
+.chv-tab-ativo {
+  color: #7c3aed !important;
+  border-bottom-color: #7c3aed !important;
+}
+
+.chv-stab-btn {
+  padding: 6px 12px;
+  font-size: 10px;
+  font-weight: 800;
+  color: #64748b;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.15s;
+  user-select: none;
+}
+.chv-stab-btn:hover { background: #f1f5f9; }
+.chv-stab-btn:active { transform: scale(0.96); }
+.chv-stab-ativo { background: #7c3aed !important; color: white !important; border-color: #7c3aed !important; }
+
+/* ── Cards de protocolo ──────────────────────────────────── */
+.chv-card {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 12px 14px;
+  transition: box-shadow 0.15s;
+}
+.chv-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.07); }
+.chv-card-atrasado { border-left: 3px solid #ef4444; }
+.chv-card-retirado { border-left: 3px solid #10b981; }
+.chv-card-aguardando { border-left: 3px solid #f59e0b; }
+.chv-card-transferencia { border-left: 3px solid #3b82f6; }
+.chv-card-devolvido { border-left: 3px solid #94a3b8; }
+.chv-card-negado { border-left: 3px solid #dc2626; }
+.chv-card-cancelado { border-left: 3px solid #94a3b8; }
+
+/* ── Badges de status ────────────────────────────────────── */
+.chv-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 99px;
+  font-size: 9px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.chv-badge-SOLICITADA            { background: #fef9c3; color: #854d0e; }
+.chv-badge-AGUARDANDO_CONFIRMACAO_USUARIO { background: #fef3c7; color: #92400e; }
+.chv-badge-AGUARDANDO_CONFIRMACAO_INFRA   { background: #dbeafe; color: #1e40af; }
+.chv-badge-RETIRADA              { background: #dcfce7; color: #166534; }
+.chv-badge-DEVOLVIDA             { background: #f1f5f9; color: #475569; }
+.chv-badge-ATRASADA              { background: #fee2e2; color: #991b1b; }
+.chv-badge-CANCELADA             { background: #f1f5f9; color: #94a3b8; }
+.chv-badge-NEGADA                { background: #fee2e2; color: #991b1b; }
+.chv-badge-TRANSFERENCIA_PENDENTE { background: #ede9fe; color: #5b21b6; }
+.chv-badge-TRANSFERIDA           { background: #e0e7ff; color: #3730a3; }
+
+/* Indicador card */
+.chv-ind-card { border-radius: 14px; padding: 10px 12px; text-align: center; }
+</style>

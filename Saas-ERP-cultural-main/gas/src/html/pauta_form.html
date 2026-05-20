@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Solicitação de Cessão de Pauta — CCBJ</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+    .step { display: none; }
+    .step.active { display: block; }
+    input, select, textarea { transition: border-color .15s; }
+    input:focus, select:focus, textarea:focus { outline: none; border-color: #0d9488; box-shadow: 0 0 0 3px rgba(13,148,136,.15); }
+    .progress-step { transition: all .3s; }
+    .error-msg { color: #dc2626; font-size: .75rem; margin-top: 2px; display: none; }
+    .field-error input, .field-error select, .field-error textarea { border-color: #dc2626 !important; }
+    .field-error .error-msg { display: block; }
+  </style>
+</head>
+<body class="bg-gradient-to-br from-teal-50 via-white to-slate-50 min-h-screen">
+
+  <!-- Header -->
+  <header class="bg-white border-b border-slate-200 px-4 py-4 sticky top-0 z-10 shadow-sm">
+    <div class="max-w-2xl mx-auto flex items-center gap-3">
+      <div class="w-10 h-10 bg-teal-600 rounded-xl flex items-center justify-center">
+        <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="white" stroke-width="2"><path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+      </div>
+      <div>
+        <h1 class="text-base font-bold text-slate-800">Solicitação de Cessão de Pauta</h1>
+        <p class="text-xs text-slate-500">Centro Cultural Bom Jardim</p>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-2xl mx-auto px-4 py-8">
+
+    <!-- ── Progress bar ───────────────────────────────────────────────────── -->
+    <div class="mb-8">
+      <div class="flex items-center justify-between text-xs font-semibold text-slate-500 mb-2">
+        <span id="prog-label">Etapa 1 de 5</span>
+        <span id="prog-pct">20%</span>
+      </div>
+      <div class="h-2 bg-slate-200 rounded-full overflow-hidden">
+        <div id="prog-bar" class="h-full bg-teal-500 rounded-full transition-all duration-300" style="width:20%"></div>
+      </div>
+      <div class="flex justify-between mt-2">
+        <div id="ps-1" class="progress-step text-center" style="flex:1">
+          <div class="w-6 h-6 mx-auto rounded-full bg-teal-500 text-white text-xs flex items-center justify-center font-bold">1</div>
+          <p class="text-[10px] text-teal-600 font-medium mt-0.5 hidden sm:block">Solicitante</p>
+        </div>
+        <div id="ps-2" class="progress-step text-center" style="flex:1">
+          <div class="w-6 h-6 mx-auto rounded-full bg-slate-300 text-white text-xs flex items-center justify-center font-bold">2</div>
+          <p class="text-[10px] text-slate-400 font-medium mt-0.5 hidden sm:block">Proposta</p>
+        </div>
+        <div id="ps-3" class="progress-step text-center" style="flex:1">
+          <div class="w-6 h-6 mx-auto rounded-full bg-slate-300 text-white text-xs flex items-center justify-center font-bold">3</div>
+          <p class="text-[10px] text-slate-400 font-medium mt-0.5 hidden sm:block">Espaço/Datas</p>
+        </div>
+        <div id="ps-4" class="progress-step text-center" style="flex:1">
+          <div class="w-6 h-6 mx-auto rounded-full bg-slate-300 text-white text-xs flex items-center justify-center font-bold">4</div>
+          <p class="text-[10px] text-slate-400 font-medium mt-0.5 hidden sm:block">Técnico</p>
+        </div>
+        <div id="ps-5" class="progress-step text-center" style="flex:1">
+          <div class="w-6 h-6 mx-auto rounded-full bg-slate-300 text-white text-xs flex items-center justify-center font-bold">5</div>
+          <p class="text-[10px] text-slate-400 font-medium mt-0.5 hidden sm:block">Revisão</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════
+         ETAPA 1 — Dados do Solicitante
+    ════════════════════════════════════════════════════ -->
+    <div id="step-1" class="step active bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+      <h2 class="text-base font-bold text-slate-800 mb-1">Dados do Solicitante</h2>
+      <p class="text-sm text-slate-500 mb-5">Informe seus dados de contato e da organização proponente.</p>
+
+      <div class="space-y-4">
+        <div class="grid sm:grid-cols-2 gap-4">
+          <div id="f-nome" class="field-group">
+            <label class="text-xs font-semibold text-slate-700 mb-1 block">Nome completo *</label>
+            <input id="nome" type="text" class="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm" placeholder="Seu nome completo">
+            <span class="error-msg">Campo obrigatório.</span>
+          </div>
+          <div id="f-cpf" class="field-group">
+            <label class="text-xs font-semibold text-slate-700 mb-1 block">CPF *</label>
+            <input id="cpf" type="text" class="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm" placeholder="000.000.000-00" maxlength="14" oninput="mascararCpf(this)">
+            <span class="error-msg">Campo obrigatório.</span>
+          </div>
+        </div>
+
+        <div class="grid sm:grid-cols-2 gap-4">
+          <div id="f-email" class="field-group">
+            <label class="text-xs font-semibold text-slate-700 mb-1 block">E-mail *</label>
+            <input id="email" type="email" class="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm" placeholder="seu@email.com">
+            <span class="error-msg">E-mail inválido.</span>
+          </div>
+          <div id="f-telefone" class="field-group">
+            <label class="text-xs font-semibold text-slate-700 mb-1 block">Telefone/WhatsApp *</label>
+            <input id="telefone" type="tel" class="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm" placeholder="(85) 99999-9999" maxlength="15" oninput="mascararTel(this)">
+            <span class="error-msg">Campo obrigatório.</span>
+          </div>
+        </div>
+
+        <div class="grid sm:grid-cols-2 gap-4">
+          <div>
+            <label class="text-xs font-semibold text-slate-700 mb-1 block">Organização / Grupo</label>
+            <input id="organizacao" type="text" class="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm" placeholder="Nome da organização ou grupo (se aplicável)">
+          </div>
+          <div>
+            <label class="text-xs font-semibold text-slate-700 mb-1 block">CNPJ</label>
+            <input id="cnpj" type="text" class="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm" placeholder="00.000.000/0000-00" maxlength="18">
+          </div>
+        </div>
+
+        <div class="grid sm:grid-cols-2 gap-4">
+          <div>
+            <label class="text-xs font-semibold text-slate-700 mb-1 block">Site / Portfolio</label>
+            <input id="enderecoWeb" type="url" class="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm" placeholder="https://...">
+          </div>
+          <div>
+            <label class="text-xs font-semibold text-slate-700 mb-1 block">Perfil no Mapa Cultural</label>
+            <input id="mapaCultural" type="url" class="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm" placeholder="https://mapacultural.ce.gov.br/...">
+          </div>
+        </div>
+
+        <div class="grid sm:grid-cols-2 gap-4">
+          <div>
+            <label class="text-xs font-semibold text-slate-700 mb-1 block">Instagram</label>
+            <input id="instagram" type="text" class="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm" placeholder="@usuario">
+          </div>
+          <div>
+            <label class="text-xs font-semibold text-slate-700 mb-1 block">Outras redes</label>
+            <input id="outrasRedes" type="text" class="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm" placeholder="Facebook, YouTube, etc.">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════
+         ETAPA 2 — Proposta Artística
+    ════════════════════════════════════════════════════ -->
+    <div id="step-2" class="step bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+      <h2 class="text-base font-bold text-slate-800 mb-1">Proposta Artística / Cultural</h2>
+      <p class="text-sm text-slate-500 mb-5">Descreva a proposta que será apresentada no espaço solicitado.</p>
+
+      <div class="space-y-4">
+        <div id="f-titulo-prop" class="field-group">
+          <label class="text-xs font-semibold text-slate-700 mb-1 block">Título da Proposta *</label>
+          <input id="tituloProp" type="text" class="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm" placeholder="Nome da apresentação, show, espetáculo, etc.">
+          <span class="error-msg">Campo obrigatório.</span>
+        </div>
+
+        <div class="grid sm:grid-cols-2 gap-4">
+          <div id="f-linguagem" class="field-group">
+            <label class="text-xs font-semibold text-slate-700 mb-1 block">Linguagem Artística *</label>
+            <select id="linguagem" class="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm bg-white">
+              <option value="">Selecione…</option>
+              <option value="Teatro">Teatro</option>
+              <option value="Dança">Dança</option>
+              <option value="Música">Música</option>
+              <option value="Circo">Circo</option>
+              <option value="Palhaçaria">Palhaçaria</option>
+              <option value="Artes Visuais">Artes Visuais</option>
+              <option value="Exposição">Exposição</option>
+              <option value="Cinema / Audiovisual">Cinema / Audiovisual</option>
+              <option value="Contação de Histórias">Contação de Histórias</option>
+              <option value="Poesia">Poesia</option>
+              <option value="Literatura">Literatura</option>
+              <option value="Formação / Oficina">Formação / Oficina</option>
+              <option value="Evento Cultural">Evento Cultural</option>
+              <option value="Outra">Outra</option>
+            </select>
+            <span class="error-msg">Selecione a linguagem.</span>
+          </div>
+          <div>
+            <label class="text-xs font-semibold text-slate-700 mb-1 block">Subtipo / Especificação</label>
+            <input id="subTipo" type="text" class="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm" placeholder="Ex: Show de MPB, Teatro infantil…">
+          </div>
+        </div>
+
+        <div id="f-sinopse" class="field-group">
+          <label class="text-xs font-semibold text-slate-700 mb-1 block">Sinopse / Descrição da Proposta *</label>
+          <textarea id="sinopse" rows="4" class="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm resize-none" placeholder="Descreva a proposta: do que se trata, formato, linguagem, duração estimada…"></textarea>
+          <span class="error-msg">Campo obrigatório.</span>
+        </div>
+
+        <div>
+          <label class="text-xs font-semibold text-slate-700 mb-1 block">Release / Texto de Divulgação</label>
+          <textarea id="release" rows="3" class="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm resize-none" placeholder="Texto para divulgação (máx. 300 palavras)"></textarea>
+        </div>
+
+        <div class="grid sm:grid-cols-3 gap-4">
+          <div>
+            <label class="text-xs font-semibold text-slate-700 mb-1 block">Classificação Indicativa</label>
+            <select id="classificacao" class="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm bg-white">
+              <option value="Livre">Livre</option>
+              <option value="10 anos">10 anos</option>
+              <option value="12 anos">12 anos</option>
+              <option value="14 anos">14 anos</option>
+              <option value="16 anos">16 anos</option>
+              <option value="18 anos">18 anos</option>
+            </select>
+          </div>
+          <div>
+            <label class="text-xs font-semibold text-slate-700 mb-1 block">Público-alvo</label>
+            <input id="publicoAlvo" type="text" class="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm" placeholder="Ex: Crianças, jovens, adultos">
+          </div>
+          <div>
+            <label class="text-xs font-semibold text-slate-700 mb-1 block">Estimativa de público</label>
+            <input id="estimativaPublico" type="number" min="1" class="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm" placeholder="Ex: 150">
+          </div>
+        </div>
+
+        <div class="flex flex-wrap gap-4">
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" id="gratuito" checked class="w-4 h-4 accent-teal-600 rounded">
+            <span class="text-sm font-medium text-slate-700">Atividade gratuita ao público <span class="text-red-500">*</span></span>
+          </label>
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" id="acessibilidade" class="w-4 h-4 accent-teal-600 rounded">
+            <span class="text-sm font-medium text-slate-700">Possui recursos de acessibilidade</span>
+          </label>
+        </div>
+
+        <div id="div-acessibilidade" class="hidden">
+          <label class="text-xs font-semibold text-slate-700 mb-1 block">Descreva os recursos de acessibilidade</label>
+          <input id="descricaoAcessibilidade" type="text" class="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm" placeholder="Libras, audiodescrição, rampa, etc.">
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════
+         ETAPA 3 — Espaços e Datas
+    ════════════════════════════════════════════════════ -->
+    <div id="step-3" class="step bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+      <h2 class="text-base font-bold text-slate-800 mb-1">Espaços e Datas</h2>
+      <p class="text-sm text-slate-500 mb-1">Informe os espaços e as datas desejadas.</p>
+      <div class="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 mb-5">
+        <p class="text-xs text-amber-700 font-medium">⚠️ As solicitações devem ser feitas com no mínimo <strong>15 dias de antecedência</strong>. Atividades comerciais não são permitidas.</p>
+      </div>
+
+      <div class="space-y-4">
+        <div>
+          <label class="text-xs font-semibold text-slate-700 mb-2 block">Espaços Solicitados</label>
+          <div class="space-y-2" id="espacos-lista">
+            <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" value="Sala Principal" class="chk-espaco w-4 h-4 accent-teal-600 rounded"><span class="text-sm">Sala Principal</span></label>
+            <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" value="Sala de Ensaios" class="chk-espaco w-4 h-4 accent-teal-600 rounded"><span class="text-sm">Sala de Ensaios</span></label>
+            <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" value="Espaço Externo" class="chk-espaco w-4 h-4 accent-teal-600 rounded"><span class="text-sm">Espaço Externo</span></label>
+            <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" value="Auditório" class="chk-espaco w-4 h-4 accent-teal-600 rounded"><span class="text-sm">Auditório</span></label>
+            <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" value="Galeria" class="chk-espaco w-4 h-4 accent-teal-600 rounded"><span class="text-sm">Galeria</span></label>
+          </div>
+        </div>
+
+        <div>
+          <div class="flex items-center justify-between mb-2">
+            <label class="text-xs font-semibold text-slate-700">Datas Solicitadas</label>
+            <button type="button" onclick="adicionarData()" class="text-xs text-teal-600 hover:text-teal-800 font-semibold flex items-center gap-1">
+              + Adicionar data
+            </button>
+          </div>
+          <div id="datas-container" class="space-y-2"></div>
+        </div>
+
+        <div class="grid sm:grid-cols-2 gap-4">
+          <div>
+            <label class="text-xs font-semibold text-slate-700 mb-1 block">Duração estimada (minutos)</label>
+            <input id="duracao" type="number" min="15" step="15" class="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm" placeholder="Ex: 60">
+          </div>
+          <div>
+            <label class="text-xs font-semibold text-slate-700 mb-1 block">Periodicidade</label>
+            <select id="periodicidade" class="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm bg-white">
+              <option value="pontual">Pontual (única)</option>
+              <option value="semanal">Semanal</option>
+              <option value="quinzenal">Quinzenal</option>
+              <option value="mensal">Mensal</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════
+         ETAPA 4 — Equipe e Rider Técnico
+    ════════════════════════════════════════════════════ -->
+    <div id="step-4" class="step bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+      <h2 class="text-base font-bold text-slate-800 mb-1">Equipe e Rider Técnico</h2>
+      <p class="text-sm text-slate-500 mb-5">Informe a equipe envolvida e as necessidades técnicas.</p>
+
+      <div class="space-y-5">
+        <!-- Rider -->
+        <div>
+          <label class="text-xs font-semibold text-slate-700 mb-2 block">Necessidades Técnicas</label>
+          <div class="grid sm:grid-cols-2 gap-2">
+            <label class="flex items-center gap-2 cursor-pointer border border-slate-200 rounded-xl px-3 py-2.5 hover:border-teal-300">
+              <input type="checkbox" id="r-palco" class="w-4 h-4 accent-teal-600 rounded">
+              <span class="text-sm">Palco</span>
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer border border-slate-200 rounded-xl px-3 py-2.5 hover:border-teal-300">
+              <input type="checkbox" id="r-iluminacao" class="w-4 h-4 accent-teal-600 rounded">
+              <span class="text-sm">Iluminação Cênica</span>
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer border border-slate-200 rounded-xl px-3 py-2.5 hover:border-teal-300">
+              <input type="checkbox" id="r-sonorizacao" class="w-4 h-4 accent-teal-600 rounded">
+              <span class="text-sm">Sonorização</span>
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer border border-slate-200 rounded-xl px-3 py-2.5 hover:border-teal-300">
+              <input type="checkbox" id="r-camerim" class="w-4 h-4 accent-teal-600 rounded">
+              <span class="text-sm">Camarim</span>
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer border border-slate-200 rounded-xl px-3 py-2.5 hover:border-teal-300">
+              <input type="checkbox" id="r-projecao" class="w-4 h-4 accent-teal-600 rounded">
+              <span class="text-sm">Projeção / Data Show</span>
+            </label>
+          </div>
+          <div class="mt-2">
+            <label class="text-xs font-semibold text-slate-700 mb-1 block">Observações técnicas</label>
+            <textarea id="r-obs" rows="2" class="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm resize-none" placeholder="Detalhes específicos do setup técnico…"></textarea>
+          </div>
+        </div>
+
+        <!-- Equipe -->
+        <div>
+          <div class="flex items-center justify-between mb-2">
+            <label class="text-xs font-semibold text-slate-700">Equipe Envolvida</label>
+            <button type="button" onclick="adicionarMembro()" class="text-xs text-teal-600 hover:text-teal-800 font-semibold">+ Adicionar membro</button>
+          </div>
+          <div id="equipe-container" class="space-y-2"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════
+         ETAPA 5 — Revisão e Aceite
+    ════════════════════════════════════════════════════ -->
+    <div id="step-5" class="step bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+      <h2 class="text-base font-bold text-slate-800 mb-1">Revisão e Envio</h2>
+      <p class="text-sm text-slate-500 mb-5">Revise os dados e aceite os termos institucionais para enviar.</p>
+
+      <div id="revisao-resumo" class="bg-slate-50 rounded-xl border border-slate-200 p-4 mb-5 text-sm space-y-3"></div>
+
+      <!-- Termos -->
+      <div class="bg-teal-50 border border-teal-200 rounded-xl p-4 mb-4">
+        <h3 class="text-sm font-bold text-teal-800 mb-2">Termos Institucionais de Cessão de Pauta</h3>
+        <div class="text-xs text-teal-700 space-y-1 max-h-32 overflow-y-auto pr-1">
+          <p>• A cessão de pauta destina-se exclusivamente a atividades culturais, artísticas e educativas de caráter gratuito.</p>
+          <p>• Não são permitidas atividades de natureza comercial, religiosa ou político-partidária.</p>
+          <p>• As solicitações devem ser realizadas com antecedência mínima de 15 (quinze) dias corridos.</p>
+          <p>• A aprovação está sujeita à disponibilidade de espaço e à análise da equipe do CCBJ.</p>
+          <p>• O responsável pelo evento se compromete a zelar pelo espaço e equipamentos cedidos.</p>
+          <p>• O CCBJ reserva-se o direito de cancelar a cessão por motivos de força maior ou conflito de agenda institucional.</p>
+          <p>• Ao enviar esta solicitação, o proponente declara que as informações prestadas são verdadeiras.</p>
+        </div>
+      </div>
+
+      <label class="flex items-start gap-2 cursor-pointer mb-5">
+        <input type="checkbox" id="aceiteTermos" class="w-4 h-4 accent-teal-600 rounded mt-0.5">
+        <span class="text-sm text-slate-700">Li e aceito os termos institucionais de cessão de pauta do <strong>Centro Cultural Bom Jardim</strong>. <span class="text-red-500">*</span></span>
+      </label>
+
+      <div id="form-success" class="hidden bg-green-50 border border-green-200 rounded-2xl p-6 text-center">
+        <div class="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+          <svg width="32" height="32" fill="none" viewBox="0 0 24 24" stroke="#059669" stroke-width="2.5"><path d="M5 13l4 4L19 7"/></svg>
+        </div>
+        <h3 class="text-lg font-bold text-green-800 mb-2">Solicitação Enviada!</h3>
+        <p class="text-sm text-green-700 mb-3">Sua solicitação foi recebida com sucesso.</p>
+        <p class="text-lg font-black text-teal-700" id="protocolo-gerado"></p>
+        <p class="text-xs text-slate-500 mt-2">Guarde este protocolo para acompanhar sua solicitação. Em breve você receberá um e-mail de confirmação.</p>
+        <a id="link-acompanhar" href="#" class="inline-block mt-4 text-sm text-teal-600 underline">Acompanhar minha solicitação</a>
+      </div>
+
+      <div id="form-error" class="hidden bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700"></div>
+
+    </div>
+
+    <!-- ── Botões de navegação ─────────────────────────────────────────────── -->
+    <div class="flex justify-between mt-6">
+      <button id="btn-anterior" onclick="etapaAnterior()" class="px-5 py-2.5 border border-slate-300 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50 transition hidden">
+        ← Anterior
+      </button>
+      <div class="flex-1"></div>
+      <button id="btn-proximo" onclick="etapaProxima()" class="px-6 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-sm font-semibold transition">
+        Próximo →
+      </button>
+      <button id="btn-enviar" onclick="enviarFormulario()" class="hidden px-6 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-sm font-semibold transition flex items-center gap-2">
+        <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
+        Enviar Solicitação
+      </button>
+    </div>
+
+  </main>
+
+  <footer class="max-w-2xl mx-auto px-4 pb-8 text-center text-xs text-slate-400 mt-4">
+    Centro Cultural Bom Jardim — Fortaleza, CE<br>
+    Esta plataforma é gerenciada pela equipe de programação do CCBJ.
+  </footer>
+
+  <script>
+    var etapaAtual = 1;
+    var totalEtapas = 5;
+    var _datasArray = [];
+    var _equipeArray = [];
+
+    // Inicializa com uma data
+    adicionarData();
+
+    // ── Navegação ─────────────────────────────────────────────────────────────
+
+    function etapaProxima() {
+      if (!validarEtapa(etapaAtual)) return;
+      if (etapaAtual < totalEtapas) {
+        if (etapaAtual === totalEtapas - 1) gerarResumo();
+        mostrarEtapa(etapaAtual + 1);
+      }
+    }
+
+    function etapaAnterior() {
+      if (etapaAtual > 1) mostrarEtapa(etapaAtual - 1);
+    }
+
+    function mostrarEtapa(n) {
+      document.getElementById('step-' + etapaAtual).classList.remove('active');
+      etapaAtual = n;
+      document.getElementById('step-' + etapaAtual).classList.add('active');
+      atualizarProgresso();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function atualizarProgresso() {
+      var pct = Math.round(etapaAtual / totalEtapas * 100);
+      document.getElementById('prog-bar').style.width   = pct + '%';
+      document.getElementById('prog-pct').textContent   = pct + '%';
+      document.getElementById('prog-label').textContent = 'Etapa ' + etapaAtual + ' de ' + totalEtapas;
+
+      document.getElementById('btn-anterior').classList.toggle('hidden', etapaAtual === 1);
+      document.getElementById('btn-proximo').classList.toggle('hidden', etapaAtual === totalEtapas);
+      document.getElementById('btn-enviar').classList.toggle('hidden', etapaAtual !== totalEtapas);
+
+      for (var i = 1; i <= totalEtapas; i++) {
+        var el = document.getElementById('ps-' + i);
+        var dot = el.querySelector('div');
+        if (i < etapaAtual) { dot.style.background = '#059669'; }
+        else if (i === etapaAtual) { dot.style.background = '#0d9488'; }
+        else { dot.style.background = '#cbd5e1'; }
+      }
+    }
+
+    // ── Validação por etapa ───────────────────────────────────────────────────
+
+    function validarEtapa(n) {
+      var ok = true;
+      if (n === 1) {
+        ok = validarCampo('nome', 'f-nome', function(v){ return v.trim().length > 2; }) && ok;
+        ok = validarCampo('cpf', 'f-cpf', function(v){ return v.trim().length >= 11; }) && ok;
+        ok = validarCampo('email', 'f-email', function(v){ return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v); }) && ok;
+        ok = validarCampo('telefone', 'f-telefone', function(v){ return v.trim().length >= 8; }) && ok;
+      }
+      if (n === 2) {
+        ok = validarCampo('tituloProp', 'f-titulo-prop', function(v){ return v.trim().length > 0; }) && ok;
+        ok = validarCampo('linguagem', 'f-linguagem', function(v){ return v !== ''; }) && ok;
+        ok = validarCampo('sinopse', 'f-sinopse', function(v){ return v.trim().length > 10; }) && ok;
+        if (!document.getElementById('gratuito').checked) {
+          alert('Apenas atividades gratuitas são elegíveis para cessão de pauta.');
+          return false;
+        }
+      }
+      if (n === 3) {
+        var espacosMarcados = document.querySelectorAll('.chk-espaco:checked').length;
+        if (!espacosMarcados) { alert('Selecione pelo menos um espaço.'); return false; }
+        if (!_datasArray.length) { alert('Informe pelo menos uma data.'); return false; }
+        var ok3 = true;
+        _datasArray.forEach(function(d, i) {
+          if (!d.data) {
+            alert('Preencha a data na linha ' + (i+1) + '.');
+            ok3 = false;
+          } else {
+            var agora = Date.now();
+            var minFuture = agora + 15 * 86400000;
+            if (new Date(d.data).getTime() < minFuture) {
+              alert('A data "' + d.data + '" não respeita a antecedência mínima de 15 dias.');
+              ok3 = false;
+            }
+          }
+        });
+        ok = ok && ok3;
+      }
+      return ok;
+    }
+
+    function validarCampo(inputId, wrapperId, fn) {
+      var el = document.getElementById(inputId);
+      var wr = document.getElementById(wrapperId);
+      if (!el || !wr) return true;
+      var valid = fn(el.value);
+      wr.classList.toggle('field-error', !valid);
+      return valid;
+    }
+
+    // ── Datas ─────────────────────────────────────────────────────────────────
+
+    function adicionarData() {
+      _datasArray.push({ data: '', horaInicio: '09:00', horaFim: '12:00', observacao: '' });
+      renderizarDatas();
+    }
+
+    function renderizarDatas() {
+      var c = document.getElementById('datas-container');
+      if (!c) return;
+      c.innerHTML = _datasArray.map(function(d, i) {
+        return '<div class="grid grid-cols-4 gap-2 items-end bg-slate-50 border border-slate-200 rounded-xl p-3">' +
+          '<div class="col-span-2"><label class="text-xs text-slate-500 mb-0.5 block">Data *</label>' +
+          '<input type="date" value="' + (d.data||'') + '" oninput="_datasArray['+i+'].data=this.value" class="w-full border border-slate-200 rounded-lg px-2 py-2 text-sm"></div>' +
+          '<div><label class="text-xs text-slate-500 mb-0.5 block">Início</label>' +
+          '<input type="time" value="' + (d.horaInicio||'09:00') + '" oninput="_datasArray['+i+'].horaInicio=this.value" class="w-full border border-slate-200 rounded-lg px-2 py-2 text-sm"></div>' +
+          '<div class="flex gap-1"><div class="flex-1"><label class="text-xs text-slate-500 mb-0.5 block">Fim</label>' +
+          '<input type="time" value="' + (d.horaFim||'12:00') + '" oninput="_datasArray['+i+'].horaFim=this.value" class="w-full border border-slate-200 rounded-lg px-2 py-2 text-sm"></div>' +
+          (i > 0 ? '<button type="button" onclick="_datasArray.splice('+i+',1);renderizarDatas()" class="mt-5 text-red-400 hover:text-red-600 flex-shrink-0"><svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M6 18L18 6M6 6l12 12"/></svg></button>' : '<div class="w-5 mt-5"></div>') +
+          '</div></div>';
+      }).join('');
+    }
+
+    // ── Equipe ────────────────────────────────────────────────────────────────
+
+    function adicionarMembro() {
+      _equipeArray.push({ nome: '', funcao: '', email: '' });
+      renderizarEquipe();
+    }
+
+    function renderizarEquipe() {
+      var c = document.getElementById('equipe-container');
+      if (!c) return;
+      if (!_equipeArray.length) {
+        c.innerHTML = '<p class="text-xs text-slate-400 py-2">Nenhum membro adicionado.</p>';
+        return;
+      }
+      c.innerHTML = _equipeArray.map(function(m, i) {
+        return '<div class="grid grid-cols-3 gap-2 bg-slate-50 border border-slate-200 rounded-xl p-3">' +
+          '<div><label class="text-xs text-slate-500 mb-0.5 block">Nome</label>' +
+          '<input value="' + (m.nome||'') + '" oninput="_equipeArray['+i+'].nome=this.value" class="w-full border border-slate-200 rounded-lg px-2 py-2 text-sm" placeholder="Nome"></div>' +
+          '<div><label class="text-xs text-slate-500 mb-0.5 block">Função</label>' +
+          '<input value="' + (m.funcao||'') + '" oninput="_equipeArray['+i+'].funcao=this.value" class="w-full border border-slate-200 rounded-lg px-2 py-2 text-sm" placeholder="Ex: Diretor"></div>' +
+          '<div class="flex gap-1"><div class="flex-1"><label class="text-xs text-slate-500 mb-0.5 block">E-mail</label>' +
+          '<input type="email" value="' + (m.email||'') + '" oninput="_equipeArray['+i+'].email=this.value" class="w-full border border-slate-200 rounded-lg px-2 py-2 text-sm" placeholder="email@..."></div>' +
+          '<button type="button" onclick="_equipeArray.splice('+i+',1);renderizarEquipe()" class="mt-5 text-red-400 hover:text-red-600 flex-shrink-0"><svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M6 18L18 6M6 6l12 12"/></svg></button>' +
+          '</div></div>';
+      }).join('');
+    }
+
+    // ── Resumo ────────────────────────────────────────────────────────────────
+
+    function gerarResumo() {
+      var espacos = Array.from(document.querySelectorAll('.chk-espaco:checked')).map(function(c){ return c.value; });
+      var div = document.getElementById('revisao-resumo');
+      div.innerHTML =
+        '<div><strong>Solicitante:</strong> ' + esc(v('nome')) + ' — ' + esc(v('email')) + '</div>' +
+        '<div><strong>Proposta:</strong> ' + esc(v('tituloProp')) + ' (' + esc(v('linguagem')) + ')</div>' +
+        '<div><strong>Espaços:</strong> ' + esc(espacos.join(', ') || '-') + '</div>' +
+        '<div><strong>Datas:</strong> ' + _datasArray.map(function(d){ return esc(d.data) + (d.horaInicio ? ' ' + d.horaInicio + '–' + d.horaFim : ''); }).join(', ') + '</div>' +
+        '<div><strong>Gratuito:</strong> ' + (document.getElementById('gratuito').checked ? 'Sim' : 'Não') + '</div>';
+    }
+
+    // ── Envio ─────────────────────────────────────────────────────────────────
+
+    function enviarFormulario() {
+      if (!document.getElementById('aceiteTermos').checked) {
+        alert('É obrigatório aceitar os termos institucionais.');
+        return;
+      }
+
+      var espacos = Array.from(document.querySelectorAll('.chk-espaco:checked')).map(function(c){ return c.value; });
+
+      var dados = {
+        aceiteTermos: true,
+        solicitante: {
+          nome:           v('nome'),
+          cpf:            v('cpf'),
+          email:          v('email'),
+          telefone:       v('telefone'),
+          organizacao:    v('organizacao'),
+          cnpj:           v('cnpj'),
+          enderecoWeb:    v('enderecoWeb'),
+          mapaCultural:   v('mapaCultural'),
+          instagram:      v('instagram'),
+          outrasRedes:    v('outrasRedes')
+        },
+        proposta: {
+          titulo:                  v('tituloProp'),
+          linguagem:               v('linguagem'),
+          subTipo:                 v('subTipo'),
+          sinopse:                 v('sinopse'),
+          release:                 v('release'),
+          classificacaoIndicativa: v('classificacao'),
+          publicoAlvo:             v('publicoAlvo'),
+          estimativaPublico:       parseInt(v('estimativaPublico')) || 0,
+          gratuito:                document.getElementById('gratuito').checked,
+          comercial:               false,
+          acessibilidade:          document.getElementById('acessibilidade').checked,
+          descricaoAcessibilidade: v('descricaoAcessibilidade')
+        },
+        rider: {
+          palco:       document.getElementById('r-palco').checked,
+          iluminacao:  document.getElementById('r-iluminacao').checked,
+          sonorizacao: document.getElementById('r-sonorizacao').checked,
+          camerim:     document.getElementById('r-camerim').checked,
+          projecao:    document.getElementById('r-projecao').checked,
+          observacoes: v('r-obs')
+        },
+        espacosSolicitados: espacos,
+        datasSolicitadas:   _datasArray.filter(function(d){ return d.data; }),
+        duracaoMinutos:     parseInt(v('duracao')) || 0,
+        periodicidade:      v('periodicidade'),
+        equipe:             _equipeArray.filter(function(m){ return m.nome; })
+      };
+
+      var btn = document.getElementById('btn-enviar');
+      btn.disabled = true;
+      btn.textContent = 'Enviando…';
+      document.getElementById('form-error').classList.add('hidden');
+
+      google.script.run
+        .withSuccessHandler(function(r) {
+          btn.disabled = false;
+          btn.textContent = 'Enviar Solicitação';
+          if (!r.ok) {
+            var erroDiv = document.getElementById('form-error');
+            erroDiv.textContent = '⚠️ ' + (r.error && r.error.message || 'Erro ao enviar.');
+            erroDiv.classList.remove('hidden');
+            return;
+          }
+          document.getElementById('revisao-resumo').classList.add('hidden');
+          document.querySelector('#step-5 label[for="aceiteTermos"]') && (document.querySelector('#step-5 label[for="aceiteTermos"]').style.display = 'none');
+          document.getElementById('btn-enviar').classList.add('hidden');
+          document.getElementById('protocolo-gerado').textContent = r.data.protocolo;
+          var appUrl = typeof <?= appUrl ?> !== 'undefined' ? '<?= appUrl ?>' : window.location.href.split('?')[0];
+          document.getElementById('link-acompanhar').href = appUrl + '?secao=pauta_status&protocolo=' + r.data.protocolo + '&email=' + encodeURIComponent(dados.solicitante.email);
+          document.getElementById('form-success').classList.remove('hidden');
+        })
+        .withFailureHandler(function(e) {
+          btn.disabled = false;
+          btn.textContent = 'Enviar Solicitação';
+          var erroDiv = document.getElementById('form-error');
+          erroDiv.textContent = '⚠️ Erro de comunicação: ' + e.message;
+          erroDiv.classList.remove('hidden');
+        })
+        .ctrl_pauta_receber(dados);
+    }
+
+    // ── Acessibilidade checkbox ───────────────────────────────────────────────
+    document.getElementById('acessibilidade').addEventListener('change', function() {
+      document.getElementById('div-acessibilidade').classList.toggle('hidden', !this.checked);
+    });
+
+    // ── Máscaras ──────────────────────────────────────────────────────────────
+    function mascararCpf(input) {
+      var v = input.value.replace(/\D/g,'').substring(0,11);
+      if (v.length > 9) v = v.substring(0,3)+'.'+v.substring(3,6)+'.'+v.substring(6,9)+'-'+v.substring(9);
+      else if (v.length > 6) v = v.substring(0,3)+'.'+v.substring(3,6)+'.'+v.substring(6);
+      else if (v.length > 3) v = v.substring(0,3)+'.'+v.substring(3);
+      input.value = v;
+    }
+
+    function mascararTel(input) {
+      var v = input.value.replace(/\D/g,'').substring(0,11);
+      if (v.length === 11) v = '('+v.substring(0,2)+') '+v.substring(2,7)+'-'+v.substring(7);
+      else if (v.length >= 10) v = '('+v.substring(0,2)+') '+v.substring(2,6)+'-'+v.substring(6);
+      input.value = v;
+    }
+
+    function v(id) { var el = document.getElementById(id); return el ? el.value : ''; }
+    function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  </script>
+</body>
+</html>

@@ -1,0 +1,107 @@
+<!--
+@file ui/permissoes_ui_js.html
+@layer frontend/ui
+@description Controla a visibilidade de elementos de UI com base no nível de acesso do usuário.
+@responsibility Exibir/ocultar botões de admin/superadmin; redirecionar usuários sem permissão.
+@dependencies core/app_state_js (AppState.usuario), ui/navegacao_ui_js (mostrarAba)
+-->
+
+<script>
+
+/**
+ * ========================================
+ * BLOCO: Interface por permissão de acesso
+ * ========================================
+ */
+function configurarInterfacePorPermissao() {
+  if (!AppState || !AppState.usuario) return;
+
+  const isAdmin      = AppState.usuario.isAdmin;
+  const isSuperadmin = AppState.usuario.isSuperadmin;
+
+  const btnGestao      = document.getElementById('btn-aba-gestao');
+  const btnPermissoes  = document.getElementById('btn-aba-permissoes');
+  const btnAuditoria   = document.getElementById('btn-aba-auditoria');
+  const btnModulos     = document.getElementById('btn-aba-gestao-modulos');
+  const modSistema     = document.getElementById('modulo-sistema');
+
+  if (isAdmin || isSuperadmin) {
+    if (btnGestao)     btnGestao.classList.remove('hidden');
+    if (btnPermissoes) btnPermissoes.classList.remove('hidden');
+    if (btnAuditoria)  btnAuditoria.classList.remove('hidden');
+    if (modSistema)    modSistema.classList.remove('hidden');
+  } else {
+    if (modSistema)   modSistema.classList.add('hidden');
+  }
+
+  // Módulos: visível apenas para SUPERADMIN
+  if (btnModulos) {
+    if (isSuperadmin) {
+      btnModulos.classList.remove('hidden');
+    } else {
+      btnModulos.classList.add('hidden');
+    }
+  }
+
+  document.querySelectorAll('.em-breve-badge').forEach(function(badge) {
+    const btn = badge.closest('button');
+    if (!btn) return;
+    if (!isSuperadmin) btn.style.display = 'none';
+  });
+
+  if (!isAdmin && !isSuperadmin) {
+    const abaAtual = document.querySelector('.tab-content:not(.hidden)')?.id;
+    if (abaAtual === 'aba-gestao-admin' || abaAtual === 'aba-auditoria') {
+      mostrarAba('aba-lista-reservas');
+    }
+  }
+}
+
+/**
+ * ========================================
+ * BLOCO: Execução segura (espera AppState)
+ * ========================================
+ */
+document.addEventListener('DOMContentLoaded', function() {
+
+  let tentativas = 0;
+
+  function esperarAppState() {
+    if (AppState && AppState.usuario && AppState.usuario.email) {
+
+      if (typeof carregarPermissoes === 'function') {
+        carregarPermissoes(function() {
+          configurarInterfacePorPermissao();
+
+          if (typeof EventBus !== 'undefined') {
+            EventBus.emit('permissoes:prontas', { email: AppState.usuario.email });
+          }
+
+          if (typeof carregarStatusModulos === 'function') {
+            carregarStatusModulos(function() {
+              aplicarEstadoModulos && aplicarEstadoModulos();
+              if (typeof EventBus !== 'undefined') {
+                EventBus.emit('app:modulos:carregados', AppState.modulos);
+              }
+            });
+          }
+
+          if (AppState.colecoes.reservas && AppState.colecoes.reservas.length) {
+            if (typeof renderizarReservas === 'function') renderizarReservas();
+          }
+        });
+      } else {
+        console.warn('carregarPermissoes não disponível ainda');
+      }
+
+    } else if (tentativas < 30) {
+      tentativas++;
+      setTimeout(esperarAppState, 200);
+    }
+  }
+
+  esperarAppState();
+
+});
+
+</script>

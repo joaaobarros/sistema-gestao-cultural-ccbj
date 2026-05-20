@@ -1,0 +1,678 @@
+<!--
+@file services/server_bridge_js.html
+@layer frontend/services
+@description Camada de serviço: encapsula todas as chamadas google.script.run em um objeto
+             único (GAS) com namespaces por domínio.
+             REGRA: todo código novo deve usar GAS.* em vez de google.script.run diretamente.
+             Código legado pode continuar usando google.script.run diretamente até ser migrado.
+@responsibility Centralizar chamadas backend; padronizar tratamento de erro; expor API tipada.
+@dependencies mod_ui_componentes_js (_handleServerError) — deve ser carregado APÓS mod_ui_componentes_js.
+-->
+<script>
+
+/**
+ * ========================================
+ * BLOCO: GAS — bridge de chamadas ao backend
+ * ========================================
+ * @description Objeto com namespaces por domínio (reservas, admin, rece, ia, contratos, sessao, etc.).
+ *              Cada método encapsula google.script.run com tratamento de erro padrão.
+ *              Uso: GAS.reservas.obter(onSuccess, onError)
+ * @context Todo código novo deve usar GAS.* em vez de google.script.run diretamente.
+ * @inputs onSuccess: callback; onError: callback opcional (padrão: _handleServerError).
+ * @outputs Resultado assíncrono via callbacks.
+ * @sideEffects Chamadas HTTP ao servidor GAS.
+ */
+const GAS = {
+
+  _call: function(fnName, args, onSuccess, onError) {
+    const fallbackError = typeof _handleServerError === 'function'
+      ? _handleServerError
+      : function(e) { console.error('[GAS]', fnName, e); };
+
+    const runner = google.script.run
+      .withSuccessHandler(onSuccess || function() {})
+      .withFailureHandler(onError || fallbackError);
+
+    runner[fnName].apply(runner, Array.isArray(args) ? args : (args !== undefined ? [args] : []));
+  },
+
+  _stub: function(cb) {
+    if (typeof cb === 'function') cb({ ok: false, stub: true, msg: 'Funcionalidade em desenvolvimento' });
+  },
+
+  // Retorna o token de sessão ou o email como fallback.
+  // Quando o usuário é identificado via obterEmailSessaoAtiva() (sem GSI), nenhum token é criado.
+  // Passar o email diretamente garante que _resolverEmailReal() consiga validar a identidade.
+  _sessao: function() {
+    if (typeof AppState !== 'undefined' && AppState.usuario) {
+      return AppState.usuario._sessao || AppState.usuario.email || '';
+    }
+    return '';
+  },
+
+  /**
+   * BLOCO: Serviços de reserva
+   * @context CRUD e disponibilidade de reservas.
+   */
+  reservas: {
+    obter: function(cb, err) {
+      GAS._call('obterReservas', [], cb, err);
+    },
+    criar: function(dados, datas, cb, err) {
+      GAS._call('criarReservaController', [dados, datas], cb, err);
+    },
+    atualizar: function(dados, cb, err) {
+      GAS._call('atualizarReservaController', [dados], cb, err);
+    },
+    cancelar: function(id, email, cb, err) {
+      GAS._call('cancelarReserva', [id, email], cb, err);
+    },
+    cancelarComJustificativa: function(id, email, justificativa, cb, err) {
+      GAS._call('cancelarReservaComJustificativa', [id, email, justificativa], cb, err);
+    },
+    habilitar: function(id, email, obs, cb, err) {
+      GAS._call('habilitarReservaStatus', [id, email, obs], cb, err);
+    },
+    verificarConflito: function(sala, data, inicio, termino, idIgnorar, cb, err) {
+      GAS._call('verificarConflitoEspaco', [sala, data, inicio, termino, idIgnorar], cb, err);
+    },
+    analisarDisponibilidade: function(payload, cb, err) {
+      GAS._call('analisarDisponibilidadeReal', [payload], cb, err);
+    },
+    obterDisponibilidadeItens: function(data, inicio, termino, idSala, cb, err) {
+      GAS._call('obterDisponibilidadeItensPorHorario', [data, inicio, termino, idSala], cb, err);
+    },
+    verificarPermissaoCancelamento: function(id, email, cb, err) {
+      GAS._call('verificarPermissaoCancelamento', [id, email], cb, err);
+    }
+  },
+
+  /**
+   * BLOCO: Serviços de administração
+   * @context Configurações, auditoria, dashboard, estoque.
+   */
+  admin: {
+    obterDados: function(cb, err) {
+      var emailFallback = (window.__EMAIL_INICIAL__ && window.__EMAIL_INICIAL__.indexOf('@') >= 0)
+        ? window.__EMAIL_INICIAL__ : '';
+      // Inclui token de sessão gerado no login (senha ou GSI) para identificação do usuário
+      // quando Session.getActiveUser() retorna vazio no deployment "Execute as: Me".
+      var sessaoId = (typeof AppState !== 'undefined' && AppState.usuario && AppState.usuario._sessao)
+        ? AppState.usuario._sessao : '';
+      GAS._call('obterDadosIniciais', [emailFallback, sessaoId], cb, err);
+    },
+    salvarConfig: function(dados, cb, err) {
+      GAS._call('processarSalvarConfig', [dados], cb, err);
+    },
+    excluirPorId: function(tipo, id, email, cb, err) {
+      GAS._call('excluirRegistroPorID', [tipo, id, email], cb, err);
+    },
+    removerRegistro: function(id, tipo, email, cb, err) {
+      GAS._call('removerRegistroGenerico', [id, tipo, email], cb, err);
+    },
+    obterItensFixosPorSala: function(id, cb, err) {
+      GAS._call('obterItensFixosPorSala', [id], cb, err);
+    },
+    obterDadosParaConfig: function(nomeAba, cb, err) {
+      GAS._call('obterDadosParaConfig', nomeAba ? [nomeAba] : [], cb, err);
+    },
+    obterPerfil: function(cb, err) {
+      var em = (AppState && AppState.usuario && AppState.usuario.email) || window.__EMAIL_INICIAL__ || '';
+      GAS._call('obterPerfilUsuario', [em], cb, err);
+    },
+    sugerirReservaIA: function(descricao, cb, err) {
+      GAS._call('sugerirReservaIAComDados', [descricao], cb, err);
+    },
+    obterLogs: function(email, cb, err) {
+      GAS._call('obterLogs', [email], cb, err);
+    },
+    obterLogAcessos: function(email, cb, err) {
+      GAS._call('obterLogAcessos', [email], cb, err);
+    },
+    rollback: function(email, ts, cb, err) {
+      GAS._call('rollbackAcaoPorTimestamp', [email, ts], cb, err);
+    },
+    rollbackPorIndice: function(email, idx, cb, err) {
+      GAS._call('rollbackAcaoPorIndice', [email, idx], cb, err);
+    },
+    obterMetricas: function(ini, fim, sala, setor, cb, err) {
+      GAS._call('obterMetricasDashboard', [ini, fim, sala, setor], cb, err);
+    },
+    alternarItemQtd: function(idItem, idSala, qtd, acao, email, cb, err) {
+      GAS._call('alternarQuantidadeItem', [idItem, idSala, qtd, acao, email], cb, err);
+    },
+    obterEmailsSistema: function(cb, err) {
+      GAS._call('obterEmailsSistema', [], cb, err);
+    },
+    obterDadosGrafico: function(cb, err) {
+      GAS._call('obterDadosGraficoReservas', [], cb, err);
+    },
+    obterUrlLogout: function(cb, err) {
+      GAS._call('obterUrlLogout', [], cb, err);
+    },
+    perguntarIA: function(pergunta, cb, err) {
+      GAS._call('perguntarIA', [pergunta], cb, err);
+    },
+    gerarRelatorioIA: function(filtros, cb, err) {
+      GAS._call('gerarRelatorioIA', [filtros], cb, err);
+    },
+    analisarDashboardIA: function(metricas, cb, err) {
+      GAS._call('analisarDashboardIA', [metricas], cb, err);
+    },
+    obterMetricasCODIP: function(cb, err) {
+      GAS._call('obterMetricasCODIP', [], cb, err);
+    },
+    obterRelatoriosCODIP: function(cb, err) {
+      GAS._call('obterRelatoriosCODIP', [], cb, err);
+    },
+    obterSetor: function(emailAlvo, cb, err) {
+      GAS._call('obterSetorUsuario', [emailAlvo], cb, err);
+    },
+    salvarSetor: function(emailAlvo, setor, cb, err) {
+      var emailSolicitante = (typeof AppState !== 'undefined' && AppState.usuario && AppState.usuario.email) || '';
+      GAS._call('salvarSetorUsuario', [emailAlvo, setor, emailSolicitante], cb, err);
+    }
+  },
+
+  /**
+   * BLOCO: Serviços RECE
+   * @context Agenda RECE, exportações e upload de imagem.
+   */
+  rece: {
+    obter: function(cb, err) {
+      GAS._call('obterReservasRece', [], cb, err);
+    },
+    salvar: function(dados, cb, err) {
+      GAS._call('salvarReservaRece', [dados], cb, err);
+    },
+    cancelar: function(id, email, cb, err) {
+      GAS._call('cancelarReservaRece', [id, email], cb, err);
+    },
+    excluir: function(id, email, cb, err) {
+      GAS._call('excluirReservaRece', [id, email], cb, err);
+    },
+    exportarPlanilha: function(dados, cb, err) {
+      GAS._call('exportarAgendaRecePlanilha', [dados], cb, err);
+    },
+    uploadImagem: function(b64, mimeType, nome, cb, err) {
+      GAS._call('uploadImagemRece', [b64, mimeType, nome], cb, err);
+    }
+  },
+
+  /**
+   * BLOCO: Serviços de IA
+   * @context Chamadas ao modelo de linguagem para chat, análise e sugestões.
+   */
+  ia: {
+    chamar: function(prompt, ctx, cb, err) {
+      GAS._call('chamarIA', [prompt, ctx], cb, err);
+    },
+    chat: function(mensagens, ctx, cb, err) {
+      GAS._stub(cb);
+    },
+    reescreverDescricao: function(texto, setor, cb, err) {
+      GAS._call('reescreverDescricaoAcaoIA', [texto, setor], cb, err);
+    }
+  },
+
+  /**
+   * BLOCO: Serviços de contratos
+   * @context CRUD de contratos, metas, rubricas e indicadores.
+   */
+  contratos: {
+    obter: function(cb, err) {
+      GAS._call('obterContratos', [], cb, err);
+    },
+    obterDados: function(cb, err) {
+      GAS._call('obterDadosContratos', [], cb, err);
+    },
+    salvar: function(dados, email, cb, err) {
+      GAS._call('salvarContrato', [dados, email], cb, err);
+    },
+    excluir: function(id, email, cb, err) {
+      GAS._call('excluirContrato', [id, email], cb, err);
+    },
+    obterMemorias: function(idRubrica, cb, err) {
+      GAS._call('obterMemoriaRubrica', [idRubrica], cb, err);
+    },
+    comparativo: function(idCtr, v1, v2, cb, err) {
+      GAS._call('obterDashboardComparativoContrato', [idCtr, v1, v2], cb, err);
+    },
+    salvarMeta: function(dados, email, cb, err) {
+      GAS._call('salvarMeta', [dados, email], cb, err);
+    },
+    excluirMeta: function(id, email, cb, err) {
+      GAS._call('excluirMeta', [id, email], cb, err);
+    },
+    salvarRubrica: function(dados, email, cb, err) {
+      GAS._call('salvarRubrica', [dados, email], cb, err);
+    },
+    excluirRubrica: function(id, email, cb, err) {
+      GAS._call('excluirRubrica', [id, email], cb, err);
+    },
+    salvarIndicador: function(dados, email, cb, err) {
+      GAS._call('salvarIndicador', [dados, email], cb, err);
+    },
+    excluirIndicador: function(id, email, cb, err) {
+      GAS._call('excluirIndicador', [id, email], cb, err);
+    }
+  },
+
+  /**
+   * BLOCO: Serviços de sessão e preferências
+   * @context Logout, preferências do usuário e sidebar.
+   */
+  sessao: {
+    logout: function(cb, err) {
+      GAS._call('fazerLogout', [], cb, err);
+    },
+    obterUrlLogout: function(cb, err) {
+      GAS._call('obterUrlLogout', [], cb, err);
+    },
+    salvarPreferencia: function(chave, valor, cb, err) {
+      var em = (AppState && AppState.usuario && AppState.usuario.email) || window.__EMAIL_INICIAL__ || '';
+      GAS._call('salvarPreferenciasUsuario', [chave, valor, em], cb, err);
+    },
+    carregarPreferencias: function(cb, err) {
+      var em = (AppState && AppState.usuario && AppState.usuario.email) || window.__EMAIL_INICIAL__ || '';
+      GAS._call('carregarPreferenciasUsuario', [em], cb, err);
+    }
+  },
+
+  /**
+   * BLOCO: Serviços de solicitações externas
+   * @context Polling e listagem de solicitações CODIP/aprovações.
+   */
+  solicitacoes: {
+    listarTodas: function(email, cb, err) {
+      GAS._call('listarTodasSolicitacoes', [email], cb, err);
+    },
+    listarPendentes: function(email, cb, err) {
+      GAS._call('listarSolicitacoesPendentes', [email], cb, err);
+    },
+    criar: function(tipo, subtipo, dados, usuario, justificativa, cb, err) {
+      GAS._call('chat_criarSolicitacao', [tipo, subtipo, dados, usuario, justificativa], cb, err);
+    }
+  },
+
+  /**
+   * BLOCO: Serviços de calendário e comunicação
+   * @context Google Calendar, convites e e-mails institucionais.
+   */
+  comunicacao: {
+    criarConvitesCalendar: function(dados, cb, err) {
+      GAS._call('enviarConvitesCalendar', [dados], cb, err);
+    },
+    enviarConviteEmail: function(dados, cb, err) {
+      GAS._call('enviarConviteEmailInstitucional', [dados], cb, err);
+    },
+    criarEventosCalendar: function(dados, cb, err) {
+      GAS._call('criarEventosCalendarConvidados', [dados], cb, err);
+    }
+  },
+
+  /**
+   * BLOCO: Serviços de documentos / relatórios
+   * @context Geração de documentos no Google Drive ou download PDF.
+   */
+  documentos: {
+    gerarDrive: function(conteudo, cb, err) {
+      GAS._call('gerarDocumentoDrive', [conteudo], cb, err);
+    },
+    gerarDownload: function(conteudo, cb, err) {
+      GAS._call('gerarDocumentoDownload', [conteudo], cb, err);
+    }
+  },
+
+  /**
+   * BLOCO: Tarefas e processos (mod_pessoal.gs)
+   */
+  tarefas: {
+    listar:  function(cb, err)             { GAS._call('obterTarefas',  [], cb, err); },
+    salvar:  function(dados, cb, err)      { GAS._call('salvarTarefa',  [dados], cb, err); },
+    excluir: function(id, cb, err)         { GAS._call('excluirTarefa', [id], cb, err); },
+
+    listarPorFuncao: function(funcao, cb, err) {
+      GAS._call('listarTarefasPorFuncao', [funcao], cb, err);
+    },
+
+    atribuirExecutores: function(id, emails, cb, err) {
+      GAS._call('atribuirExecutoresTarefa', [id, emails], cb, err);
+    },
+
+    responderComoFuncao: function(id, mensagem, autor, cb, err) {
+      GAS._call('responderTarefaComoFuncao', [id, mensagem, autor], cb, err);
+    }
+  },
+
+  processos: {
+    listar:  function(cb, err)             { GAS._call('obterProcessos',  [], cb, err); },
+    salvar:  function(dados, cb, err)      { GAS._call('salvarProcesso',  [dados], cb, err); },
+    excluir: function(id, cb, err)         { GAS._call('excluirProcesso', [id], cb, err); }
+  },
+
+  /**
+   * BLOCO: Almoxarifado (mod_almoxarifado.gs)
+   */
+  almoxarifado: {
+    listar:      function(cb, err)                       { GAS._call('obterItensAlmoxarifado', [], cb, err); },
+    salvar:      function(dados, cb, err)                { GAS._call('salvarItemAlmoxarifado', [dados], cb, err); },
+    excluir:     function(id, cb, err)                   { GAS._call('excluirItemAlmoxarifado', [id], cb, err); },
+    movimentar:  function(id, tipo, qtd, obs, cb, err)   { GAS._call('movimentarEstoque', [id, tipo, qtd, obs], cb, err); },
+    movimentos:  function(cb, err)                       { GAS._call('obterMovimentacoes', [], cb, err); }
+  },
+
+  /**
+   * BLOCO: Balcão — atendimentos (mod_pessoal.gs)
+   */
+  balcao: {
+    listar:  function(cb, err)        { GAS._call('obterAtendimentos',  [], cb, err); },
+    salvar:  function(dados, cb, err) { GAS._call('salvarAtendimento',  [dados], cb, err); },
+    excluir: function(id, cb, err)    { GAS._call('excluirAtendimento', [id], cb, err); }
+  },
+
+  /**
+ * BLOCO: Comunicação — processos
+ */
+  comunicacaoProcessos: {
+    listar: function(cb, err) {
+      GAS._call('listarProcessosComunicacao', [], cb, err);
+    },
+
+    criar: function(dados, cb, err) {
+      GAS._call('criarProcessoComunicacao', [dados], cb, err);
+    },
+
+    atualizar: function(id, dados, cb, err) {
+      GAS._call('atualizarProcessoComunicacao', [id, dados], cb, err);
+    },
+
+    excluir: function(id, cb, err) {
+      GAS._call('excluirProcessoComunicacao', [id], cb, err);
+    },
+
+    mudarStatus: function(id, status, cb, err) {
+      GAS._call('atualizarProcessoComunicacao', [id, { status: status }], cb, err);
+    },
+    
+  },
+
+  entregas: {
+
+    listarPorProcesso: function(idProcesso, cb, err) {
+      GAS._call('listarEntregasPorProcesso', [idProcesso], cb, err);
+    },
+
+    atualizar: function(idEntrega, dados, cb, err) {
+      GAS._call('atualizarEntregaComunicacao', [idEntrega, dados], cb, err);
+    }
+
+  },
+
+  revisao: {
+
+    solicitar: function(id, texto, email, cb, err) {
+      GAS._call('solicitarAlteracaoProcesso', [id, texto, email], cb, err);
+    },
+
+    responder: function(id, status, resposta, cb, err) {
+      GAS._call('responderRevisaoProcesso', [id, status, resposta], cb, err);
+    }
+
+  },
+
+  /**
+   * BLOCO: Equipes — colaboradores, escalas, férias (mod_equipes.gs)
+   */
+  equipes: {
+    listar:            function(cb, err)        { GAS._call('obterFuncionarios',  [], cb, err); },
+    salvar:            function(dados, cb, err) { GAS._call('salvarFuncionario',  [dados], cb, err); },
+    excluir:           function(id, cb, err)    { GAS._call('excluirFuncionario', [id], cb, err); },
+    obterEscalas:      function(cb, err)        { GAS._call('obterEscalas',       [], cb, err); },
+    salvarEscala:      function(dados, cb, err) { GAS._call('salvarEscala',       [dados], cb, err); },
+    obterAvaliacoes:   function(cb, err)        { GAS._call('obterAvaliacoes',    [], cb, err); },
+    registrarAvaliacao:function(dados, cb, err) { GAS._call('registrarAvaliacao', [dados], cb, err); },
+    obterFerias:       function(cb, err)        { GAS._call('obterFerias',        [], cb, err); },
+    solicitarFerias:   function(dados, cb, err) { GAS._call('solicitarFerias',    [dados], cb, err); },
+    listarPorFuncao: function(funcao, cb, err) {
+      GAS._call('listarEquipePorFuncao', [funcao], cb, err);
+    },
+  },
+
+  /**
+   * BLOCO: Eficiência (mod_equipes.gs)
+   */
+  eficiencia: {
+    obterMetricas: function(cb, err) { GAS._call('obterMetricasEficiencia', [], cb, err); }
+  },
+
+  /**
+   * BLOCO: Contratações / financeiro (mod_financeiro.gs)
+   */
+  contratacoes: {
+    listar:           function(cb, err)        { GAS._call('obterContratacoes',  [], cb, err); },
+    salvar:           function(dados, cb, err) { GAS._call('salvarContratacao',  [dados], cb, err); },
+    excluir:          function(id, cb, err)    { GAS._call('excluirContratacao', [id], cb, err); },
+    obterPagamentos:  function(cb, err)        { GAS._call('obterPagamentos',    [], cb, err); },
+    registrarPagamento:function(dados, cb, err){ GAS._call('registrarPagamento', [dados], cb, err); },
+    fluxoCaixa:       function(cb, err)        { GAS._call('obterFluxoCaixa',    [], cb, err); }
+  },
+
+  // legado — mantido para retrocompatibilidade
+  financeiro: {
+    obterContratacoes:  function(cb, err)        { GAS._call('obterContratacoes',  [], cb, err); },
+    salvarContratacao:  function(dados, cb, err) { GAS._call('salvarContratacao',  [dados], cb, err); },
+    excluirContratacao: function(id, email, cb, err) { GAS._call('excluirContratacao', [id], cb, err); },
+    obterPagamentos:    function(cb, err)        { GAS._call('obterPagamentos',    [], cb, err); },
+    registrarPagamento: function(dados, cb, err) { GAS._call('registrarPagamento', [dados], cb, err); },
+    obterFluxoCaixa:    function(cb, err)        { GAS._call('obterFluxoCaixa',    [], cb, err); }
+  },
+
+  /**
+   * BLOCO: RH expandido (mod_rh.gs)
+   */
+  rh: {
+    obterCargos:        function(cb, err)        { GAS._call('obterCargosRH',       [], cb, err); },
+    salvarCargo:        function(dados, cb, err) { GAS._call('salvarCargoRH',       [dados], cb, err); },
+    excluirCargo:       function(id, cb, err)    { GAS._call('excluirCargoRH',      [id], cb, err); },
+    obterHistorico:     function(id, cb, err)    { GAS._call('obterHistoricoRH',    [id], cb, err); },
+    registrarEvento:    function(dados, cb, err) { GAS._call('registrarEventoRH',   [dados], cb, err); },
+    excluirEvento:      function(id, cb, err)    { GAS._call('excluirEventoRH',     [id], cb, err); },
+    obterAvaliacoes:    function(id, cb, err)    { GAS._call('obterAvaliacoesRH',   [id], cb, err); },
+    salvarAvaliacao:    function(dados, cb, err) { GAS._call('salvarAvaliacaoRH',   [dados], cb, err); },
+    excluirAvaliacao:   function(id, cb, err)    { GAS._call('excluirAvaliacaoRH',  [id], cb, err); },
+    obterPonto:         function(id, mes, cb, err){ GAS._call('obterPontoRH',       [id, mes], cb, err); },
+    registrarPonto:     function(dados, cb, err) { GAS._call('registrarPontoRH',    [dados], cb, err); },
+    excluirPonto:       function(id, cb, err)    { GAS._call('excluirPontoRH',      [id], cb, err); },
+    obterDocumentos:    function(id, cb, err)    { GAS._call('obterDocumentosRH',   [id], cb, err); },
+    salvarDocumento:    function(dados, cb, err) { GAS._call('salvarDocumentoRH',   [dados], cb, err); },
+    excluirDocumento:   function(id, cb, err)    { GAS._call('excluirDocumentoRH',  [id], cb, err); },
+    obterFolha:         function(mes, cb, err)   { GAS._call('obterFolhaRH',        [mes], cb, err); },
+    salvarFolha:        function(dados, cb, err) { GAS._call('salvarFolhaRH',       [dados], cb, err); },
+    simular:            function(dados, cb, err) { GAS._call('simularFolhaRH',      [dados], cb, err); },
+    obterPerfilSocial:  function(id, cb, err)    { GAS._call('obterPerfilSocialRH', [id], cb, err); },
+    salvarPerfilSocial: function(dados, cb, err) { GAS._call('salvarPerfilSocialRH',[dados], cb, err); },
+    indicadores:        function(cb, err)        { GAS._call('obterIndicadoresRH',  [], cb, err); },
+    diversidade:        function(cb, err)        { GAS._call('obterDiversidadeRH',  [], cb, err); }
+  },
+
+  /**
+   * BLOCO: Escuta Institucional Contínua (mod_escuta.gs)
+   * @context Pesquisas pulse, escuta espontânea, indicadores, alertas e relatórios.
+   */
+  escuta: {
+    obterDados:            function(cb, err)          { GAS._call('obterDadosEscuta',               [],                          cb, err); },
+    obterPergunta:         function(cb, err)          { GAS._call('obterPerguntaPulse',              [],                          cb, err); },
+    responderPulse:        function(dados, cb, err)   {
+      if (dados && !dados.sessao) dados.sessao = GAS._sessao();
+      GAS._call('registrarRespostaPulse', [dados], cb, err);
+    },
+    registrarEspontanea:   function(dados, cb, err)   {
+      if (dados && !dados.sessao) dados.sessao = GAS._sessao();
+      GAS._call('registrarEscutaEspontanea', [dados], cb, err);
+    },
+    obterDashboard:        function(filtros, cb, err) { GAS._call('obterDashboardEscuta',            [filtros],                   cb, err); },
+    obterAlertas:          function(cb, err)          { GAS._call('obterAlertasEscuta',              [],                          cb, err); },
+    resolverAlerta:        function(id, acao, cb, err){ GAS._call('resolverAlertaEscuta',            [id, acao, GAS._sessao()],   cb, err); },
+    obterPesquisas:        function(cb, err)          { GAS._call('obterPesquisasEscuta',            [],                          cb, err); },
+    salvarPesquisa:        function(dados, cb, err)   {
+      if (dados && !dados.sessao) dados.sessao = GAS._sessao();
+      GAS._call('salvarPesquisaEscuta', [dados], cb, err);
+    },
+    excluirPesquisa:       function(id, cb, err)      { GAS._call('excluirPesquisaEscuta',           [id, GAS._sessao()],         cb, err); },
+    obterBanco:            function(cb, err)          { GAS._call('obterBancoPesquisas',             [],                          cb, err); },
+    salvarTemplate:        function(dados, cb, err)   { GAS._call('salvarTemplateBancoPesquisas',    [dados],                     cb, err); },
+    obterConfig:           function(cb, err)          { GAS._call('obterConfiguracaoEscuta',         [],                          cb, err); },
+    salvarConfig:          function(cfg, cb, err)     { GAS._call('salvarConfiguracaoEscuta',        [cfg],                       cb, err); },
+    obterPerguntas:        function(cb, err)          { GAS._call('obterPerguntasEscuta',            [],                          cb, err); },
+    atualizarPergunta:     function(id, c, cb, err)   { GAS._call('atualizarPerguntaEscuta',         [id, c],                     cb, err); },
+    obterPerfil:           function(cb, err)          { GAS._call('obterPerfilAnaliticoEscuta',      [],                          cb, err); },
+    salvarPerfil:          function(dados, cb, err)   {
+      if (dados && !dados.sessao) dados.sessao = GAS._sessao();
+      GAS._call('salvarPerfilAnaliticoEscuta', [dados], cb, err);
+    },
+    gerarRelatorio:        function(tipo, p, cb, err) { GAS._call('gerarRelatorioEscuta',            [tipo, p],                   cb, err); },
+    obterFeedback:         function(cb, err)          { GAS._call('obterFeedbackEscuta',             [],                          cb, err); },
+    obterSaturacao:        function(cb, err)          { GAS._call('obterSaturacaoEscuta',            [],                          cb, err); },
+
+    // ── Governança e Motor Metodológico ───────────────────────
+    obterGovernanca:       function(cb, err)          { GAS._call('obterGovernancaEscuta',           [],                          cb, err); },
+    simularImpacto:        function(pesquisa, cb, err){ GAS._call('simularImpactoPesquisa',          [pesquisa],                  cb, err); },
+    construirFluxo:        function(etapa, d, cb, err){ GAS._call('construirFluxoPesquisa',          [etapa, d],                  cb, err); },
+    obterMapa:             function(periodo, cb, err) { GAS._call('obterMapaDadosEscuta',            [periodo],                   cb, err); },
+    obterManual:           function(secao, cb, err)   { GAS._call('obterManualEscuta',               [secao],                     cb, err); },
+    normalizarPesquisa:    function(p, cb, err)       { GAS._call('normalizarPesquisaEscuta',        [p],                         cb, err); },
+    sugerirParametros:     function(obj, pub, cb, err){ GAS._call('sugerirParametrosPesquisa',       [obj, pub],                  cb, err); },
+    definirTotalColab:     function(total, cb, err)   { GAS._call('definirTotalColaboradoresEscuta', [total],                     cb, err); }
+  },
+
+  /**
+   * BLOCO: Autenticação / identidade (auth_session.gs + auth credenciais)
+   */
+  auth: {
+    obterInfo:    function(cb, err)                           { GAS._call('obterInfoAutenticacao',    [],                          cb, err); },
+    iniciar:      function(jwt, email, cb, err)               { GAS._call('iniciarSessaoGAS',         [jwt, email],                cb, err); },
+    renovar:      function(sessaoId, cb, err)                 { GAS._call('renovarSessaoGAS',         [sessaoId],                  cb, err); },
+    encerrar:     function(sessaoId, cb, err)                 { GAS._call('encerrarSessaoGAS',        [sessaoId],                  cb, err); },
+    login:        function(email, senha, cb, err)             { GAS._call('validarCredenciais',       [email, senha],              cb, err); },
+    salvarUsuario:function(adm, alvo, senha, nome, ativo, cb, err) { GAS._call('salvarCredencialUsuario', [adm, alvo, senha, nome, ativo], cb, err); },
+    listarUsuarios:function(adm, cb, err)                     { GAS._call('listarCredenciais',        [adm],                       cb, err); },
+    solicitarCadastro: function(nome, email, senha, cb, err)  { GAS._call('solicitarCadastroExterno', [nome, email, senha],         cb, err); },
+    listarPendentesCadastro: function(adm, cb, err)           { GAS._call('listarSolicitacoesCadastroExterno', [adm],              cb, err); },
+    aprovarCadastro: function(id, adm, cb, err)               { GAS._call('aprovarCadastroExterno',   [id, adm],                   cb, err); },
+    recusarCadastro: function(id, adm, motivo, cb, err)       { GAS._call('recusarCadastroExterno',   [id, adm, motivo],           cb, err); }
+  },
+
+  /**
+   * BLOCO: Protocolo de Chaves (mod_chaves.gs)
+   * @context Retirada, devolução, transferência e rastreabilidade de chaves físicas.
+   */
+  chaves: {
+    obterDados:            function(email, cb, err)                    { GAS._call('chaves_obterDados',            [email],                     cb, err); },
+    listarProtocolos:      function(filtros, email, cb, err)           { GAS._call('chaves_listarProtocolos',      [filtros, email],             cb, err); },
+    obterHistorico:        function(filtros, email, cb, err)           { GAS._call('chaves_obterHistorico',        [filtros, email],             cb, err); },
+    obterIndicadores:      function(email, cb, err)                    { GAS._call('chaves_obterIndicadores',      [email],                     cb, err); },
+
+    salvarChave:           function(dados, email, cb, err)             { GAS._call('chaves_salvarChave',           [dados, email],               cb, err); },
+    alterarStatusChave:    function(id, status, obs, email, cb, err)   { GAS._call('chaves_alterarStatusChave',    [id, status, obs, email],    cb, err); },
+    desativarChave:        function(id, obs, email, cb, err)           { GAS._call('chaves_desativarChave',        [id, obs, email],            cb, err); },
+
+    solicitar:             function(dados, email, cb, err)             { GAS._call('chaves_solicitar',             [dados, email],               cb, err); },
+    iniciarEntregaDireta:  function(dados, email, cb, err)             { GAS._call('chaves_iniciarEntregaDireta',  [dados, email],               cb, err); },
+    aprovarEntrega:        function(id, obs, email, cb, err)           { GAS._call('chaves_aprovarEntrega',        [id, obs, email],             cb, err); },
+    confirmarRecebimento:  function(id, obs, email, cb, err)           { GAS._call('chaves_confirmarRecebimento',  [id, obs, email],             cb, err); },
+    registrarDevolucao:    function(id, obs, email, cb, err)           { GAS._call('chaves_registrarDevolucao',    [id, obs, email],             cb, err); },
+    confirmarDevolucao:    function(id, obs, email, cb, err)           { GAS._call('chaves_confirmarDevolucao',    [id, obs, email],             cb, err); },
+
+    solicitarTransferencia:  function(id, dest, obs, email, cb, err)   { GAS._call('chaves_solicitarTransferencia',  [id, dest, obs, email],    cb, err); },
+    confirmarTransferencia:  function(id, obs, email, cb, err)         { GAS._call('chaves_confirmarTransferencia',  [id, obs, email],          cb, err); },
+    cancelarTransferencia:   function(id, obs, email, cb, err)         { GAS._call('chaves_cancelarTransferencia',   [id, obs, email],          cb, err); },
+
+    cancelar:              function(id, motivo, email, cb, err)        { GAS._call('chaves_cancelar',              [id, motivo, email],          cb, err); },
+    negar:                 function(id, motivo, email, cb, err)        { GAS._call('chaves_negar',                 [id, motivo, email],          cb, err); },
+
+    salvarCamposEspaco:    function(id, dados, email, cb, err)         { GAS._call('chaves_salvarCamposEspaco',    [id, dados, email],           cb, err); },
+    listarEspacosCompletos: function(email, cb, err)                   { GAS._call('chaves_listarEspacosCompletos', [email],                     cb, err); },
+
+    retiradaOperacional:      function(dados, email, cb, err)                    { GAS._call('chaves_retiradaOperacional',      [dados, email],               cb, err); },
+    devolucaoOperacional:     function(id, obs, email, cb, err)                  { GAS._call('chaves_devolucaoOperacional',     [id, obs, email],             cb, err); },
+    transferenciaOperacional: function(id, nome, setor, obs, email, cb, err)     { GAS._call('chaves_transferenciaOperacional', [id, nome, setor, obs, email], cb, err); }
+  },
+
+  /**
+   * BLOCO: Registro de Módulos (mod_modulos_registry.gs)
+   * @context Ativação/desativação de módulos via SUPERADMIN.
+   */
+  modulos: {
+    obterStatus: function(cb, err) {
+      GAS._call('modulos_obterStatus', [], cb, err);
+    },
+    obterRegistro: function(cb, err) {
+      var em = (typeof AppState !== 'undefined' && AppState.usuario && AppState.usuario.email)
+        ? AppState.usuario.email : (window.__EMAIL_INICIAL__ || '');
+      GAS._call('modulos_obterRegistro', [em], cb, err);
+    },
+    alterarStatus: function(moduleId, ativo, cb, err) {
+      var em = (typeof AppState !== 'undefined' && AppState.usuario && AppState.usuario.email)
+        ? AppState.usuario.email : (window.__EMAIL_INICIAL__ || '');
+      GAS._call('modulos_alterarStatus', [moduleId, ativo, em], cb, err);
+    },
+    salvarLote: function(alteracoes, cb, err) {
+      var em = (typeof AppState !== 'undefined' && AppState.usuario && AppState.usuario.email)
+        ? AppState.usuario.email : (window.__EMAIL_INICIAL__ || '');
+      GAS._call('modulos_salvarLote', [alteracoes, em], cb, err);
+    },
+    resetar: function(cb, err) {
+      var em = (typeof AppState !== 'undefined' && AppState.usuario && AppState.usuario.email)
+        ? AppState.usuario.email : (window.__EMAIL_INICIAL__ || '');
+      GAS._call('modulos_resetar', [em], cb, err);
+    }
+  },
+
+  /**
+   * BLOCO: Ações Institucionais (mod_acoes.gs)
+   * @context Gestão de iniciativas (cursos, eventos, oficinas, projetos) às quais
+   *          reservas e outros recursos são vinculados.
+   */
+  acoes: {
+    listar: function(filtros, cb, err) {
+      GAS._call('listarAcoes', [filtros || {}], cb, err);
+    },
+    obter: function(id, cb, err) {
+      GAS._call('obterAcao', [id], cb, err);
+    },
+    criar: function(dados, cb, err) {
+      var em = GAS._sessao();
+      GAS._call('criarAcao', [dados, em], cb, err);
+    },
+    atualizar: function(id, dados, cb, err) {
+      var em = GAS._sessao();
+      GAS._call('atualizarAcao', [id, dados, em], cb, err);
+    },
+    mudarStatus: function(id, novoStatus, motivo, cb, err) {
+      var em = GAS._sessao();
+      GAS._call('mudarStatusAcao', [id, novoStatus, em, motivo || ''], cb, err);
+    },
+    associarRecurso: function(acaoId, tipo, recursoId, cb, err) {
+      var em = GAS._sessao();
+      GAS._call('associarRecursoAcao', [acaoId, tipo, recursoId, em], cb, err);
+    },
+    obterRecursos: function(acaoId, cb, err) {
+      GAS._call('obterRecursosDaAcao', [acaoId], cb, err);
+    }
+  },
+
+  /**
+   * BLOCO: Permissões modulares (mod_permissoes_v2.gs)
+   */
+  permissoes: {
+    obter:      function(email, cb, err)       { GAS._call('obterPermissoesUsuarioV2',  [email],  cb, err); },
+    salvar:     function(dados, cb, err)        { GAS._call('salvarPermissoesUsuarioV2', [dados],  cb, err); },
+    listar:     function(cb, err)               { GAS._call('listarPermissoesV2',        [],       cb, err); },
+    auditoria:  function(cb, err)               { GAS._call('obterAuditoriaPermissoes',  [],       cb, err); },
+    sincronizar:function(cb, err)               { GAS._call('sincronizarUsuariosSistema',[],       cb, err); }
+  }
+
+};
+
+</script>

@@ -1,0 +1,486 @@
+<!--
+@file mod_financeiro.html
+@type module
+@description Painel financeiro de contratos: layout split desktop (lista | detalhe) / mobile stack.
+@responsibility Estrutura HTML da aba financeira (#aba-contratos-fin).
+@dependencies carregarDadosContratos, renderizarContratos, abrirModalContrato (GestaoContratos.html)
+-->
+
+<style>
+/* ── Split layout ─────────────────────────────────────── */
+.fin-split {
+  display:grid;
+  grid-template-columns:340px 1fr;
+  gap:0;
+  min-height:600px;
+}
+@media(max-width:768px){
+  .fin-split { grid-template-columns:1fr; }
+  .fin-detail-panel { display:none; }
+  .fin-detail-panel.visible { display:block; }
+}
+
+.fin-list-panel {
+  border-right:1.5px solid #e2e8f0;
+  display:flex;
+  flex-direction:column;
+  min-height:0;
+}
+
+.fin-list-scroll {
+  flex:1;
+  overflow-y:auto;
+  scrollbar-width:thin;
+  padding:12px;
+}
+
+.fin-ctr-item {
+  padding:14px 16px;
+  border:1.5px solid #e2e8f0;
+  border-radius:16px;
+  margin-bottom:8px;
+  cursor:pointer;
+  transition:all .15s;
+  background:#fff;
+  position:relative;
+}
+.fin-ctr-item:hover { border-color:#a5b4fc; box-shadow:0 2px 8px rgba(99,102,241,.08); }
+.fin-ctr-item.active { border-color:#6366f1; background:#fafbff; box-shadow:0 2px 12px rgba(99,102,241,.12); }
+.fin-ctr-item.active::before {
+  content:'';
+  position:absolute;
+  left:-1.5px; top:20%; bottom:20%;
+  width:3px;
+  background:#6366f1;
+  border-radius:0 3px 3px 0;
+}
+
+.fin-detail-panel {
+  display:flex;
+  flex-direction:column;
+  min-height:0;
+  background:#fafbff;
+}
+
+.fin-detail-scroll {
+  flex:1;
+  overflow-y:auto;
+  scrollbar-width:thin;
+  padding:20px;
+}
+
+/* ── Meta cards no detalhe ────────────────────────────── */
+.fin-meta-card {
+  background:#fff;
+  border:1.5px solid #e0e7ff;
+  border-radius:16px;
+  overflow:hidden;
+  margin-bottom:12px;
+}
+.fin-meta-card-header {
+  padding:14px 16px;
+  background:linear-gradient(135deg,#eef2ff,#f5f3ff);
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:8px;
+  cursor:pointer;
+  user-select:none;
+}
+.fin-meta-card-body { display:block; }
+.fin-meta-card-body.collapsed { display:none; }
+
+/* ── Rubrica rows no detalhe ─────────────────────────── */
+.fin-rub-row {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  padding:9px 16px;
+  border-bottom:1px solid #f8fafc;
+  transition:background .15s;
+}
+.fin-rub-row:last-child { border-bottom:none; }
+.fin-rub-row:hover { background:#fafbff; }
+
+/* ── Mobile back button ───────────────────────────────── */
+.fin-back-btn {
+  display:none;
+  align-items:center;
+  gap:6px;
+  padding:8px 14px;
+  background:#f1f5f9;
+  border:none;
+  border-radius:10px;
+  font-size:11px;
+  font-weight:900;
+  color:#475569;
+  cursor:pointer;
+  margin-bottom:12px;
+  text-transform:uppercase;
+  letter-spacing:.06em;
+  transition:background .15s;
+}
+.fin-back-btn:hover { background:#e2e8f0; }
+@media(max-width:768px){
+  .fin-back-btn { display:flex; }
+}
+
+/* ── Progress bar ─────────────────────────────────────── */
+.fin-progress-wrap {
+  height:4px;
+  background:#f1f5f9;
+  border-radius:99px;
+  overflow:hidden;
+  margin-top:6px;
+}
+.fin-progress-fill {
+  height:100%;
+  border-radius:99px;
+  transition:width .5s ease;
+}
+</style>
+
+<section id="aba-contratos-fin" class="tab-content hidden pb-20">
+
+  <div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+
+    <!-- HEADER -->
+    <div class="p-5 border-b border-slate-100 bg-slate-50/50 flex flex-wrap justify-between items-center gap-3">
+      <div>
+        <h3 class="font-black text-slate-800 uppercase tracking-tighter text-sm">
+          <i class="fas fa-file-contract text-indigo-400 mr-2"></i>Contratos / Fontes de Recurso
+        </h3>
+        <p class="text-[10px] text-slate-400 font-medium">Metas e indicadores por contrato</p>
+      </div>
+      <div class="flex gap-2 items-center">
+        <!-- busca mobile/desktop -->
+        <div class="relative">
+          <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 text-xs"></i>
+          <input type="text" placeholder="Buscar contrato..."
+            oninput="_finBuscar(this.value)"
+            style="padding:8px 12px 8px 30px;border:1.5px solid #e2e8f0;border-radius:12px;font-size:12px;outline:none;width:180px;transition:border-color .15s"
+            onfocus="this.style.borderColor='#6366f1'" onblur="this.style.borderColor='#e2e8f0'">
+        </div>
+        <button onclick="abrirModalContrato()"
+          class="bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-black px-4 py-2 rounded-xl transition-all uppercase flex items-center gap-1.5">
+          <i class="fas fa-plus text-[9px]"></i>Novo Contrato
+        </button>
+      </div>
+    </div>
+
+    <!-- SPLIT LAYOUT -->
+    <div class="fin-split">
+
+      <!-- PAINEL ESQUERDO: lista de contratos -->
+      <div class="fin-list-panel">
+        <div class="px-3 pt-3 pb-1">
+          <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">Contratos</p>
+        </div>
+        <div class="fin-list-scroll" id="finListaContratos">
+          <div class="p-8 text-center">
+            <i class="fas fa-spinner animate-spin text-indigo-300 text-xl"></i>
+            <p class="text-[11px] text-slate-400 mt-2">Carregando...</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- PAINEL DIREITO: detalhe do contrato selecionado -->
+      <div class="fin-detail-panel" id="finDetailPanel">
+        <div class="fin-detail-scroll" id="finDetailContent">
+          <!-- estado vazio -->
+          <div class="flex flex-col items-center justify-center h-full py-20 text-center">
+            <div class="w-16 h-16 bg-indigo-50 rounded-2xl flex items-center justify-center mb-4">
+              <i class="fas fa-file-contract text-indigo-300 text-2xl"></i>
+            </div>
+            <p class="text-sm font-bold text-slate-400">Selecione um contrato</p>
+            <p class="text-[11px] text-slate-300 mt-1">Clique em um contrato para ver metas e rubricas</p>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+</section>
+
+<script>
+// ══════════════════════════════════════════════════════
+// MOD_FINANCEIRO — Split UI State
+// ══════════════════════════════════════════════════════
+var _finContratoSelecionado = null;
+var _finMetasColapsadas = {};
+var _finBuscaTexto = '';
+
+function _finBuscar(val) {
+  _finBuscaTexto = (val||'').toLowerCase().trim();
+  _finRenderizarLista();
+}
+
+// ── Carregamento integrado com GestaoContratos ────────
+// O override de renderizarContratos é feito no DOMContentLoaded
+// para garantir que corre APÓS mod_contratos_js e GestaoContratos definirem a função.
+
+// ── Lista de contratos (painel esquerdo) ──────────────
+function _finRenderizarLista() {
+  var container = document.getElementById('finListaContratos');
+  if (!container) return;
+
+  var lista = (_ctrCache.contratos||[]).filter(function(c){
+    if (!_finBuscaTexto) return true;
+    return String(c.nome||'').toLowerCase().includes(_finBuscaTexto) ||
+           String(c.numero||'').toLowerCase().includes(_finBuscaTexto) ||
+           String(c.fonteRecurso||'').toLowerCase().includes(_finBuscaTexto);
+  });
+
+  if (!lista.length) {
+    container.innerHTML = '<div class="p-8 text-center"><i class="fas fa-search text-slate-200 text-2xl mb-2"></i><p class="text-[11px] text-slate-400 italic">Nenhum contrato encontrado.</p></div>';
+    return;
+  }
+
+  container.innerHTML = lista.map(function(ctr) {
+    var status = _statusAutoCtr ? _statusAutoCtr(ctr) : (ctr.status||'Ativo');
+    var total  = Number(ctr.valorTotal)||0;
+    var alocado = typeof _totalMetasCtr==='function' ? _totalMetasCtr(ctr.id) : 0;
+    var pct    = total>0 ? Math.min(100,Math.round(alocado/total*100)) : 0;
+    var barCor = pct>=90?'#ef4444':pct>=70?'#f59e0b':'#6366f1';
+    var isAtivo = _finContratoSelecionado === ctr.id;
+
+    var statusCls = {
+      'Ativo':'background:#d1fae5;color:#065f46',
+      'Encerrado':'background:#fee2e2;color:#991b1b',
+      'Suspenso':'background:#fef3c7;color:#92400e',
+      'Vencendo':'background:#fed7aa;color:#9a3412'
+    }[status] || 'background:#f1f5f9;color:#475569';
+
+    var metas = (_ctrCache.metas||[]).filter(function(m){ return m.idContrato===ctr.id; });
+
+    return '<div class="fin-ctr-item'+(isAtivo?' active':'')+'" onclick="_finSelecionarContrato(\''+escaparHTML(ctr.id)+'\')" id="fin-item-'+escaparHTML(ctr.id)+'">'
+      +'<div class="flex items-start justify-between gap-2 mb-2">'
+      +'<div class="min-w-0 flex-1">'
+      +'<p class="font-black text-slate-800 text-[12px] leading-tight truncate">'+escaparHTML(ctr.nome||'')+'</p>'
+      +(ctr.vigIni||ctr.vigFim?'<p class="text-[10px] text-slate-400 mt-0.5">'+(_fmtDataBR?_fmtDataBR(ctr.vigIni):ctr.vigIni||'')+(ctr.vigFim?' a '+(_fmtDataBR?_fmtDataBR(ctr.vigFim):ctr.vigFim):'')+'</p>':'')
+      +'</div>'
+      +'<span style="font-size:8px;font-weight:900;padding:2px 8px;border-radius:99px;white-space:nowrap;'+statusCls+'">'+status+'</span>'
+      +'</div>'
+      +(total>0?'<p class="text-[11px] font-black text-emerald-600 mb-1">'+_fmtMoeda(total)+'</p>':'')
+      +(metas.length?'<p class="text-[10px] text-slate-400">'+metas.length+' meta'+(metas.length>1?'s':'')+'</p>':'<p class="text-[10px] text-slate-300 italic">Sem metas</p>')
+      +(total>0?'<div class="fin-progress-wrap"><div class="fin-progress-fill" style="width:'+pct+'%;background:'+barCor+'"></div></div>':'')
+      +'</div>';
+  }).join('');
+}
+
+// ── Selecionar contrato ───────────────────────────────
+function _finSelecionarContrato(id) {
+  _finContratoSelecionado = id;
+
+  // atualiza active na lista
+  document.querySelectorAll('.fin-ctr-item').forEach(function(el){
+    el.classList.remove('active');
+  });
+  var item = document.getElementById('fin-item-'+id);
+  if (item) item.classList.add('active');
+
+  var ctr = (_ctrCache.contratos||[]).find(function(c){ return c.id===id; });
+  if (!ctr) return;
+
+  // Mobile: mostrar painel direito
+  var detail = document.getElementById('finDetailPanel');
+  if (detail) detail.classList.add('visible');
+
+  _finRenderizarDetalhe(ctr);
+}
+
+// ── Detalhe do contrato (painel direito) ──────────────
+function _finRenderizarDetalhe(ctr) {
+  var container = document.getElementById('finDetailContent');
+  if (!container) return;
+
+  var status  = _statusAutoCtr ? _statusAutoCtr(ctr) : (ctr.status||'Ativo');
+  var total   = Number(ctr.valorTotal)||0;
+  var alocado = typeof _totalMetasCtr==='function' ? _totalMetasCtr(ctr.id) : 0;
+  var saldo   = total - alocado;
+  var pct     = total>0 ? Math.min(100,Math.round(alocado/total*100)) : 0;
+  var barCor  = pct>=90?'#ef4444':pct>=70?'#f59e0b':'#6366f1';
+  var metas   = (_ctrCache.metas||[]).filter(function(m){ return m.idContrato===ctr.id; });
+  var fmt     = _fmtMoeda;
+  var fmtDt   = _fmtDataBR  || function(v){ return v||''; };
+
+  var statusCls = {
+    'Ativo':'background:#d1fae5;color:#065f46',
+    'Encerrado':'background:#fee2e2;color:#991b1b',
+    'Suspenso':'background:#fef3c7;color:#92400e',
+    'Vencendo':'background:#fed7aa;color:#9a3412'
+  }[status] || 'background:#f1f5f9;color:#475569';
+
+  var metasHtml = metas.length ? metas.map(function(meta) {
+    var totalMeta = typeof _totalRubricasMetaCtr==='function' ? _totalRubricasMetaCtr(meta.id) : 0;
+    var rubs  = (_ctrCache.rubricas||[]).filter(function(r){ return r.idMeta===meta.id; });
+    var inds  = (_ctrCache.indicadores||[]).filter(function(i){ return i.idMeta===meta.id; });
+    var colapsada = _finMetasColapsadas[meta.id];
+    var metaBodyId = 'fin-meta-body-'+escaparHTML(meta.id);
+
+    var rubsHtml = rubs.length
+      ? rubs.map(function(r){
+          return '<div class="fin-rub-row">'
+            +'<div class="flex items-center gap-2 min-w-0">'
+            +'<span style="width:6px;height:6px;border-radius:50%;background:#a5b4fc;flex-shrink:0"></span>'
+            +'<span style="font-size:11px;font-weight:700;color:#334155;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escaparHTML(r.nome||'')+'</span>'
+            +(r.obs?'<span style="font-size:9px;color:#94a3b8;font-style:italic;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:120px" class="hidden sm:inline">'+escaparHTML(r.obs.substring(0,40))+'</span>':'')
+            +'</div>'
+            +'<div style="display:flex;align-items:center;gap:6px;flex-shrink:0">'
+            +'<span style="font-size:11px;font-weight:900;color:#059669;white-space:nowrap">'+fmt(r.valor)+'</span>'
+            +'<button onclick="editarRubrica(\''+escaparHTML(r.id)+'\')" class="ctr-icon-btn bg-slate-100 text-slate-400 hover:bg-indigo-600 hover:text-white" title="Editar"><i class="fas fa-edit text-[9px]"></i></button>'
+            +'<button onclick="excluirRubricaUI(\''+escaparHTML(r.id)+'\')" class="ctr-icon-btn bg-slate-100 text-slate-400 hover:bg-red-600 hover:text-white" title="Excluir"><i class="fas fa-trash text-[9px]"></i></button>'
+            +'</div>'
+            +'</div>';
+        }).join('')
+      : '<div style="padding:8px 16px"><p style="font-size:10px;color:#cbd5e1;font-style:italic">Sem rubricas.</p></div>';
+
+    var indsHtml = inds.length
+      ? '<div style="padding:8px 16px 12px;border-top:1px solid #f1f5f9">'
+        +'<p style="font-size:9px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Indicadores</p>'
+        + inds.map(function(ind){
+            var tot = Array.isArray(ind.meses) ? ind.meses.reduce(function(a,b){return a+Number(b);},0) : 0;
+            return '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:4px 0">'
+              +'<div style="display:flex;align-items:center;gap:6px;min-width:0">'
+              +'<span style="font-size:8px;font-weight:900;color:#818cf8;background:#eef2ff;padding:2px 6px;border-radius:4px;flex-shrink:0">#'+(ind.numero||'—')+'</span>'
+              +'<span style="font-size:11px;font-weight:700;color:#475569;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escaparHTML(ind.nome||ind.texto||'')+'</span>'
+              +(tot?'<span style="font-size:9px;font-weight:900;color:#7c3aed;flex-shrink:0">Meta: '+tot+'</span>':'')
+              +'</div>'
+              +'<div style="display:flex;gap:4px;flex-shrink:0">'
+              +'<button onclick="editarIndicador(\''+escaparHTML(ind.id)+'\')" class="ctr-icon-btn bg-slate-100 text-slate-400 hover:bg-indigo-600 hover:text-white"><i class="fas fa-edit text-[9px]"></i></button>'
+              +'<button onclick="excluirIndicadorUI(\''+escaparHTML(ind.id)+'\')" class="ctr-icon-btn bg-slate-100 text-slate-400 hover:bg-red-600 hover:text-white"><i class="fas fa-trash text-[9px]"></i></button>'
+              +'</div>'
+              +'</div>';
+          }).join('')
+        +'</div>'
+      : '';
+
+    return '<div class="fin-meta-card">'
+      +'<div class="fin-meta-card-header" onclick="_finToggleMeta(\''+escaparHTML(meta.id)+'\')">'
+      +'<div style="flex:1;min-width:0">'
+      +'<p style="font-size:10px;font-weight:900;color:#6366f1;text-transform:uppercase;letter-spacing:.07em;line-height:1">Meta '+(meta.numero||'')+'</p>'
+      +'<p style="font-weight:800;color:#1e293b;font-size:13px;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escaparHTML(meta.titulo||'')+'</p>'
+      +(totalMeta>0?'<p style="font-size:10px;font-weight:900;color:#059669;margin-top:4px"><i class="fas fa-coins mr-1" style="font-size:8px"></i>'+fmt(totalMeta)+'</p>':'')
+      +'</div>'
+      +'<div style="display:flex;align-items:center;gap:6px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end">'
+      +'<button onclick="event.stopPropagation();abrirModalIndicador(\''+escaparHTML(meta.id)+'\',\''+escaparHTML(ctr.id)+'\')" class="ctr-btn ctr-btn-indigo" style="font-size:8px"><i class="fas fa-chart-line" style="font-size:7px"></i>Indicador</button>'
+      +'<button onclick="event.stopPropagation();abrirModalRubrica(\''+escaparHTML(meta.id)+'\')" class="ctr-btn ctr-btn-green" style="font-size:8px"><i class="fas fa-tag" style="font-size:7px"></i>Rubrica</button>'
+      +'<button onclick="event.stopPropagation();editarMeta(\''+escaparHTML(meta.id)+'\')" class="ctr-icon-btn bg-white text-slate-400 hover:bg-indigo-600 hover:text-white"><i class="fas fa-edit" style="font-size:9px"></i></button>'
+      +'<button onclick="event.stopPropagation();excluirMetaUI(\''+escaparHTML(meta.id)+'\')" class="ctr-icon-btn bg-white text-slate-400 hover:bg-red-600 hover:text-white"><i class="fas fa-trash" style="font-size:9px"></i></button>'
+      +'<i id="fin-meta-ch-'+escaparHTML(meta.id)+'" class="fas fa-chevron-'+(colapsada?'down':'up')+' text-slate-400" style="font-size:9px;margin-left:2px"></i>'
+      +'</div>'
+      +'</div>'
+      +'<div id="'+metaBodyId+'" class="fin-meta-card-body'+(colapsada?' collapsed':'')+'">'
+      + rubsHtml + indsHtml
+      +'</div>'
+      +'</div>';
+  }).join('')
+  : '<div style="padding:32px;text-align:center"><i class="fas fa-bullseye" style="color:#e2e8f0;font-size:2rem;margin-bottom:8px"></i><p style="font-size:11px;color:#94a3b8;font-style:italic">Nenhuma meta cadastrada.</p><button onclick="abrirModalMeta(\''+escaparHTML(ctr.id)+'\')" class="ctr-btn ctr-btn-indigo" style="margin-top:10px"><i class="fas fa-plus" style="font-size:8px"></i>Adicionar Meta</button></div>';
+
+  container.innerHTML =
+    // Botão voltar (mobile)
+    '<button class="fin-back-btn" onclick="_finVoltarLista()"><i class="fas fa-chevron-left" style="font-size:10px"></i>Contratos</button>'
+
+    // Cabeçalho do contrato
+    +'<div style="background:#fff;border:1.5px solid #e2e8f0;border-radius:20px;padding:20px;margin-bottom:16px">'
+    +'<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap">'
+    +'<div style="flex:1;min-width:0">'
+    +'<div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:6px">'
+    +'<h2 style="font-weight:900;font-size:15px;color:#1e293b;margin:0">'+escaparHTML(ctr.nome||'')+'</h2>'
+    +'<span style="font-size:9px;font-weight:900;padding:3px 10px;border-radius:99px;'+statusCls+'">'+status+'</span>'
+    +(ctr.modalidade?'<span style="font-size:9px;font-weight:700;color:#64748b;background:#f1f5f9;padding:2px 8px;border-radius:99px">'+escaparHTML(ctr.modalidade)+'</span>':'')
+    +'</div>'
+    +(ctr.descricao?'<p style="font-size:11px;color:#64748b;margin-bottom:8px;line-height:1.5">'+escaparHTML(ctr.descricao)+'</p>':'')
+    +'<div style="display:flex;flex-wrap:wrap;gap:12px">'
+    +((ctr.vigIni||ctr.vigFim)?'<span style="font-size:10px;color:#94a3b8"><i class="fas fa-calendar-alt" style="color:#a5b4fc;margin-right:4px"></i>'+fmtDt(ctr.vigIni)+' — '+fmtDt(ctr.vigFim)+'</span>':'')
+    +(ctr.numero?'<span style="font-size:10px;color:#94a3b8"><i class="fas fa-hashtag" style="color:#cbd5e1;margin-right:4px"></i>'+escaparHTML(ctr.numero)+'</span>':'')
+    +(ctr.fonteRecurso?'<span style="font-size:10px;color:#94a3b8"><i class="fas fa-landmark" style="color:#cbd5e1;margin-right:4px"></i>'+escaparHTML(ctr.fonteRecurso)+'</span>':'')
+    +'</div>'
+    +(total>0?'<div style="margin-top:12px">'
+      +'<div style="display:flex;justify-content:space-between;margin-bottom:4px">'
+      +'<span style="font-size:10px;font-weight:900;color:#64748b">Total: <b style="color:#1e293b">'+fmt(total)+'</b></span>'
+      +'<span style="font-size:10px;font-weight:900;color:'+(pct>=90?'#ef4444':pct>=70?'#f59e0b':'#059669')+'">'+pct+'% alocado</span>'
+      +'</div>'
+      +'<div class="fin-progress-wrap"><div class="fin-progress-fill" style="width:'+pct+'%;background:'+barCor+'"></div></div>'
+      +(alocado>0?'<p style="font-size:9px;color:#94a3b8;margin-top:4px">Rubricas: <b style="color:#059669">'+fmt(alocado)+'</b> · Saldo: <b style="color:'+(saldo<0?'#ef4444':'#475569')+'">'+fmt(saldo)+'</b></p>':'')
+      +'</div>':'')
+    +'</div>'
+    +'<div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0">'
+    +'<button onclick="abrirModalMeta(\''+escaparHTML(ctr.id)+'\')" class="ctr-btn ctr-btn-indigo"><i class="fas fa-plus" style="font-size:8px"></i>Meta</button>'
+    +'<button onclick="editarContrato(\''+escaparHTML(ctr.id)+'\')" class="ctr-btn ctr-btn-slate"><i class="fas fa-edit" style="font-size:8px"></i>Editar</button>'
+    +'<button onclick="excluirContratoUI(\''+escaparHTML(ctr.id)+'\')" class="ctr-btn ctr-btn-red"><i class="fas fa-trash" style="font-size:8px"></i>Excluir</button>'
+    +'</div>'
+    +'</div>'
+    +'</div>'
+
+    // Metas
+    +'<div>'
+    +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">'
+    +'<p style="font-size:10px;font-weight:900;color:#64748b;text-transform:uppercase;letter-spacing:.08em"><i class="fas fa-bullseye" style="color:#a5b4fc;margin-right:6px"></i>Metas ('+metas.length+')</p>'
+    +'</div>'
+    + metasHtml
+    +'</div>';
+}
+
+// ── Toggle colapsar meta ──────────────────────────────
+function _finToggleMeta(idMeta) {
+  _finMetasColapsadas[idMeta] = !_finMetasColapsadas[idMeta];
+  var body    = document.getElementById('fin-meta-body-'+idMeta);
+  var chevron = document.getElementById('fin-meta-ch-'+idMeta);
+  if (body) body.classList.toggle('collapsed', !!_finMetasColapsadas[idMeta]);
+  if (chevron) chevron.className = 'fas fa-chevron-'+(!!_finMetasColapsadas[idMeta]?'down':'up')+' text-slate-400';
+}
+
+// ── Mobile: voltar para lista ─────────────────────────
+function _finVoltarLista() {
+  var detail = document.getElementById('finDetailPanel');
+  if (detail) detail.classList.remove('visible');
+  _finContratoSelecionado = null;
+  document.querySelectorAll('.fin-ctr-item').forEach(function(el){ el.classList.remove('active'); });
+}
+
+function _finInit() {
+
+  if (typeof carregarDadosContratos !== 'function') {
+    console.warn('carregarDadosContratos não encontrado');
+    return;
+  }
+
+  // se já tem dados → só renderiza
+  if (_ctrCache && _ctrCache.contratos && _ctrCache.contratos.length) {
+    _finRenderizarLista();
+    return;
+  }
+
+  // senão → carrega
+  carregarDadosContratos(function(){
+    _finRenderizarLista();
+  });
+}
+
+// Dispara após todos os scripts do Index.html terem executado:
+// garante que o override de renderizarContratos envolve a versão final da função.
+document.addEventListener('DOMContentLoaded', function() {
+  var _baseRenderizarContratos = window.renderizarContratos;
+  window.renderizarContratos = function() {
+    if (typeof _baseRenderizarContratos === 'function') {
+      try { _baseRenderizarContratos(); } catch(e) { console.warn(e); }
+    }
+    _finRenderizarLista();
+    if (_finContratoSelecionado) {
+      var ctr = (_ctrCache.contratos||[]).find(function(c){ return c.id===_finContratoSelecionado; });
+      if (ctr) _finRenderizarDetalhe(ctr);
+    }
+  };
+  setTimeout(_finInit, 100);
+});
+
+// 🔁 dispara também quando aba for exibida manualmente
+window._finOnShow = function() {
+  _finInit();
+};
+
+</script>

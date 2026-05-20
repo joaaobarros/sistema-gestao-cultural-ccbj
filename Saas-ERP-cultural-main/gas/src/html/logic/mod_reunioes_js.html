@@ -1,0 +1,1734 @@
+<!--
+  @file html/logic/mod_reunioes_js.html
+  @layer frontend/logic
+  @description Lógica do módulo de Reuniões e Atas.
+               Lazy-load via _onShow_aba_reunioes. Estado local em _reuState.
+  @dependencies GAS.reunioes (server_bridge_js), AppState, EventBus
+-->
+<script>
+
+// ── Estado local ─────────────────────────────────────────────────────────────
+
+var _reuState = {
+  reunioes:        [],
+  encaminhamentos: [],
+  usuarios:        [],
+  reuniaoAtual:    null,   // reuniao selecionada na ata ou ao vivo
+  ataReuniaoId:    null,
+  encSelecId:      null,   // encaminhamento aberto no detalhe
+  encSelecionados: [],     // participantes sendo selecionados no modal
+  visaoEnc:        'kanban',
+  timer: {
+    rodando:     false,
+    inicio:      null,
+    acumulado:   0,
+    intervaloId: null
+  },
+  nivel:           '',
+  carregado:       false,
+  seletorAlvo:     null  // 'participantes' | 'envolvidos'
+};
+
+// Debounce para autocomplete de participantes
+var _reuDebounceTimer = null;
+
+// ── Lock universal contra duplo clique ───────────────────────────────────────
+// Alias de BtnGuard (action_guard_js) para compatibilidade com todo código existente.
+var _reunBtn = BtnGuard;
+
+// ── Autosave de rascunho da ata ───────────────────────────────────────────────
+var _reuAutosaveTimer = null;
+
+function _reunAutosave(reuniaoId, conteudo) {
+  try {
+    if (!reuniaoId) return;
+    var key = 'reun_draft_' + reuniaoId;
+    localStorage.setItem(key, JSON.stringify({ conteudo: conteudo, ts: Date.now() }));
+  } catch(e) { /* localStorage pode não estar disponível */ }
+}
+
+function _reunRecuperarRascunho(reuniaoId) {
+  try {
+    if (!reuniaoId) return null;
+    var key = 'reun_draft_' + reuniaoId;
+    var raw = localStorage.getItem(key);
+    if (!raw) return null;
+    var draft = JSON.parse(raw);
+    // Rascunho expira em 24h
+    if (Date.now() - draft.ts > 24 * 3600 * 1000) {
+      localStorage.removeItem(key);
+      return null;
+    }
+    return draft;
+  } catch(e) { return null; }
+}
+
+function _reunLimparRascunho(reuniaoId) {
+  try {
+    if (!reuniaoId) return;
+    localStorage.removeItem('reun_draft_' + reuniaoId);
+  } catch(e) {}
+}
+
+function _reuIniciarAutosave(reuniaoId) {
+  if (_reuAutosaveTimer) clearInterval(_reuAutosaveTimer);
+  _reuAutosaveTimer = setInterval(function() {
+    if (!reuniaoId) return;
+    var abertura    = (document.getElementById('reu-ata-abertura')     || {}).value || '';
+    var encerramento = (document.getElementById('reu-ata-encerramento') || {}).value || '';
+    _reunAutosave(reuniaoId, {
+      abertura:     abertura,
+      encerramento: encerramento,
+      deliberacoes: _reuDeliberacoes
+    });
+    // Mostrar indicador visual discreto
+    var indicador = document.getElementById('reu-autosave-indicador');
+    if (indicador) {
+      var spanTexto = indicador.querySelector('span');
+      var msg = 'Rascunho salvo às ' + new Date().toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' });
+      if (spanTexto) spanTexto.textContent = msg; else indicador.textContent = msg;
+      indicador.classList.remove('hidden');
+      setTimeout(function() { indicador.classList.add('hidden'); }, 3000);
+    }
+  }, 30000);
+}
+
+// ── Toast de feedback ────────────────────────────────────────────────────────
+
+function _reuToast(tipo, mensagem, duracao) {
+  if (typeof Swal !== 'undefined' && Swal.fire) {
+    Swal.fire({
+      icon: tipo,
+      title: mensagem,
+      toast: true,
+      position: 'top-end',
+      timer: duracao || 3000,
+      timerProgressBar: true,
+      showConfirmButton: false
+    });
+  } else {
+    if (tipo === 'error') console.error('[Reuniões]', mensagem);
+    // Fallback discreto sem alert() bloqueante
+  }
+}
+
+function _reuConfirmar(titulo, texto, iconeTipo, callbackConfirmar) {
+  if (typeof Swal !== 'undefined' && Swal.fire) {
+    Swal.fire({
+      title: titulo,
+      text: texto || '',
+      icon: iconeTipo || 'warning',
+      showCancelButton: true,
+      confirmButtonColor: iconeTipo === 'error' ? '#dc2626' : '#7c3aed',
+      cancelButtonColor: '#94a3b8',
+      confirmButtonText: 'Confirmar',
+      cancelButtonText: 'Cancelar'
+    }).then(function(result) {
+      if (result.isConfirmed) callbackConfirmar();
+    });
+  } else {
+    if (confirm(titulo + (texto ? '\n' + texto : ''))) callbackConfirmar();
+  }
+}
+
+// Cores para avatares
+var _REU_CORES = ['#7c3aed','#2563eb','#059669','#d97706','#dc2626','#0891b2','#9333ea'];
+function _reuCor(email) {
+  var h = 0;
+  for (var i = 0; i < (email || '').length; i++) h = (h * 31 + email.charCodeAt(i)) & 0xffffffff;
+  return _REU_CORES[Math.abs(h) % _REU_CORES.length];
+}
+function _reuIniciais(email) {
+  var partes = (email || '').split('@')[0].split('.');
+  if (partes.length >= 2) return (partes[0][0] + partes[1][0]).toUpperCase();
+  return (partes[0] || '?').substring(0, 2).toUpperCase();
+}
+function _reuNome(email) {
+  if (!email) return '—';
+  var u = _reuState.usuarios.find(function(u) { return u.email === email; });
+  return u ? (u.nome || email.split('@')[0]) : email.split('@')[0];
+}
+
+// ── Lazy load ─────────────────────────────────────────────────────────────────
+
+function _onShow_aba_reunioes() {
+  if (_reuState.carregado) return;
+  _reuState.carregado = true;
+  _reuCarregarDados();
+}
+
+function _reuCarregarDados() {
+  // Carregar usuários e reuniões em paralelo
+  GAS.reunioes.listarUsuarios(function(r) {
+    _reuState.usuarios = (r && r.usuarios) ? r.usuarios : [];
+    _reuPopularSelectsUsuarios();
+  }, null, GAS._sessao());
+
+  GAS.reunioes.listar({}, function(r) {
+    _reuState.reunioes        = (r && r.reunioes) ? r.reunioes : [];
+    _reuState.nivel           = (r && r.nivel)    ? r.nivel    : '';
+    _reuRenderizarLista();
+    _reuPopularSelectsReunioes();
+    _reuAtualizarBadgeAoVivo();
+  }, null, GAS._sessao());
+
+  GAS.reunioes.listarEncaminhamentos({}, function(r) {
+    _reuState.encaminhamentos = (r && r.encaminhamentos) ? r.encaminhamentos : [];
+    _reuRenderizarKanban();
+    _reuAtualizarBadgeAtrasados();
+  }, null, GAS._sessao());
+}
+
+function _reu_atualizarVisaoAtual() {
+  _reuState.carregado = false;
+  _reuCarregarDados();
+}
+
+// ── Navegação entre sub-visões ────────────────────────────────────────────────
+
+function _reu_mostrarVisao(visao) {
+  document.querySelectorAll('.reu-visao').forEach(function(v) { v.classList.add('hidden'); });
+  document.querySelectorAll('.reu-tab-btn').forEach(function(b) { b.classList.remove('reu-tab-ativo'); });
+
+  var el = document.getElementById('reu-visao-' + visao);
+  if (el) el.classList.remove('hidden');
+  var btn = document.getElementById('reu-tab-' + visao);
+  if (btn) btn.classList.add('reu-tab-ativo');
+
+  if (visao === 'dashboard') _reuCarregarDashboard();
+  if (visao === 'encaminhamentos') _reuRenderizarKanban();
+}
+
+// ── Visão Lista ───────────────────────────────────────────────────────────────
+
+var _REU_STATUS_COR = {
+  planejada:'gray', agendada:'blue', em_andamento:'green',
+  finalizada:'indigo', ata_rascunho:'yellow', ata_aprovada:'purple',
+  arquivada:'slate', cancelada:'red'
+};
+var _REU_STATUS_LABEL = {
+  planejada:'Planejada', agendada:'Agendada', em_andamento:'Em andamento',
+  finalizada:'Finalizada', ata_rascunho:'Ata em rascunho', ata_aprovada:'Ata aprovada',
+  arquivada:'Arquivada', cancelada:'Cancelada'
+};
+var _REU_TIPO_LABEL = { ordinaria:'Ordinária', extraordinaria:'Extraordinária', emergencial:'Emergencial' };
+
+function _reuRenderizarLista(filtradas) {
+  var container = document.getElementById('reu-lista-container');
+  if (!container) return;
+  var lista = filtradas || _reuState.reunioes;
+
+  if (lista.length === 0) {
+    container.innerHTML = '<div class="text-center py-10 text-slate-400 text-sm">' +
+      '<i class="fas fa-calendar-times text-3xl mb-3 block"></i>' +
+      '<p>Nenhuma reunião encontrada.</p>' +
+      '<button onclick="_reu_abrirModalNovaReuniao()" class="mt-3 btn-primary text-xs px-4 py-2">Nova Reunião</button>' +
+      '</div>';
+    return;
+  }
+
+  container.innerHTML = lista.map(function(r) {
+    var cor = _REU_STATUS_COR[r.status] || 'gray';
+    var label = _REU_STATUS_LABEL[r.status] || r.status;
+    var dataFmt = r.data ? new Date(r.data + 'T12:00:00').toLocaleDateString('pt-BR', { weekday:'short', day:'2-digit', month:'short' }) : '—';
+    var encCount = _reuState.encaminhamentos.filter(function(e) { return e.reuniaoId === r.id; }).length;
+    return '<div class="reu-card flex items-start gap-3" onclick="_reuAbrirDetalheReuniao(\'' + r.id + '\')">' +
+      '<div class="reu-card-status-bar bg-' + cor + '-400 mt-1"></div>' +
+      '<div class="flex-1 min-w-0">' +
+        '<div class="flex items-start justify-between gap-2">' +
+          '<div>' +
+            '<p class="font-bold text-slate-800 text-sm leading-tight">' + _esc(r.titulo) + '</p>' +
+            '<p class="text-xs text-slate-500 mt-0.5">' +
+              dataFmt + (r.horaInicio ? ' · ' + r.horaInicio : '') +
+              (r.local ? ' · ' + _esc(r.local) : '') +
+            '</p>' +
+          '</div>' +
+          '<span class="reu-tag reu-tag-' + cor + ' shrink-0">' + label + '</span>' +
+        '</div>' +
+        '<div class="flex items-center gap-3 mt-2">' +
+          '<span class="text-[10px] text-slate-400">' + _REU_TIPO_LABEL[r.tipo] + '</span>' +
+          (r.modalidade !== 'presencial' ? '<span class="text-[10px] text-slate-400 capitalize">' + r.modalidade + '</span>' : '') +
+          (encCount > 0 ? '<span class="text-[10px] text-orange-500 font-semibold"><i class="fas fa-arrow-right mr-0.5"></i>' + encCount + ' encaminhamento(s)</span>' : '') +
+          (r.sigilosa ? '<span class="text-[10px] text-amber-500"><i class="fas fa-lock mr-0.5"></i>Sigilosa</span>' : '') +
+        '</div>' +
+      '</div>' +
+      '<div class="flex flex-col gap-1 shrink-0">' +
+        '<button onclick="event.stopPropagation();_reuAbrirDetalheReuniao(\'' + r.id + '\')" class="btn-icon text-slate-400 hover:text-purple-500" title="Ver detalhes"><i class="fas fa-chevron-right text-xs"></i></button>' +
+        (_reuState.nivel === 'superadmin' || _reuState.nivel === 'admin'
+          ? '<button onclick="event.stopPropagation();_reuExcluirReuniao(\'' + r.id + '\')" class="btn-icon text-slate-300 hover:text-red-500" title="Excluir reunião"><i class="fas fa-trash text-xs"></i></button>'
+          : '') +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function _reu_filtrarLista() {
+  var busca   = (document.getElementById('reu-busca')         || {}).value || '';
+  var status  = (document.getElementById('reu-filtro-status') || {}).value || '';
+  var tipo    = (document.getElementById('reu-filtro-tipo')   || {}).value || '';
+
+  var filtradas = _reuState.reunioes.filter(function(r) {
+    if (status && r.status !== status) return false;
+    if (tipo   && r.tipo   !== tipo)   return false;
+    if (busca) {
+      var q = busca.toLowerCase();
+      if ((r.titulo || '').toLowerCase().indexOf(q) === -1 &&
+          (r.local  || '').toLowerCase().indexOf(q) === -1) return false;
+    }
+    return true;
+  });
+  _reuRenderizarLista(filtradas);
+}
+
+function _reu_redefinirFiltros() {
+  var ids = ['reu-busca','reu-filtro-status','reu-filtro-tipo'];
+  ids.forEach(function(id) { var el = document.getElementById(id); if (el) el.value = ''; });
+  _reuRenderizarLista();
+}
+
+// ── Detalhe de reunião ────────────────────────────────────────────────────────
+
+function _reuAbrirDetalheReuniao(id) {
+  GAS.reunioes.obter(id, function(r) {
+    _reuState.reuniaoAtual = r.reuniao;
+    // Atualizar caches locais
+    var idx = _reuState.reunioes.findIndex(function(x) { return x.id === id; });
+    if (idx !== -1) _reuState.reunioes[idx] = r.reuniao;
+
+    // Abrir ata automaticamente
+    _reu_mostrarVisao('ata');
+    var sel = document.getElementById('reu-select-ata');
+    if (sel) sel.value = id;
+    _reuCarregarAtaEditor(r.reuniao, r.encaminhamentos);
+  }, null, GAS._sessao());
+}
+
+// ── Reunião: Criar/Editar ─────────────────────────────────────────────────────
+
+var _reuEditandoId = null;
+var _reuFormParticipantes = [];
+var _reuFormPauta = [];
+
+function _reu_abrirModalNovaReuniao(id) {
+  _reuEditandoId = id || null;
+  _reuFormParticipantes = [];
+  _reuFormPauta = [];
+  var titulo = document.getElementById('modal-reuniao-titulo');
+  if (titulo) titulo.textContent = id ? 'Editar Reunião' : 'Nova Reunião';
+
+  // Reset form
+  ['reu-form-titulo','reu-form-data','reu-form-hora-inicio','reu-form-hora-termino',
+   'reu-form-local','reu-form-link','reu-form-descricao'].forEach(function(fid) {
+    var el = document.getElementById(fid); if (el) el.value = '';
+  });
+  var sel = document.getElementById('reu-form-tipo');      if (sel) sel.value = 'ordinaria';
+  var sel2 = document.getElementById('reu-form-modalidade'); if (sel2) sel2.value = 'presencial';
+  var chk = document.getElementById('reu-form-sigilosa');  if (chk) chk.checked = false;
+
+  if (id) {
+    var r = _reuState.reunioes.find(function(x) { return x.id === id; });
+    if (r) _reuPreencherFormReuniao(r);
+  }
+
+  _reuRenderizarPautaForm();
+  _reuRenderizarChipsParticipantes();
+  _reuAbrirModal('modal-nova-reuniao');
+}
+
+function _reuPreencherFormReuniao(r) {
+  var map = {
+    'reu-form-titulo': r.titulo, 'reu-form-data': r.data,
+    'reu-form-hora-inicio': r.horaInicio, 'reu-form-hora-termino': r.horaTermino,
+    'reu-form-local': r.local, 'reu-form-link': r.linkRemoto,
+    'reu-form-descricao': r.descricao
+  };
+  Object.keys(map).forEach(function(fid) {
+    var el = document.getElementById(fid); if (el) el.value = map[fid] || '';
+  });
+  var st = document.getElementById('reu-form-tipo');       if (st) st.value = r.tipo || 'ordinaria';
+  var sm = document.getElementById('reu-form-modalidade'); if (sm) sm.value = r.modalidade || 'presencial';
+  var sc = document.getElementById('reu-form-sigilosa');   if (sc) sc.checked = !!r.sigilosa;
+  _reuFormParticipantes = (r.participantes || []).slice();
+  _reuFormPauta = (r.pauta || []).map(function(p) { return Object.assign({}, p); });
+}
+
+function _reu_salvarReuniao() {
+  if (_reunBtn.isLocked('salvar-reuniao')) return;
+
+  var titulo = (document.getElementById('reu-form-titulo') || {}).value || '';
+  var data   = (document.getElementById('reu-form-data')   || {}).value || '';
+  if (!titulo.trim()) { _reuToast('warning', 'Informe o título da reunião.'); return; }
+  if (!data)          { _reuToast('warning', 'Informe a data da reunião.');   return; }
+
+  var dados = {
+    titulo:      titulo.trim(),
+    data:        data,
+    tipo:        (document.getElementById('reu-form-tipo')         || {}).value,
+    horaInicio:  (document.getElementById('reu-form-hora-inicio')  || {}).value,
+    horaTermino: (document.getElementById('reu-form-hora-termino') || {}).value,
+    modalidade:  (document.getElementById('reu-form-modalidade')   || {}).value,
+    local:       (document.getElementById('reu-form-local')        || {}).value,
+    linkRemoto:  (document.getElementById('reu-form-link')         || {}).value,
+    descricao:   (document.getElementById('reu-form-descricao')    || {}).value,
+    sigilosa:    (document.getElementById('reu-form-sigilosa')     || {}).checked,
+    participantes: _reuFormParticipantes,
+    pauta:       _reuFormPauta
+  };
+
+  _reunBtn.wrap('btn-salvar-reuniao', 'salvar-reuniao', 'Salvando...', function(done) {
+    var fn = _reuEditandoId
+      ? function(cb, err, s) { GAS.reunioes.atualizar(_reuEditandoId, dados, cb, err, s); }
+      : function(cb, err, s) { GAS.reunioes.criar(dados, cb, err, s); };
+
+    fn(function(r) {
+      done();
+      _reu_fecharModal('modal-nova-reuniao');
+      _reuState.carregado = false;
+      _reuCarregarDados();
+      _reuToast('success', _reuEditandoId ? 'Reunião atualizada!' : 'Reunião criada com sucesso!');
+    }, function(e) {
+      done();
+      _reuToast('error', 'Erro: ' + (e.message || e));
+    }, GAS._sessao());
+  });
+}
+
+// ── Exclusão de reunião com confirmação ──────────────────────────────────────
+
+function _reuExcluirReuniao(id) {
+  var r = _reuState.reunioes.find(function(x) { return x.id === id; });
+  var tituloR = r ? r.titulo : id;
+  var temEncs = _reuState.encaminhamentos.filter(function(e) { return e.reuniaoId === id; }).length;
+
+  var texto = 'Esta ação marcará a reunião "' + tituloR + '" como excluída.' +
+    (temEncs > 0 ? '\n\nAtenção: ' + temEncs + ' encaminhamento(s) vinculado(s) serão marcados (mas não deletados).' : '') +
+    '\n\nInforme o motivo da exclusão:';
+
+  if (typeof Swal !== 'undefined' && Swal.fire) {
+    Swal.fire({
+      title: 'Excluir reunião?',
+      html: '<p class="text-sm text-slate-600 mb-3">' + texto.replace(/\n/g, '<br>') + '</p>' +
+            '<textarea id="swal-motivo-exclusao" class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" rows="2" placeholder="Motivo (obrigatório)..."></textarea>',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#dc2626',
+      cancelButtonColor: '#94a3b8',
+      confirmButtonText: '<i class="fas fa-trash mr-1"></i>Excluir',
+      cancelButtonText: 'Cancelar',
+      preConfirm: function() {
+        var motivo = document.getElementById('swal-motivo-exclusao').value.trim();
+        if (!motivo) {
+          Swal.showValidationMessage('O motivo da exclusão é obrigatório.');
+          return false;
+        }
+        return motivo;
+      }
+    }).then(function(result) {
+      if (!result.isConfirmed) return;
+      var motivo = result.value;
+      GAS.reunioes.excluir(id, motivo, function(res) {
+        // Remover da lista local
+        _reuState.reunioes = _reuState.reunioes.filter(function(x) { return x.id !== id; });
+        _reuRenderizarLista();
+        _reuToast('success', 'Reunião "' + tituloR + '" excluída. ' + (res.encsAfetados > 0 ? res.encsAfetados + ' encaminhamento(s) marcados.' : ''));
+      }, function(e) {
+        _reuToast('error', 'Erro ao excluir: ' + (e.message || e));
+      }, GAS._sessao());
+    });
+  } else {
+    var motivo = prompt(texto);
+    if (motivo === null || motivo.trim() === '') return;
+    GAS.reunioes.excluir(id, motivo.trim(), function(res) {
+      _reuState.reunioes = _reuState.reunioes.filter(function(x) { return x.id !== id; });
+      _reuRenderizarLista();
+      _reuToast('success', 'Reunião excluída.');
+    }, function(e) {
+      _reuToast('error', 'Erro ao excluir: ' + (e.message || e));
+    }, GAS._sessao());
+  }
+}
+
+// ── Pauta no form ─────────────────────────────────────────────────────────────
+
+function _reu_adicionarItemPauta() {
+  _reuFormPauta.push({ id: 'P' + (_reuFormPauta.length + 1), titulo: '', responsavel: '', tempoEstimado: 0, status: 'pendente' });
+  _reuRenderizarPautaForm();
+}
+
+function _reuRenderizarPautaForm() {
+  var container = document.getElementById('reu-form-pauta-lista');
+  if (!container) return;
+  if (_reuFormPauta.length === 0) {
+    container.innerHTML = '<p class="text-xs text-slate-400 italic">Nenhum item de pauta adicionado.</p>';
+    return;
+  }
+  container.innerHTML = _reuFormPauta.map(function(p, i) {
+    return '<div class="flex gap-2 items-center">' +
+      '<span class="text-xs text-slate-400 w-5 text-right">' + (i+1) + '.</span>' +
+      '<input type="text" value="' + _esc(p.titulo) + '" placeholder="Item de pauta..." class="input-sm flex-1"' +
+        ' oninput="_reuFormPauta[' + i + '].titulo=this.value">' +
+      '<input type="number" value="' + (p.tempoEstimado || '') + '" placeholder="min" class="input-sm w-16" title="Tempo estimado (min)"' +
+        ' oninput="_reuFormPauta[' + i + '].tempoEstimado=parseInt(this.value)||0">' +
+      '<button onclick="_reuFormPauta.splice(' + i + ',1);_reuRenderizarPautaForm()" class="btn-icon text-red-400 hover:text-red-600">' +
+        '<i class="fas fa-trash text-xs"></i></button>' +
+    '</div>';
+  }).join('');
+}
+
+// ── Seletor de participantes ──────────────────────────────────────────────────
+
+function _reuPopularSelectsUsuarios() {
+  // Preencher selects de responsável nos modais de encaminhamento
+  ['reu-enc-form-responsavel'].forEach(function(sid) {
+    var sel = document.getElementById(sid);
+    if (!sel) return;
+    var v = sel.value;
+    sel.innerHTML = '<option value="">-- Selecione --</option>' +
+      _reuState.usuarios.map(function(u) {
+        return '<option value="' + _esc(u.email) + '">' + _esc(u.nome || u.email) + ' — ' + _esc(u.email) + '</option>';
+      }).join('');
+    if (v) sel.value = v;
+  });
+
+  // Filtro de responsável nos encaminhamentos
+  var filtroResp = document.getElementById('reu-enc-filtro-responsavel');
+  if (filtroResp) {
+    filtroResp.innerHTML = '<option value="">Todos</option>' +
+      _reuState.usuarios.map(function(u) {
+        return '<option value="' + _esc(u.email) + '">' + _esc(u.nome || u.email) + '</option>';
+      }).join('');
+  }
+}
+
+function _reuPopularSelectsReunioes() {
+  var sels = ['reu-select-ata', 'reu-select-ao-vivo'];
+  sels.forEach(function(sid) {
+    var sel = document.getElementById(sid);
+    if (!sel) return;
+    var v = sel.value;
+    sel.innerHTML = '<option value="">-- Selecione --</option>' +
+      _reuState.reunioes
+        .filter(function(r) { return r.status !== 'cancelada' && r.status !== 'arquivada'; })
+        .map(function(r) {
+          var dataFmt = r.data ? new Date(r.data + 'T12:00:00').toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit' }) : '';
+          return '<option value="' + r.id + '">' + dataFmt + ' — ' + _esc(r.titulo) + '</option>';
+        }).join('');
+    if (v) sel.value = v;
+  });
+}
+
+function _reu_abrirSeletorParticipantes() {
+  _reuState.seletorAlvo = 'participantes';
+  _reuAbrirSeletorUsuarios(_reuFormParticipantes);
+}
+
+function _reu_abrirSeletorEnvolvidos() {
+  _reuState.seletorAlvo = 'envolvidos';
+  _reuAbrirSeletorUsuarios(_reuEncFormEnvolvidos || []);
+}
+
+function _reuAbrirSeletorUsuarios(selecionados) {
+  _reuState.encSelecionados = selecionados ? selecionados.slice() : [];
+  _reuRenderizarSeletorUsuarios('');
+  _reuAbrirModal('modal-seletor-participantes');
+  setTimeout(function() {
+    var input = document.getElementById('reu-busca-participantes');
+    if (input) { input.value = ''; input.focus(); }
+  }, 60);
+}
+
+function _reu_filtrarUsuarios(q) {
+  clearTimeout(_reuDebounceTimer);
+  _reuDebounceTimer = setTimeout(function() {
+    _reuRenderizarSeletorUsuarios(q);
+  }, 150);
+}
+
+function _reuRenderizarSeletorUsuarios(q) {
+  var container = document.getElementById('reu-lista-usuarios-seletor');
+  if (!container) return;
+  var filtrados = (q || '').trim() === ''
+    ? _reuState.usuarios
+    : _reuState.usuarios.filter(function(u) {
+        return (u.nome  || '').toLowerCase().indexOf(q.toLowerCase()) !== -1 ||
+               (u.email || '').toLowerCase().indexOf(q.toLowerCase()) !== -1;
+      });
+
+  container.innerHTML = filtrados.map(function(u) {
+    var sel = _reuState.encSelecionados.indexOf(u.email) !== -1;
+    return '<button onclick="_reuToggleUsuarioSeletor(\'' + u.email + '\')" ' +
+      'class="w-full flex items-center gap-2 px-2 py-1.5 rounded hover:bg-slate-50 text-left ' +
+      (sel ? 'bg-purple-50' : '') + '">' +
+      '<div class="reu-avatar text-xs" style="background:' + _reuCor(u.email) + ';width:24px;height:24px">' + _reuIniciais(u.email) + '</div>' +
+      '<div class="flex-1 min-w-0">' +
+        '<p class="text-xs font-semibold text-slate-700 leading-tight">' + _esc(u.nome || u.email.split('@')[0]) + '</p>' +
+        '<p class="text-[10px] text-slate-400 leading-tight">' + _esc(u.email) + '</p>' +
+      '</div>' +
+      (sel ? '<i class="fas fa-check text-purple-500 text-xs"></i>' : '') +
+    '</button>';
+  }).join('');
+}
+
+function _reuToggleUsuarioSeletor(email) {
+  var idx = _reuState.encSelecionados.indexOf(email);
+  if (idx === -1) _reuState.encSelecionados.push(email);
+  else            _reuState.encSelecionados.splice(idx, 1);
+  _reuRenderizarSeletorUsuarios((document.getElementById('reu-busca-participantes') || {}).value || '');
+}
+
+// ── Modal Stack Manager ───────────────────────────────────────────────────────
+// Modais top-level são mutuamente exclusivos. O seletor de participantes é
+// um sub-modal que empilha sobre o modal pai sem fechá-lo.
+// Garante: um único overlay real, scroll lock correto, ESC funcional.
+
+var _REU_MODAIS_TOP_LEVEL = [
+  'modal-nova-reuniao',
+  'modal-novo-enc',
+  'modal-detalhe-enc',
+  'modal-ia-ata'
+];
+
+function _reuAbrirModal(id) {
+  if (_REU_MODAIS_TOP_LEVEL.indexOf(id) !== -1) {
+    _REU_MODAIS_TOP_LEVEL.forEach(function(mid) {
+      if (mid !== id) {
+        var el = document.getElementById(mid);
+        if (el) el.classList.add('hidden');
+      }
+    });
+    var seletor = document.getElementById('modal-seletor-participantes');
+    if (seletor) seletor.classList.add('hidden');
+  }
+  var modal = document.getElementById(id);
+  if (modal) modal.classList.remove('hidden');
+
+  // Scroll lock no body enquanto algum modal estiver aberto
+  document.body.style.overflow = 'hidden';
+
+  // Foco no primeiro elemento focável do modal (acessibilidade)
+  setTimeout(function() {
+    if (!modal) return;
+    var focusable = modal.querySelector(
+      'input:not([disabled]), textarea:not([disabled]), select:not([disabled]), button:not([disabled])'
+    );
+    if (focusable) focusable.focus();
+  }, 60);
+}
+
+function _reu_fecharModal(modalId) {
+  if (modalId === 'modal-seletor-participantes') {
+    if (_reuState.seletorAlvo === 'participantes') {
+      _reuFormParticipantes = _reuState.encSelecionados.slice();
+      _reuRenderizarChipsParticipantes();
+    } else if (_reuState.seletorAlvo === 'envolvidos') {
+      _reuEncFormEnvolvidos = _reuState.encSelecionados.slice();
+      _reuRenderizarChipsEnvolvidos();
+    }
+  }
+  var el = document.getElementById(modalId);
+  if (el) el.classList.add('hidden');
+
+  // Restaurar scroll quando não houver mais modal aberto
+  var algumAberto = _REU_MODAIS_TOP_LEVEL.some(function(mid) {
+    var m = document.getElementById(mid);
+    return m && !m.classList.contains('hidden');
+  });
+  var seletor = document.getElementById('modal-seletor-participantes');
+  var seletorAberto = seletor && !seletor.classList.contains('hidden');
+  if (!algumAberto && !seletorAberto) {
+    document.body.style.overflow = '';
+  }
+}
+
+// ESC fecha o modal mais ao topo (seletor > top-level)
+document.addEventListener('keydown', function(e) {
+  if (e.key !== 'Escape') return;
+  var seletor = document.getElementById('modal-seletor-participantes');
+  if (seletor && !seletor.classList.contains('hidden')) {
+    _reu_fecharModal('modal-seletor-participantes');
+    return;
+  }
+  for (var i = _REU_MODAIS_TOP_LEVEL.length - 1; i >= 0; i--) {
+    var m = document.getElementById(_REU_MODAIS_TOP_LEVEL[i]);
+    if (m && !m.classList.contains('hidden')) {
+      _reu_fecharModal(_REU_MODAIS_TOP_LEVEL[i]);
+      return;
+    }
+  }
+});
+
+function _reuRenderizarChipsParticipantes() {
+  var container = document.getElementById('reu-form-participantes-chips');
+  if (!container) return;
+  if (_reuFormParticipantes.length === 0) {
+    container.innerHTML = '<span class="text-xs text-slate-400">Clique para adicionar participantes</span>';
+    return;
+  }
+  container.innerHTML = _reuFormParticipantes.map(function(email) {
+    return '<span class="reu-chip">' +
+      '<div class="reu-avatar" style="background:' + _reuCor(email) + ';width:16px;height:16px;font-size:8px">' + _reuIniciais(email) + '</div>' +
+      _esc(_reuNome(email)) +
+      '<button onclick="event.stopPropagation();_reuRemoverParticipante(\'' + email + '\')" title="Remover">×</button>' +
+    '</span>';
+  }).join('');
+}
+
+function _reuRemoverParticipante(email) {
+  _reuFormParticipantes = _reuFormParticipantes.filter(function(e) { return e !== email; });
+  _reuRenderizarChipsParticipantes();
+}
+
+// ── Visão Ao Vivo ─────────────────────────────────────────────────────────────
+
+function _reu_selecionarReuniaoAoVivo(id) {
+  var painel = document.getElementById('reu-ao-vivo-painel');
+  if (!id) { if (painel) painel.classList.add('hidden'); return; }
+
+  GAS.reunioes.obter(id, function(r) {
+    _reuState.reuniaoAtual = r.reuniao;
+    if (painel) painel.classList.remove('hidden');
+    document.getElementById('reu-ao-vivo-titulo').textContent = r.reuniao.titulo;
+    document.getElementById('reu-ao-vivo-local').textContent  = r.reuniao.local || r.reuniao.modalidade;
+    _reuRenderizarPautaAoVivo(r.reuniao);
+    _reuRenderizarPresencaAoVivo(r.reuniao);
+    _reuRenderizarEncAoVivo(r.encaminhamentos);
+  }, null, GAS._sessao());
+}
+
+function _reuRenderizarPautaAoVivo(reuniao) {
+  var container = document.getElementById('reu-ao-vivo-pauta');
+  if (!container) return;
+  var pauta = reuniao.pauta || [];
+  var discutidos = pauta.filter(function(p) { return p.status === 'discutido' || p.status === 'aprovado'; }).length;
+  var prog = document.getElementById('reu-ao-vivo-pauta-progresso');
+  if (prog) prog.textContent = discutidos + '/' + pauta.length + ' itens';
+
+  container.innerHTML = pauta.map(function(p) {
+    var cls = p.status === 'discutido' || p.status === 'aprovado' ? 'discutido' : (p.status === 'em_andamento' ? 'ativo' : '');
+    return '<div class="reu-pauta-item ' + cls + '">' +
+      '<div class="flex items-center justify-between">' +
+        '<div class="flex-1 min-w-0">' +
+          '<p class="text-sm font-semibold text-slate-700 leading-tight">' + _esc(p.titulo) + '</p>' +
+          (p.responsavel ? '<p class="text-xs text-slate-400 mt-0.5">' + _esc(_reuNome(p.responsavel)) + '</p>' : '') +
+        '</div>' +
+        '<div class="flex gap-1 ml-2">' +
+          (p.status !== 'discutido' && p.status !== 'aprovado'
+            ? '<button onclick="_reuMarcarPautaDiscutido(\'' + reuniao.id + '\',\'' + p.id + '\')" class="btn-ghost text-xs px-2 py-0.5 text-green-600 border-green-200 hover:bg-green-50"><i class="fas fa-check text-xs"></i></button>'
+            : '<span class="text-[10px] text-green-500 font-bold"><i class="fas fa-check"></i> Ok</span>') +
+        '</div>' +
+      '</div>' +
+      (p.tempoEstimado ? '<p class="text-[10px] text-slate-400 mt-1"><i class="fas fa-clock mr-0.5"></i>' + p.tempoEstimado + ' min</p>' : '') +
+    '</div>';
+  }).join('') || '<p class="text-xs text-slate-400 italic">Sem pauta definida.</p>';
+}
+
+function _reuMarcarPautaDiscutido(reuniaoId, itemId) {
+  var lockId = 'pauta-disc-' + itemId;
+  if (_reunBtn.isLocked(lockId)) return;
+  _reunBtn.lock(lockId);
+  GAS.reunioes.atualizarPauta(reuniaoId, itemId, { status: 'discutido' }, function(r) {
+    _reunBtn.unlock(lockId);
+    _reuState.reuniaoAtual = r;
+    _reuRenderizarPautaAoVivo(r);
+  }, function(e) {
+    _reunBtn.unlock(lockId);
+    _reuToast('error', 'Erro ao marcar item: ' + (e.message || e));
+  }, GAS._sessao());
+}
+
+function _reuRenderizarPresencaAoVivo(reuniao) {
+  var container = document.getElementById('reu-ao-vivo-presenca');
+  if (!container) return;
+  var todos = reuniao.participantes || [];
+  var presentes = (reuniao.ata && reuniao.ata.presentes) ? reuniao.ata.presentes : todos.slice();
+
+  container.innerHTML = todos.map(function(email) {
+    var presente = presentes.indexOf(email) !== -1;
+    return '<div class="flex items-center justify-between p-1.5 rounded hover:bg-slate-50" id="reu-presenca-' + email.replace(/[@.]/g,'_') + '">' +
+      '<div class="flex items-center gap-2">' +
+        '<div class="reu-avatar" style="background:' + _reuCor(email) + ';width:22px;height:22px;font-size:9px">' + _reuIniciais(email) + '</div>' +
+        '<span class="text-xs text-slate-700">' + _esc(_reuNome(email)) + '</span>' +
+      '</div>' +
+      '<input type="checkbox" ' + (presente ? 'checked' : '') + ' onchange="_reuTogglePresenca(\'' + email + '\',this.checked)" class="rounded text-green-500">' +
+    '</div>';
+  }).join('') || '<p class="text-xs text-slate-400 italic">Sem participantes.</p>';
+}
+
+var _reuPresencaTemp = {};
+function _reuTogglePresenca(email, presente) {
+  _reuPresencaTemp[email] = presente;
+}
+
+function _reu_salvarPresenca() {
+  if (!_reuState.reuniaoAtual) return;
+  if (_reunBtn.isLocked('salvar-presenca')) return;
+
+  var todos = _reuState.reuniaoAtual.participantes || [];
+  var presentes = todos.filter(function(e) {
+    return _reuPresencaTemp.hasOwnProperty(e) ? _reuPresencaTemp[e] : true;
+  });
+  var ausentes = todos.filter(function(e) { return presentes.indexOf(e) === -1; });
+
+  _reunBtn.wrap('btn-salvar-presenca', 'salvar-presenca', 'Salvando...', function(done) {
+    GAS.reunioes.registrarPresenca(_reuState.reuniaoAtual.id, presentes, ausentes, function(r) {
+      done();
+      _reuState.reuniaoAtual = r;
+      _reuPresencaTemp = {};
+      _reuToast('success', 'Presença salva!');
+    }, function(e) {
+      done();
+      _reuToast('error', 'Erro ao salvar presença: ' + (e.message || e));
+    }, GAS._sessao());
+  });
+}
+
+function _reuRenderizarEncAoVivo(encs) {
+  var container = document.getElementById('reu-ao-vivo-encaminhamentos');
+  if (!container) return;
+  if (!encs || encs.length === 0) {
+    container.innerHTML = '<p class="text-xs text-slate-400 italic">Nenhum encaminhamento adicionado.</p>';
+    return;
+  }
+  container.innerHTML = encs.map(function(e) {
+    return '<div class="flex items-center gap-2 p-2 bg-slate-50 rounded border border-slate-200 text-xs">' +
+      '<span class="reu-tag reu-tag-orange"><i class="fas fa-arrow-right mr-1"></i>' + _esc(e.titulo) + '</span>' +
+      '<span class="text-slate-400">' + _esc(_reuNome(e.responsavel)) + '</span>' +
+      (e.prazo ? '<span class="text-slate-400">' + new Date(e.prazo + 'T12:00:00').toLocaleDateString('pt-BR') + '</span>' : '') +
+      (e.incompleto ? '<span class="reu-tag reu-tag-yellow"><i class="fas fa-exclamation mr-0.5"></i>Incompleto</span>' : '') +
+    '</div>';
+  }).join('');
+}
+
+function _reu_abrirModalEncAoVivo() {
+  if (!_reuState.reuniaoAtual) return;
+  _reuEncFormReuniaoId = _reuState.reuniaoAtual.id;
+  _reuEncFormEnvolvidos = [];
+  _reuLimparFormEnc();
+  _reuAbrirModal('modal-novo-enc');
+}
+
+// ── Timer ─────────────────────────────────────────────────────────────────────
+
+function _reu_toggleTimer() {
+  var t = _reuState.timer;
+  if (t.rodando) {
+    clearInterval(t.intervaloId);
+    t.acumulado += Date.now() - t.inicio;
+    t.rodando = false;
+    var btn = document.getElementById('reu-btn-timer');
+    if (btn) btn.innerHTML = '<i class="fas fa-play mr-1"></i>Retomar';
+  } else {
+    t.inicio = Date.now();
+    t.rodando = true;
+    t.intervaloId = setInterval(_reuAtualizarTimer, 1000);
+    var btn = document.getElementById('reu-btn-timer');
+    if (btn) btn.innerHTML = '<i class="fas fa-pause mr-1"></i>Pausar';
+
+    if (_reuState.reuniaoAtual && _reuState.reuniaoAtual.status === 'agendada') {
+      GAS.reunioes.transicao(_reuState.reuniaoAtual.id, 'em_andamento', '', function(r) {
+        _reuState.reuniaoAtual = r;
+        _reuAtualizarBadgeAoVivo();
+      }, null, GAS._sessao());
+    }
+  }
+}
+
+function _reuAtualizarTimer() {
+  var t = _reuState.timer;
+  var ms = t.acumulado + (t.rodando ? (Date.now() - t.inicio) : 0);
+  var h  = Math.floor(ms / 3600000);
+  var m  = Math.floor((ms % 3600000) / 60000);
+  var s  = Math.floor((ms % 60000) / 1000);
+  var el = document.getElementById('reu-timer');
+  if (el) el.textContent = _pad(h) + ':' + _pad(m) + ':' + _pad(s);
+}
+function _pad(n) { return n < 10 ? '0' + n : '' + n; }
+
+function _reu_encerrarReuniao() {
+  if (!_reuState.reuniaoAtual) return;
+  if (_reunBtn.isLocked('encerrar-reuniao')) return;
+
+  _reuConfirmar(
+    'Encerrar reunião?',
+    'A reunião será marcada como finalizada e você será redirecionado para a edição da ata.',
+    'question',
+    function() {
+      _reunBtn.lock('encerrar-reuniao');
+      clearInterval(_reuState.timer.intervaloId);
+      _reuState.timer = { rodando: false, inicio: null, acumulado: 0, intervaloId: null };
+
+      GAS.reunioes.transicao(_reuState.reuniaoAtual.id, 'finalizada', '', function(r) {
+        _reunBtn.unlock('encerrar-reuniao');
+        _reuState.reuniaoAtual = r;
+        _reu_mostrarVisao('ata');
+        var sel = document.getElementById('reu-select-ata');
+        if (sel) { sel.value = r.id; _reuCarregarAta(r.id); }
+        _reuCarregarDados();
+        _reuToast('success', 'Reunião encerrada. Edite a ata abaixo.');
+      }, function(e) {
+        _reunBtn.unlock('encerrar-reuniao');
+        _reuToast('error', 'Erro ao encerrar reunião: ' + (e.message || e));
+      }, GAS._sessao());
+    }
+  );
+}
+
+function _reuAtualizarBadgeAoVivo() {
+  var badge = document.getElementById('reu-badge-ao-vivo');
+  if (!badge) return;
+  var ativas = _reuState.reunioes.filter(function(r) { return r.status === 'em_andamento'; });
+  if (ativas.length > 0) badge.classList.remove('hidden');
+  else                    badge.classList.add('hidden');
+
+  // Popular select ao vivo com reuniões em andamento/agendadas
+  var sel = document.getElementById('reu-select-ao-vivo');
+  if (!sel) return;
+  var v = sel.value;
+  sel.innerHTML = '<option value="">-- Selecione a reunião ativa --</option>' +
+    _reuState.reunioes
+      .filter(function(r) { return r.status === 'agendada' || r.status === 'em_andamento' || r.status === 'planejada'; })
+      .map(function(r) {
+        var dataFmt = r.data ? new Date(r.data + 'T12:00:00').toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit' }) : '';
+        return '<option value="' + r.id + '">' + dataFmt + ' — ' + _esc(r.titulo) +
+          (r.status === 'em_andamento' ? ' 🟢' : '') + '</option>';
+      }).join('');
+  if (v) sel.value = v;
+}
+
+// ── Visão Ata ─────────────────────────────────────────────────────────────────
+
+function _reuCarregarAta(id) {
+  if (!id) {
+    var ed = document.getElementById('reu-ata-editor');
+    if (ed) ed.classList.add('hidden');
+    return;
+  }
+  GAS.reunioes.obter(id, function(r) {
+    _reuState.ataReuniaoId = id;
+    _reuCarregarAtaEditor(r.reuniao, r.encaminhamentos);
+  }, null, GAS._sessao());
+}
+
+function _reuCarregarAtaEditor(reuniao, encs) {
+  var ed = document.getElementById('reu-ata-editor');
+  if (!ed) return;
+  ed.classList.remove('hidden');
+  _reuState.reuniaoAtual = reuniao;
+
+  var ata = reuniao.ata || {};
+
+  // Status bar
+  _reuRenderizarStatusAta(reuniao);
+
+  // Presença
+  _reuRenderizarChipsPresenca('reu-ata-presentes', ata.presentes || reuniao.participantes || [], 'green');
+  _reuRenderizarChipsPresenca('reu-ata-ausentes',  ata.ausentes  || [], 'red');
+
+  // Textos — verificar se há rascunho local mais recente que a versão salva
+  var aberturaServidor     = ata.abertura    || '';
+  var encerramentoServidor = ata.encerramento || '';
+  var deliberacoesServidor = ata.deliberacoes || [];
+
+  // Só oferecer recuperação se a ata ainda for editável (rascunho ou não iniciada)
+  var ataSalvavel = reuniao.status === 'finalizada' || reuniao.status === 'ata_rascunho';
+  if (ataSalvavel) {
+    var draft = _reunRecuperarRascunho(reuniao.id);
+    if (draft && draft.conteudo && typeof Swal !== 'undefined' && Swal.fire) {
+      var draftTs = new Date(draft.ts).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
+      Swal.fire({
+        title: 'Rascunho local encontrado',
+        html: '<p class="text-sm text-slate-600">Existe um rascunho salvo localmente às <strong>' + draftTs + '</strong>.<br>Deseja recuperá-lo ou usar a versão do servidor?</p>',
+        icon: 'info',
+        showCancelButton: true,
+        confirmButtonColor: '#7c3aed',
+        cancelButtonColor: '#94a3b8',
+        confirmButtonText: '<i class="fas fa-history mr-1"></i>Recuperar rascunho',
+        cancelButtonText: 'Usar versão salva'
+      }).then(function(result) {
+        var c = result.isConfirmed ? draft.conteudo : null;
+        var elA = document.getElementById('reu-ata-abertura');
+        var elE = document.getElementById('reu-ata-encerramento');
+        if (elA) elA.value = (c && c.abertura    !== undefined) ? c.abertura    : aberturaServidor;
+        if (elE) elE.value = (c && c.encerramento !== undefined) ? c.encerramento : encerramentoServidor;
+        _reuRenderizarDeliberacoes((c && c.deliberacoes) ? c.deliberacoes : deliberacoesServidor);
+        if (!result.isConfirmed) _reunLimparRascunho(reuniao.id);
+      });
+    } else {
+      var elA = document.getElementById('reu-ata-abertura');
+      var elE = document.getElementById('reu-ata-encerramento');
+      if (elA) elA.value = aberturaServidor;
+      if (elE) elE.value = encerramentoServidor;
+      _reuRenderizarDeliberacoes(deliberacoesServidor);
+    }
+
+    // Iniciar autosave a cada 30 segundos
+    _reuIniciarAutosave(reuniao.id);
+  } else {
+    var elA = document.getElementById('reu-ata-abertura');
+    var elE = document.getElementById('reu-ata-encerramento');
+    if (elA) elA.value = aberturaServidor;
+    if (elE) elE.value = encerramentoServidor;
+    _reuRenderizarDeliberacoes(deliberacoesServidor);
+  }
+
+  // Encaminhamentos
+  _reuRenderizarEncAtaLista(encs || []);
+}
+
+function _reuRenderizarStatusAta(reuniao) {
+  var bar    = document.getElementById('reu-ata-status-bar');
+  var label  = document.getElementById('reu-ata-status-label');
+  var acoes  = document.getElementById('reu-ata-acoes');
+  if (!bar) return;
+
+  var s = reuniao.status;
+  var cor = { ata_rascunho: 'yellow', ata_aprovada: 'green', arquivada: 'slate' }[s] || 'gray';
+  var labelTxt = {
+    finalizada:   'Reunião finalizada — ata não iniciada',
+    ata_rascunho: 'Ata em rascunho',
+    ata_aprovada: 'Ata aprovada e publicada',
+    arquivada:    'Arquivada'
+  }[s] || 'Status: ' + s;
+
+  label.textContent = labelTxt;
+  label.className   = 'font-bold text-' + cor + '-700';
+
+  acoes.innerHTML = '';
+  if (s === 'ata_rascunho') {
+    var ata = reuniao.ata || {};
+    var meuEmail = AppState && AppState.usuario ? AppState.usuario.email : '';
+    var aprovadores = ata.aprovadores || [];
+    var jaAprovei = (ata.aprovacoes || []).find(function(a) { return a.email === meuEmail && a.aprovado; });
+    if (aprovadores.indexOf(meuEmail) !== -1 && !jaAprovei) {
+      acoes.innerHTML =
+        '<button onclick="_reuAprovarAta(true)"  class="btn-ghost text-xs px-2 py-1 text-green-600 border-green-200 hover:bg-green-50"><i class="fas fa-check mr-1"></i>Aprovar ata</button>' +
+        '<button onclick="_reuAprovarAta(false)" class="btn-ghost text-xs px-2 py-1 text-red-500 border-red-200 hover:bg-red-50"><i class="fas fa-times mr-1"></i>Rejeitar</button>';
+    }
+  }
+
+  // Aprovações pendentes
+  var aprovDiv  = document.getElementById('reu-ata-aprovacoes');
+  var aprovLista = document.getElementById('reu-ata-aprovacoes-lista');
+  var ata = reuniao.ata || {};
+  if (s === 'ata_rascunho' && (ata.aprovadores || []).length > 0) {
+    aprovDiv.classList.remove('hidden');
+    aprovLista.innerHTML = (ata.aprovadores || []).map(function(email) {
+      var aprv = (ata.aprovacoes || []).find(function(a) { return a.email === email; });
+      var icon = aprv ? (aprv.aprovado ? '<i class="fas fa-check text-green-500 mr-1"></i>' : '<i class="fas fa-times text-red-500 mr-1"></i>') : '<i class="fas fa-clock text-amber-400 mr-1"></i>';
+      return '<div class="flex items-center gap-2">' + icon + '<span>' + _esc(_reuNome(email)) + '</span></div>';
+    }).join('');
+  } else {
+    aprovDiv.classList.add('hidden');
+  }
+}
+
+function _reuRenderizarChipsPresenca(containerId, emails, cor) {
+  var container = document.getElementById(containerId);
+  if (!container) return;
+  if (!emails || emails.length === 0) {
+    container.innerHTML = '<span class="text-xs text-slate-400 italic">Nenhum</span>';
+    return;
+  }
+  container.innerHTML = emails.map(function(email) {
+    return '<span class="flex items-center gap-1 px-2 py-0.5 rounded-full bg-' + cor + '-100 text-' + cor + '-700 text-xs font-semibold">' +
+      '<div class="reu-avatar" style="background:' + _reuCor(email) + ';width:16px;height:16px;font-size:8px">' + _reuIniciais(email) + '</div>' +
+      _esc(_reuNome(email)) +
+    '</span>';
+  }).join('');
+}
+
+// Deliberações
+var _reuDeliberacoes = [];
+
+function _reuRenderizarDeliberacoes(deliberacoes) {
+  _reuDeliberacoes = deliberacoes || [];
+  var container = document.getElementById('reu-ata-deliberacoes');
+  if (!container) return;
+  if (_reuDeliberacoes.length === 0) {
+    container.innerHTML = '<p class="text-xs text-slate-400 italic">Nenhuma deliberação registrada.</p>';
+    return;
+  }
+  container.innerHTML = _reuDeliberacoes.map(function(d, i) {
+    return '<div class="reu-delib-item">' +
+      '<div class="flex items-center justify-between mb-1">' +
+        '<select class="input-sm text-xs" onchange="_reuDeliberacoes[' + i + '].tipo=this.value">' +
+          ['informacao','deliberacao','encaminhamento'].map(function(t) {
+            return '<option value="' + t + '" ' + (d.tipo === t ? 'selected' : '') + '>' +
+              ({informacao:'Informação',deliberacao:'Deliberação',encaminhamento:'Encaminhamento'}[t]) + '</option>';
+          }).join('') +
+        '</select>' +
+        '<button onclick="_reuDeliberacoes.splice(' + i + ',1);_reuRenderizarDeliberacoes(_reuDeliberacoes)" class="btn-icon text-red-400 hover:text-red-600"><i class="fas fa-trash text-xs"></i></button>' +
+      '</div>' +
+      '<textarea rows="2" class="input-textarea text-xs" placeholder="Registro da deliberação / decisão..." oninput="_reuDeliberacoes[' + i + '].texto=this.value">' + _esc(d.texto || '') + '</textarea>' +
+    '</div>';
+  }).join('');
+}
+
+function _reu_adicionarDeliberacao() {
+  _reuDeliberacoes.push({ id: 'D' + (_reuDeliberacoes.length + 1), tipo: 'deliberacao', texto: '' });
+  _reuRenderizarDeliberacoes(_reuDeliberacoes);
+}
+
+function _reu_salvarAta(enviarAprovacao) {
+  if (!_reuState.ataReuniaoId) return;
+  var lockId = enviarAprovacao ? 'enviar-ata-aprovacao' : 'salvar-ata-rascunho';
+  var btnId  = enviarAprovacao ? 'btn-ata-enviar' : 'btn-ata-salvar';
+  if (_reunBtn.isLocked(lockId)) return;
+
+  var dadosAta = {
+    abertura:      (document.getElementById('reu-ata-abertura')     || {}).value || '',
+    encerramento:  (document.getElementById('reu-ata-encerramento') || {}).value || '',
+    deliberacoes:  _reuDeliberacoes
+  };
+
+  _reunBtn.wrap(btnId, lockId, enviarAprovacao ? 'Enviando...' : 'Salvando...', function(done) {
+    GAS.reunioes.salvarAta(_reuState.ataReuniaoId, dadosAta, function(r) {
+      _reuState.reuniaoAtual = r;
+      _reuRenderizarStatusAta(r);
+      // Limpar rascunho local ao salvar com sucesso
+      _reunLimparRascunho(_reuState.ataReuniaoId);
+
+      if (enviarAprovacao && r.status !== 'ata_rascunho') {
+        GAS.reunioes.transicao(_reuState.ataReuniaoId, 'ata_rascunho', '', function(r2) {
+          done();
+          _reuState.reuniaoAtual = r2;
+          _reuRenderizarStatusAta(r2);
+          _reuToast('success', 'Ata enviada para aprovação!');
+        }, function(e) {
+          done();
+          _reuToast('error', 'Erro ao enviar para aprovação: ' + (e.message || e));
+        }, GAS._sessao());
+      } else {
+        done();
+        _reuToast('success', enviarAprovacao ? 'Ata enviada para aprovação!' : 'Rascunho salvo!');
+      }
+    }, function(e) {
+      done();
+      _reuToast('error', 'Erro ao salvar ata: ' + (e.message || e));
+    }, GAS._sessao());
+  });
+}
+
+function _reuAprovarAta(aprovado) {
+  if (!_reuState.ataReuniaoId) return;
+  var lockId = 'aprovar-ata-' + _reuState.ataReuniaoId;
+  if (_reunBtn.isLocked(lockId)) return;
+
+  var titulo = aprovado ? 'Aprovar ata?' : 'Rejeitar ata?';
+  var texto  = aprovado ? 'Sua aprovação será registrada.' : 'Sua rejeição impedirá a publicação automática.';
+  var icon   = aprovado ? 'question' : 'warning';
+
+  _reuConfirmar(titulo, texto, icon, function() {
+    _reunBtn.lock(lockId);
+    GAS.reunioes.aprovarAta(_reuState.ataReuniaoId, aprovado, function(r) {
+      _reunBtn.unlock(lockId);
+      _reuState.reuniaoAtual = r;
+      _reuRenderizarStatusAta(r);
+      _reuToast('success', aprovado ? 'Aprovação registrada!' : 'Rejeição registrada.');
+    }, function(e) {
+      _reunBtn.unlock(lockId);
+      _reuToast('error', 'Erro: ' + (e.message || e));
+    }, GAS._sessao());
+  });
+}
+
+// Encaminhamentos na ata
+function _reuRenderizarEncAtaLista(encs) {
+  var container = document.getElementById('reu-ata-encaminhamentos-lista');
+  if (!container) return;
+  var incompletos = encs.filter(function(e) { return e.incompleto; });
+  var aviso = document.getElementById('reu-ata-aviso-incompletos');
+  var avisotxt = document.getElementById('reu-ata-aviso-incompletos-texto');
+  if (incompletos.length > 0) {
+    aviso.classList.remove('hidden');
+    avisotxt.textContent = incompletos.length + ' encaminhamento(s) incompleto(s) — faltam campos O QUÊ/QUEM/QUANDO.';
+  } else { aviso.classList.add('hidden'); }
+
+  if (encs.length === 0) {
+    container.innerHTML = '<p class="text-xs text-slate-400 italic">Nenhum encaminhamento registrado.</p>';
+    return;
+  }
+
+  container.innerHTML = encs.map(function(e) {
+    var corP = { critica:'red', alta:'orange', media:'blue', baixa:'gray' }[e.prioridade] || 'gray';
+    return '<div class="flex items-start gap-2 p-2 rounded-lg border ' +
+      (e.incompleto ? 'border-amber-300 bg-amber-50' : 'border-slate-200 bg-white') +
+      '" onclick="_reuAbrirDetalheEnc(\'' + e.id + '\')" style="cursor:pointer">' +
+      '<span class="reu-tag reu-tag-' + corP + ' mt-0.5 shrink-0">' + _esc(e.prioridade) + '</span>' +
+      '<div class="flex-1 min-w-0">' +
+        '<p class="text-xs font-bold text-slate-700">' + _esc(e.titulo) + '</p>' +
+        '<p class="text-[10px] text-slate-500 mt-0.5">' +
+          '<i class="fas fa-user mr-0.5"></i>' + _esc(_reuNome(e.responsavel)) +
+          (e.prazo ? ' · <i class="fas fa-calendar mr-0.5"></i>' + new Date(e.prazo + 'T12:00:00').toLocaleDateString('pt-BR') : '') +
+        '</p>' +
+        (e.incompleto ? '<p class="text-[10px] text-amber-600 mt-0.5"><i class="fas fa-exclamation-triangle mr-0.5"></i>Incompleto: ' + (e.camposFaltando || []).join(', ') + '</p>' : '') +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+// ── Modal Novo Encaminhamento ─────────────────────────────────────────────────
+
+var _reuEncFormReuniaoId = null;
+var _reuEncFormEnvolvidos = [];
+
+function _reu_abrirModalNovoEnc() {
+  if (!_reuState.ataReuniaoId) {
+    _reuToast('warning', 'Selecione uma reunião antes de criar encaminhamentos.');
+    return;
+  }
+  _reuEncFormReuniaoId = _reuState.ataReuniaoId;
+  _reuEncFormEnvolvidos = [];
+  _reuLimparFormEnc();
+  _reuAbrirModal('modal-novo-enc');
+}
+
+function _reuLimparFormEnc() {
+  ['reu-enc-form-titulo','reu-enc-form-desc','reu-enc-form-prazo'].forEach(function(fid) {
+    var el = document.getElementById(fid); if (el) el.value = '';
+  });
+  var sel = document.getElementById('reu-enc-form-responsavel'); if (sel) sel.value = '';
+  var sp  = document.getElementById('reu-enc-form-prioridade');  if (sp)  sp.value  = 'media';
+  var sm  = document.getElementById('reu-enc-form-modulo');      if (sm)  sm.value  = '';
+  _reuEncFormEnvolvidos = [];
+  _reuRenderizarChipsEnvolvidos();
+}
+
+function _reuRenderizarChipsEnvolvidos() {
+  var container = document.getElementById('reu-enc-form-envolvidos-chips');
+  if (!container) return;
+  if (_reuEncFormEnvolvidos.length === 0) {
+    container.innerHTML = '<span class="text-xs text-slate-400">Clique para adicionar...</span>';
+    return;
+  }
+  container.innerHTML = _reuEncFormEnvolvidos.map(function(email) {
+    return '<span class="reu-chip">' + _esc(_reuNome(email)) +
+      '<button onclick="event.stopPropagation();_reuEncFormEnvolvidos=_reuEncFormEnvolvidos.filter(function(e){return e!==\'' + email + '\'});_reuRenderizarChipsEnvolvidos()">×</button>' +
+    '</span>';
+  }).join('');
+}
+
+function _reu_salvarEncaminhamento() {
+  if (_reunBtn.isLocked('salvar-enc')) return;
+
+  var titulo      = (document.getElementById('reu-enc-form-titulo')      || {}).value || '';
+  var responsavel = (document.getElementById('reu-enc-form-responsavel') || {}).value || '';
+  var prazo       = (document.getElementById('reu-enc-form-prazo')       || {}).value || '';
+
+  var alertaCampos = document.getElementById('reu-enc-alerta-campos');
+  if (!titulo.trim() || !responsavel || !prazo) {
+    if (alertaCampos) alertaCampos.classList.remove('hidden');
+  } else {
+    if (alertaCampos) alertaCampos.classList.add('hidden');
+  }
+
+  var dados = {
+    titulo:      titulo.trim(),
+    descricao:   (document.getElementById('reu-enc-form-desc')       || {}).value || '',
+    responsavel: responsavel,
+    prazo:       prazo,
+    envolvidos:  _reuEncFormEnvolvidos,
+    prioridade:  (document.getElementById('reu-enc-form-prioridade') || {}).value || 'media',
+    modulo:      (document.getElementById('reu-enc-form-modulo')     || {}).value || null
+  };
+
+  _reunBtn.wrap('btn-salvar-enc', 'salvar-enc', 'Salvando...', function(done) {
+    GAS.reunioes.criarEncaminhamento(_reuEncFormReuniaoId, dados, function(enc) {
+      done();
+      _reu_fecharModal('modal-novo-enc');
+      _reuState.encaminhamentos.push(enc);
+      _reuRenderizarEncAtaLista(_reuState.encaminhamentos.filter(function(e) { return e.reuniaoId === _reuEncFormReuniaoId; }));
+      _reuRenderizarKanban();
+      _reuAtualizarBadgeAtrasados();
+      _reuToast('success', 'Encaminhamento criado!');
+    }, function(e) {
+      done();
+      _reuToast('error', 'Erro: ' + (e.message || e));
+    }, GAS._sessao());
+  });
+}
+
+// ── Kanban de Encaminhamentos ─────────────────────────────────────────────────
+
+var _ENC_COLUNAS = [
+  { status: 'pendente',             label: 'Pendente',            cor: 'gray' },
+  { status: 'em_andamento',         label: 'Em andamento',        cor: 'blue' },
+  { status: 'aguardando_terceiros', label: 'Aguard. Terceiros',   cor: 'yellow' },
+  { status: 'atrasado',             label: 'Atrasado',            cor: 'red' },
+  { status: 'concluido',            label: 'Concluído',           cor: 'green' }
+];
+
+function _reuRenderizarKanban(filtradas) {
+  var container = document.getElementById('reu-enc-kanban');
+  if (!container) return;
+  var lista = filtradas || _reuState.encaminhamentos;
+
+  container.innerHTML = _ENC_COLUNAS.map(function(col) {
+    var itens = lista.filter(function(e) { return e.status === col.status; });
+    return '<div class="reu-kanban-col">' +
+      '<div class="reu-kanban-col-header text-' + col.cor + '-600">' +
+        col.label + ' <span class="font-normal text-slate-400">(' + itens.length + ')</span>' +
+      '</div>' +
+      itens.map(function(e) { return _reuRenderizarEncCard(e); }).join('') +
+    '</div>';
+  }).join('');
+}
+
+function _reuRenderizarEncCard(e) {
+  var corP = { critica:'red', alta:'orange', media:'blue', baixa:'gray' }[e.prioridade] || 'gray';
+  var agora = Date.now();
+  var atrasado = e.prazo && new Date(e.prazo + 'T23:59:59').getTime() < agora &&
+                 e.status !== 'concluido' && e.status !== 'cancelado';
+  var cls = e.incompleto ? 'incompleto' : (atrasado ? 'atrasado' : '');
+
+  return '<div class="reu-enc-card ' + cls + '" onclick="_reuAbrirDetalheEnc(\'' + e.id + '\')">' +
+    '<div class="flex items-start justify-between gap-1 mb-1">' +
+      '<p class="font-bold text-slate-700 leading-tight flex-1 min-w-0 text-xs">' + _esc(e.titulo) + '</p>' +
+      '<span class="reu-tag reu-tag-' + corP + ' shrink-0 text-[9px]">' + _esc(e.prioridade) + '</span>' +
+    '</div>' +
+    '<div class="flex items-center gap-2 mt-1">' +
+      '<div class="reu-avatar" style="background:' + _reuCor(e.responsavel) + ';width:18px;height:18px;font-size:8px">' + _reuIniciais(e.responsavel) + '</div>' +
+      '<span class="text-[10px] text-slate-500 truncate">' + _esc(_reuNome(e.responsavel)) + '</span>' +
+    '</div>' +
+    (e.prazo ? '<p class="text-[10px] mt-1 ' + (atrasado ? 'text-red-500 font-bold' : 'text-slate-400') + '"><i class="fas fa-calendar mr-0.5"></i>' + new Date(e.prazo + 'T12:00:00').toLocaleDateString('pt-BR') + (atrasado ? ' · ATRASADO' : '') + '</p>' : '') +
+    (e.incompleto ? '<p class="text-[10px] text-amber-600 mt-0.5"><i class="fas fa-exclamation-triangle mr-0.5"></i>Incompleto</p>' : '') +
+  '</div>';
+}
+
+function _reu_filtrarEncaminhamentos() {
+  var responsavel = (document.getElementById('reu-enc-filtro-responsavel') || {}).value || '';
+  var prioridade  = (document.getElementById('reu-enc-filtro-prioridade')  || {}).value || '';
+  var atrasados   = (document.getElementById('reu-enc-filtro-atrasados')   || {}).checked;
+  var incompletos = (document.getElementById('reu-enc-filtro-incompletos') || {}).checked;
+
+  var agora = Date.now();
+  var filtrados = _reuState.encaminhamentos.filter(function(e) {
+    if (responsavel && e.responsavel !== responsavel) return false;
+    if (prioridade  && e.prioridade  !== prioridade)  return false;
+    if (atrasados   && !(e.prazo && new Date(e.prazo + 'T23:59:59').getTime() < agora && e.status !== 'concluido')) return false;
+    if (incompletos && !e.incompleto) return false;
+    return true;
+  });
+
+  if (_reuState.visaoEnc === 'kanban') _reuRenderizarKanban(filtrados);
+  else _reuRenderizarListaEnc(filtrados);
+}
+
+function _reuRenderizarListaEnc(filtradas) {
+  var container = document.getElementById('reu-enc-lista');
+  if (!container) return;
+  var lista = filtradas || _reuState.encaminhamentos;
+  container.innerHTML = lista.map(function(e) {
+    return _reuRenderizarEncCard(e);
+  }).join('');
+}
+
+function _reu_toggleVisaoEnc(visao) {
+  _reuState.visaoEnc = visao;
+  document.getElementById('reu-enc-kanban').classList.toggle('hidden', visao !== 'kanban');
+  document.getElementById('reu-enc-lista').classList.toggle('hidden',  visao !== 'lista');
+  document.getElementById('reu-enc-btn-kanban').classList.toggle('bg-slate-100', visao === 'kanban');
+  document.getElementById('reu-enc-btn-lista').classList.toggle('bg-slate-100',  visao === 'lista');
+  if (visao === 'lista') _reuRenderizarListaEnc();
+}
+
+function _reu_redefinirFiltrosEnc() {
+  ['reu-enc-filtro-responsavel','reu-enc-filtro-prioridade'].forEach(function(id) {
+    var el = document.getElementById(id); if (el) el.value = '';
+  });
+  ['reu-enc-filtro-atrasados','reu-enc-filtro-incompletos'].forEach(function(id) {
+    var el = document.getElementById(id); if (el) el.checked = false;
+  });
+  _reuRenderizarKanban();
+}
+
+function _reuAtualizarBadgeAtrasados() {
+  var badge = document.getElementById('reu-badge-enc-atrasados');
+  if (!badge) return;
+  var agora = Date.now();
+  var atrasados = _reuState.encaminhamentos.filter(function(e) {
+    return e.prazo && new Date(e.prazo + 'T23:59:59').getTime() < agora &&
+           e.status !== 'concluido' && e.status !== 'cancelado';
+  });
+  if (atrasados.length > 0) {
+    badge.textContent = atrasados.length;
+    badge.classList.remove('hidden');
+  } else { badge.classList.add('hidden'); }
+}
+
+// ── Detalhe Encaminhamento ────────────────────────────────────────────────────
+
+function _reuAbrirDetalheEnc(id) {
+  var enc = _reuState.encaminhamentos.find(function(e) { return e.id === id; });
+  if (!enc) return;
+  _reuState.encSelecId = id;
+
+  document.getElementById('modal-enc-titulo').textContent = enc.titulo;
+
+  // Reunião de origem
+  var r = _reuState.reunioes.find(function(x) { return x.id === enc.reuniaoId; });
+  var origemEl = document.getElementById('modal-enc-reuniao-origem');
+  if (origemEl) origemEl.textContent = r ? 'Reunião: ' + r.titulo + (r.data ? ' — ' + new Date(r.data + 'T12:00:00').toLocaleDateString('pt-BR') : '') : '';
+
+  // Responsáveis
+  var respEl = document.getElementById('modal-enc-responsaveis');
+  if (respEl) {
+    var todos = [enc.responsavel].concat(enc.envolvidos || []).filter(Boolean);
+    respEl.innerHTML = todos.map(function(email) {
+      var isResp = email === enc.responsavel;
+      return '<div class="flex items-center gap-1.5 text-xs">' +
+        '<div class="reu-avatar" style="background:' + _reuCor(email) + '">' + _reuIniciais(email) + '</div>' +
+        '<span class="font-semibold text-slate-700">' + _esc(_reuNome(email)) + '</span>' +
+        (isResp ? '<span class="reu-tag reu-tag-purple text-[9px]">Responsável</span>' : '<span class="reu-tag reu-tag-gray text-[9px]">Envolvido</span>') +
+      '</div>';
+    }).join('');
+  }
+
+  // Status e prazo
+  var corS = { pendente:'gray', em_andamento:'blue', aguardando_terceiros:'yellow', atrasado:'red', concluido:'green', cancelado:'slate' }[enc.status] || 'gray';
+  var statusEl = document.getElementById('modal-enc-status-badge');
+  if (statusEl) statusEl.innerHTML = '<span class="reu-tag reu-tag-' + corS + '">' + _esc(enc.status) + '</span>';
+  var prazoEl = document.getElementById('modal-enc-prazo');
+  if (prazoEl) prazoEl.textContent = enc.prazo ? 'Prazo: ' + new Date(enc.prazo + 'T12:00:00').toLocaleDateString('pt-BR') : '';
+  var prioEl = document.getElementById('modal-enc-prioridade-badge');
+  var corP = { critica:'red', alta:'orange', media:'blue', baixa:'gray' }[enc.prioridade] || 'gray';
+  if (prioEl) prioEl.innerHTML = '<span class="reu-tag reu-tag-' + corP + '">' + _esc(enc.prioridade) + '</span>';
+
+  // Incompleto
+  var avisoEl = document.getElementById('modal-enc-aviso-incompleto');
+  var faltandoEl = document.getElementById('modal-enc-campos-faltando');
+  if (enc.incompleto) {
+    avisoEl.classList.remove('hidden');
+    faltandoEl.textContent = (enc.camposFaltando || []).join(', ');
+  } else { avisoEl.classList.add('hidden'); }
+
+  // Descrição
+  var descEl = document.getElementById('modal-enc-descricao');
+  if (descEl) descEl.textContent = enc.descricao || '(sem descrição)';
+
+  // Histórico
+  var histEl = document.getElementById('modal-enc-historico');
+  if (histEl) {
+    var hist = (enc.historico || []).slice().reverse();
+    histEl.innerHTML = hist.length ? hist.map(function(h) {
+      return '<div class="text-[10px] text-slate-500 flex gap-2">' +
+        '<span class="text-slate-400 shrink-0">' + new Date(h.ts).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' }) + '</span>' +
+        '<span class="font-semibold">' + _esc(h.acao) + '</span>' +
+        (h.detalhe ? '<span class="text-slate-400">' + _esc(h.detalhe) + '</span>' : '') +
+      '</div>';
+    }).join('') : '<p class="text-xs text-slate-400 italic">Sem histórico.</p>';
+  }
+
+  // Comentários
+  _reuRenderizarComentariosEnc(enc);
+
+  // Ações de status (transições permitidas)
+  var transicoesDisp = {
+    pendente:             ['em_andamento','aguardando_terceiros','cancelado'],
+    em_andamento:         ['aguardando_terceiros','concluido','cancelado'],
+    aguardando_terceiros: ['em_andamento','concluido','cancelado'],
+    atrasado:             ['em_andamento','concluido','cancelado'],
+    concluido:            [],
+    cancelado:            []
+  };
+  var labelTrans = {
+    em_andamento:'Iniciar', aguardando_terceiros:'Aguardar Terceiros',
+    concluido:'Concluir', pendente:'Voltar ao Pendente', cancelado:'Cancelar'
+  };
+  var corTrans = { em_andamento:'blue', concluido:'green', cancelado:'red', aguardando_terceiros:'yellow', pendente:'gray' };
+  var acoesEl = document.getElementById('modal-enc-acoes-status');
+  if (acoesEl) {
+    var trans = transicoesDisp[enc.status] || [];
+    acoesEl.innerHTML = trans.map(function(t) {
+      return '<button onclick="_reuTransicionarEnc(\'' + t + '\')" class="btn-ghost text-xs px-2 py-1 text-' + corTrans[t] + '-600 border-' + corTrans[t] + '-200 hover:bg-' + corTrans[t] + '-50">' +
+        (labelTrans[t] || t) + '</button>';
+    }).join('');
+  }
+
+  // Tarefa vinculada
+  var tarefaEl = document.getElementById('modal-enc-tarefa-vinculada');
+  var gerarBtn = document.getElementById('modal-enc-gerar-tarefa');
+  if (enc.tarefaId) {
+    tarefaEl.textContent = 'Tarefa vinculada: ' + enc.tarefaId;
+    tarefaEl.classList.remove('hidden');
+    if (gerarBtn) gerarBtn.querySelector('button').disabled = true;
+  } else {
+    tarefaEl.classList.add('hidden');
+    if (gerarBtn) gerarBtn.querySelector('button').disabled = false;
+  }
+
+  _reuAbrirModal('modal-detalhe-enc');
+}
+
+function _reuRenderizarComentariosEnc(enc) {
+  var container = document.getElementById('modal-enc-comentarios');
+  if (!container) return;
+  var comentarios = enc.comentarios || [];
+  container.innerHTML = comentarios.length
+    ? comentarios.slice(-5).map(function(c) {
+        return '<div class="text-xs flex gap-2 py-1 border-b border-slate-50">' +
+          '<div class="reu-avatar shrink-0" style="background:' + _reuCor(c.usuario) + ';width:18px;height:18px;font-size:7px">' + _reuIniciais(c.usuario) + '</div>' +
+          '<div><span class="font-semibold text-slate-700">' + _esc(_reuNome(c.usuario)) + '</span> ' +
+          '<span class="text-slate-500">' + _esc(c.texto) + '</span></div>' +
+        '</div>';
+      }).join('')
+    : '<p class="text-[10px] text-slate-400 italic">Sem comentários.</p>';
+}
+
+function _reu_enviarComentario() {
+  if (!_reuState.encSelecId) return;
+  var input = document.getElementById('modal-enc-novo-comentario');
+  var texto = (input || {}).value || '';
+  if (!texto.trim()) return;
+  GAS.reunioes.comentarEncaminhamento(_reuState.encSelecId, texto.trim(), function(enc) {
+    var idx = _reuState.encaminhamentos.findIndex(function(e) { return e.id === enc.id; });
+    if (idx !== -1) _reuState.encaminhamentos[idx] = enc;
+    if (input) input.value = '';
+    _reuRenderizarComentariosEnc(enc);
+  }, null, GAS._sessao());
+}
+
+function _reuTransicionarEnc(novoStatus) {
+  if (!_reuState.encSelecId) return;
+  var lockId = 'transicionar-enc-' + _reuState.encSelecId;
+  if (_reunBtn.isLocked(lockId)) return;
+
+  function _executarTransicao() {
+    _reunBtn.lock(lockId);
+    GAS.reunioes.transicaoEncaminhamento(_reuState.encSelecId, novoStatus, '', function(enc) {
+      _reunBtn.unlock(lockId);
+      var idx = _reuState.encaminhamentos.findIndex(function(e) { return e.id === enc.id; });
+      if (idx !== -1) _reuState.encaminhamentos[idx] = enc;
+      _reu_fecharModal('modal-detalhe-enc');
+      _reuRenderizarKanban();
+      _reuAtualizarBadgeAtrasados();
+      if (_reuState.ataReuniaoId) {
+        _reuRenderizarEncAtaLista(_reuState.encaminhamentos.filter(function(e) { return e.reuniaoId === _reuState.ataReuniaoId; }));
+      }
+      var labelsTrans = {
+        em_andamento: 'Encaminhamento iniciado.',
+        aguardando_terceiros: 'Aguardando terceiros.',
+        concluido: 'Encaminhamento concluído!',
+        cancelado: 'Encaminhamento cancelado.',
+        pendente: 'Encaminhamento retornado ao pendente.'
+      };
+      _reuToast(novoStatus === 'concluido' ? 'success' : (novoStatus === 'cancelado' ? 'warning' : 'info'),
+        labelsTrans[novoStatus] || 'Status atualizado.');
+    }, function(e) {
+      _reunBtn.unlock(lockId);
+      _reuToast('error', 'Erro ao atualizar status: ' + (e.message || e));
+    }, GAS._sessao());
+  }
+
+  // Ações destrutivas exigem confirmação explícita
+  if (novoStatus === 'cancelado') {
+    _reuConfirmar(
+      'Cancelar encaminhamento?',
+      'Esta ação marcará o encaminhamento como cancelado. O histórico será preservado.',
+      'warning',
+      _executarTransicao
+    );
+  } else if (novoStatus === 'concluido') {
+    _reuConfirmar(
+      'Marcar como concluído?',
+      'Confirme que o encaminhamento foi completamente executado.',
+      'question',
+      _executarTransicao
+    );
+  } else {
+    _executarTransicao();
+  }
+}
+
+function _reu_gerarTarefa() {
+  if (!_reuState.encSelecId) return;
+  var lockId = 'gerar-tarefa-' + _reuState.encSelecId;
+  if (_reunBtn.isLocked(lockId)) return;
+
+  _reuConfirmar(
+    'Gerar tarefa vinculada?',
+    'Uma tarefa será criada no sistema a partir deste encaminhamento e ficará vinculada a ele.',
+    'question',
+    function() {
+      _reunBtn.lock(lockId);
+      GAS.reunioes.gerarTarefa(_reuState.encSelecId, function(r) {
+        _reunBtn.unlock(lockId);
+        var enc = r.encaminhamento;
+        var idx = _reuState.encaminhamentos.findIndex(function(e) { return e.id === enc.id; });
+        if (idx !== -1) _reuState.encaminhamentos[idx] = enc;
+        var tarefaEl = document.getElementById('modal-enc-tarefa-vinculada');
+        if (tarefaEl) { tarefaEl.textContent = 'Tarefa vinculada: ' + enc.tarefaId; tarefaEl.classList.remove('hidden'); }
+        var gerarBtn = document.getElementById('modal-enc-gerar-tarefa');
+        if (gerarBtn) { var btn = gerarBtn.querySelector('button'); if (btn) btn.disabled = true; }
+        _reuToast('success', 'Tarefa ' + (r.tarefa ? r.tarefa.id : '') + ' criada com sucesso!');
+      }, function(e) {
+        _reunBtn.unlock(lockId);
+        _reuToast('error', 'Erro ao gerar tarefa: ' + (e.message || e));
+      }, GAS._sessao());
+    }
+  );
+}
+
+// ── Assistente IA ─────────────────────────────────────────────────────────────
+
+var _reuIASugestao = null;
+
+function _reu_assistenteIA() {
+  _reuAbrirModal('modal-ia-ata');
+}
+
+function _reu_enviarParaIA() {
+  var input = document.getElementById('reu-ia-input');
+  var texto = (input || {}).value || '';
+  if (!texto.trim()) { _reuToast('warning', 'Insira o texto das notas da reunião.'); return; }
+  if (_reunBtn.isLocked('enviar-ia-ata')) return;
+
+  var promptTexto = 'Você está ajudando a organizar uma ata de reunião institucional. ' +
+    'A partir das notas abaixo, identifique e estruture:\n' +
+    '1. Deliberações e decisões tomadas\n' +
+    '2. Encaminhamentos (O QUÊ deve ser feito, QUEM é o responsável, QUANDO é o prazo)\n' +
+    '3. Pontos informativos\n\n' +
+    'IMPORTANTE: Não invente informações. Se prazo ou responsável não estiver claro, indique como "a definir".\n\n' +
+    'Notas:\n' + texto;
+
+  // Mostrar estado de carregamento
+  var resultado = document.getElementById('reu-ia-resultado');
+  var conteudo  = document.getElementById('reu-ia-conteudo');
+  if (conteudo)  conteudo.textContent = '';
+  if (resultado) resultado.classList.add('hidden');
+
+  _reunBtn.wrap('btn-enviar-ia', 'enviar-ia-ata', 'Analisando...', function(done) {
+    // CORREÇÃO CRÍTICA: GAS.ia.processar não existe. Usar GAS.ia.chamar(prompt, ctx, cb, err).
+    GAS.ia.chamar(promptTexto, {
+      modulo: 'reunioes',
+      contexto: 'assistente_ata',
+      reuniaoId: _reuState.ataReuniaoId || (_reuState.reuniaoAtual && _reuState.reuniaoAtual.id) || null
+    }, function(resp) {
+      done();
+      // resp pode ser string direta ou objeto {texto, resposta, content}
+      var textoResposta = typeof resp === 'string'
+        ? resp
+        : (resp && (resp.resposta || resp.texto || resp.content || resp.resultado || JSON.stringify(resp)));
+      _reuIASugestao = textoResposta;
+      if (conteudo)  { conteudo.textContent = textoResposta || '(sem resposta da IA)'; }
+      if (resultado) { resultado.classList.remove('hidden'); }
+    }, function(e) {
+      done();
+      var msgErro = e && (e.message || (typeof e === 'string' ? e : JSON.stringify(e))) || 'Erro desconhecido';
+      _reuToast('error', 'Erro na IA: ' + msgErro);
+      // Mostrar erro no painel para contexto adicional
+      if (conteudo)  { conteudo.textContent = 'Erro: ' + msgErro; }
+      if (resultado) { resultado.classList.remove('hidden'); }
+    });
+    // Nota: GAS.ia.chamar não usa sessão como 4º argumento — sessão é gerenciada internamente
+  });
+}
+
+function _reu_aplicarSugestaoIA() {
+  if (!_reuIASugestao) return;
+  var textarea = document.getElementById('reu-ata-abertura');
+  if (textarea) {
+    var atual = textarea.value;
+    textarea.value = atual ? atual + '\n\n[IA]\n' + _reuIASugestao : '[IA]\n' + _reuIASugestao;
+  }
+  _reu_fecharModal('modal-ia-ata');
+  _reuToast('success', 'Sugestão da IA aplicada. Revise o conteúdo antes de salvar.');
+}
+
+// ── Dashboard ─────────────────────────────────────────────────────────────────
+
+function _reuCarregarDashboard() {
+  GAS.reunioes.dashboard(function(d) {
+    // Cards
+    var els = {
+      'reu-dash-total-reunioes': d.reunioes ? d.reunioes.total : '—',
+      'reu-dash-enc-pendentes':  d.encaminhamentos ? ((d.encaminhamentos.por_status && d.encaminhamentos.por_status.pendente) || 0) : '—',
+      'reu-dash-enc-atrasados':  d.encaminhamentos ? d.encaminhamentos.atrasados : '—',
+      'reu-dash-sem-execucao':   d.reunioes ? d.reunioes.sem_execucao : '—'
+    };
+    Object.keys(els).forEach(function(id) {
+      var el = document.getElementById(id); if (el) el.textContent = els[id];
+    });
+
+    // Próximas
+    var proxEl = document.getElementById('reu-dash-proximas');
+    if (proxEl && d.proximas_reunioes) {
+      proxEl.innerHTML = d.proximas_reunioes.length ? d.proximas_reunioes.map(function(r) {
+        var corS = _REU_STATUS_COR[r.status] || 'gray';
+        return '<div class="flex items-center gap-2 py-1.5 border-b border-slate-50 cursor-pointer hover:bg-slate-50 rounded px-1" onclick="_reuAbrirDetalheReuniao(\'' + r.id + '\')">' +
+          '<span class="reu-tag reu-tag-' + corS + ' shrink-0">' + (r.data ? new Date(r.data + 'T12:00:00').toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit' }) : '') + '</span>' +
+          '<span class="text-xs text-slate-700 font-semibold truncate">' + _esc(r.titulo) + '</span>' +
+        '</div>';
+      }).join('') : '<p class="text-xs text-slate-400 italic">Sem reuniões nos próximos 14 dias.</p>';
+    }
+
+    // Atenção
+    var atencaoEl = document.getElementById('reu-dash-atencao');
+    if (atencaoEl) {
+      var itens = (d.enc_atrasados || []).concat(d.enc_criticos || []);
+      var unicos = [];
+      var ids = {};
+      itens.forEach(function(e) { if (!ids[e.id]) { ids[e.id] = 1; unicos.push(e); } });
+      atencaoEl.innerHTML = unicos.slice(0, 8).length ? unicos.slice(0, 8).map(function(e) {
+        var atrasado = e.atrasado || e.status === 'atrasado';
+        return '<div class="flex items-center gap-2 py-1.5 border-b border-slate-50 cursor-pointer hover:bg-slate-50 rounded px-1" onclick="_reuAbrirDetalheEnc(\'' + e.id + '\')">' +
+          (atrasado ? '<span class="reu-tag reu-tag-red shrink-0 text-[9px]">Atrasado</span>' : '<span class="reu-tag reu-tag-orange shrink-0 text-[9px]">Crítico</span>') +
+          '<span class="text-xs text-slate-700 truncate">' + _esc(e.titulo) + '</span>' +
+          '<span class="text-[10px] text-slate-400 shrink-0">' + _esc(_reuNome(e.responsavel)) + '</span>' +
+        '</div>';
+      }).join('') : '<p class="text-xs text-slate-400 italic">Sem itens críticos.</p>';
+    }
+
+    // Por responsável
+    var respEl = document.getElementById('reu-dash-por-responsavel');
+    if (respEl && d.encaminhamentos && d.encaminhamentos.por_responsavel) {
+      var entries = Object.keys(d.encaminhamentos.por_responsavel).map(function(email) {
+        return { email: email, total: d.encaminhamentos.por_responsavel[email] };
+      }).sort(function(a, b) { return b.total - a.total; }).slice(0, 8);
+
+      var maxTotal = entries.length ? Math.max.apply(null, entries.map(function(e) { return e.total; })) : 1;
+      respEl.innerHTML = entries.length ? entries.map(function(e) {
+        var pct = Math.round((e.total / maxTotal) * 100);
+        return '<div class="flex items-center gap-2">' +
+          '<div class="reu-avatar shrink-0" style="background:' + _reuCor(e.email) + ';width:22px;height:22px;font-size:9px">' + _reuIniciais(e.email) + '</div>' +
+          '<div class="flex-1 min-w-0">' +
+            '<p class="text-xs font-semibold text-slate-700 truncate">' + _esc(_reuNome(e.email)) + '</p>' +
+            '<div class="h-1.5 bg-slate-100 rounded-full mt-0.5"><div class="h-full bg-purple-400 rounded-full" style="width:' + pct + '%"></div></div>' +
+          '</div>' +
+          '<span class="text-xs text-slate-500 shrink-0 font-bold">' + e.total + '</span>' +
+        '</div>';
+      }).join('') : '<p class="text-xs text-slate-400 italic">Sem dados.</p>';
+    }
+
+    // Timeline institucional
+    var timelineEl = document.getElementById('reu-dash-timeline');
+    if (timelineEl) {
+      var eventos = [];
+      (_reuState.reunioes || []).forEach(function(r) {
+        if (r.historico) {
+          r.historico.forEach(function(h) {
+            eventos.push({ ts: h.ts, titulo: r.titulo, acao: h.acao, usuario: h.usuario });
+          });
+        }
+      });
+      eventos.sort(function(a, b) { return b.ts > a.ts ? 1 : -1; });
+      timelineEl.innerHTML = eventos.slice(0, 20).length ? eventos.slice(0, 20).map(function(ev) {
+        return '<div class="flex gap-2 py-1 border-b border-slate-50 text-xs">' +
+          '<span class="text-slate-400 shrink-0">' + new Date(ev.ts).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' }) + '</span>' +
+          '<span class="font-semibold text-slate-600 truncate">' + _esc(ev.titulo) + '</span>' +
+          '<span class="text-slate-400 shrink-0">' + _esc(ev.acao) + '</span>' +
+        '</div>';
+      }).join('') : '<p class="text-xs text-slate-400 italic">Sem eventos.</p>';
+    }
+
+  }, null, GAS._sessao());
+}
+
+// ── Helper de escape ──────────────────────────────────────────────────────────
+
+function _esc(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+</script>

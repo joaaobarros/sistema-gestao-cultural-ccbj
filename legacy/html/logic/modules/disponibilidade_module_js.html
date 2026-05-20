@@ -1,0 +1,277 @@
+<!--
+@file modules/disponibilidade_module_js.html
+@layer frontend/modules
+@description Regras puras de disponibilidade: normalização de datas, detecção de conflitos,
+             horários ocupados/livres e salas disponíveis por período.
+             NENHUMA função aqui acessa DOM ou chama o backend.
+             Dependência única: AppState (core/app_state_js.html).
+@responsibility Verificação de conflito frontend, cálculo de slots livres, normalização de datas.
+@dependencies core/app_state_js (AppState, AppState.cacheReservasIndex)
+-->
+<script>
+
+/**
+ * ========================================
+ * BLOCO: Normalização de datas
+ * ========================================
+ * @description Converte qualquer representação de data para o formato YYYY-MM-DD,
+ *              usado como chave no AppState.cacheReservasIndex.
+ * @context Chamado por verificarConflitoFrontend, indexarReservas e obterHorariosOcupadosFrontend.
+ * @inputs Date object, string DD/MM/YYYY ou YYYY-MM-DD.
+ * @outputs String 'YYYY-MM-DD' ou null se inválido.
+ * @sideEffects Nenhum.
+ */
+function normalizarDataKey(data) {
+  if (!data) return null;
+  try {
+    if (data instanceof Date) {
+      const d = data;
+      const ano = d.getFullYear();
+      const mes = String(d.getMonth() + 1).padStart(2, '0');
+      const dia = String(d.getDate()).padStart(2, '0');
+      return `${ano}-${mes}-${dia}`;
+    }
+    const s = String(data).trim();
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(s)) {
+      return `${s.slice(6)}-${s.slice(3,5)}-${s.slice(0,2)}`;
+    }
+    if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
+      return s.slice(0, 10);
+    }
+    const p = s.split(/[\/\-]/);
+    if (p.length === 3) {
+      if (p[0].length === 4) {
+        return `${p[0]}-${p[1].padStart(2,'0')}-${p[2].padStart(2,'0')}`;
+      } else {
+        return `${p[2]}-${p[1].padStart(2,'0')}-${p[0].padStart(2,'0')}`;
+      }
+    }
+  } catch(e) {
+    console.warn('Erro ao normalizar data:', data, e);
+  }
+  return null;
+}
+
+/**
+ * ========================================
+ * BLOCO: Helpers de horário
+ * ========================================
+ * @description adicionar1Hora: soma 1 hora a um string HH:MM, útil para sugestões de término.
+ * @context Chamado por aplicarSugestaoHorario e pelos helpers de IA.
+ * @inputs horario: string HH:MM.
+ * @outputs String HH:MM com +1 hora.
+ * @sideEffects Nenhum.
+ */
+function adicionar1Hora(horario) {
+  if (!horario) return '';
+  const p = String(horario).split(':');
+  return String((parseInt(p[0], 10) + 1) % 24).padStart(2, '0') + ':' + p[1];
+}
+
+/**
+ * ========================================
+ * BLOCO: Horários ocupados via cache local
+ * ========================================
+ * @description Retorna os blocos de horário ocupados para uma sala/data sem consultar o backend.
+ *              Usa AppState.cacheReservasIndex para lookup O(1) via YYYY-MM-DD + salaId.
+ * @context Chamado por verificarConflitoFrontend, sugerirProximoHorarioLivre e analisarDisponibilidadeIA.
+ * @inputs sala: string ID, data: qualquer formato, idIgnorar: string ID para edição.
+ * @outputs Array de { inicio: number, fim: number } em minutos desde meia-noite.
+ * @sideEffects Nenhum.
+ */
+function obterHorariosOcupadosFrontend(sala, data, idIgnorar) {
+  const index = AppState.cacheReservasIndex || {};
+  const normData = d => {
+    try {
+      if (d instanceof Date) { const x = new Date(d); x.setHours(0,0,0,0); return x.getTime(); }
+      const s = String(d||'').trim();
+      if (s.includes('/')) { const p = s.split('/'); if (p.length===3) { const x=new Date(p[2],p[1]-1,p[0]); x.setHours(0,0,0,0); return x.getTime(); } }
+      if (s.includes('-')) { const x=new Date(s); x.setHours(0,0,0,0); return x.getTime(); }
+    } catch(e) {} return null;
+  };
+  const normHora = h => { const p=String(h||'').split(':'); return parseInt(p[0])*60+parseInt(p[1]); };
+  const dataBusca = normData(data);
+  if (!dataBusca) return [];
+  const salaKey = String(sala).trim();
+
+  const dataKeyObj = new Date(dataBusca);
+  const dataKey = dataKeyObj.toISOString().slice(0, 10);
+
+  const lista = (index[dataKey] && index[dataKey][salaKey]) || [];
+  const ocupados = [];
+
+  lista.forEach(r => {
+    if (idIgnorar && String(r[0]).trim() === String(idIgnorar).trim()) return;
+    ocupados.push({ inicio: normHora(r[2]), fim: normHora(r[3]) });
+  });
+
+  return ocupados;
+}
+
+/**
+ * ========================================
+ * BLOCO: Verificação de conflito frontend
+ * ========================================
+ * @description Detecta sobreposição de horário usando o cache local AppState.cacheReservasIndex,
+ *              sem chamar o backend. Retorna tipo de conflito (INICIO, FIM, TOTAL) e sugestão.
+ *              IMPORTANTE: verificação otimista. A fonte de verdade é o backend —
+ *              salvarAgendamento() confirma no servidor antes de persistir.
+ * @context Chamado em tempo real durante preenchimento do formulário (validarConflitoTempoReal).
+ * @inputs dados: { sala, horaInicio, horaTermino }, datas: string[], idIgnorar: string|null.
+ * @outputs { conflito: boolean, tipo?, data?, reserva?, sugestao? }.
+ * @sideEffects Nenhum.
+ */
+function verificarConflitoFrontend(dados, datas, idIgnorar) {
+  const normHora = h => {
+    const p = String(h || '').split(':');
+    return parseInt(p[0]) * 60 + parseInt(p[1]);
+  };
+  const toHora = m => {
+    const h = String(Math.floor(m / 60)).padStart(2,'0');
+    const min = String(m % 60).padStart(2,'0');
+    return `${h}:${min}`;
+  };
+
+  const inicio  = normHora(dados.horaInicio);
+  const termino = normHora(dados.horaTermino);
+  const salaKey = String(dados.sala || '').trim();
+
+  for (const dataStr of datas) {
+    const dataKey = normalizarDataKey(dataStr);
+    if (!dataKey) continue;
+
+    const reservas = (AppState.cacheReservasIndex?.[dataKey]?.[salaKey]) || [];
+
+    for (const r of reservas) {
+      if ((r[13] || '').toUpperCase() === 'CANCELADO') continue;
+      if (idIgnorar && String(r[0]).trim() === String(idIgnorar).trim()) continue;
+
+      const ini = normHora(r[2]);
+      const ter = normHora(r[3]);
+      const conflito = inicio < ter && termino > ini;
+
+      if (conflito) {
+        let tipo = 'TOTAL';
+        let sugestao = '';
+        if (inicio >= ini && inicio < ter && termino > ter) {
+          tipo = 'INICIO'; sugestao = toHora(ter);
+        } else if (termino > ini && termino <= ter && inicio < ini) {
+          tipo = 'FIM'; sugestao = toHora(ini);
+        } else {
+          tipo = 'TOTAL'; sugestao = `${toHora(ini)}–${toHora(ter)}`;
+        }
+        return { conflito: true, tipo, data: dataStr, reserva: r, sugestao };
+      }
+    }
+  }
+  return { conflito: false };
+}
+
+/**
+ * ========================================
+ * BLOCO: Sugestão de próximo horário livre
+ * ========================================
+ * @description Percorre slots pré-definidos (08:00–20:30) e retorna o próximo horário
+ *              após horarioAtual que não conflita com ocupados do cache.
+ * @context Chamado por analisarDisponibilidadeIA e helpers de sugestão do formulário.
+ * @inputs sala: string ID, data: qualquer formato, horarioAtual: string HH:MM.
+ * @outputs String HH:MM do primeiro slot livre, ou null se nenhum.
+ * @sideEffects Nenhum.
+ */
+function sugerirProximoHorarioLivre(sala, data, horarioAtual) {
+  const horariosBase = [
+    "08:00","08:30","09:00","09:30","10:00","10:30",
+    "11:00","11:30","12:00","12:30","13:00","13:30",
+    "14:00","14:30","15:00","15:30","16:00","16:30",
+    "17:00","17:30","18:00","18:30","19:00","19:30",
+    "20:00","20:30"
+  ];
+  const ocupados = obterHorariosOcupadosFrontend(sala, data);
+  const norm = h => { const p=h.split(':'); return parseInt(p[0])*60+parseInt(p[1]); };
+  const atual = norm(horarioAtual);
+  const livres = horariosBase.filter(h => {
+    const i = norm(h);
+    return !ocupados.some(o => i < o.fim && (i + 60) > o.inicio);
+  });
+  return livres.find(h => norm(h) > atual) || livres[0] || null;
+}
+
+/**
+ * ========================================
+ * BLOCO: Slots livres e salas disponíveis por período
+ * ========================================
+ * @description obterHorariosLivresComIntervalo: retorna intervalos livres { inicio, fim } (HH:MM)
+ *              para uma sala/data no intervalo 08:00–21:30.
+ *              obterSalasDisponiveisPorData: filtra salas sem conflito para o período informado.
+ *              Ambas usam exclusivamente AppState.cacheReservasIndex — sem backend.
+ * @context Chamadas por mostrarHorariosDisponiveisUI e mostrarSalasDisponiveisUI (mod_reservas_js).
+ * @inputs sala/data para horários; data/horaInicio/horaTermino para salas.
+ * @outputs Array de { inicio, fim } | Array de { id, nome }.
+ * @sideEffects Nenhum.
+ */
+function obterHorariosLivresComIntervalo(sala, data) {
+  const dataKey = normalizarDataKey(data);
+  const salaKey = String(sala);
+  const reservas = AppState.cacheReservasIndex?.[dataKey]?.[salaKey] || [];
+
+  const normHora = h => {
+    const [hh, mm] = String(h).split(':').map(Number);
+    return hh * 60 + mm;
+  };
+  const toHora = m => {
+    const h = String(Math.floor(m / 60)).padStart(2,'0');
+    const min = String(m % 60).padStart(2,'0');
+    return `${h}:${min}`;
+  };
+
+  const inicioDia = 8 * 60;
+  const fimDia    = 21 * 60 + 30;
+
+  let ocupados = [];
+  reservas.forEach(r => {
+    if (String(r[4]) !== String(sala)) return;
+    if ((r[13] || '').toUpperCase() === 'CANCELADO') return;
+    ocupados.push({ inicio: normHora(r[2]), fim: normHora(r[3]) });
+  });
+  ocupados.sort((a, b) => a.inicio - b.inicio);
+
+  let livres = [];
+  let cursor = inicioDia;
+  ocupados.forEach(o => {
+    if (cursor < o.inicio) livres.push({ inicio: cursor, fim: o.inicio });
+    cursor = Math.max(cursor, o.fim);
+  });
+  if (cursor < fimDia) livres.push({ inicio: cursor, fim: fimDia });
+
+  return livres.map(l => ({ inicio: toHora(l.inicio), fim: toHora(l.fim) }));
+}
+
+function obterSalasDisponiveisPorData(data, horaInicio, horaTermino) {
+  const salas = AppState.colecoes.salas || [];
+  const normHora = h => {
+    const p = String(h || '').split(':');
+    return parseInt(p[0]) * 60 + parseInt(p[1]);
+  };
+  const inicio  = normHora(horaInicio);
+  const termino = normHora(horaTermino);
+  const dataKey = normalizarDataKey(data);
+  if (!dataKey) return [];
+
+  const flags = AppState.mapaFlagsEspacos || {};
+  return salas.filter(s => {
+    const idSala = String(s[0]).trim();
+    if (!idSala) return false;
+    const f = flags[idSala];
+    if (f && f.aceitaReserva === false) return false;
+    const reservasSala = AppState.cacheReservasIndex?.[dataKey]?.[idSala] || [];
+    const conflito = reservasSala.some(r => {
+      if ((r[13] || '').toUpperCase() === 'CANCELADO') return false;
+      const ini = normHora(r[2]);
+      const ter = normHora(r[3]);
+      return inicio < ter && termino > ini;
+    });
+    return !conflito;
+  }).map(s => ({ id: s[0], nome: s[1] }));
+}
+
+</script>

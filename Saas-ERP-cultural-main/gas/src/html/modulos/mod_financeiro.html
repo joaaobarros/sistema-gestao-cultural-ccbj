@@ -1,0 +1,207 @@
+<!--
+@file mod_financeiro.html
+@type module
+@description Painel financeiro de contratos: layout split desktop (lista | detalhe) / mobile stack.
+@responsibility Estrutura HTML da aba financeira (#aba-contratos-fin).
+@dependencies carregarDadosContratos, renderizarContratos, abrirModalContrato (GestaoContratos.html)
+-->
+
+<style>
+/* ── Split layout ─────────────────────────────────────── */
+.fin-split {
+  display:grid;
+  grid-template-columns:340px 1fr;
+  gap:0;
+  min-height:600px;
+}
+@media(max-width:768px){
+  .fin-split { grid-template-columns:1fr; }
+  .fin-detail-panel { display:none; }
+  .fin-detail-panel.visible { display:block; }
+}
+
+.fin-list-panel {
+  border-right:1.5px solid #e2e8f0;
+  display:flex;
+  flex-direction:column;
+  min-height:0;
+}
+
+.fin-list-scroll {
+  flex:1;
+  overflow-y:auto;
+  scrollbar-width:thin;
+  padding:12px;
+}
+
+.fin-ctr-item {
+  padding:14px 16px;
+  border:1.5px solid #e2e8f0;
+  border-radius:16px;
+  margin-bottom:8px;
+  cursor:pointer;
+  transition:all .15s;
+  background:#fff;
+  position:relative;
+}
+.fin-ctr-item:hover { border-color:#a5b4fc; box-shadow:0 2px 8px rgba(99,102,241,.08); }
+.fin-ctr-item.active { border-color:#6366f1; background:#fafbff; box-shadow:0 2px 12px rgba(99,102,241,.12); }
+.fin-ctr-item.active::before {
+  content:'';
+  position:absolute;
+  left:-1.5px; top:20%; bottom:20%;
+  width:3px;
+  background:#6366f1;
+  border-radius:0 3px 3px 0;
+}
+
+.fin-detail-panel {
+  display:flex;
+  flex-direction:column;
+  min-height:0;
+  background:#fafbff;
+}
+
+.fin-detail-scroll {
+  flex:1;
+  overflow-y:auto;
+  scrollbar-width:thin;
+  padding:20px;
+}
+
+/* ── Meta cards no detalhe ────────────────────────────── */
+.fin-meta-card {
+  background:#fff;
+  border:1.5px solid #e0e7ff;
+  border-radius:16px;
+  overflow:hidden;
+  margin-bottom:12px;
+}
+.fin-meta-card-header {
+  padding:14px 16px;
+  background:linear-gradient(135deg,#eef2ff,#f5f3ff);
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:8px;
+  cursor:pointer;
+  user-select:none;
+}
+.fin-meta-card-body { display:block; }
+.fin-meta-card-body.collapsed { display:none; }
+
+/* ── Rubrica rows no detalhe ─────────────────────────── */
+.fin-rub-row {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  padding:9px 16px;
+  border-bottom:1px solid #f8fafc;
+  transition:background .15s;
+}
+.fin-rub-row:last-child { border-bottom:none; }
+.fin-rub-row:hover { background:#fafbff; }
+
+/* ── Mobile back button ───────────────────────────────── */
+.fin-back-btn {
+  display:none;
+  align-items:center;
+  gap:6px;
+  padding:8px 14px;
+  background:#f1f5f9;
+  border:none;
+  border-radius:10px;
+  font-size:11px;
+  font-weight:900;
+  color:#475569;
+  cursor:pointer;
+  margin-bottom:12px;
+  text-transform:uppercase;
+  letter-spacing:.06em;
+  transition:background .15s;
+}
+.fin-back-btn:hover { background:#e2e8f0; }
+@media(max-width:768px){
+  .fin-back-btn { display:flex; }
+}
+
+/* ── Progress bar ─────────────────────────────────────── */
+.fin-progress-wrap {
+  height:4px;
+  background:#f1f5f9;
+  border-radius:99px;
+  overflow:hidden;
+  margin-top:6px;
+}
+.fin-progress-fill {
+  height:100%;
+  border-radius:99px;
+  transition:width .5s ease;
+}
+</style>
+
+<section id="aba-contratos-fin" class="tab-content hidden pb-20">
+
+  <div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+
+    <!-- HEADER -->
+    <div class="p-5 border-b border-slate-100 bg-slate-50/50 flex flex-wrap justify-between items-center gap-3">
+      <div>
+        <h3 class="font-black text-slate-800 uppercase tracking-tighter text-sm">
+          <i class="fas fa-file-contract text-indigo-400 mr-2"></i>Contratos / Fontes de Recurso
+        </h3>
+        <p class="text-[10px] text-slate-400 font-medium">Metas e indicadores por contrato</p>
+      </div>
+      <div class="flex gap-2 items-center">
+        <!-- busca mobile/desktop -->
+        <div class="relative">
+          <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 text-xs"></i>
+          <input type="text" placeholder="Buscar contrato..."
+            oninput="_finBuscar(this.value)"
+            style="padding:8px 12px 8px 30px;border:1.5px solid #e2e8f0;border-radius:12px;font-size:12px;outline:none;width:180px;transition:border-color .15s"
+            onfocus="this.style.borderColor='#6366f1'" onblur="this.style.borderColor='#e2e8f0'">
+        </div>
+        <button onclick="abrirModalContrato()"
+          class="bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-black px-4 py-2 rounded-xl transition-all uppercase flex items-center gap-1.5">
+          <i class="fas fa-plus text-[9px]"></i>Novo Contrato
+        </button>
+      </div>
+    </div>
+
+    <!-- SPLIT LAYOUT -->
+    <div class="fin-split">
+
+      <!-- PAINEL ESQUERDO: lista de contratos -->
+      <div class="fin-list-panel">
+        <div class="px-3 pt-3 pb-1">
+          <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">Contratos</p>
+        </div>
+        <div class="fin-list-scroll" id="finListaContratos">
+          <div class="p-8 text-center">
+            <i class="fas fa-spinner animate-spin text-indigo-300 text-xl"></i>
+            <p class="text-[11px] text-slate-400 mt-2">Carregando...</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- PAINEL DIREITO: detalhe do contrato selecionado -->
+      <div class="fin-detail-panel" id="finDetailPanel">
+        <div class="fin-detail-scroll" id="finDetailContent">
+          <!-- estado vazio -->
+          <div class="flex flex-col items-center justify-center h-full py-20 text-center">
+            <div class="w-16 h-16 bg-indigo-50 rounded-2xl flex items-center justify-center mb-4">
+              <i class="fas fa-file-contract text-indigo-300 text-2xl"></i>
+            </div>
+            <p class="text-sm font-bold text-slate-400">Selecione um contrato</p>
+            <p class="text-[11px] text-slate-300 mt-1">Clique em um contrato para ver metas e rubricas</p>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+</section>
+

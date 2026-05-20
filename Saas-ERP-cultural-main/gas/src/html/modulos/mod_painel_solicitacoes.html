@@ -1,0 +1,800 @@
+<!-- PainelSolicitacoes.html -->
+
+<script>
+var _solicitacoesCache = [];
+var _filtroSolicitacoes = 'PENDENTE';
+
+function carregarSolicitacoes() {
+  const container = document.getElementById('listaSolicitacoes');
+  if (!container) return;
+
+  container.innerHTML = `
+    <div class="p-10 text-center">
+      <div class="inline-flex gap-1.5 items-center">
+        <div class="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style="animation-delay:0ms"></div>
+        <div class="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style="animation-delay:150ms"></div>
+        <div class="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style="animation-delay:300ms"></div>
+      </div>
+      <p class="text-slate-400 text-[10px] mt-3 font-black uppercase tracking-widest">Carregando solicitações...</p>
+    </div>`;
+
+  const ehGestor = AppState && AppState.usuario &&
+    (AppState.usuario.isAdmin || AppState.usuario.isSuperadmin || AppState.usuario.isHabilitador);
+  const email = AppState && AppState.usuario ? AppState.usuario.email : '';
+  const listarFn = ehGestor ? GAS.solicitacoes.listarTodas : GAS.solicitacoes.listarPendentes;
+  const onSucesso = function(lista) {
+    _solicitacoesCache = lista || [];
+    _renderizarSolicitacoes();
+    _atualizarBadgeSolicitacoes();
+    _atualizarStatsSolicitacoes();
+  };
+  const onErro = function(err) {
+    if (container) container.innerHTML =
+      `<div class="p-10 text-center"><div class="w-12 h-12 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-3"><i class="fas fa-triangle-exclamation text-red-400"></i></div><p class="text-red-400 text-sm font-bold">${escaparHTML(err.message || err)}</p></div>`;
+  };
+  listarFn(email, onSucesso, onErro);
+}
+
+function _atualizarStatsSolicitacoes() {
+  const pendentes  = _solicitacoesCache.filter(s => s.status === 'PENDENTE').length;
+  const aprovadas  = _solicitacoesCache.filter(s => s.status === 'APROVADO').length;
+  const recusadas  = _solicitacoesCache.filter(s => s.status === 'RECUSADO').length;
+  const total      = _solicitacoesCache.length;
+
+  const stats = document.getElementById('statsBarSolicitacoes');
+  if (!stats) return;
+
+  stats.innerHTML = `
+    <div class="flex flex-wrap items-center gap-3">
+      <div class="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2">
+        <div class="w-2 h-2 rounded-full bg-slate-400"></div>
+        <span class="text-[10px] font-black text-slate-500 uppercase">Total</span>
+        <span class="text-sm font-black text-slate-700">${total}</span>
+      </div>
+      <div class="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 cursor-pointer hover:bg-amber-100 transition-all" onclick="filtrarSolicitacoes('PENDENTE')">
+        <div class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></div>
+        <span class="text-[10px] font-black text-amber-600 uppercase">Pendentes</span>
+        <span class="text-sm font-black text-amber-700">${pendentes}</span>
+      </div>
+      <div class="flex items-center gap-2 bg-green-50 border border-green-200 rounded-xl px-3 py-2 cursor-pointer hover:bg-green-100 transition-all" onclick="filtrarSolicitacoes('APROVADO')">
+        <div class="w-2 h-2 rounded-full bg-green-400"></div>
+        <span class="text-[10px] font-black text-green-600 uppercase">Aprovadas</span>
+        <span class="text-sm font-black text-green-700">${aprovadas}</span>
+      </div>
+      <div class="flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl px-3 py-2 cursor-pointer hover:bg-red-100 transition-all" onclick="filtrarSolicitacoes('RECUSADO')">
+        <div class="w-2 h-2 rounded-full bg-red-400"></div>
+        <span class="text-[10px] font-black text-red-600 uppercase">Recusadas</span>
+        <span class="text-sm font-black text-red-700">${recusadas}</span>
+      </div>
+    </div>`;
+}
+
+function _atualizarBadgeSolicitacoes() {
+  const pendentesReservas = _solicitacoesCache.filter(s => s.status === 'PENDENTE').length;
+  const pendentesCadastros = (_cadastrosCache || []).filter(c => c.status === 'PENDENTE').length;
+  const pendentesChaves = (_chavesAprovCache || []).length;
+  const total = pendentesReservas + pendentesCadastros + pendentesChaves;
+  const badge = document.getElementById('badgeAprovacoes') || document.getElementById('badgeSolicitacoes');
+  if (!badge) return;
+  if (total > 0) {
+    badge.textContent = total;
+    badge.classList.remove('hidden');
+  } else {
+    badge.classList.add('hidden');
+  }
+}
+
+function _renderizarSolicitacoes() {
+  const container = document.getElementById('listaSolicitacoes');
+  if (!container) return;
+
+  const lista = _solicitacoesCache.filter(s =>
+    _filtroSolicitacoes === 'TODOS' || s.status === _filtroSolicitacoes
+  );
+
+  _atualizarContadorSolicitacoes(lista.length);
+
+  if (!lista.length) {
+    const configs = {
+      'PENDENTE': { icon: 'fa-check-double', msg: 'Nenhuma solicitação pendente.', cor: 'text-green-400', bg: 'bg-green-50' },
+      'APROVADO': { icon: 'fa-thumbs-up',    msg: 'Nenhuma solicitação aprovada.', cor: 'text-blue-400', bg: 'bg-blue-50' },
+      'RECUSADO': { icon: 'fa-ban',          msg: 'Nenhuma solicitação recusada.', cor: 'text-red-400', bg: 'bg-red-50' },
+      'TODOS':    { icon: 'fa-inbox',         msg: 'Nenhuma solicitação encontrada.', cor: 'text-slate-400', bg: 'bg-slate-50' }
+    };
+    const cfg = configs[_filtroSolicitacoes] || configs['TODOS'];
+    container.innerHTML = `
+      <div class="p-16 text-center">
+        <div class="w-16 h-16 ${cfg.bg} rounded-full flex items-center justify-center mx-auto mb-4">
+          <i class="fas ${cfg.icon} ${cfg.cor} text-2xl"></i>
+        </div>
+        <p class="text-slate-400 font-bold text-sm">${cfg.msg}</p>
+      </div>`;
+    return;
+  }
+
+  const isAdmin = AppState && AppState.usuario &&
+    (AppState.usuario.isAdmin || AppState.usuario.isSuperadmin);
+
+  // Monta set de salas onde o usuário logado é dono
+  const _emailLogado = String(AppState?.usuario?.email || '').toLowerCase().trim();
+  const _salasComoDono = new Set();
+  (AppState.colecoes?.salas || []).forEach(function(s) {
+    const raw = String(s[4] || '').trim();
+    if (!raw) return;
+    let emails = [];
+    try {
+      const arr = JSON.parse(raw);
+      emails = (Array.isArray(arr) ? arr : [arr]).map(function(d){ return String(d.email||d||'').toLowerCase().trim(); });
+    } catch(e) { emails = [raw.toLowerCase().trim()]; }
+    if (emails.includes(_emailLogado)) _salasComoDono.add(String(s[0]).trim());
+  });
+
+  const tipoConfig = {
+    'RESERVA':      { label: 'Reserva',      cor: 'bg-blue-100 text-blue-700',    icon: 'fa-calendar-plus'  },
+    'ALTERACAO':    { label: 'Alteração',     cor: 'bg-indigo-100 text-indigo-700', icon: 'fa-pen-to-square'  },
+    'CANCELAMENTO': { label: 'Cancelamento',  cor: 'bg-red-100 text-red-600',       icon: 'fa-calendar-xmark' }
+  };
+
+  const statusConfig = {
+    'PENDENTE': { label: 'Pendente',  cor: 'bg-amber-100 text-amber-700',  dot: 'bg-amber-400 animate-pulse', borda: 'border-l-amber-400' },
+    'APROVADO': { label: 'Aprovado',  cor: 'bg-green-100 text-green-700',  dot: 'bg-green-400',               borda: 'border-l-green-400'  },
+    'RECUSADO': { label: 'Recusado',  cor: 'bg-red-100 text-red-600',      dot: 'bg-red-400',                 borda: 'border-l-red-400'    }
+  };
+
+  container.innerHTML = lista.map(function(s) {
+    const tipo   = tipoConfig[s.tipo]   || { label: s.tipo,   cor: 'bg-slate-100 text-slate-600', icon: 'fa-circle-info' };
+    const status = statusConfig[s.status] || { label: s.status, cor: 'bg-slate-100 text-slate-600', dot: 'bg-slate-400', borda: 'border-l-slate-300' };
+
+    const sala = s.sala
+      ? `<span class="inline-flex items-center gap-1 text-[10px] text-purple-600 font-black">
+           <i class="fas fa-map-marker-alt text-[8px]"></i>${escaparHTML(AppState.mapaSalas && AppState.mapaSalas[s.sala] ? AppState.mapaSalas[s.sala] : s.sala)}
+         </span>`
+      : '';
+
+    const aprovadorInfo = s.aprovador ? `
+      <div class="flex items-center gap-1.5 mt-1 pt-1 border-t border-slate-100">
+        <i class="fas fa-user-check text-[9px] text-slate-300"></i>
+        <span class="text-[10px] text-slate-400">${s.status === 'APROVADO' ? 'Aprovado' : 'Recusado'} por <b class="text-slate-600">${escaparHTML(s.aprovador)}</b></span>
+        ${s.dataAcao ? `<span class="text-[9px] text-slate-300 ml-1">${escaparHTML(s.dataAcao)}</span>` : ''}
+      </div>` : '';
+
+    const _podeAprovar = s.status === 'PENDENTE' &&
+      (isAdmin || _salasComoDono.has(String(s.sala).trim()));
+
+    const btnAprovar = _podeAprovar ? `
+      <button data-acao-sol="aprovar" data-sol-id="${escaparHTML(s.id)}"
+        class="flex-1 py-2.5 bg-green-600 hover:bg-green-700 active:scale-95 text-white text-[10px] font-black rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-sm shadow-green-200">
+        <i class="fas fa-check text-[9px]"></i>Aprovar
+      </button>` : '';
+
+    const btnRecusar = _podeAprovar ? `
+      <button data-acao-sol="recusar" data-sol-id="${escaparHTML(s.id)}"
+        class="flex-1 py-2.5 bg-white hover:bg-red-600 border border-red-200 hover:border-red-600 text-red-500 hover:text-white text-[10px] font-black rounded-xl transition-all flex items-center justify-center gap-1.5">
+        <i class="fas fa-times text-[9px]"></i>Recusar
+      </button>` : '';
+
+    return `
+      <div class="bg-white border border-slate-200 border-l-4 ${status.borda} rounded-2xl overflow-hidden hover:shadow-md transition-all group">
+
+        <!-- Cabeçalho do card -->
+        <div class="flex items-start justify-between gap-3 px-5 pt-5 pb-3">
+          <div class="flex flex-wrap items-center gap-2">
+            <span class="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[9px] font-black uppercase ${tipo.cor}">
+              <i class="fas ${tipo.icon} text-[8px]"></i>${escaparHTML(tipo.label)}
+            </span>
+            <span class="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[9px] font-black uppercase ${status.cor}">
+              <span class="w-1.5 h-1.5 rounded-full ${status.dot}"></span>${escaparHTML(status.label)}
+            </span>
+            ${sala}
+          </div>
+          <span class="text-[9px] text-slate-400 shrink-0 mt-0.5">${escaparHTML(s.dataSolicitacao || '')}</span>
+        </div>
+
+        <!-- Subtipo e usuário -->
+        <div class="px-5 pb-3 space-y-2">
+          ${s.subtipo ? `<p class="text-[11px] font-black text-slate-700 uppercase tracking-tight">${escaparHTML(s.subtipo.replace(/_/g,' '))}</p>` : ''}
+          <div class="flex flex-wrap items-center gap-3">
+            <div class="flex items-center gap-2">
+              <div class="w-6 h-6 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center text-[9px] font-black shrink-0">
+                ${escaparHTML((s.usuario || '?').charAt(0).toUpperCase())}
+              </div>
+              <div class="flex flex-col">
+                <span class="text-[9px] font-black text-slate-400 uppercase tracking-wider">Solicitante</span>
+                <span class="text-[11px] text-slate-600 font-bold truncate">${escaparHTML(s.usuario || '')}</span>
+              </div>
+            </div>
+            ${(function() {
+              const salaObj = (AppState.colecoes.salas || []).find(x => String(x[0]).trim() === String(s.sala).trim());
+              if (!salaObj) return '';
+              const rawDono = String(salaObj[4] || '').trim();
+              if (!rawDono) return '';
+
+              // Detecta dia da semana da solicitação (0=Dom,1=Seg,...,6=Sab)
+              let diaSolicitacao = null;
+              try {
+                const partes = String(s.dataSolicitacao || '').split('/');
+                if (partes.length === 3) {
+                  diaSolicitacao = new Date(partes[2], partes[1]-1, partes[0]).getDay();
+                } else {
+                  // tenta formato ISO ou de planilha
+                  const d = new Date(s.dataSolicitacao);
+                  if (!isNaN(d)) diaSolicitacao = d.getDay();
+                }
+              } catch(e) {}
+
+              // Tenta parsear como JSON de múltiplos donos
+              let donos = [];
+              try {
+                const parsed = JSON.parse(rawDono);
+                const arr = Array.isArray(parsed) ? parsed : [parsed];
+                // Filtra pelo dia da semana se disponível
+                if (diaSolicitacao !== null) {
+                  const filtrados = arr.filter(d => Array.isArray(d.dias) && d.dias.includes(diaSolicitacao));
+                  donos = filtrados.length > 0 ? filtrados : arr;
+                } else {
+                  donos = arr;
+                }
+              } catch(e) {
+                // String simples — email único
+                donos = [{ email: rawDono }];
+              }
+
+              if (!donos.length) return '';
+
+              return donos.map(d => {
+                const emailDono = escaparHTML(d.email || '');
+                const setorDono = d.setor ? ` · ${escaparHTML(d.setor)}` : '';
+                const diasLabel = Array.isArray(d.dias) && d.dias.length
+                  ? ` <span class="text-amber-400 text-[8px]">(${d.dias.map(n=>['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'][n]||n).join(',')})</span>`
+                  : '';
+                return `<div class="flex items-center gap-2">
+                  <div class="w-6 h-6 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center text-[9px] font-black shrink-0">
+                    ${emailDono.charAt(0).toUpperCase()}
+                  </div>
+                  <div class="flex flex-col">
+                    <span class="text-[9px] font-black text-amber-500 uppercase tracking-wider">Responsável pelo espaço${diasLabel}</span>
+                    <span class="text-[11px] text-amber-700 font-bold">${emailDono}${setorDono}</span>
+                  </div>
+                </div>`;
+              }).join('');
+            })()}
+          </div>
+        </div>
+
+        <!-- Justificativa -->
+        <div class="mx-5 mb-3 p-3 bg-slate-50 rounded-xl border-l-2 border-slate-200">
+          <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Justificativa</p>
+          <p class="text-[11px] text-slate-600 leading-relaxed">${escaparHTML(s.justificativa || '—')}</p>
+        </div>
+
+        <!-- Aprovador / data da ação -->
+        ${aprovadorInfo ? `<div class="px-5 mb-3">${aprovadorInfo}</div>` : ''}
+
+        <!-- Ações -->
+        ${(btnAprovar || btnRecusar) ? `
+          <div class="flex gap-2 px-5 pb-5 pt-1">
+            ${btnAprovar}
+            ${btnRecusar}
+          </div>` : ''}
+      </div>`;
+  }).join('');
+}
+
+function _atualizarContadorSolicitacoes(total) {
+  const el = document.getElementById('contadorSolicitacoes');
+  if (el) el.textContent = `${total} registro(s)`;
+}
+
+function filtrarSolicitacoes(status) {
+  _filtroSolicitacoes = status;
+
+  document.querySelectorAll('.btn-filtro-sol').forEach(function(b) {
+    b.classList.remove('bg-slate-900', 'text-white');
+    b.classList.add('bg-slate-200', 'text-slate-600');
+  });
+
+  const mapa = { 'PENDENTE':'pendente', 'APROVADO':'aprovado', 'RECUSADO':'recusado', 'TODOS':'todos' };
+  const ativo = document.getElementById('filtro-sol-' + (mapa[status] || status.toLowerCase()));
+  if (ativo) {
+    ativo.classList.add('bg-slate-900', 'text-white');
+    ativo.classList.remove('bg-slate-200', 'text-slate-600');
+  }
+
+  _renderizarSolicitacoes();
+}
+
+document.addEventListener('click', function(e) {
+  const btn = e.target.closest('[data-acao-sol]');
+  if (!btn) return;
+  const acao = btn.dataset.acaoSol;
+  const id   = btn.dataset.solId;
+  if (acao === 'aprovar') _aprovarUI(id);
+  if (acao === 'recusar') _recusarUI(id);
+});
+
+function _aprovarUI(id) {
+  Swal.fire({
+    title: 'Aprovar solicitação?',
+    text: 'A ação vinculada será executada imediatamente.',
+    icon: 'question',
+    showCancelButton: true,
+    confirmButtonColor: '#16a34a',
+    confirmButtonText: '<i class="fas fa-check mr-1"></i>Aprovar',
+    cancelButtonText: 'Cancelar'
+  }).then(function(result) {
+    if (!result.isConfirmed) return;
+
+    const btn = document.querySelector(`[data-sol-id="${id}"][data-acao-sol="aprovar"]`);
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner animate-spin"></i>'; }
+    if (typeof showLoader === 'function') showLoader(true);
+
+    GAS.solicitacoes.aprovar(id,
+      function() {
+        if (typeof showLoader === 'function') showLoader(false);
+        Swal.fire({ icon: 'success', title: 'Aprovado!', timer: 2000, showConfirmButton: false });
+        carregarSolicitacoes();
+        if (typeof atualizarAgendaAposMudanca === 'function') atualizarAgendaAposMudanca();
+      },
+      function(err) {
+        if (typeof showLoader === 'function') showLoader(false);
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-check text-[9px]"></i>Aprovar'; }
+        Swal.fire('Erro', err.message || err, 'error');
+      }
+    );
+  });
+}
+
+function _recusarUI(id) {
+  Swal.fire({
+    title: 'Recusar solicitação',
+    input: 'textarea',
+    inputPlaceholder: 'Informe o motivo da recusa...',
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonColor: '#dc2626',
+    confirmButtonText: '<i class="fas fa-times mr-1"></i>Recusar',
+    cancelButtonText: 'Cancelar',
+    preConfirm: function(val) {
+      if (!val || val.trim().length < 5) {
+        Swal.showValidationMessage('Mínimo 5 caracteres.');
+        return false;
+      }
+      return val.trim();
+    }
+  }).then(function(result) {
+    if (!result.isConfirmed) return;
+
+    if (typeof showLoader === 'function') showLoader(true);
+
+    GAS.solicitacoes.recusar(id, result.value,
+      function() {
+        if (typeof showLoader === 'function') showLoader(false);
+        Swal.fire({ icon: 'success', title: 'Recusado.', timer: 2000, showConfirmButton: false });
+        carregarSolicitacoes();
+      },
+      function(err) {
+        if (typeof showLoader === 'function') showLoader(false);
+        Swal.fire('Erro', err.message || err, 'error');
+      }
+    );
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CADASTROS EXTERNOS
+// ═══════════════════════════════════════════════════════════════
+var _cadastrosCache = [];
+var _filtroCadastros = 'PENDENTE';
+var _chavesAprovCache = [];
+
+function carregarCadastrosExternos() {
+  var isAdmin = AppState && AppState.usuario &&
+    (AppState.usuario.isAdmin || AppState.usuario.isSuperadmin);
+  if (!isAdmin) return;
+
+  var container = document.getElementById('listaCadastros');
+  if (!container) return;
+
+  container.innerHTML = `
+    <div class="p-10 text-center">
+      <div class="inline-flex gap-1.5 items-center">
+        <div class="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style="animation-delay:0ms"></div>
+        <div class="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style="animation-delay:150ms"></div>
+        <div class="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style="animation-delay:300ms"></div>
+      </div>
+      <p class="text-slate-400 text-[10px] mt-3 font-black uppercase tracking-widest">Carregando...</p>
+    </div>`;
+
+  GAS.auth.listarPendentesCadastro(AppState.usuario.email, function(res) {
+    _cadastrosCache = (res && res.ok && res.solicitacoes) ? res.solicitacoes : [];
+    _renderizarCadastros();
+    _atualizarBadgeCadastros();
+  }, function(err) {
+    if (container) container.innerHTML =
+      `<div class="p-10 text-center"><div class="w-12 h-12 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-3"><i class="fas fa-triangle-exclamation text-red-400"></i></div><p class="text-red-400 text-sm font-bold">${escaparHTML(err.message || 'Erro ao carregar.')}</p></div>`;
+  });
+}
+
+function _atualizarBadgeCadastros() {
+  var pendentes = (_cadastrosCache || []).filter(function(c) { return c.status === 'PENDENTE'; }).length;
+  var badge = document.getElementById('badgeCadastros');
+  if (badge) {
+    badge.textContent = pendentes;
+    badge.classList.toggle('hidden', pendentes === 0);
+  }
+  // Atualiza também o badge da sidebar (inclui reservas + cadastros)
+  if (typeof _atualizarBadgeSolicitacoes === 'function') _atualizarBadgeSolicitacoes();
+}
+
+function filtrarCadastros(status) {
+  _filtroCadastros = status;
+  document.querySelectorAll('.btn-filtro-cad').forEach(function(b) {
+    b.classList.remove('bg-slate-900', 'text-white');
+    b.classList.add('bg-slate-200', 'text-slate-600');
+  });
+  var mapa = { 'PENDENTE': 'pendente', 'APROVADO': 'aprovado', 'RECUSADO': 'recusado' };
+  var ativo = document.getElementById('filtro-cad-' + (mapa[status] || status.toLowerCase()));
+  if (ativo) {
+    ativo.classList.add('bg-slate-900', 'text-white');
+    ativo.classList.remove('bg-slate-200', 'text-slate-600');
+  }
+  _renderizarCadastros();
+}
+
+function _renderizarCadastros() {
+  var container = document.getElementById('listaCadastros');
+  if (!container) return;
+
+  var lista = _cadastrosCache.filter(function(c) {
+    return _filtroCadastros === 'TODOS' || c.status === _filtroCadastros;
+  });
+
+  var el = document.getElementById('contadorCadastros');
+  if (el) el.textContent = lista.length + ' registro(s)';
+
+  if (!lista.length) {
+    var msgs = {
+      'PENDENTE': { icon: 'fa-user-clock', msg: 'Nenhuma solicitação pendente.', cor: 'text-amber-400', bg: 'bg-amber-50' },
+      'APROVADO': { icon: 'fa-user-check', msg: 'Nenhum cadastro aprovado.',     cor: 'text-green-400', bg: 'bg-green-50' },
+      'RECUSADO': { icon: 'fa-user-xmark', msg: 'Nenhum cadastro recusado.',     cor: 'text-red-400',   bg: 'bg-red-50'   },
+      'TODOS':    { icon: 'fa-users',       msg: 'Nenhuma solicitação.',          cor: 'text-slate-400', bg: 'bg-slate-50'  }
+    };
+    var cfg = msgs[_filtroCadastros] || msgs['TODOS'];
+    container.innerHTML = `<div class="p-16 text-center"><div class="w-16 h-16 ${cfg.bg} rounded-full flex items-center justify-center mx-auto mb-4"><i class="fas ${cfg.icon} ${cfg.cor} text-2xl"></i></div><p class="text-slate-400 font-bold text-sm">${cfg.msg}</p></div>`;
+    return;
+  }
+
+  var statusConfig = {
+    'PENDENTE': { label: 'Pendente', cor: 'bg-amber-100 text-amber-700', dot: 'bg-amber-400 animate-pulse', borda: 'border-l-amber-400' },
+    'APROVADO': { label: 'Aprovado', cor: 'bg-green-100 text-green-700', dot: 'bg-green-400',               borda: 'border-l-green-400'  },
+    'RECUSADO': { label: 'Recusado', cor: 'bg-red-100 text-red-600',     dot: 'bg-red-400',                 borda: 'border-l-red-400'    }
+  };
+
+  container.innerHTML = lista.map(function(c) {
+    var st = statusConfig[c.status] || { label: c.status, cor: 'bg-slate-100 text-slate-600', dot: 'bg-slate-400', borda: 'border-l-slate-300' };
+    var inicial = escaparHTML((c.nome || c.email || '?').charAt(0).toUpperCase());
+
+    var acoes = c.status === 'PENDENTE' ? `
+      <div class="flex gap-2 px-5 pb-5 pt-1">
+        <button data-acao-cad="aprovar" data-cad-id="${escaparHTML(c.id)}"
+          class="flex-1 py-2.5 bg-green-600 hover:bg-green-700 active:scale-95 text-white text-[10px] font-black rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-sm shadow-green-200">
+          <i class="fas fa-check text-[9px]"></i>Aprovar
+        </button>
+        <button data-acao-cad="recusar" data-cad-id="${escaparHTML(c.id)}"
+          class="flex-1 py-2.5 bg-white hover:bg-red-600 border border-red-200 hover:border-red-600 text-red-500 hover:text-white text-[10px] font-black rounded-xl transition-all flex items-center justify-center gap-1.5">
+          <i class="fas fa-times text-[9px]"></i>Recusar
+        </button>
+      </div>` : '';
+
+    var aprovInfo = c.aprovador ? `
+      <div class="px-5 mb-3">
+        <div class="flex items-center gap-1.5 mt-1 pt-1 border-t border-slate-100">
+          <i class="fas fa-user-check text-[9px] text-slate-300"></i>
+          <span class="text-[10px] text-slate-400">${c.status === 'APROVADO' ? 'Aprovado' : 'Recusado'} por <b class="text-slate-600">${escaparHTML(c.aprovador)}</b></span>
+          ${c.dataAcao ? `<span class="text-[9px] text-slate-300 ml-1">${escaparHTML(c.dataAcao)}</span>` : ''}
+        </div>
+      </div>` : '';
+
+    return `
+      <div class="bg-white border border-slate-200 border-l-4 ${st.borda} rounded-2xl overflow-hidden hover:shadow-md transition-all">
+        <div class="flex items-start justify-between gap-3 px-5 pt-5 pb-3">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center text-sm font-black shrink-0">${inicial}</div>
+            <div>
+              <p class="text-sm font-black text-slate-800">${escaparHTML(c.nome || '—')}</p>
+              <p class="text-[11px] text-slate-500">${escaparHTML(c.email || '—')}</p>
+            </div>
+          </div>
+          <div class="flex flex-col items-end gap-1 shrink-0">
+            <span class="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[9px] font-black uppercase ${st.cor}">
+              <span class="w-1.5 h-1.5 rounded-full ${st.dot}"></span>${st.label}
+            </span>
+            <span class="text-[9px] text-slate-400">${escaparHTML(c.dataSolicitacao || '')}</span>
+          </div>
+        </div>
+        ${aprovInfo}
+        ${acoes}
+      </div>`;
+  }).join('');
+}
+
+document.addEventListener('click', function(e) {
+  var btn = e.target.closest('[data-acao-cad]');
+  if (!btn) return;
+  var acao = btn.dataset.acaoCad;
+  var id   = btn.dataset.cadId;
+  if (acao === 'aprovar') _aprovarCadastroUI(id);
+  if (acao === 'recusar') _recusarCadastroUI(id);
+});
+
+function _aprovarCadastroUI(id) {
+  var cad = _cadastrosCache.find(function(c) { return c.id === id; });
+  var nomeExib = cad ? (cad.nome + ' <' + cad.email + '>') : id;
+
+  Swal.fire({
+    title: 'Aprovar cadastro?',
+    html: `<p class="text-sm text-slate-600">Será criado acesso para <b>${escaparHTML(nomeExib)}</b>.<br>Um e-mail de confirmação será enviado automaticamente.</p>`,
+    icon: 'question',
+    showCancelButton: true,
+    confirmButtonColor: '#16a34a',
+    confirmButtonText: '<i class="fas fa-check mr-1"></i>Aprovar acesso',
+    cancelButtonText: 'Cancelar'
+  }).then(function(result) {
+    if (!result.isConfirmed) return;
+
+    var btn = document.querySelector(`[data-cad-id="${id}"][data-acao-cad="aprovar"]`);
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner animate-spin"></i>'; }
+    if (typeof showLoader === 'function') showLoader(true);
+
+    GAS.auth.aprovarCadastro(id, AppState.usuario.email, function(res) {
+      if (typeof showLoader === 'function') showLoader(false);
+      if (!res || !res.ok) {
+        Swal.fire('Erro', (res && res.msg) || 'Falha ao aprovar.', 'error');
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-check text-[9px]"></i>Aprovar'; }
+        return;
+      }
+      Swal.fire({
+        icon: 'success',
+        title: 'Aprovado!',
+        text: 'Acesso criado. Redirecionando para configurar permissões...',
+        timer: 2500,
+        showConfirmButton: false
+      }).then(function() {
+        carregarCadastrosExternos();
+        // Navega para configuração do novo usuário
+        if (typeof mostrarAba === 'function') {
+          mostrarAba('aba-gestao-admin');
+          setTimeout(function() {
+            if (typeof _abrirConfigUsuarioExterno === 'function') {
+              _abrirConfigUsuarioExterno(res.emailAlvo);
+            }
+          }, 600);
+        }
+      });
+    }, function(err) {
+      if (typeof showLoader === 'function') showLoader(false);
+      Swal.fire('Erro', err.message || 'Falha ao aprovar.', 'error');
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-check text-[9px]"></i>Aprovar'; }
+    });
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// TRANSAÇÕES DE CHAVES
+// ═══════════════════════════════════════════════════════════════
+
+function carregarChavesPendentes() {
+  var container = document.getElementById('listaChavesAprov');
+  if (!container) return;
+
+  container.innerHTML = `
+    <div class="p-10 text-center">
+      <div class="inline-flex gap-1.5 items-center">
+        <div class="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style="animation-delay:0ms"></div>
+        <div class="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style="animation-delay:150ms"></div>
+        <div class="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style="animation-delay:300ms"></div>
+      </div>
+      <p class="text-slate-400 text-[10px] mt-3 font-black uppercase tracking-widest">Carregando transações...</p>
+    </div>`;
+
+  var email = AppState && AppState.usuario ? AppState.usuario.email : '';
+  var statusPendentes = ['SOLICITADA', 'AGUARDANDO_CONFIRMACAO_INFRA', 'TRANSFERENCIA_PENDENTE'];
+
+  GAS.chaves.listarProtocolos({}, email, function(res) {
+    var todos = (res && res.ok) ? (res.protocolos || []) : [];
+    _chavesAprovCache = todos.filter(function(p) { return statusPendentes.indexOf(p.status) !== -1; });
+    _renderizarChavesAprov();
+    _atualizarBadgeChavesAprov();
+  }, function() {
+    if (container) container.innerHTML =
+      '<div class="p-10 text-center"><div class="w-12 h-12 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-3"><i class="fas fa-triangle-exclamation text-red-400"></i></div><p class="text-red-400 text-sm font-bold">Erro ao carregar transações.</p></div>';
+  });
+}
+
+function _atualizarBadgeChavesAprov() {
+  var total = _chavesAprovCache.length;
+  var badge = document.getElementById('badgeChavesAprov');
+  if (badge) { badge.textContent = total; badge.classList.toggle('hidden', total === 0); }
+  var el = document.getElementById('contadorChavesAprov');
+  if (el) el.textContent = total + ' registro(s)';
+  if (typeof _atualizarBadgeSolicitacoes === 'function') _atualizarBadgeSolicitacoes();
+}
+
+function _renderizarChavesAprov() {
+  var container = document.getElementById('listaChavesAprov');
+  if (!container) return;
+
+  if (!_chavesAprovCache.length) {
+    container.innerHTML = '<div class="p-16 text-center"><div class="w-16 h-16 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-4"><i class="fas fa-key text-green-400 text-2xl"></i></div><p class="text-slate-400 font-bold text-sm">Nenhuma transação pendente.</p></div>';
+    return;
+  }
+
+  var email = (AppState && AppState.usuario ? AppState.usuario.email : '').toLowerCase().trim();
+  var isInfra = AppState && AppState.usuario && (AppState.usuario.isAdmin || AppState.usuario.isSuperadmin || AppState.usuario.isInfra);
+
+  var statusConfig = {
+    'SOLICITADA': {
+      label: 'Aguardando Infra', cor: 'bg-purple-100 text-purple-700',
+      dot: 'bg-purple-400 animate-pulse', borda: 'border-l-purple-400',
+      descr: 'Solicitação de retirada aguardando aprovação da infra'
+    },
+    'AGUARDANDO_CONFIRMACAO_INFRA': {
+      label: 'Devolvida — Confirmar', cor: 'bg-amber-100 text-amber-700',
+      dot: 'bg-amber-400 animate-pulse', borda: 'border-l-amber-400',
+      descr: 'Usuário registrou devolução — aguardando confirmação da infra'
+    },
+    'TRANSFERENCIA_PENDENTE': {
+      label: 'Transferência Pendente', cor: 'bg-indigo-100 text-indigo-700',
+      dot: 'bg-indigo-400 animate-pulse', borda: 'border-l-indigo-400',
+      descr: 'Aguardando confirmação do destinatário'
+    }
+  };
+
+  container.innerHTML = _chavesAprovCache.map(function(p) {
+    var sc = statusConfig[p.status] || { label: p.status, cor: 'bg-slate-100 text-slate-600', dot: 'bg-slate-400', borda: 'border-l-slate-300', descr: '' };
+    var espacoNome = (AppState && AppState.mapaSalas && AppState.mapaSalas[p.espacoId]) ? AppState.mapaSalas[p.espacoId] : (p.espacoId || '—');
+    var destEmail = String(p.transferenciaDestinoId || '').toLowerCase().trim();
+
+    var acoes = '';
+    if (p.status === 'SOLICITADA' && isInfra) {
+      acoes = `<button onclick="_aprovChaveAprovarEntrega('${escaparHTML(p.id)}')" class="flex-1 py-2.5 bg-green-600 hover:bg-green-700 text-white text-[10px] font-black rounded-xl transition-all flex items-center justify-center gap-1.5"><i class="fas fa-check text-[9px]"></i>Aprovar Entrega</button>
+               <button onclick="_aprovChaveNegar('${escaparHTML(p.id)}')" class="py-2.5 px-3 bg-white hover:bg-red-600 border border-red-200 hover:border-red-600 text-red-500 hover:text-white text-[10px] font-black rounded-xl transition-all flex items-center justify-center gap-1.5"><i class="fas fa-times text-[9px]"></i>Negar</button>`;
+    } else if (p.status === 'AGUARDANDO_CONFIRMACAO_INFRA' && isInfra) {
+      acoes = `<button onclick="_aprovChaveConfirmarDevolucao('${escaparHTML(p.id)}')" class="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-black rounded-xl transition-all flex items-center justify-center gap-1.5"><i class="fas fa-undo text-[9px]"></i>Confirmar Devolução</button>`;
+    } else if (p.status === 'TRANSFERENCIA_PENDENTE' && destEmail === email) {
+      acoes = `<button onclick="_aprovChaveConfirmarTransferencia('${escaparHTML(p.id)}')" class="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-black rounded-xl transition-all flex items-center justify-center gap-1.5"><i class="fas fa-exchange-alt text-[9px]"></i>Aceitar</button>
+               <button onclick="_aprovChaveCancelarTransferencia('${escaparHTML(p.id)}')" class="py-2.5 px-3 bg-white hover:bg-red-600 border border-red-200 hover:border-red-600 text-red-500 hover:text-white text-[10px] font-black rounded-xl transition-all flex items-center justify-center gap-1.5"><i class="fas fa-times text-[9px]"></i>Recusar</button>`;
+    }
+
+    return `
+      <div class="bg-white border border-slate-200 border-l-4 ${sc.borda} rounded-2xl overflow-hidden hover:shadow-md transition-all">
+        <div class="flex items-start justify-between gap-3 px-5 pt-5 pb-3">
+          <div class="flex flex-wrap items-center gap-2">
+            <span class="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[9px] font-black uppercase bg-slate-100 text-slate-600"><i class="fas fa-key text-[8px]"></i>Chave</span>
+            <span class="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[9px] font-black uppercase ${sc.cor}"><span class="w-1.5 h-1.5 rounded-full ${sc.dot}"></span>${escaparHTML(sc.label)}</span>
+            <span class="inline-flex items-center gap-1 text-[10px] text-purple-600 font-black"><i class="fas fa-map-marker-alt text-[8px]"></i>${escaparHTML(espacoNome)}</span>
+          </div>
+          <span class="text-[9px] text-slate-400 shrink-0 mt-0.5 font-mono">${escaparHTML(p.id)}</span>
+        </div>
+        <div class="px-5 pb-3 space-y-2">
+          <p class="text-[10px] text-slate-500">${escaparHTML(sc.descr)}</p>
+          <div class="flex flex-wrap gap-3">
+            <div class="flex items-center gap-2">
+              <div class="w-6 h-6 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center text-[9px] font-black shrink-0">${escaparHTML((p.responsavelNome || p.solicitanteNome || '?').charAt(0).toUpperCase())}</div>
+              <div class="flex flex-col">
+                <span class="text-[9px] font-black text-slate-400 uppercase tracking-wider">Responsável</span>
+                <span class="text-[11px] text-slate-600 font-bold">${escaparHTML(p.responsavelNome || p.solicitanteNome || '—')}</span>
+              </div>
+            </div>
+            ${p.transferenciaDestinoNome ? `<div class="flex items-center gap-2">
+              <div class="w-6 h-6 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center text-[9px] font-black shrink-0"><i class="fas fa-arrow-right text-[8px]"></i></div>
+              <div class="flex flex-col">
+                <span class="text-[9px] font-black text-slate-400 uppercase tracking-wider">Destinatário</span>
+                <span class="text-[11px] text-slate-600 font-bold">${escaparHTML(p.transferenciaDestinoNome)}</span>
+              </div>
+            </div>` : ''}
+          </div>
+        </div>
+        ${acoes ? `<div class="flex gap-2 px-5 pb-5">${acoes}</div>` : ''}
+      </div>`;
+  }).join('');
+}
+
+function _aprovChaveAprovarEntrega(id) {
+  var email = AppState && AppState.usuario ? AppState.usuario.email : '';
+  Swal.fire({ title: 'Aprovar entrega?', icon: 'question', showCancelButton: true, confirmButtonText: 'Aprovar', confirmButtonColor: '#16a34a' })
+    .then(function(r) {
+      if (!r.isConfirmed) return;
+      GAS.chaves.aprovarEntrega(id, '', email, function(res) {
+        if (res && res.ok) { Swal.fire({ icon: 'success', title: 'Aprovado!', timer: 1800, showConfirmButton: false }); carregarChavesPendentes(); }
+        else Swal.fire('Erro', (res && res.msg) || 'Falha.', 'error');
+      });
+    });
+}
+
+function _aprovChaveNegar(id) {
+  var email = AppState && AppState.usuario ? AppState.usuario.email : '';
+  Swal.fire({ title: 'Negar solicitação?', input: 'text', inputPlaceholder: 'Motivo (opcional)', icon: 'warning', showCancelButton: true, confirmButtonText: 'Negar', confirmButtonColor: '#dc2626' })
+    .then(function(r) {
+      if (!r.isConfirmed) return;
+      GAS.chaves.negar(id, r.value || '', email, function(res) {
+        if (res && res.ok) { Swal.fire({ icon: 'success', title: 'Negado.', timer: 1800, showConfirmButton: false }); carregarChavesPendentes(); }
+        else Swal.fire('Erro', (res && res.msg) || 'Falha.', 'error');
+      });
+    });
+}
+
+function _aprovChaveConfirmarDevolucao(id) {
+  var email = AppState && AppState.usuario ? AppState.usuario.email : '';
+  Swal.fire({ title: 'Confirmar devolução?', icon: 'question', showCancelButton: true, confirmButtonText: 'Confirmar', confirmButtonColor: '#2563eb' })
+    .then(function(r) {
+      if (!r.isConfirmed) return;
+      GAS.chaves.confirmarDevolucao(id, '', email, function(res) {
+        if (res && res.ok) { Swal.fire({ icon: 'success', title: 'Devolução confirmada!', timer: 1800, showConfirmButton: false }); carregarChavesPendentes(); }
+        else Swal.fire('Erro', (res && res.msg) || 'Falha.', 'error');
+      });
+    });
+}
+
+function _aprovChaveConfirmarTransferencia(id) {
+  var email = AppState && AppState.usuario ? AppState.usuario.email : '';
+  Swal.fire({ title: 'Aceitar transferência?', icon: 'question', showCancelButton: true, confirmButtonText: 'Aceitar', confirmButtonColor: '#4f46e5' })
+    .then(function(r) {
+      if (!r.isConfirmed) return;
+      GAS.chaves.confirmarTransferencia(id, '', email, function(res) {
+        if (res && res.ok) { Swal.fire({ icon: 'success', title: 'Transferência aceita!', timer: 1800, showConfirmButton: false }); carregarChavesPendentes(); }
+        else Swal.fire('Erro', (res && res.msg) || 'Falha.', 'error');
+      });
+    });
+}
+
+function _aprovChaveCancelarTransferencia(id) {
+  var email = AppState && AppState.usuario ? AppState.usuario.email : '';
+  Swal.fire({ title: 'Recusar transferência?', icon: 'warning', showCancelButton: true, confirmButtonText: 'Recusar', confirmButtonColor: '#dc2626' })
+    .then(function(r) {
+      if (!r.isConfirmed) return;
+      GAS.chaves.cancelarTransferencia(id, 'Recusado pelo destinatário.', email, function(res) {
+        if (res && res.ok) { Swal.fire({ icon: 'success', title: 'Recusada.', timer: 1800, showConfirmButton: false }); carregarChavesPendentes(); }
+        else Swal.fire('Erro', (res && res.msg) || 'Falha.', 'error');
+      });
+    });
+}
+
+function _recusarCadastroUI(id) {
+  Swal.fire({
+    title: 'Recusar cadastro?',
+    input: 'textarea',
+    inputLabel: 'Motivo da recusa (será enviado ao solicitante)',
+    inputPlaceholder: 'Explique o motivo...',
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonColor: '#dc2626',
+    confirmButtonText: '<i class="fas fa-times mr-1"></i>Recusar',
+    cancelButtonText: 'Cancelar',
+    preConfirm: function(val) {
+      if (!val || val.trim().length < 5) {
+        Swal.showValidationMessage('Informe o motivo (mínimo 5 caracteres).');
+        return false;
+      }
+      return val.trim();
+    }
+  }).then(function(result) {
+    if (!result.isConfirmed) return;
+
+    if (typeof showLoader === 'function') showLoader(true);
+
+    GAS.auth.recusarCadastro(id, AppState.usuario.email, result.value, function(res) {
+      if (typeof showLoader === 'function') showLoader(false);
+      if (!res || !res.ok) {
+        Swal.fire('Erro', (res && res.msg) || 'Falha ao recusar.', 'error');
+        return;
+      }
+      Swal.fire({ icon: 'success', title: 'Recusado.', text: 'E-mail enviado ao solicitante.', timer: 2000, showConfirmButton: false });
+      carregarCadastrosExternos();
+    }, function(err) {
+      if (typeof showLoader === 'function') showLoader(false);
+      Swal.fire('Erro', err.message || 'Falha ao recusar.', 'error');
+    });
+  });
+}
+</script>

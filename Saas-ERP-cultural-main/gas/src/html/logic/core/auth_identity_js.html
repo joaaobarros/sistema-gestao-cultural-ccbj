@@ -1,0 +1,66 @@
+<!--
+@file core/auth_identity_js.html
+@layer frontend/auth
+@description Helper não-bloqueante de identidade.
+
+  O boot do sistema NÃO depende deste arquivo.
+  A identidade primária vem de obterDadosIniciais() via google.script.run,
+  que resolve Session.getActiveUser() corretamente no domínio Google Workspace
+  mesmo em "Execute as: Me" porque google.script.run propaga o contexto OAuth.
+
+  Este módulo resolve Auth.email em paralelo (assíncrono) para módulos que
+  usem Auth.quandoPronto(). Não bloqueia, não exibe login, não cria tokens.
+-->
+<script>
+  window.__EMAIL_INICIAL__ = '<?= emailInicial ?>';
+  window.__APP_URL__       = '<?= appUrl ?>';
+</script>
+<script>
+
+// ═══════════════════════════════════════════════════════════════
+// AUTH — helper não-bloqueante de identidade
+// ═══════════════════════════════════════════════════════════════
+
+const Auth = {
+  email:      '',
+  pronto:     false,
+  _callbacks: [],
+
+  _definirEmail: function(email) {
+    if (this.pronto) return;
+    this.email  = email;
+    this.pronto = true;
+    if (typeof AppState !== 'undefined' && AppState.usuario && !AppState.usuario.email) {
+      AppState.usuario.email = email;
+    }
+    var cbs = this._callbacks.slice();
+    this._callbacks = [];
+    cbs.forEach(function(cb) { try { cb(email); } catch(e) {} });
+  },
+
+  quandoPronto: function(cb) {
+    if (this.pronto) cb(this.email);
+    else this._callbacks.push(cb);
+  }
+};
+
+// Resolução assíncrona em background — não bloqueia o boot
+document.addEventListener('DOMContentLoaded', function() {
+  var raw = window.__EMAIL_INICIAL__;
+  if (raw && raw.indexOf('@') >= 0) {
+    Auth._definirEmail(String(raw).toLowerCase().trim());
+    return;
+  }
+
+  // Fallback: servidor resolve Session.getActiveUser() via google.script.run
+  google.script.run
+    .withSuccessHandler(function(r) {
+      if (r && r.ok && r.email && r.email.indexOf('@') >= 0) {
+        Auth._definirEmail(r.email);
+      }
+    })
+    .withFailureHandler(function() {})
+    .obterEmailSessaoAtiva();
+});
+
+</script>

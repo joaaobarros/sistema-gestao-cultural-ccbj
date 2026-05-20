@@ -1,0 +1,785 @@
+<!--
+@file logic/mod_permissoes_v2_js.html
+@layer frontend/logic
+@description Sistema de permissões v2 — lógica completa do painel de gestão.
+             Estende GAS.permissoes, recalcula permissões localmente, gerencia
+             estado de edição, renderiza UI e sincroniza com backend.
+@dependencies core/app_state_js (AppState), services/server_bridge_js (GAS), mod_ui_componentes_js
+-->
+<script>
+
+// ── Extensão do GAS namespace ────────────────────────────────
+
+function _p2emailAtual() {
+  return (AppState && AppState.usuario && AppState.usuario.email) || '';
+}
+
+GAS.permissoesV2 = {
+  listar:        function(cb, err)        { GAS._call('listarPermissoesV2',           [_p2emailAtual()], cb, err); },
+  obter:         function(email, cb, err) { GAS._call('obterPermissoesUsuarioV2',     [email],           cb, err); },
+  salvar:        function(dados, cb, err) { GAS._call('salvarPermissoesUsuarioV2',    [dados],           cb, err); },
+  usuarios:      function(cb, err)        { GAS._call('obterUsuariosSistema',          [],                cb, err); },
+  sincronizar:   function(cb, err)        { GAS._call('sincronizarUsuariosSistema',    [],                cb, err); },
+  calcularAuto:  function(origem, perfil, cb, err) { GAS._call('calcularPermissoesAutomaticas', [origem, perfil], cb, err); },
+  auditoria:     function(cb, err)        { GAS._call('obterAuditoriaPermissoes',      [],                cb, err); }
+};
+
+// ── Estado do módulo ─────────────────────────────────────────
+
+var _p2S = {
+  usuarios:          [],
+  permissoes:        [],
+  emailSelecionado:  null,
+  editando:          null,
+  filtroStatus:      '',
+  filtroBusca:       '',
+  origemEditando:    false,
+  saving:            false,
+
+  get emailAtual()  { return AppState && AppState.usuario ? AppState.usuario.email || '' : ''; },
+  get isSA()        { return AppState && AppState.usuario ? !!AppState.usuario.isSuperadmin : false; },
+  get isAdmin()     { return AppState && AppState.usuario ? (!!AppState.usuario.isAdmin || !!AppState.usuario.isSuperadmin) : false; }
+};
+
+var _P2_MODULOS_LABELS = {
+  espacos:'Espaços & Agendamento',
+  reservas:'Aprovações',
+  estrategia:'Estratégia'
+};
+
+// Módulos ativos no escopo atual do sistema (ESPAÇOS, APROVAÇÕES, ESTRATÉGIA)
+// Acesso ao módulo "sistema" (admin/auditoria) é controlado pela lista Administradores, não por esta grade.
+var _P2_MODULOS_ORDEM = ['espacos','reservas','estrategia'];
+
+// Permissões base para os 3 módulos ativos do sistema
+var _P2_BASE_LOCAL = {
+  superadmin:          null,
+  admin:               {espacos:{v:1,e:1,x:1}, reservas:{v:1,e:1,x:1}, estrategia:{v:1,e:1,x:1}},
+  gestor:              {espacos:{v:1,e:1,x:0}, reservas:{v:1,e:1,x:0}, estrategia:{v:1,e:1,x:0}},
+  tecnico:             {espacos:{v:1,e:1,x:0}, reservas:{v:1,e:0,x:0}, estrategia:{v:1,e:0,x:0}},
+  rh:                  {espacos:{v:1,e:0,x:0}, reservas:{v:0,e:0,x:0}, estrategia:{v:1,e:0,x:0}},
+  comunicacao:         {espacos:{v:1,e:0,x:0}, reservas:{v:1,e:0,x:0}, estrategia:{v:1,e:1,x:0}},
+  visitante_controlado:{espacos:{v:1,e:0,x:0}, reservas:{v:0,e:0,x:0}, estrategia:{v:1,e:0,x:0}},
+  visitante:           {espacos:{v:1,e:0,x:0}, reservas:{v:0,e:0,x:0}, estrategia:{v:0,e:0,x:0}}
+};
+
+function _p2baseLocal(perfil, mod) {
+  if (perfil === 'superadmin') return {v:1,e:1,x:1};
+  var base = _P2_BASE_LOCAL[perfil] || {};
+  return base[mod] || {v:0,e:0,x:0};
+}
+
+// ── Carregamento de dados ────────────────────────────────────
+
+window._onShow_aba_permissoes_v2 = function() {
+  if (!_p2S.usuarios.length) p2CarregarDados();
+};
+
+function p2CarregarDados() {
+  _p2El('p2-lista-usuarios').innerHTML =
+    '<div class="p-4 text-center text-slate-300 text-xs"><i class="fas fa-spinner animate-spin block text-2xl mb-2"></i>Carregando...</div>';
+
+  GAS.permissoesV2.listar(function(data) {
+    if (!data) return;
+    _p2S.usuarios   = (data.usuarios   || []).sort(function(a,b){ return (a.nome||'').localeCompare(b.nome||''); });
+    _p2S.permissoes = data.permissoes  || [];
+    p2RenderizarLista();
+    if (_p2S.emailSelecionado) p2SelecionarUsuario(_p2S.emailSelecionado);
+  }, function(e) {
+    _p2El('p2-lista-usuarios').innerHTML =
+      '<div class="p-4 text-center text-red-300 text-xs"><i class="fas fa-exclamation-triangle block text-2xl mb-2"></i>Sem acesso ao painel</div>';
+  });
+}
+
+function p2SincronizarUsuarios() {
+  var btn = document.querySelector('#aba-permissoes-v2 button[onclick*="p2Sincronizar"]');
+  if (btn) { btn.innerHTML = '<i class="fas fa-spinner animate-spin text-[9px]"></i>'; btn.disabled = true; }
+  GAS.permissoesV2.sincronizar(function(r) {
+    if (btn) { btn.innerHTML = '<i class="fas fa-sync-alt text-[9px]"></i> Sync'; btn.disabled = false; }
+    p2CarregarDados();
+    if (typeof Swal !== 'undefined') Swal.fire({icon:'success',title:'Sincronizado',text:(r.total||0)+' usuários',timer:2000,showConfirmButton:false});
+  }, function() {
+    if (btn) { btn.innerHTML = '<i class="fas fa-sync-alt text-[9px]"></i> Sync'; btn.disabled = false; }
+  });
+}
+
+// ── Lista de usuários ────────────────────────────────────────
+
+function p2RenderizarLista() {
+  var lista = _p2FiltrarLista();
+  var el = _p2El('p2-lista-usuarios');
+
+  if (!lista.length) {
+    el.innerHTML = '<div class="p-4 text-center text-slate-300 text-xs">Nenhum usuário encontrado</div>';
+    _p2El('p2-total-label').textContent = '0 usuários';
+    return;
+  }
+
+  _p2El('p2-total-label').textContent = lista.length + ' de ' + _p2S.usuarios.length + ' usuários';
+
+  el.innerHTML = lista.map(function(u) {
+    var perm = _p2FindPerm(u.email);
+    var perfil = perm ? perm.perfil_base : (u.nivelAdmin || 'visitante_controlado');
+    var isSelected = u.email === _p2S.emailSelecionado;
+    var isNaoConfig = !u.configurado;
+
+    return '<div class="p2-user-card ' + (isSelected ? 'selected' : '') + '" onclick="p2SelecionarUsuario(\'' + _p2esc(u.email) + '\')">' +
+      '<div class="flex items-center gap-2">' +
+        '<div class="w-8 h-8 rounded-xl flex-shrink-0 flex items-center justify-center font-black text-sm uppercase ' + _p2AvatarCls(perfil) + '">' +
+          (u.nome || u.email).charAt(0) +
+        '</div>' +
+        '<div class="flex-1 min-w-0">' +
+          '<div class="flex items-center gap-1.5">' +
+            '<span class="text-xs font-bold text-slate-700 truncate">' + _p2esc(u.nome || u.email.split('@')[0]) + '</span>' +
+            (isNaoConfig ? '<span class="flex-shrink-0 text-[8px] font-black bg-amber-100 text-amber-600 px-1.5 rounded-full uppercase">novo</span>' : '') +
+          '</div>' +
+          '<p class="text-[9px] text-slate-400 truncate">' + _p2esc(u.email) + '</p>' +
+          '<span class="text-[9px] font-bold ' + _p2PerfilCor(perfil) + '">' + _p2PerfilLabel(perfil) + '</span>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function _p2FiltrarLista() {
+  return _p2S.usuarios.filter(function(u) {
+    var busca = _p2S.filtroBusca.toLowerCase();
+    if (busca && (u.email + ' ' + (u.nome||'')).toLowerCase().indexOf(busca) === -1) return false;
+    if (_p2S.filtroStatus === 'ok'  && !u.configurado) return false;
+    if (_p2S.filtroStatus === 'new' && u.configurado)  return false;
+    return true;
+  });
+}
+
+function p2FiltrarUsuarios(v) { _p2S.filtroBusca = v; p2RenderizarLista(); }
+
+function p2FiltroStatus(s) {
+  _p2S.filtroStatus = s;
+  ['todos','config','naoconfig'].forEach(function(k) {
+    var el = _p2El('p2-f-' + k);
+    if (el) el.classList.remove('active');
+  });
+  var map = {'':'todos','ok':'config','new':'naoconfig'};
+  var active = _p2El('p2-f-' + (map[s] || 'todos'));
+  if (active) active.classList.add('active');
+  p2RenderizarLista();
+}
+
+// ── Seleção de usuário ───────────────────────────────────────
+
+function p2SelecionarUsuario(email) {
+  _p2S.emailSelecionado = email;
+  _p2S.origemEditando   = false;
+
+  var usuario = _p2S.usuarios.find(function(u) { return u.email === email; }) || { email: email, nome: email.split('@')[0] };
+  var perm    = _p2FindPerm(email);
+
+  if (!perm) {
+    var perfil = usuario.nivelAdmin || 'visitante_controlado';
+    perm = {
+      email: email,
+      perfil_base: perfil,
+      origem: { cargo: '', funcoes: [], setores: [], donos_espaco: [] },
+      permissoes_automaticas: {},
+      permissoes_manuais: {},
+      permissoes_finais: {},
+      atualizadoEm: null
+    };
+  }
+
+  _p2S.editando = JSON.parse(JSON.stringify(perm));
+
+  var isSelf   = email === _p2S.emailAtual;
+  var isTargetSA = perm.perfil_base === 'superadmin';
+  var blocked  = (isTargetSA && !_p2S.isSA) || (isSelf && isTargetSA);
+
+  _p2El('p2-no-selection').classList.add('hidden');
+  _p2El('p2-detail').classList.remove('hidden');
+
+  _p2El('p2-avatar').textContent      = (usuario.nome || email).charAt(0).toUpperCase();
+  _p2El('p2-nome').textContent        = usuario.nome || email.split('@')[0];
+  _p2El('p2-email-label').textContent = email;
+  _p2El('p2-acesso-label').textContent = usuario.ultimoAcesso
+    ? 'Último acesso: ' + new Date(usuario.ultimoAcesso).toLocaleString('pt-BR')
+    : 'Nunca acessou';
+
+  _p2Show('p2-badge-naoconfig', !usuario.configurado);
+  _p2Show('p2-badge-sa',        isTargetSA);
+  _p2Show('p2-badge-bloq',      blocked);
+
+  _p2El('p2-btn-salvar').disabled = blocked;
+  _p2El('p2-perfil-select').disabled = blocked;
+  _p2El('p2-perfil-select').value = perm.perfil_base || 'visitante_controlado';
+
+  _p2SetOrigemForm(perm.origem || {});
+  _p2El('p2-origem-edit').classList.add('hidden');
+  _p2El('p2-origem-view').classList.remove('hidden');
+  _p2El('p2-origem-edit-btn').style.display = _p2S.isAdmin && !blocked ? '' : 'none';
+
+  p2RenderizarOrigem(perm.origem || {});
+  p2RenderizarAutomaticas(perm.permissoes_automaticas || {});
+  p2RenderizarManuais(perm.permissoes_manuais || {});
+  p2RenderizarFinaisLocal();
+
+  p2RenderizarLista();
+  p2CarregarSetor(email);
+}
+
+// ── Origem ───────────────────────────────────────────────────
+
+function p2RenderizarOrigem(origem) {
+  _p2El('p2-origem-cargo-view').textContent = origem.cargo || '—';
+  _p2El('p2-origem-funcoes-view').innerHTML = _p2Chips(origem.funcoes);
+  _p2El('p2-origem-setores-view').innerHTML = _p2Chips(origem.setores);
+  _p2El('p2-origem-espacos-view').innerHTML = _p2Chips(origem.donos_espaco);
+}
+
+function _p2SetoresDisponiveis() {
+  return (AppState && AppState.colecoes && AppState.colecoes.setores || [])
+    .filter(function(s) { return s && String(s).trim() !== '' && String(s).toUpperCase() !== 'SETORES'; });
+}
+
+function _p2PopularPickerSetores() {
+  var picker = _p2El('p2-setores-picker');
+  if (!picker) return;
+  var disponíveis = _p2SetoresDisponiveis();
+  picker.innerHTML = '<option value="">— selecionar setor —</option>'
+    + disponíveis.map(function(s) {
+        return '<option value="' + escaparHTML(s) + '">' + escaparHTML(s) + '</option>';
+      }).join('');
+}
+
+function _p2RenderSetoresChips(setores) {
+  var div = _p2El('p2-setores-chips');
+  if (!div) return;
+  div.innerHTML = (setores || []).map(function(s) {
+    return '<span style="display:inline-flex;align-items:center;gap:3px;background:#e0e7ff;color:#3730a3;'
+      + 'border-radius:6px;padding:2px 7px;font-size:10px;font-weight:700">'
+      + escaparHTML(s)
+      + '<button type="button" onclick="_p2RemoveSetor(\'' + escaparHTML(s) + '\')" '
+      + 'style="background:none;border:none;cursor:pointer;color:#6366f1;font-size:11px;line-height:1;padding:0 0 0 2px">&times;</button>'
+      + '</span>';
+  }).join('');
+}
+
+function _p2AddSetor() {
+  var picker = _p2El('p2-setores-picker');
+  var hidden = _p2El('p2-setores-input');
+  if (!picker || !picker.value) return;
+  var val   = picker.value.trim();
+  var atual = hidden ? hidden.value.split(',').map(function(s){ return s.trim(); }).filter(Boolean) : [];
+  if (!atual.includes(val)) {
+    atual.push(val);
+    if (hidden) hidden.value = atual.join(', ');
+    _p2RenderSetoresChips(atual);
+    p2OnOrigemChange();
+  }
+  picker.value = '';
+}
+
+function _p2RemoveSetor(s) {
+  var hidden = _p2El('p2-setores-input');
+  if (!hidden) return;
+  var atual = hidden.value.split(',').map(function(x){ return x.trim(); }).filter(Boolean);
+  atual = atual.filter(function(x){ return x !== s; });
+  hidden.value = atual.join(', ');
+  _p2RenderSetoresChips(atual);
+  p2OnOrigemChange();
+}
+
+function _p2SetOrigemForm(origem) {
+  _p2El('p2-cargo-input').value   = origem.cargo || '';
+  _p2El('p2-funcoes-input').value = (origem.funcoes     || []).join(', ');
+  _p2El('p2-espacos-input').value = (origem.donos_espaco|| []).join(', ');
+
+  _p2PopularPickerSetores();
+  var setores = (origem.setores || []).filter(Boolean);
+  var hidden  = _p2El('p2-setores-input');
+  if (hidden) hidden.value = setores.join(', ');
+  _p2RenderSetoresChips(setores);
+}
+
+function p2ToggleOrigemEdit() {
+  _p2S.origemEditando = !_p2S.origemEditando;
+  _p2El('p2-origem-edit').classList.toggle('hidden', !_p2S.origemEditando);
+  _p2El('p2-origem-view').classList.toggle('hidden', _p2S.origemEditando);
+  _p2El('p2-origem-edit-btn').textContent = _p2S.origemEditando ? '✕ Fechar' : '✎ Editar';
+  if (_p2S.origemEditando) {
+    // garante picker populado ao abrir (setores podem ter carregado após _p2SetOrigemForm)
+    var picker = _p2El('p2-setores-picker');
+    if (picker && picker.options.length <= 1) _p2PopularPickerSetores();
+  }
+}
+
+function _p2LerOrigem() {
+  function splitInput(v) {
+    return (v || '').split(',').map(function(s){ return s.trim(); }).filter(Boolean);
+  }
+  return {
+    cargo:       _p2El('p2-cargo-input').value.trim(),
+    funcoes:     splitInput(_p2El('p2-funcoes-input').value),
+    setores:     splitInput(_p2El('p2-setores-input') ? _p2El('p2-setores-input').value : ''),
+    donos_espaco:splitInput(_p2El('p2-espacos-input').value)
+  };
+}
+
+function p2OnOrigemChange() {
+  if (!_p2S.editando) return;
+  _p2S.editando.origem = _p2LerOrigem();
+}
+
+function p2RecalcularAuto() {
+  if (!_p2S.editando) return;
+  var origem = _p2LerOrigem();
+  _p2S.editando.origem = origem;
+  var perfil = _p2El('p2-perfil-select').value;
+
+  var btn = document.querySelector('#p2-origem-edit button[onclick*="RecalcularAuto"]');
+  if (btn) { btn.innerHTML = '<i class="fas fa-spinner animate-spin mr-1"></i> Calculando...'; btn.disabled = true; }
+
+  GAS.permissoesV2.calcularAuto(origem, perfil, function(auto) {
+    if (btn) { btn.innerHTML = '<i class="fas fa-bolt mr-1"></i> Recalcular automáticas'; btn.disabled = false; }
+    _p2S.editando.permissoes_automaticas = auto || {};
+    p2RenderizarAutomaticas(auto || {});
+    p2RenderizarOrigem(origem);
+    p2RenderizarFinaisLocal();
+  }, function() {
+    if (btn) { btn.innerHTML = '<i class="fas fa-bolt mr-1"></i> Recalcular automáticas'; btn.disabled = false; }
+  });
+}
+
+// ── Render: Automáticas ──────────────────────────────────────
+
+function p2RenderizarAutomaticas(auto) {
+  var el = _p2El('p2-auto-lista');
+  var ativos = _P2_MODULOS_ORDEM.filter(function(m) {
+    return auto[m] && (auto[m].visualizar || auto[m].editar || auto[m].excluir);
+  });
+
+  if (!ativos.length) {
+    el.innerHTML = '<div class="text-[10px] text-slate-300 text-center py-4">Nenhuma permissão automática derivada</div>';
+    return;
+  }
+
+  el.innerHTML = ativos.map(function(m) {
+    var a = auto[m] || {};
+    var origem = (a.origem || []).join(', ') || '';
+    return '<div class="flex items-center justify-between py-1.5 px-2 rounded-xl hover:bg-slate-50">' +
+      '<div>' +
+        '<span class="text-xs font-bold text-slate-700">' + (_P2_MODULOS_LABELS[m]||m) + '</span>' +
+        (origem ? '<span class="ml-1.5 text-[9px] text-violet-400 font-medium">' + _p2esc(origem) + '</span>' : '') +
+      '</div>' +
+      '<div class="flex gap-1">' +
+        _p2DotRead(a.visualizar) + _p2DotRead(a.editar) + _p2DotRead(a.excluir) +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+// ── Render: Manuais ──────────────────────────────────────────
+
+function p2RenderizarManuais(manuais) {
+  var tbody = _p2El('p2-manual-tbody');
+  var blocked = !_p2S.isAdmin || (_p2S.editando && _p2S.editando.perfil_base === 'superadmin' && !_p2S.isSA);
+
+  tbody.innerHTML = _P2_MODULOS_ORDEM.map(function(m) {
+    var mn = manuais[m] || {};
+    var lbl = _P2_MODULOS_LABELS[m] || m;
+    return '<tr class="p2-mod-row border-b border-slate-50">' +
+      '<td class="py-2 px-4 text-xs font-bold text-slate-700 whitespace-nowrap">' + lbl + '</td>' +
+      '<td class="py-2 px-3 text-center">' + _p2ToggleBtn(m, 'visualizar', mn.visualizar, blocked) + '</td>' +
+      '<td class="py-2 px-3 text-center">' + _p2ToggleBtn(m, 'editar',     mn.editar,     blocked) + '</td>' +
+      '<td class="py-2 px-3 text-center">' + _p2ToggleBtn(m, 'excluir',    mn.excluir,    blocked) + '</td>' +
+    '</tr>';
+  }).join('');
+}
+
+function _p2ToggleBtn(mod, acao, state, disabled) {
+  var s   = state === true ? 'true' : (state === false ? 'false' : 'null');
+  var dis = disabled ? 'disabled style="opacity:.4;cursor:not-allowed"' : '';
+  return '<button class="p2-toggle" data-mod="' + mod + '" data-acao="' + acao + '" data-state="' + s + '" ' +
+    'onclick="p2ToggleManual(this)" ' + dis + '>' +
+    _p2ToggleIcon(s) + '</button>';
+}
+
+function _p2ToggleIcon(s) {
+  if (s === 'true')  return '<i class="fas fa-check" style="font-size:9px"></i>';
+  if (s === 'false') return '<i class="fas fa-times" style="font-size:9px"></i>';
+  return '<i class="fas fa-minus" style="font-size:9px"></i>';
+}
+
+function p2ToggleManual(btn) {
+  if (!_p2S.editando) return;
+  var mod  = btn.dataset.mod;
+  var acao = btn.dataset.acao;
+  var cur  = btn.dataset.state;
+  var next = cur === 'null' ? 'true' : (cur === 'true' ? 'false' : 'null');
+
+  btn.dataset.state = next;
+  btn.innerHTML = _p2ToggleIcon(next);
+
+  if (!_p2S.editando.permissoes_manuais) _p2S.editando.permissoes_manuais = {};
+  if (!_p2S.editando.permissoes_manuais[mod]) _p2S.editando.permissoes_manuais[mod] = {};
+  _p2S.editando.permissoes_manuais[mod][acao] = next === 'null' ? null : next === 'true';
+
+  p2RenderizarFinaisLocal();
+}
+
+// ── Render: Finais (local) ───────────────────────────────────
+
+function p2RenderizarFinaisLocal() {
+  if (!_p2S.editando) return;
+  var perfil  = _p2El('p2-perfil-select').value;
+  var auto    = _p2S.editando.permissoes_automaticas || {};
+  var manuais = _p2S.editando.permissoes_manuais     || {};
+  var finais  = _p2ConsolidarLocal(perfil, auto, manuais);
+  p2RenderizarFinais(finais);
+}
+
+function _p2ConsolidarLocal(perfil, auto, manuais) {
+  if (perfil === 'superadmin') {
+    var r = {};
+    _P2_MODULOS_ORDEM.forEach(function(m) { r[m] = {v:true,e:true,x:true,exp:['superadmin']}; });
+    return r;
+  }
+  var result = {};
+  _P2_MODULOS_ORDEM.forEach(function(m) {
+    var b  = _p2baseLocal(perfil, m);
+    var a  = auto[m]    || {visualizar:false,editar:false,excluir:false,origem:[]};
+    var mn = manuais[m] || {};
+    var exp = [];
+
+    function res(acao, bv) {
+      if (mn[acao] === true)  { exp.push(acao+':manual(+)'); return true;  }
+      if (mn[acao] === false) { exp.push(acao+':manual(-)'); return false; }
+      if (a[acao])            { exp.push(acao+':auto(' + (a.origem||[]).slice(0,1).join(',') + ')'); return true; }
+      if (bv)                 { exp.push(acao+':perfil'); return true; }
+      return false;
+    }
+
+    var v = res('visualizar', !!b.v);
+    var e = res('editar',     !!b.e);
+    var x = res('excluir',    !!b.x);
+    if (!v) { e = false; x = false; }
+    if (!e) x = false;
+    result[m] = {v:v, e:e, x:x, exp:exp};
+  });
+  return result;
+}
+
+function p2RenderizarFinais(finais) {
+  var tbody = _p2El('p2-finais-tbody');
+  tbody.innerHTML = _P2_MODULOS_ORDEM.map(function(m) {
+    var f   = finais[m] || {v:false,e:false,x:false,exp:[]};
+    var lbl = _P2_MODULOS_LABELS[m] || m;
+    var anyOn = f.v || f.e || f.x;
+    return '<tr class="p2-mod-row border-b border-slate-50' + (anyOn ? '' : ' opacity-40') + '">' +
+      '<td class="py-2 px-4 text-xs font-bold text-slate-700 whitespace-nowrap">' + lbl + '</td>' +
+      '<td class="py-2 px-3 text-center">' + _p2DotRead(f.v||f.visualizar) + '</td>' +
+      '<td class="py-2 px-3 text-center">' + _p2DotRead(f.e||f.editar)     + '</td>' +
+      '<td class="py-2 px-3 text-center">' + _p2DotRead(f.x||f.excluir)    + '</td>' +
+      '<td class="py-2 px-4 text-[9px] text-slate-400 font-medium">' + _p2esc((f.exp||[]).slice(0,3).join(' · ')) + '</td>' +
+    '</tr>';
+  }).join('');
+}
+
+// ── onChange perfil ──────────────────────────────────────────
+
+function p2OnPerfilChange() {
+  if (!_p2S.editando) return;
+  _p2S.editando.perfil_base = _p2El('p2-perfil-select').value;
+  p2RenderizarFinaisLocal();
+}
+
+// ── Salvar ───────────────────────────────────────────────────
+
+function p2SalvarPermissoes() {
+  if (!_p2S.editando || _p2S.saving) return;
+  _p2S.saving = true;
+
+  var btn = _p2El('p2-btn-salvar');
+  btn.innerHTML = '<i class="fas fa-spinner animate-spin mr-1"></i> Salvando...';
+  btn.disabled = true;
+
+  var origemFinal = _p2S.origemEditando ? _p2LerOrigem() : (_p2S.editando.origem || {});
+
+  var dados = {
+    email:               _p2S.emailSelecionado,
+    emailEditor:         _p2S.emailAtual || (AppState && AppState.usuario ? AppState.usuario.email || '' : ''),
+    perfil_base:         _p2El('p2-perfil-select').value,
+    origem:              origemFinal,
+    permissoes_manuais:  _p2S.editando.permissoes_manuais || {}
+  };
+
+  GAS.permissoesV2.salvar(dados, function(res) {
+    _p2S.saving = false;
+    btn.innerHTML = '<i class="fas fa-save mr-1"></i> Salvar';
+    btn.disabled = false;
+
+    if (!res || !res.ok) {
+      if (typeof Swal !== 'undefined') Swal.fire({icon:'error',title:'Erro',text:res && res.msg ? res.msg : 'Falha ao salvar'});
+      return;
+    }
+
+    var idx = _p2S.permissoes.findIndex(function(p) { return p.email === _p2S.emailSelecionado; });
+    if (idx === -1) _p2S.permissoes.push(res.permissoes);
+    else _p2S.permissoes[idx] = res.permissoes;
+
+    var uidx = _p2S.usuarios.findIndex(function(u) { return u.email === _p2S.emailSelecionado; });
+    if (uidx !== -1) _p2S.usuarios[uidx].configurado = true;
+
+    _p2S.editando = JSON.parse(JSON.stringify(res.permissoes));
+    p2RenderizarOrigem(res.permissoes.origem || {});
+    // sincroniza chips/input do formulário de edição com os dados salvos
+    var _setoresSalvos = (res.permissoes.origem && res.permissoes.origem.setores) || [];
+    var _hiddenS = _p2El('p2-setores-input');
+    if (_hiddenS) _hiddenS.value = _setoresSalvos.join(', ');
+    _p2RenderSetoresChips(_setoresSalvos);
+    p2RenderizarAutomaticas(res.permissoes.permissoes_automaticas || {});
+    p2RenderizarManuais(res.permissoes.permissoes_manuais || {});
+    p2RenderizarFinais(_p2ConsolidarLocal(
+      res.permissoes.perfil_base,
+      res.permissoes.permissoes_automaticas || {},
+      res.permissoes.permissoes_manuais || {}
+    ));
+    p2RenderizarLista();
+
+    if (typeof _p2AtualizarAppState === 'function') _p2AtualizarAppState(res.permissoes);
+
+    if (typeof Swal !== 'undefined') Swal.fire({icon:'success',title:'Salvo!',timer:1500,showConfirmButton:false});
+  }, function(e) {
+    _p2S.saving = false;
+    btn.innerHTML = '<i class="fas fa-save mr-1"></i> Salvar';
+    btn.disabled = false;
+    if (typeof Swal !== 'undefined') Swal.fire({icon:'error',title:'Erro',text:e && e.message ? e.message : 'Erro ao salvar'});
+  });
+}
+
+// ── AppState integration ─────────────────────────────────────
+
+function _p2AtualizarAppState(perm) {
+  if (!AppState || !AppState.usuario) return;
+  if (perm.email !== _p2S.emailAtual) return;
+  var finais = _p2ConsolidarLocal(
+    perm.perfil_base,
+    perm.permissoes_automaticas || {},
+    perm.permissoes_manuais || {}
+  );
+  var modulos = {};
+  _P2_MODULOS_ORDEM.forEach(function(m) {
+    var f = finais[m] || {};
+    modulos[m] = { visualizar: !!(f.v||f.visualizar), editar: !!(f.e||f.editar), excluir: !!(f.x||f.excluir) };
+  });
+  AppState.usuario.permissoes = modulos;
+  AppState.usuario.perfil     = perm.perfil_base;
+  if (typeof aplicarPermissoesUI === 'function') aplicarPermissoesUI();
+}
+
+// ── Override temPermissao com dados v2 ───────────────────────
+
+var _temPermissaoV1 = typeof temPermissao === 'function' ? temPermissao : null;
+
+function temPermissao(modulo, acao) {
+  if (!AppState || !AppState.usuario) return false;
+  if (AppState.usuario.isSuperadmin) return true;
+  // Admins têm acesso total ao módulo sistema (gestão, auditoria, permissões)
+  if (AppState.usuario.isAdmin && modulo === 'sistema') return true;
+
+  var perm = _p2S.permissoes.find(function(p) { return p.email === _p2S.emailAtual; });
+  if (perm) {
+    var fin = perm.permissoes_finais;
+    if (fin && fin[modulo]) return !!fin[modulo][acao];
+    return false;
+  }
+
+  var modulos = AppState.usuario.permissoes;
+
+  if (modulos && modulos[modulo]) {
+    return !!modulos[modulo][acao];
+  }
+
+  // fallback seguro (visitante_controlado)
+  if (acao === 'visualizar') {
+    return ['espacos','comunicacao','relatorios','estrategia'].indexOf(modulo) !== -1;
+  }
+
+  return false;
+}
+
+// ── Override carregarPermissoes com dados v2 ─────────────────
+
+function carregarPermissoes(cb) {
+  var em = _p2S.emailAtual;
+
+  if (!em) {
+    if (typeof cb === 'function') cb();
+    document.dispatchEvent(new Event('permissoes:ready'));
+    return;
+  }
+
+  GAS.permissoesV2.obter(em, function(data) {
+
+    if (data && AppState && AppState.usuario) {
+
+      var finais = data.permissoes_finais || {};
+
+      if (!finais || Object.keys(finais).length === 0) {
+
+        finais = {};
+
+        _P2_MODULOS_ORDEM.forEach(function(m) {
+          var b = _p2baseLocal(data.perfil_base || 'visitante_controlado', m);
+
+          finais[m] = {
+            visualizar: !!b.v,
+            editar:     !!b.e,
+            excluir:    !!b.x
+          };
+        });
+
+      }
+      var modulos = {};
+
+      Object.keys(finais).forEach(function(m) {
+        modulos[m] = {
+          visualizar: !!finais[m].visualizar,
+          editar:     !!finais[m].editar,
+          excluir:    !!finais[m].excluir
+        };
+      });
+
+      AppState.usuario.permissoes = modulos;
+      AppState.usuario.perfil     = data.perfil_base || 'visitante_controlado';
+
+      var idx = _p2S.permissoes.findIndex(function(p) { return p.email === em; });
+      if (idx === -1) _p2S.permissoes.push(data);
+      else _p2S.permissoes[idx] = data;
+
+      aplicarPermissoesUI();
+    }
+
+    document.dispatchEvent(new Event('permissoes:ready'));
+
+    if (typeof cb === 'function') cb();
+
+  }, function() {
+
+    // Em erro de rede/backend: aplicar visitante_controlado para garantir entrada segura sem crash.
+    if (AppState && AppState.usuario) {
+      var _vcModulos = {};
+      _P2_MODULOS_ORDEM.forEach(function(m) {
+        var b = _p2baseLocal('visitante_controlado', m);
+        _vcModulos[m] = { visualizar: !!b.v, editar: !!b.e, excluir: !!b.x };
+      });
+      AppState.usuario.permissoes = _vcModulos;
+      AppState.usuario.perfil     = 'visitante_controlado';
+      if (typeof aplicarPermissoesUI === 'function') aplicarPermissoesUI();
+    }
+
+    document.dispatchEvent(new Event('permissoes:ready'));
+
+    if (typeof cb === 'function') cb();
+  });
+}
+
+// ── Aplicar permissões a atributos data-requer-permissao ────
+
+function aplicarPermissoesUI() {
+  document.querySelectorAll('[data-requer-permissao]').forEach(function(el) {
+    var val = el.getAttribute('data-requer-permissao') || '';
+    var partes = val.split(':');
+    var modulo = partes[0];
+    var acao   = partes[1] || 'visualizar';
+    if (!temPermissao(modulo, acao)) {
+      el.style.display = 'none';
+    }
+  });
+}
+
+// ── Helpers DOM ──────────────────────────────────────────────
+
+function _p2El(id)         { return document.getElementById(id); }
+function _p2Show(id, show) { var el = _p2El(id); if (el) el.classList.toggle('hidden', !show); }
+function _p2esc(s)         { return String(s||'').replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+
+function _p2FindPerm(email) {
+  return _p2S.permissoes.find(function(p) { return String(p.email||'').toLowerCase() === String(email||'').toLowerCase(); }) || null;
+}
+
+function _p2Chips(arr) {
+  if (!arr || !arr.length) return '<span class="text-[10px] text-slate-300">—</span>';
+  return arr.map(function(v) {
+    return '<span class="p2-chip p2-chip-auto">' + _p2esc(v) + '</span>';
+  }).join('');
+}
+
+function _p2DotRead(val) {
+  return val
+    ? '<span class="p2-dot p2-dot-on" title="Sim"></span>'
+    : '<span class="p2-dot p2-dot-off" title="Não"></span>';
+}
+
+function _p2AvatarCls(perfil) {
+  var map = {
+    superadmin:'bg-purple-600 text-white',
+    admin:'bg-slate-700 text-white',
+    gestor:'bg-blue-500 text-white',
+    tecnico:'bg-emerald-500 text-white',
+    rh:'bg-teal-500 text-white',
+    comunicacao:'bg-orange-500 text-white',
+    visitante_controlado:'bg-slate-200 text-slate-600',
+    visitante:'bg-slate-100 text-slate-400'
+  };
+  return map[perfil] || map.visitante;
+}
+
+function _p2PerfilLabel(perfil) {
+  var map = {
+    superadmin:'Superadmin',admin:'Admin',gestor:'Gestor',tecnico:'Técnico',
+    rh:'RH',comunicacao:'Comunicação',visitante_controlado:'Visitante Controlado',visitante:'Visitante'
+  };
+  return map[perfil] || perfil;
+}
+
+function _p2PerfilCor(perfil) {
+  var map = {
+    superadmin:'text-purple-600',admin:'text-slate-600',gestor:'text-blue-600',
+    tecnico:'text-emerald-600',rh:'text-teal-600',comunicacao:'text-orange-600',
+    visitante_controlado:'text-amber-600',visitante:'text-slate-400'
+  };
+  return map[perfil] || 'text-slate-400';
+}
+
+// ── Setor Principal do usuário ────────────────────────────────
+
+function _p2PopularSelectSetor(valorAtual) {
+  var sel = document.getElementById('p2-setor-select');
+  if (!sel) return;
+  var setores = (AppState && AppState.colecoes && AppState.colecoes.setores) || [];
+  sel.innerHTML = '<option value="">— nenhum —</option>'
+    + setores.filter(Boolean).map(function(s) {
+        return '<option value="' + escaparHTML(s) + '"' + (s === valorAtual ? ' selected' : '') + '>' + escaparHTML(s) + '</option>';
+      }).join('');
+}
+
+function p2CarregarSetor(email) {
+  _p2PopularSelectSetor('');
+  if (!email) return;
+  GAS.admin.obterSetor(email, function(setor) {
+    _p2PopularSelectSetor(setor || '');
+  }, function() {});
+}
+
+function p2SalvarSetor() {
+  var email = _p2S.emailSelecionado;
+  var sel   = document.getElementById('p2-setor-select');
+  if (!email || !sel) return;
+  var setor = sel.value;
+  GAS.admin.salvarSetor(email, setor, function() {
+    Swal.fire({ icon: 'success', title: 'Setor salvo', timer: 1500, showConfirmButton: false });
+  }, function(err) {
+    Swal.fire('Erro', (err && err.message) || 'Falha ao salvar setor.', 'error');
+  });
+}
+
+</script>

@@ -1,0 +1,258 @@
+<!-- ═══════════════════════════════════════════════════════
+     GestaoContratos.html
+     UI de Contratos/Metas/Rubricas/Indicadores + Auditoria
+════════════════════════════════════════════════════════ -->
+
+<style>
+/* ── Contratos Design System ───────────────────────────── */
+.ctr-card {
+  background:#fff;
+  border:1.5px solid #e2e8f0;
+  border-radius:20px;
+  overflow:hidden;
+  margin-bottom:12px;
+  box-shadow:0 1px 3px rgba(0,0,0,.04);
+  transition:box-shadow .2s;
+}
+.ctr-card:hover { box-shadow:0 4px 16px rgba(99,102,241,.08); }
+
+.ctr-card-header {
+  padding:18px 20px;
+  background:#fff;
+  display:flex;
+  align-items:flex-start;
+  gap:12px;
+  cursor:pointer;
+  user-select:none;
+}
+.ctr-card-header:hover { background:#fafafa; }
+
+.ctr-status-pill {
+  display:inline-flex;
+  align-items:center;
+  gap:5px;
+  font-size:9px;
+  font-weight:900;
+  letter-spacing:.07em;
+  text-transform:uppercase;
+  padding:3px 10px;
+  border-radius:99px;
+  white-space:nowrap;
+}
+.ctr-pill-ativo    { background:#d1fae5; color:#065f46; }
+.ctr-pill-encerrado{ background:#fee2e2; color:#991b1b; }
+.ctr-pill-suspenso { background:#fef3c7; color:#92400e; }
+.ctr-pill-vencendo { background:#fed7aa; color:#9a3412; }
+
+.ctr-progress-wrap {
+  height:5px;
+  background:#f1f5f9;
+  border-radius:99px;
+  overflow:hidden;
+  margin-top:8px;
+}
+.ctr-progress-fill {
+  height:100%;
+  border-radius:99px;
+  transition:width .5s ease;
+}
+
+.ctr-meta-block {
+  margin:0 12px 12px;
+  border:1.5px solid #e0e7ff;
+  border-radius:14px;
+  overflow:hidden;
+  background:#fff;
+}
+.ctr-meta-header {
+  padding:12px 16px;
+  background:linear-gradient(135deg,#eef2ff 0%,#f5f3ff 100%);
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+}
+.ctr-rubrica-row {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  padding:9px 14px;
+  border-bottom:1px solid #f8fafc;
+  transition:background .15s;
+}
+.ctr-rubrica-row:last-child { border-bottom:none; }
+.ctr-rubrica-row:hover { background:#fafbff; }
+
+.ctr-valor-tag {
+  font-size:11px;
+  font-weight:900;
+  color:#059669;
+  white-space:nowrap;
+}
+.ctr-btn {
+  display:inline-flex;
+  align-items:center;
+  gap:5px;
+  padding:5px 11px;
+  font-size:9px;
+  font-weight:900;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+  border:none;
+  border-radius:9px;
+  cursor:pointer;
+  transition:all .15s;
+}
+.ctr-btn-indigo { background:#e0e7ff; color:#4338ca; }
+.ctr-btn-indigo:hover { background:#4338ca; color:#fff; }
+.ctr-btn-green  { background:#d1fae5; color:#065f46; }
+.ctr-btn-green:hover  { background:#059669; color:#fff; }
+.ctr-btn-slate  { background:#f1f5f9; color:#475569; }
+.ctr-btn-slate:hover  { background:#64748b; color:#fff; }
+.ctr-btn-red    { background:#fee2e2; color:#dc2626; }
+.ctr-btn-red:hover    { background:#dc2626; color:#fff; }
+.ctr-btn-amber  { background:#fef3c7; color:#b45309; }
+.ctr-btn-amber:hover  { background:#d97706; color:#fff; }
+
+.ctr-icon-btn {
+  width:28px; height:28px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  border:none;
+  border-radius:8px;
+  cursor:pointer;
+  font-size:11px;
+  transition:all .15s;
+}
+
+.ctr-search-box {
+  width:100%;
+  padding:10px 14px 10px 36px;
+  border:1.5px solid #e2e8f0;
+  border-radius:12px;
+  font-size:13px;
+  outline:none;
+  transition:border-color .15s;
+}
+.ctr-search-box:focus { border-color:#6366f1; }
+
+/* ── Memória de Cálculo ───────────────────────────────── */
+.mem-row {
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  margin-bottom:10px;
+  padding:10px;
+  background:#fff;
+  border:1.5px solid #e2e8f0;
+  border-radius:10px;
+}
+.mem-linha-ctrl {
+  display:flex;
+  gap:6px;
+  flex-wrap:wrap;
+  align-items:center;
+}
+.mem-input {
+  padding:7px 10px;
+  border:1.5px solid #e2e8f0;
+  border-radius:9px;
+  font-size:12px;
+  font-weight:600;
+  outline:none;
+  transition:border-color .15s;
+  box-sizing:border-box;
+  font-family:inherit;
+  min-width:0;
+  width:100%;
+}
+.mem-linha-ctrl .mem-input { width:auto; flex:1; min-width:80px; }
+.mem-input:focus { border-color:#6366f1; }
+
+/* ── Scroll da Memória de Cálculo ─────────────────────── */
+#memScroll {
+  max-height: 320px;       /* mostra ~3 memórias */
+  overflow-y: auto;
+  padding-right: 4px;      /* evita cortar conteúdo com scrollbar */
+}
+
+/* Scroll bonito (Chrome, Edge, etc.) */
+#memScroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+#memScroll::-webkit-scrollbar-thumb {
+  background: #c7d2fe;
+  border-radius: 6px;
+}
+
+#memScroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ── Observação textarea grande ───────────────────────── */
+.ctr-obs-textarea {
+  width:100%;
+  box-sizing:border-box;
+  resize:vertical;
+  min-height:90px;
+  padding:10px 13px;
+  border:1.5px solid #e2e8f0;
+  border-radius:12px;
+  font-size:13px;
+  font-weight:600;
+  font-family:inherit;
+  outline:none;
+  transition:border-color .15s;
+}
+.ctr-obs-textarea:focus { border-color:#6366f1; box-shadow:0 0 0 3px rgba(99,102,241,.12); }
+
+/* ── Auditoria ────────────────────────────────────────── */
+.audit-chip {
+  display:inline-flex;
+  align-items:center;
+  gap:4px;
+  padding:2px 8px;
+  border-radius:6px;
+  font-size:9px;
+  font-weight:900;
+  text-transform:uppercase;
+  letter-spacing:.06em;
+}
+
+/* ── Swal personalizado ───────────────────────────────── */
+.swal2-popup.ctr-modal {
+  border-radius:24px !important;
+  padding:0 !important;
+  overflow:hidden !important;
+  max-width:1000px !important;
+  width:95vw !important;
+}
+.swal2-popup.ctr-modal .swal2-header {
+  padding:0 !important;
+}
+.swal2-popup.ctr-modal .swal2-content {
+  padding:0 !important;
+}
+.ctr-modal-body {
+  max-height:80vh;
+  overflow-y:auto;
+  scrollbar-width:thin;
+}
+
+/* ── Input base ───────────────────────────────────────── */
+.ctr-input {
+  width:100%; padding:9px 13px; font-size:13px; font-weight:600;
+  border:1.5px solid #e2e8f0; border-radius:12px; outline:none;
+  transition:border-color .15s,box-shadow .15s; background:#fff;
+  font-family:inherit; box-sizing:border-box;
+}
+.ctr-input:focus { border-color:#6366f1; box-shadow:0 0 0 3px rgba(99,102,241,.12); }
+.ctr-label {
+  display:block; font-size:10px; font-weight:900; letter-spacing:.07em;
+  text-transform:uppercase; color:#94a3b8; margin-bottom:6px;
+}
+</style>
+

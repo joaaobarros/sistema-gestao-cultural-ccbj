@@ -1,0 +1,468 @@
+<!--
+@file sidebar.html
+@type layout
+@description Barra lateral de navegação principal do sistema.
+@responsibility Menu de módulos, seção de favoritos (drag-and-drop), perfil do usuário.
+@dependencies toggleSidebar, mostrarAba, resetarFavoritos, onDropFavoritos,
+              onDragOverFavoritos (mod_ui_estado_js + mod_favoritos_js)
+-->
+
+  <!-- Sidebar -->
+  <aside id="sidebarPrincipal"
+  class="fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 text-white flex flex-col transform -translate-x-full md:translate-x-0 md:static transition-transform duration-300 ease-in-out shadow-2xl">
+
+    
+
+    <div class="md:hidden flex justify-end pt-2 px-4 pb-1">
+      <button onclick="toggleSidebar()" class="text-purple-300 hover:text-white">
+        <i class="fas fa-times text-xl"></i>
+      </button>
+    </div>
+
+    <div class="p-5 flex flex-col items-center border-b border-white/5">
+      <img src="https://ccbj.org.br/wp-content/themes/CCBJ/assets/images/logo.png"
+     alt="Logo CCBJ"
+     class="w-32 h-auto mb-2 filter brightness-0 invert opacity-90">
+      <div class="text-center">
+        <span class="text-[10px] font-black tracking-[0.2em] text-purple-400 uppercase">Sistema de Gestão</span>
+      </div>
+    </div>
+
+    <div class="px-3 py-3 border-b border-white/5">
+
+      <div class="flex justify-between items-center mb-2">
+        <span class="text-[9px] font-black text-slate-500 uppercase tracking-widest">
+          Favoritos
+        </span>
+        <button onclick="resetarFavoritos()"
+          class="text-[8px] text-slate-500 hover:text-white">
+          resetar
+        </button>
+      </div>
+
+      <div id="favoritosContainer"
+        class="space-y-1 min-h-[24px] max-h-[220px] overflow-y-auto pr-1 custom-scrollbar">
+      </div>
+
+    </div>
+    
+    <nav class="flex-1 px-3 py-4 overflow-y-auto custom-scrollbar space-y-1">
+
+      <!-- ── ESPAÇOS ──────────────────────────────────────── -->
+      <div id="modulo-espacos-grp" class="mb-1">
+        <button onclick="toggleModulo('mod-espacos')"
+          class="w-full flex items-center justify-between px-3 py-2 text-[9px] font-black text-slate-500 uppercase tracking-widest hover:text-purple-300 transition-colors">
+          <span><i class="fas fa-building mr-2 text-slate-600"></i>Espaços</span>
+          <i id="icon-mod-espacos" class="fas fa-chevron-up text-[8px] text-slate-600"></i>
+        </button>
+
+        <div id="mod-espacos" class="space-y-0.5 pl-2">
+
+          <button data-aba="aba-lista-reservas" data-requer-permissao="agenda:visualizar" class="tab-btn nav-item w-full">
+            <i class="fas fa-calendar-alt w-5 text-center text-xs"></i>
+            <span class="text-xs font-semibold">Agenda Geral</span>
+          </button>
+
+        </div>
+      </div>
+
+      <!-- ── PROGRAMAÇÃO ────────────────────────────────────── -->
+      <div id="modulo-programacao" class="mb-1">
+        <button onclick="toggleModulo('mod-programacao')"
+          class="w-full flex items-center justify-between px-3 py-2 text-[9px] font-black text-slate-500 uppercase tracking-widest hover:text-purple-300 transition-colors">
+          <span><i class="fas fa-theater-masks mr-2 text-slate-600"></i>Programação</span>
+          <i id="icon-mod-programacao" class="fas fa-chevron-up text-[8px] text-slate-600"></i>
+        </button>
+
+        <div id="mod-programacao" class="space-y-0.5 pl-2">
+
+          <button data-aba="aba-acoes" data-requer-permissao="reservas:visualizar" class="tab-btn nav-item w-full">
+            <i class="fas fa-theater-masks w-5 text-center text-xs"></i>
+            <span class="text-xs font-semibold">Ações</span>
+          </button>
+
+          <button data-aba="aba-habilitacoes" data-requer-permissao="agenda:visualizar" class="tab-btn nav-item w-full">
+            <i class="fas fa-id-card-alt w-5 text-center text-xs"></i>
+            <span class="text-xs font-semibold">Credenciamento</span>
+          </button>
+
+          <button data-aba="aba-pauta-externa" class="tab-btn nav-item w-full hidden">
+            <i class="fas fa-calendar-alt w-5 text-center text-xs"></i>
+            <span class="text-xs font-semibold flex-1 text-left">Cessão de Pauta</span>
+            <span id="badgePautasPendentes" class="hidden min-w-[18px] h-[18px] bg-teal-500 text-white text-[9px] font-black rounded-full flex items-center justify-center px-1">0</span>
+          </button>
+
+        </div>
+      </div>
+
+      <!-- ── OPERACIONAL ─────────────────────────────────────── -->
+      <div id="modulo-operacional" class="mb-1">
+        <button onclick="toggleModulo('mod-operacional')"
+          class="w-full flex items-center justify-between px-3 py-2 text-[9px] font-black text-slate-500 uppercase tracking-widest hover:text-purple-300 transition-colors">
+          <span><i class="fas fa-clipboard-check mr-2 text-slate-600"></i>Operacional</span>
+          <i id="icon-mod-operacional" class="fas fa-chevron-up text-[8px] text-slate-600"></i>
+        </button>
+
+        <div id="mod-operacional" class="space-y-0.5 pl-2">
+
+          <button data-aba="aba-aprovacoes" data-requer-permissao="reservas:editar" class="tab-btn nav-item w-full">
+            <i class="fas fa-check-double w-5 text-center text-xs"></i>
+            <span class="text-xs font-semibold flex-1 text-left">Aprovações</span>
+            <span id="badgeAprovacoes" class="hidden min-w-[18px] h-[18px] bg-red-500 text-white text-[9px] font-black rounded-full flex items-center justify-center px-1">0</span>
+          </button>
+
+
+        </div>
+      </div>
+
+      <!-- ── COMUNICAÇÃO ──────────────────────────────────── -->
+      <div id="modulo-comunicacao-grp" class="mb-1">
+        <button onclick="toggleModulo('mod-comunicacao')"
+          class="w-full flex items-center justify-between px-3 py-2 text-[9px] font-black text-slate-500 uppercase tracking-widest hover:text-purple-300 transition-colors">
+          <span><i class="fas fa-bullhorn mr-2 text-slate-600"></i>Comunicação</span>
+          <i id="icon-mod-comunicacao" class="fas fa-chevron-up text-[8px] text-slate-600"></i>
+        </button>
+
+        <div id="mod-comunicacao" class="space-y-0.5 pl-2">
+
+          <button id="btn-aba-rece" data-aba="aba-agenda-rece" data-requer-permissao="comunicacao:visualizar" class="tab-btn nav-item w-full">
+            <i class="fas fa-star w-5 text-center text-xs"></i>
+            <span class="text-xs font-semibold">Agenda RECE</span>
+          </button>
+
+          <button data-aba="aba-balcao" class="tab-btn nav-item w-full hidden">
+            <i class="fas fa-concierge-bell w-5 text-center text-xs"></i>
+            <span class="text-xs font-semibold">Balcão da Comunicação</span>
+          </button>
+
+        </div>
+      </div>
+
+      <!-- ── INFRAESTRUTURA ─────────────────────────────────── -->
+      <div id="modulo-infraestrutura-grp" class="mb-1">
+        <button onclick="toggleModulo('mod-infraestrutura')"
+          class="w-full flex items-center justify-between px-3 py-2 text-[9px] font-black text-slate-500 uppercase tracking-widest hover:text-purple-300 transition-colors">
+          <span><i class="fas fa-tools mr-2 text-slate-600"></i>Infraestrutura</span>
+          <i id="icon-mod-infraestrutura" class="fas fa-chevron-up text-[8px] text-slate-600"></i>
+        </button>
+
+        <div id="mod-infraestrutura" class="space-y-0.5 pl-2">
+
+          <button data-aba="aba-protocolo-chaves" data-requer-permissao="espacos:visualizar" class="tab-btn nav-item w-full">
+            <i class="fas fa-key w-5 text-center text-xs"></i>
+            <span class="text-xs font-semibold flex-1 text-left">Protocolo de Chaves</span>
+            <span id="badgeChavesPendentes" class="hidden min-w-[18px] h-[18px] bg-amber-500 text-white text-[9px] font-black rounded-full flex items-center justify-center px-1">0</span>
+          </button>
+
+          <button data-aba="aba-almoxarifado" class="tab-btn nav-item w-full hidden">
+            <i class="fas fa-boxes w-5 text-center text-xs"></i>
+            <span class="text-xs font-semibold">Almoxarifado</span>
+          </button>
+
+        </div>
+      </div>
+
+      <!-- ── ESTRATÉGIA ────────────────────────────────────── -->
+      <div id="modulo-estrategia-grp" class="mb-1">
+        <button onclick="toggleModulo('mod-estrategia')"
+          class="w-full flex items-center justify-between px-3 py-2 text-[9px] font-black text-slate-500 uppercase tracking-widest hover:text-purple-300 transition-colors">
+          <span><i class="fas fa-chess-king mr-2 text-slate-600"></i>Estratégia</span>
+          <i id="icon-mod-estrategia" class="fas fa-chevron-up text-[8px] text-slate-600"></i>
+        </button>
+
+        <div id="mod-estrategia" class="space-y-0.5 pl-2">
+
+          <button data-aba="aba-dashboard" data-requer-permissao="estrategia:visualizar" class="tab-btn nav-item w-full">
+            <i class="fas fa-chart-bar w-5 text-center text-xs"></i>
+            <span class="text-xs font-semibold">Dashboard Geral</span>
+          </button>
+
+          <button onclick="abrirPainelIA()" class="nav-item w-full flex items-center gap-2">
+            <span class="w-5 h-5 flex items-center justify-center rounded-md bg-purple-500/10 shrink-0">
+              <i class="fas fa-brain text-purple-400 text-[9px]"></i>
+            </span>
+            <span class="text-xs font-semibold">Inteligência IA</span>
+          </button>
+
+        </div>
+      </div>
+
+      <!-- ── TRABALHO (hidden — controlado por módulos) ───── -->
+      <div class="mb-1 hidden" id="modulo-trabalho">
+        <button onclick="toggleModulo('mod-trabalho')"
+          class="w-full flex items-center justify-between px-3 py-2 text-[9px] font-black text-slate-500 uppercase tracking-widest hover:text-purple-300 transition-colors">
+          <span><i class="fas fa-tasks mr-2 text-slate-600"></i>Trabalho</span>
+          <i id="icon-mod-trabalho" class="fas fa-chevron-up text-[8px] text-slate-600"></i>
+        </button>
+        <div id="mod-trabalho" class="space-y-0.5 pl-2">
+          <button data-aba="aba-tarefas" class="tab-btn nav-item w-full hidden">
+            <i class="fas fa-check-square w-5 text-center text-xs"></i>
+            <span class="text-xs font-semibold">Tarefas</span>
+          </button>
+          <button data-aba="aba-eficiencia" class="tab-btn nav-item w-full hidden">
+            <i class="fas fa-tachometer-alt w-5 text-center text-xs"></i>
+            <span class="text-xs font-semibold">Eficiência</span>
+          </button>
+        </div>
+      </div>
+
+
+      <!-- ── PESSOAS (hidden — controlado por módulos) ──────── -->
+      <div class="mb-1 hidden" id="modulo-pessoas">
+        <button onclick="toggleModulo('mod-pessoas')"
+          class="w-full flex items-center justify-between px-3 py-2 text-[9px] font-black text-slate-500 uppercase tracking-widest hover:text-purple-300 transition-colors">
+          <span><i class="fas fa-users mr-2 text-slate-600"></i>Pessoas</span>
+          <i id="icon-mod-pessoas" class="fas fa-chevron-up text-[8px] text-slate-600"></i>
+        </button>
+        <div id="mod-pessoas" class="space-y-0.5 pl-2">
+          <button data-aba="aba-rh" class="tab-btn nav-item w-full hidden">
+            <i class="fas fa-id-card w-5 text-center text-xs"></i>
+            <span class="text-xs font-semibold">RH / Depto. Pessoal</span>
+          </button>
+          <button data-aba="aba-contratacoes" class="tab-btn nav-item w-full hidden">
+            <i class="fas fa-file-contract w-5 text-center text-xs"></i>
+            <span class="text-xs font-semibold">Contratações</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- ── FINANCEIRO (hidden — controlado por módulos) ───── -->
+      <div class="mb-1 hidden" id="modulo-financeiro">
+        <button onclick="toggleModulo('mod-financeiro')"
+          class="w-full flex items-center justify-between px-3 py-2 text-[9px] font-black text-slate-500 uppercase tracking-widest hover:text-purple-300 transition-colors">
+          <span><i class="fas fa-chart-line mr-2 text-slate-600"></i>Financeiro</span>
+          <i id="icon-mod-financeiro" class="fas fa-chevron-up text-[8px] text-slate-600"></i>
+        </button>
+        <div id="mod-financeiro" class="space-y-0.5 pl-2">
+          <button data-aba="aba-solicitacoes" class="tab-btn nav-item w-full hidden">
+            <i class="fas fa-file-invoice w-5 text-center text-xs"></i>
+            <span class="text-xs font-semibold flex-1 text-left">Solicitações</span>
+            <span id="badgeSolicitacoesPendentes" class="hidden min-w-[18px] h-[18px] bg-violet-500 text-white text-[9px] font-black rounded-full flex items-center justify-center px-1">0</span>
+          </button>
+          <button data-aba="aba-contratos-fin" class="tab-btn nav-item w-full hidden">
+            <i class="fas fa-file-invoice-dollar w-5 text-center text-xs"></i>
+            <span class="text-xs font-semibold">Financeiro</span>
+          </button>
+          <button data-aba="aba-rel-financeiros" class="tab-btn nav-item w-full hidden">
+            <i class="fas fa-chart-pie w-5 text-center text-xs"></i>
+            <span class="text-xs font-semibold">Relatórios Financeiros</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- ── GOVERNANÇA (hidden — controlado por módulos) ──────── -->
+      <div class="mb-1 hidden" id="modulo-governanca">
+        <button onclick="toggleModulo('mod-governanca')"
+          class="w-full flex items-center justify-between px-3 py-2 text-[9px] font-black text-slate-500 uppercase tracking-widest hover:text-purple-300 transition-colors">
+          <span><i class="fas fa-gavel mr-2 text-slate-600"></i>Governança</span>
+          <i id="icon-mod-governanca" class="fas fa-chevron-up text-[8px] text-slate-600"></i>
+        </button>
+        <div id="mod-governanca" class="space-y-0.5 pl-2">
+          <button data-aba="aba-reunioes" class="tab-btn nav-item w-full hidden">
+            <i class="fas fa-comments w-5 text-center text-xs"></i>
+            <span class="text-xs font-semibold flex-1 text-left">Reuniões & Atas</span>
+            <span id="badgeEncAtrasados" class="hidden min-w-[18px] h-[18px] bg-red-500 text-white text-[9px] font-black rounded-full flex items-center justify-center px-1">0</span>
+          </button>
+          <button data-aba="aba-processos-institucionais" class="tab-btn nav-item w-full hidden">
+            <i class="fas fa-project-diagram w-5 text-center text-xs"></i>
+            <span class="text-xs font-semibold flex-1 text-left">Processos Institucionais</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- ── INSTITUCIONAL (hidden — controlado por módulos) ── -->
+      <div class="mb-1 hidden" id="modulo-institucional">
+        <button onclick="toggleModulo('mod-institucional')"
+          class="w-full flex items-center justify-between px-3 py-2 text-[9px] font-black text-slate-500 uppercase tracking-widest hover:text-purple-300 transition-colors">
+          <span><i class="fas fa-landmark mr-2 text-slate-600"></i>Institucional</span>
+          <i id="icon-mod-institucional" class="fas fa-chevron-up text-[8px] text-slate-600"></i>
+        </button>
+        <div id="mod-institucional" class="space-y-0.5 pl-2">
+          <button data-aba="aba-escuta" class="tab-btn nav-item w-full hidden">
+            <i class="fas fa-headphones w-5 text-center text-xs"></i>
+            <span class="text-xs font-semibold">Escuta Institucional</span>
+          </button>
+          <button data-aba="aba-codip" class="tab-btn nav-item w-full hidden">
+            <i class="fas fa-shield-alt w-5 text-center text-xs"></i>
+            <span class="text-xs font-semibold">CODIP</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- ── SISTEMA (superadmin/admin) ───────────────────── -->
+      <div class="mb-1 hidden" id="modulo-sistema">
+        <button onclick="toggleModulo('mod-sistema')"
+          class="w-full flex items-center justify-between px-3 py-2 text-[9px] font-black text-slate-500 uppercase tracking-widest hover:text-purple-300 transition-colors">
+          <span><i class="fas fa-server mr-2 text-slate-600"></i>Sistema</span>
+          <i id="icon-mod-sistema" class="fas fa-chevron-down text-[8px] text-slate-600"></i>
+        </button>
+        <div id="mod-sistema" class="space-y-0.5 pl-2 hidden">
+          <button id="btn-aba-gestao" data-aba="aba-gestao-admin" data-requer-permissao="sistema:visualizar" class="tab-btn nav-item w-full hidden">
+            <i class="fas fa-cog w-5 text-center text-xs"></i>
+            <span class="text-xs font-semibold">Configurações</span>
+          </button>
+          <button id="btn-aba-permissoes" data-aba="aba-permissoes-v2" data-requer-permissao="sistema:visualizar" class="tab-btn nav-item w-full hidden">
+            <i class="fas fa-user-lock w-5 text-center text-xs"></i>
+            <span class="text-xs font-semibold">Permissões</span>
+          </button>
+          <button id="btn-aba-auditoria" data-aba="aba-auditoria" data-requer-permissao="sistema:visualizar" class="tab-btn nav-item w-full hidden">
+            <i class="fas fa-shield-alt w-5 text-center text-xs"></i>
+            <span class="text-xs font-semibold">Auditoria</span>
+          </button>
+          <button id="btn-aba-gestao-modulos" data-aba="aba-gestao-modulos" class="tab-btn nav-item w-full hidden">
+            <i class="fas fa-cubes w-5 text-center text-xs"></i>
+            <span class="text-xs font-semibold">Módulos</span>
+          </button>
+        </div>
+      </div>
+
+    </nav>
+
+    <style>
+    /* Scroll fino e discreto */
+    #favoritosContainer::-webkit-scrollbar {
+      width: 4px;
+    }
+    #favoritosContainer::-webkit-scrollbar-thumb {
+      background: rgba(255,255,255,0.15);
+      border-radius: 4px;
+    }
+
+    /* Item de favorito */
+    .favorito-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 8px;
+      font-size: 10px;
+      font-weight: 700;
+      border-radius: 8px;
+      cursor: grab;
+      background: rgba(255,255,255,0.04);
+      transition: all .2s ease;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .favorito-item:hover {
+      background: rgba(255,255,255,0.08);
+    }
+
+    .favorito-item.dragging {
+      opacity: 0.5;
+    }
+
+    /* estado ativo igual subabas */
+    #favoritosContainer .ativo {
+      background: rgba(255,255,255,0.08);
+      border-left: 2px solid #a855f7;
+    }
+
+    #favoritosContainer .ativo i {
+      color: #c084fc;
+    }
+    </style>
+
+
+
+    <div class="text-center"><span class="text-[7px] font-black tracking-[0.1em] text-purple-400 uppercase">Desenvolvido por</span></div>
+    <div class="text-center"><span class="text-[8px] font-black tracking-[0.1em] text-purple-400 uppercase">João Paulo Barros</span></div>
+    <div class="text-center"><span class="text-[7px] font-black tracking-[0.1em] text-purple-400 uppercase">Abril/2026</span></div>
+
+    <div class="p-4 border-t border-white/10 bg-slate-950/50">
+      <div class="flex items-center gap-3 mb-3">
+        <div id="userAvatar" class="w-10 h-10 rounded-full bg-purple-600 flex items-center justify-center text-white font-black text-sm shrink-0 overflow-hidden">
+          <i class="fas fa-user text-xs"></i>
+        </div>
+        <div class="flex flex-col min-w-0">
+          <span id="userNome" class="text-white text-xs font-black truncate animate-pulse">Carregando...</span>
+          <span id="statusUser" class="text-purple-400 text-[10px] truncate"></span>
+        </div>
+      </div>
+      <button onclick="confirmarLogout()"
+        class="w-full flex items-center justify-center gap-2 px-3 py-2 bg-white/5 hover:bg-red-600/20 border border-white/10 hover:border-red-500/30 text-slate-400 hover:text-red-400 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all">
+        <i class="fas fa-right-from-bracket text-xs"></i>
+        Trocar / Sair
+      </button>
+    </div>
+  </aside>
+
+  <div id="sidebarOverlay" onclick="toggleSidebar()" class="fixed inset-0 bg-black/60 z-40 hidden md:hidden"></div>
+
+<script>
+(function() {
+  var STORE_KEY = 'sidebar_modules_v3';
+  var GRUPOS = ['mod-espacos','mod-programacao','mod-operacional','mod-infraestrutura','mod-comunicacao','mod-estrategia',
+                'mod-trabalho','mod-pessoas','mod-financeiro','mod-institucional','mod-governanca'];
+  var FAV_BLOQUEADOS = ['aba-tarefas','aba-almoxarifado','aba-balcao',
+    'aba-rh','aba-eficiencia','aba-contratos-fin','aba-contratacoes',
+    'aba-codip','aba-rel-financeiros','aba-escuta','aba-permissoes-v2','aba-gestao-modulos',
+    'aba-processos-institucionais','aba-solicitacoes','aba-pauta-externa'];
+
+  function _setGrupo(id, aberto) {
+    var el = document.getElementById(id);
+    var icon = document.getElementById('icon-' + id);
+    if (!el) return;
+    if (aberto) {
+      el.classList.remove('hidden');
+      if (icon) icon.className = 'fas fa-chevron-up text-[8px] text-slate-600';
+    } else {
+      el.classList.add('hidden');
+      if (icon) icon.className = 'fas fa-chevron-down text-[8px] text-slate-600';
+    }
+  }
+
+  function _salvarEstado() {
+    var estado = {};
+    GRUPOS.concat(['mod-sistema']).forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el) estado[id] = !el.classList.contains('hidden');
+    });
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(estado)); } catch(e) {}
+  }
+
+  // Limpa estado legado (v2) para forçar defaults da v3
+  try { localStorage.removeItem('sidebar_modules_v2'); } catch(e) {}
+
+  function _contarFavoritosValidos() {
+    try {
+      var favs = JSON.parse(localStorage.getItem('_fav_cache') || '[]');
+      return (favs || []).filter(function(f) {
+        return f && f.aba && FAV_BLOQUEADOS.indexOf(f.aba) === -1;
+      }).length;
+    } catch(e) { return 0; }
+  }
+
+  function _restaurarEstado() {
+    try {
+      var estado = JSON.parse(localStorage.getItem(STORE_KEY) || 'null');
+      if (estado) {
+        // Respeitar escolha salva pelo usuário para todos os grupos.
+        // mod-sistema: _setGrupo altera apenas o inner #mod-sistema div;
+        // o outer #modulo-sistema é controlado por configurarInterfacePorPermissao.
+        Object.keys(estado).forEach(function(id) {
+          _setGrupo(id, !!estado[id]);
+        });
+        return;
+      }
+      // Sem estado salvo: colapsar tudo se houver 2+ favoritos, senão expandir tudo
+      var colapsar = _contarFavoritosValidos() >= 2;
+      GRUPOS.forEach(function(id) { _setGrupo(id, !colapsar); });
+    } catch(e) {}
+  }
+
+  var _origToggle = window.toggleModulo;
+  window.toggleModulo = function(id) {
+    if (typeof _origToggle === 'function') _origToggle(id);
+    _salvarEstado();
+  };
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', _restaurarEstado);
+  } else {
+    _restaurarEstado();
+  }
+})();
+</script>
+

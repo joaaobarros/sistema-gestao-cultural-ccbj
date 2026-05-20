@@ -1,0 +1,210 @@
+<!--
+@file mod_acoes.html
+@type module
+@description Gestão de Ações Institucionais — núcleo integrador da plataforma.
+             Ações são iniciativas (cursos, eventos, espetáculos, oficinas, projetos)
+             às quais se vinculam reservas, contratos, chaves e demais recursos.
+@responsibility Estrutura HTML da aba de ações (#aba-acoes).
+@dependencies mod_acoes_js.html (_acoesCarregar, _acoesAbrirForm, _acoesSubmit, etc.)
+-->
+<section id="aba-acoes" class="tab-content animate-fadeIn hidden pb-20">
+
+  <!-- Cabeçalho -->
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+    <div>
+      <h2 class="text-xl font-black text-slate-800 flex items-center gap-2">
+        <i class="fas fa-theater-masks text-purple-600"></i>
+        Ações Institucionais
+      </h2>
+      <p class="text-xs text-slate-500 mt-0.5">Gerencie iniciativas, eventos e projetos da organização</p>
+    </div>
+    <div class="flex items-center gap-2">
+      <button onclick="_acoesAbrirForm(null)" class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-purple-600 rounded-xl hover:bg-purple-700 active:scale-95 transition-all">
+        <i class="fas fa-plus text-[10px]"></i> Nova Ação
+      </button>
+    </div>
+  </div>
+
+  <!-- Filtros de status -->
+  <div class="flex flex-wrap gap-2 mb-5" id="acoes-filtros">
+    <button onclick="_acoesFiltrar('')"    id="acoes-f-todos"         class="acoes-filtro acoes-filtro-ativo px-3 py-1 text-[10px] font-black rounded-full uppercase tracking-wide transition-all bg-slate-900 text-white">Todos</button>
+    <button onclick="_acoesFiltrar('rascunho')"    id="acoes-f-rascunho"     class="acoes-filtro px-3 py-1 text-[10px] font-black rounded-full uppercase tracking-wide transition-all bg-slate-100 text-slate-500 hover:bg-slate-200 cursor-pointer">Rascunho</button>
+    <button onclick="_acoesFiltrar('planejamento')" id="acoes-f-planejamento" class="acoes-filtro px-3 py-1 text-[10px] font-black rounded-full uppercase tracking-wide transition-all bg-slate-100 text-slate-500 hover:bg-slate-200 cursor-pointer">Planejamento</button>
+    <button onclick="_acoesFiltrar('aprovado')"    id="acoes-f-aprovado"     class="acoes-filtro px-3 py-1 text-[10px] font-black rounded-full uppercase tracking-wide transition-all bg-slate-100 text-slate-500 hover:bg-slate-200 cursor-pointer">Aprovado</button>
+    <button onclick="_acoesFiltrar('em_execucao')" id="acoes-f-em_execucao"  class="acoes-filtro px-3 py-1 text-[10px] font-black rounded-full uppercase tracking-wide transition-all bg-slate-100 text-slate-500 hover:bg-slate-200 cursor-pointer">Em Execução</button>
+    <button onclick="_acoesFiltrar('pausado')"     id="acoes-f-pausado"      class="acoes-filtro px-3 py-1 text-[10px] font-black rounded-full uppercase tracking-wide transition-all bg-slate-100 text-slate-500 hover:bg-slate-200 cursor-pointer">Pausado</button>
+    <button onclick="_acoesFiltrar('concluido')"   id="acoes-f-concluido"    class="acoes-filtro px-3 py-1 text-[10px] font-black rounded-full uppercase tracking-wide transition-all bg-slate-100 text-slate-500 hover:bg-slate-200 cursor-pointer">Concluído</button>
+  </div>
+
+  <!-- Container principal: lista + detalhe -->
+  <div class="flex flex-col lg:flex-row gap-4">
+
+    <!-- Lista de Ações -->
+    <div class="flex-1 min-w-0">
+      <div id="acoes-lista-loading" class="hidden text-center py-10 text-slate-400 text-sm">
+        <i class="fas fa-spinner fa-spin mr-2"></i>Carregando ações...
+      </div>
+      <div id="acoes-lista-vazia" class="hidden text-center py-12">
+        <i class="fas fa-theater-masks text-4xl text-slate-200 mb-3 block"></i>
+        <p class="text-slate-400 text-sm font-semibold">Nenhuma ação encontrada.</p>
+        <button onclick="_acoesAbrirForm(null)" class="mt-3 text-xs text-purple-600 font-bold hover:underline">Criar primeira ação</button>
+      </div>
+      <div id="acoes-lista" class="space-y-2"></div>
+    </div>
+
+    <!-- Painel de detalhe / formulário -->
+    <div id="acoes-painel" class="hidden w-full lg:w-96 shrink-0">
+
+      <!-- Formulário de criação/edição -->
+      <div id="acoes-form-container" class="hidden bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+        <div class="flex items-center justify-between mb-4">
+          <h3 id="acoes-form-titulo" class="text-sm font-black text-slate-800">Nova Ação</h3>
+          <button onclick="_acoesPainelFechar()" class="text-slate-400 hover:text-slate-600 text-xs">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        <form id="acoes-form" onsubmit="event.preventDefault(); _acoesSubmit()">
+          <input type="hidden" id="acoes-form-id">
+
+          <div class="space-y-3">
+            <div>
+              <label class="text-[10px] font-black text-slate-500 uppercase tracking-wide">Nome *</label>
+              <input id="acoes-f-nome" required type="text" maxlength="120"
+                class="mt-1 w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-400"
+                placeholder="Nome da ação">
+            </div>
+            <div>
+              <label class="text-[10px] font-black text-slate-500 uppercase tracking-wide">Tipo *</label>
+              <select id="acoes-f-tipo" required class="mt-1 w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-400">
+                <option value="">Selecione...</option>
+                <option value="curso">Curso</option>
+                <option value="oficina">Oficina</option>
+                <option value="espetaculo">Espetáculo</option>
+                <option value="evento">Evento</option>
+                <option value="campanha">Campanha</option>
+                <option value="laboratorio">Laboratório</option>
+                <option value="projeto_formativo">Projeto Formativo</option>
+                <option value="difusao">Ação de Difusão</option>
+                <option value="atividade_territorial">Atividade Territorial</option>
+                <option value="outro">Outro</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-[10px] font-black text-slate-500 uppercase tracking-wide">Responsável *</label>
+              <input id="acoes-f-responsavel" required type="email"
+                class="mt-1 w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-400"
+                placeholder="email@ccbj.org.br">
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <label class="text-[10px] font-black text-slate-500 uppercase tracking-wide">Início</label>
+                <input id="acoes-f-inicio" type="date" class="mt-1 w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-400">
+              </div>
+              <div>
+                <label class="text-[10px] font-black text-slate-500 uppercase tracking-wide">Fim</label>
+                <input id="acoes-f-fim" type="date" class="mt-1 w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-400">
+              </div>
+            </div>
+            <div>
+              <label class="text-[10px] font-black text-slate-500 uppercase tracking-wide">Descrição</label>
+              <textarea id="acoes-f-descricao" rows="3"
+                class="mt-1 w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-400 resize-none"
+                placeholder="Descrição da ação..."></textarea>
+            </div>
+          </div>
+
+          <div class="flex gap-2 mt-4">
+            <button type="button" onclick="_acoesPainelFechar()" class="flex-1 py-2 text-xs font-bold text-slate-600 bg-slate-100 rounded-xl hover:bg-slate-200 transition-all">
+              Cancelar
+            </button>
+            <button type="submit" id="acoes-form-btn" class="flex-1 py-2 text-xs font-bold text-white bg-purple-600 rounded-xl hover:bg-purple-700 active:scale-95 transition-all">
+              Salvar
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Painel de detalhe da Ação -->
+      <div id="acoes-detalhe-container" class="hidden bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
+        <div class="flex items-start justify-between gap-2">
+          <div class="flex-1 min-w-0">
+            <h3 id="acoes-d-nome" class="text-sm font-black text-slate-800 truncate"></h3>
+            <p id="acoes-d-tipo" class="text-[10px] text-slate-400 font-semibold uppercase tracking-wide mt-0.5"></p>
+          </div>
+          <button onclick="_acoesPainelFechar()" class="text-slate-400 hover:text-slate-600 text-xs shrink-0">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+
+        <!-- Status badge + transições -->
+        <div>
+          <div class="flex items-center gap-2 mb-2">
+            <span class="text-[10px] font-black text-slate-500 uppercase tracking-wide">Status</span>
+            <span id="acoes-d-status-badge" class="px-2 py-0.5 text-[9px] font-black rounded-full uppercase"></span>
+          </div>
+          <div id="acoes-d-transicoes" class="flex flex-wrap gap-1.5"></div>
+        </div>
+
+        <!-- Meta -->
+        <div class="space-y-1.5 text-xs text-slate-600">
+          <div><i class="fas fa-user w-4 text-slate-400"></i> <span id="acoes-d-responsavel"></span></div>
+          <div id="acoes-d-datas-row" class="hidden"><i class="fas fa-calendar w-4 text-slate-400"></i> <span id="acoes-d-datas"></span></div>
+          <div id="acoes-d-desc-row" class="hidden"><i class="fas fa-align-left w-4 text-slate-400 align-top"></i> <span id="acoes-d-desc" class="whitespace-pre-wrap"></span></div>
+        </div>
+
+        <!-- Painel Integrado — tabs por módulo -->
+        <div>
+          <div class="flex items-center justify-between mb-2">
+            <p class="text-[10px] font-black text-slate-500 uppercase tracking-wide">Painel Integrado</p>
+            <button onclick="_acoesCarregarPainelIntegrado(window._acoesDetalheAtual && window._acoesDetalheAtual.id)"
+              class="text-[9px] font-black text-slate-400 hover:text-purple-600 transition-colors uppercase tracking-wide">
+              <i class="fas fa-sync-alt mr-1"></i>Atualizar
+            </button>
+          </div>
+
+          <!-- Tabs -->
+          <div class="flex gap-1 mb-3" id="acoes-painel-tabs">
+            <button onclick="_acoesPainelTab('reservas')" id="acoes-tab-reservas"
+              class="acoes-tab acoes-tab-ativa flex-1 py-1.5 text-[9px] font-black rounded-lg uppercase tracking-wide transition-all bg-slate-800 text-white">
+              <i class="fas fa-calendar-alt mr-1"></i>Reservas
+            </button>
+            <button onclick="_acoesPainelTab('tarefas')" id="acoes-tab-tarefas"
+              class="acoes-tab flex-1 py-1.5 text-[9px] font-black rounded-lg uppercase tracking-wide transition-all bg-slate-100 text-slate-500 hover:bg-slate-200">
+              <i class="fas fa-check-square mr-1"></i>Tarefas
+            </button>
+            <button onclick="_acoesPainelTab('reunioes')" id="acoes-tab-reunioes"
+              class="acoes-tab flex-1 py-1.5 text-[9px] font-black rounded-lg uppercase tracking-wide transition-all bg-slate-100 text-slate-500 hover:bg-slate-200">
+              <i class="fas fa-users mr-1"></i>Reuniões
+            </button>
+          </div>
+
+          <div id="acoes-painel-loading" class="hidden text-slate-400 text-xs text-center py-3">
+            <i class="fas fa-spinner fa-spin mr-1"></i>Carregando dados...
+          </div>
+
+          <!-- Conteúdo das tabs -->
+          <div id="acoes-painel-reservas" class="acoes-painel-conteudo space-y-2"></div>
+          <div id="acoes-painel-tarefas"  class="acoes-painel-conteudo hidden space-y-2"></div>
+          <div id="acoes-painel-reunioes" class="acoes-painel-conteudo hidden space-y-2"></div>
+
+          <div id="acoes-painel-vazio" class="hidden text-slate-400 text-xs italic text-center py-3">
+            Nenhum item vinculado nesta categoria.
+          </div>
+
+          <!-- Ação rápida: vincular nova reserva -->
+          <button onclick="mostrarAba('aba-nova-reserva'); _acoesPreencherVinculoReserva(window._acoesDetalheAtual)"
+            class="mt-3 w-full py-2 text-[9px] font-black text-purple-600 border border-dashed border-purple-300 rounded-xl hover:bg-purple-50 transition-all uppercase tracking-wide">
+            <i class="fas fa-plus mr-1"></i>Nova Reserva para esta Ação
+          </button>
+        </div>
+
+        <!-- Editar -->
+        <button onclick="_acoesAbrirForm(window._acoesDetalheAtual)" class="w-full py-2 text-xs font-bold text-slate-600 bg-slate-100 rounded-xl hover:bg-slate-200 transition-all">
+          <i class="fas fa-pen mr-1"></i> Editar dados
+        </button>
+      </div>
+
+    </div><!-- /painel -->
+  </div><!-- /main container -->
+
+</section>

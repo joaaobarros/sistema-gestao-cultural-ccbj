@@ -1,0 +1,31 @@
+<!--
+@file header.html
+@type layout
+@description Cabeçalho fixo do app: título da aba ativa, badges de status e ações globais.
+@responsibility Exibir contexto da aba atual, acesso ao manual, sincronização de dados.
+@dependencies toggleSidebar, abrirManual, sincronizarAbaAtual (mod_ui_estado_js + mod_reservas_js)
+-->
+    <header class="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 md:px-8 shrink-0 sticky top-0 z-40">
+      <div class="flex items-center gap-3">
+        <button onclick="toggleSidebar()" class="md:hidden p-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">
+          <i class="fas fa-bars text-xl"></i>
+        </button>
+        <div class="flex flex-col md:flex-row md:items-center gap-1 md:gap-4">
+          <h2 id="tituloAba" class="text-sm md:text-lg font-bold text-slate-800 uppercase tracking-tight leading-none">Agenda Geral</h2>
+          <span id="contadorResultados" class="bg-purple-100 text-purple-700 text-[9px] md:text-[10px] font-black px-2 py-0.5 md:py-1 rounded-md w-fit">Sincronizando...</span>
+          <span id="badgeHoje" class="hidden bg-amber-100 text-amber-700 text-[9px] font-black px-2 py-0.5 rounded-md">0 hoje</span>
+        </div>
+      </div>
+      <div class="flex items-center gap-4 md:gap-6">
+        <div class="hidden sm:flex items-center gap-2 text-[10px] font-semibold text-slate-500 uppercase tracking-widest">
+          <span class="w-2 h-2 bg-green-500 rounded-full animate-ping"></span>
+          Online
+        </div>
+        <button onclick="abrirManual()" class="w-8 h-8 flex items-center justify-center rounded-full text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-all" title="Manual de Uso">
+          <i class="fas fa-circle-question text-sm"></i>
+        </button>
+        <button onclick="sincronizarAbaAtual()" class="w-8 h-8 flex items-center justify-center rounded-full text-slate-400 hover:text-purple-600 hover:bg-purple-50 transition-all" title="Atualizar Dados">
+          <i class="fas fa-sync-alt text-sm"></i>
+        </button>
+      </div>
+    </header>

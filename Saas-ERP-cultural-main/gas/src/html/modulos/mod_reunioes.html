@@ -1,0 +1,881 @@
+<!--
+  @file html/modulos/mod_reunioes.html
+  @layer frontend/modulos
+  @description Sistema de Gestão de Reuniões e Atas — 5 visões:
+               1. Lista/Calendário   — próximas reuniões e histórico
+               2. Ao Vivo            — timer, pauta, presença em tempo real
+               3. Ata                — editor de ata + encaminhamentos
+               4. Encaminhamentos    — Kanban de todos os encaminhamentos
+               5. Dashboard          — métricas e gargalos institucionais
+  @dependencies mod_reunioes_js.html (lógica), server_bridge_js (GAS.reunioes)
+-->
+
+<div id="aba-reunioes" class="tab-content hidden flex flex-col h-full pb-20">
+
+  <!-- ═══════════════════════════════════════════════════════════════════════ -->
+  <!-- HEADER                                                                   -->
+  <!-- ═══════════════════════════════════════════════════════════════════════ -->
+  <div class="flex items-center justify-between px-5 pt-4 pb-3 border-b border-slate-200 bg-white shrink-0">
+    <div>
+      <h2 class="text-lg font-bold text-slate-800">Reuniões & Atas</h2>
+      <p class="text-xs text-slate-500 mt-0.5">Decisões que viram execução</p>
+    </div>
+    <div class="flex gap-2">
+      <button onclick="_reu_atualizarVisaoAtual()" class="btn-icon text-slate-500 hover:text-slate-800" title="Atualizar">
+        <i class="fas fa-sync-alt text-sm"></i>
+      </button>
+      <button onclick="_reu_abrirModalNovaReuniao()" class="btn-primary text-xs px-3 py-1.5 flex items-center gap-1.5">
+        <i class="fas fa-plus text-xs"></i> Nova Reunião
+      </button>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════ -->
+  <!-- SUB-NAV                                                                  -->
+  <!-- ═══════════════════════════════════════════════════════════════════════ -->
+  <div class="flex gap-1 px-5 pt-3 pb-0 shrink-0 border-b border-slate-100 overflow-x-auto">
+    <button id="reu-tab-lista"           onclick="_reu_mostrarVisao('lista')"           class="reu-tab-btn reu-tab-ativo">
+      <i class="fas fa-list text-xs mr-1.5"></i>Lista
+    </button>
+    <button id="reu-tab-ao-vivo"         onclick="_reu_mostrarVisao('ao_vivo')"         class="reu-tab-btn">
+      <i class="fas fa-broadcast-tower text-xs mr-1.5"></i>Ao Vivo
+      <span id="reu-badge-ao-vivo" class="hidden ml-1 w-2 h-2 rounded-full bg-green-400 animate-pulse inline-block"></span>
+    </button>
+    <button id="reu-tab-ata"             onclick="_reu_mostrarVisao('ata')"             class="reu-tab-btn">
+      <i class="fas fa-file-alt text-xs mr-1.5"></i>Ata
+    </button>
+    <button id="reu-tab-encaminhamentos" onclick="_reu_mostrarVisao('encaminhamentos')" class="reu-tab-btn">
+      <i class="fas fa-tasks text-xs mr-1.5"></i>Encaminhamentos
+      <span id="reu-badge-enc-atrasados" class="hidden ml-1 px-1.5 py-0.5 rounded-full bg-red-500 text-white text-[8px] font-black">0</span>
+    </button>
+    <button id="reu-tab-dashboard"       onclick="_reu_mostrarVisao('dashboard')"       class="reu-tab-btn">
+      <i class="fas fa-chart-pie text-xs mr-1.5"></i>Dashboard
+    </button>
+    <button id="reu-tab-series"           onclick="_reu_mostrarVisao('series')"         class="reu-tab-btn">
+      <i class="fas fa-layer-group text-xs mr-1.5"></i>Séries
+    </button>
+  </div>
+
+  <div class="flex-1 overflow-auto">
+
+    <!-- ─────────────────────────────────────────────────────────────────── -->
+    <!-- VISÃO 1: LISTA                                                        -->
+    <!-- ─────────────────────────────────────────────────────────────────── -->
+    <div id="reu-visao-lista" class="reu-visao p-5">
+
+      <!-- Filtros -->
+      <div class="flex flex-wrap gap-2 mb-4">
+        <input id="reu-busca" type="text" placeholder="Buscar reunião..." oninput="_reu_filtrarLista()"
+          class="input-sm w-48" />
+        <select id="reu-filtro-status" onchange="_reu_filtrarLista()" class="input-sm">
+          <option value="">Todos os status</option>
+          <option value="planejada">Planejada</option>
+          <option value="agendada">Agendada</option>
+          <option value="em_andamento">Em andamento</option>
+          <option value="finalizada">Finalizada</option>
+          <option value="ata_rascunho">Ata em rascunho</option>
+          <option value="ata_aprovada">Ata aprovada</option>
+          <option value="arquivada">Arquivada</option>
+          <option value="cancelada">Cancelada</option>
+        </select>
+        <select id="reu-filtro-tipo" onchange="_reu_filtrarLista()" class="input-sm">
+          <option value="">Todos os tipos</option>
+          <option value="ordinaria">Ordinária</option>
+          <option value="extraordinaria">Extraordinária</option>
+          <option value="emergencial">Emergencial</option>
+        </select>
+        <button onclick="_reu_redefinirFiltros()" class="btn-ghost text-xs px-2 py-1 text-slate-500">
+          <i class="fas fa-times mr-1"></i>Redefinir
+        </button>
+      </div>
+
+      <!-- Lista de reuniões -->
+      <div id="reu-lista-container" class="space-y-2">
+        <div class="text-center py-10 text-slate-400 text-sm">
+          <i class="fas fa-circle-notch fa-spin text-2xl mb-2"></i>
+          <p>Carregando reuniões...</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─────────────────────────────────────────────────────────────────── -->
+    <!-- VISÃO 2: AO VIVO                                                      -->
+    <!-- ─────────────────────────────────────────────────────────────────── -->
+    <div id="reu-visao-ao_vivo" class="reu-visao hidden p-5">
+
+      <!-- Seletor de reunião ativa -->
+      <div id="reu-ao-vivo-seletor" class="mb-4">
+        <label class="label-sm">Reunião em andamento:</label>
+        <select id="reu-select-ao-vivo" onchange="_reu_selecionarReuniaoAoVivo(this.value)" class="input-sm w-full max-w-md mt-1">
+          <option value="">-- Selecione a reunião ativa --</option>
+        </select>
+      </div>
+
+      <div id="reu-ao-vivo-painel" class="hidden">
+
+        <!-- Título + Timer -->
+        <div class="flex items-center justify-between mb-4 p-4 bg-slate-800 rounded-xl text-white">
+          <div>
+            <p id="reu-ao-vivo-titulo" class="font-bold text-base"></p>
+            <p id="reu-ao-vivo-local"  class="text-slate-400 text-xs mt-0.5"></p>
+          </div>
+          <div class="text-right">
+            <div id="reu-timer" class="font-mono text-2xl font-black text-green-400">00:00:00</div>
+            <div class="flex gap-1 mt-1 justify-end">
+              <button onclick="_reu_toggleTimer()" id="reu-btn-timer"
+                class="text-[10px] px-2 py-1 rounded bg-green-500/20 text-green-300 hover:bg-green-500/40">
+                <i class="fas fa-play mr-1"></i>Iniciar
+              </button>
+              <button onclick="_reu_encerrarReuniao()"
+                class="text-[10px] px-2 py-1 rounded bg-red-500/20 text-red-300 hover:bg-red-500/40">
+                <i class="fas fa-stop mr-1"></i>Encerrar
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+
+          <!-- Pauta -->
+          <div class="lg:col-span-2">
+            <div class="flex items-center justify-between mb-2">
+              <h3 class="text-sm font-bold text-slate-700"><i class="fas fa-list-ol mr-1.5 text-purple-500"></i>Pauta</h3>
+              <span id="reu-ao-vivo-pauta-progresso" class="text-xs text-slate-500"></span>
+            </div>
+            <div id="reu-ao-vivo-pauta" class="space-y-2"></div>
+          </div>
+
+          <!-- Presença -->
+          <div>
+            <h3 class="text-sm font-bold text-slate-700 mb-2"><i class="fas fa-users mr-1.5 text-blue-500"></i>Presença</h3>
+            <div id="reu-ao-vivo-presenca" class="space-y-1"></div>
+            <button id="btn-salvar-presenca" onclick="_reu_salvarPresenca()" class="btn-ghost text-xs mt-2 w-full">
+              <i class="fas fa-save mr-1"></i>Salvar presença
+            </button>
+          </div>
+
+        </div>
+
+        <!-- Encaminhamentos rápidos -->
+        <div class="mt-4">
+          <div class="flex items-center justify-between mb-2">
+            <h3 class="text-sm font-bold text-slate-700"><i class="fas fa-arrow-right mr-1.5 text-orange-500"></i>Encaminhamentos da reunião</h3>
+            <button onclick="_reu_abrirModalEncAoVivo()" class="btn-ghost text-xs">
+              <i class="fas fa-plus mr-1"></i>Adicionar
+            </button>
+          </div>
+          <div id="reu-ao-vivo-encaminhamentos" class="space-y-1"></div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ─────────────────────────────────────────────────────────────────── -->
+    <!-- VISÃO 3: ATA                                                          -->
+    <!-- ─────────────────────────────────────────────────────────────────── -->
+    <div id="reu-visao-ata" class="reu-visao hidden p-5">
+
+      <!-- Seletor -->
+      <div class="mb-4 flex gap-2 items-end flex-wrap">
+        <div class="flex-1 min-w-[200px]">
+          <label class="label-sm">Reunião:</label>
+          <select id="reu-select-ata" onchange="_reuCarregarAta(this.value)" class="input-sm w-full mt-1">
+            <option value="">-- Selecione a reunião --</option>
+          </select>
+        </div>
+        <button id="reu-btn-ia-ata" onclick="_reu_assistenteIA()" class="btn-ghost text-xs px-3 py-1.5 border-purple-200 text-purple-600 hover:bg-purple-50" title="Assistente IA para organizar a ata">
+          <i class="fas fa-brain mr-1.5 text-purple-400"></i>Assistente IA
+        </button>
+      </div>
+
+      <div id="reu-ata-editor" class="hidden">
+
+        <!-- Status da ata -->
+        <div id="reu-ata-status-bar" class="mb-3 p-2 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-between text-xs">
+          <span id="reu-ata-status-label" class="font-bold"></span>
+          <div id="reu-ata-acoes" class="flex gap-2"></div>
+        </div>
+
+        <!-- Aprovações -->
+        <div id="reu-ata-aprovacoes" class="hidden mb-3 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs">
+          <p class="font-bold text-amber-700 mb-2"><i class="fas fa-user-check mr-1"></i>Aprovações pendentes</p>
+          <div id="reu-ata-aprovacoes-lista"></div>
+        </div>
+
+        <!-- Presença -->
+        <div class="mb-4">
+          <h3 class="section-title"><i class="fas fa-users mr-1.5"></i>Presença</h3>
+          <div class="grid grid-cols-2 gap-3 mt-2">
+            <div>
+              <label class="label-xs text-green-600">Presentes</label>
+              <div id="reu-ata-presentes" class="flex flex-wrap gap-1 mt-1 min-h-[32px] p-2 bg-green-50 rounded-lg border border-green-200"></div>
+            </div>
+            <div>
+              <label class="label-xs text-red-500">Ausentes</label>
+              <div id="reu-ata-ausentes"  class="flex flex-wrap gap-1 mt-1 min-h-[32px] p-2 bg-red-50 rounded-lg border border-red-200"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Abertura -->
+        <div class="mb-4">
+          <label class="label-sm"><i class="fas fa-door-open mr-1.5 text-slate-400"></i>Abertura</label>
+          <textarea id="reu-ata-abertura" rows="3" placeholder="Descreva a abertura da reunião..."
+            class="input-textarea mt-1"></textarea>
+        </div>
+
+        <!-- Deliberações / pontos de pauta -->
+        <div class="mb-4">
+          <div class="flex items-center justify-between mb-2">
+            <label class="label-sm"><i class="fas fa-gavel mr-1.5 text-slate-400"></i>Deliberações & Discussões</label>
+            <button onclick="_reu_adicionarDeliberacao()" class="btn-ghost text-xs">
+              <i class="fas fa-plus mr-1"></i>Adicionar ponto
+            </button>
+          </div>
+          <div id="reu-ata-deliberacoes" class="space-y-3"></div>
+        </div>
+
+        <!-- Encaminhamentos da ata -->
+        <div class="mb-4">
+          <div class="flex items-center justify-between mb-2">
+            <label class="label-sm"><i class="fas fa-arrow-circle-right mr-1.5 text-orange-500"></i>Encaminhamentos</label>
+            <button onclick="_reu_abrirModalNovoEnc()" class="btn-ghost text-xs border-orange-200 text-orange-600 hover:bg-orange-50">
+              <i class="fas fa-plus mr-1"></i>Novo encaminhamento
+            </button>
+          </div>
+          <div id="reu-ata-encaminhamentos-lista" class="space-y-2"></div>
+          <div id="reu-ata-aviso-incompletos" class="hidden mt-2 p-2 bg-amber-50 border border-amber-200 rounded text-xs text-amber-700">
+            <i class="fas fa-exclamation-triangle mr-1"></i>
+            <span id="reu-ata-aviso-incompletos-texto"></span>
+          </div>
+        </div>
+
+        <!-- Encerramento -->
+        <div class="mb-4">
+          <label class="label-sm"><i class="fas fa-door-closed mr-1.5 text-slate-400"></i>Encerramento</label>
+          <textarea id="reu-ata-encerramento" rows="2" placeholder="Próxima reunião, palavras finais..."
+            class="input-textarea mt-1"></textarea>
+        </div>
+
+        <!-- Ações -->
+        <div class="flex gap-2 mt-4 flex-wrap items-center">
+          <button id="btn-ata-salvar" onclick="_reu_salvarAta(false)" class="btn-ghost text-xs px-3 py-1.5">
+            <i class="fas fa-save mr-1"></i>Salvar rascunho
+          </button>
+          <button id="btn-ata-enviar" onclick="_reu_salvarAta(true)" class="btn-primary text-xs px-3 py-1.5">
+            <i class="fas fa-paper-plane mr-1"></i>Enviar para aprovação
+          </button>
+          <span id="reu-autosave-indicador" class="hidden text-xs text-slate-400 ml-auto">
+            <i class="fas fa-cloud text-slate-300 mr-1"></i><span></span>
+          </span>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ─────────────────────────────────────────────────────────────────── -->
+    <!-- VISÃO 4: ENCAMINHAMENTOS                                               -->
+    <!-- ─────────────────────────────────────────────────────────────────── -->
+    <div id="reu-visao-encaminhamentos" class="reu-visao hidden p-5">
+
+      <!-- Filtros -->
+      <div class="flex flex-wrap gap-2 mb-4 items-end">
+        <div>
+          <label class="label-xs">Responsável</label>
+          <select id="reu-enc-filtro-responsavel" onchange="_reu_filtrarEncaminhamentos()" class="input-sm mt-0.5">
+            <option value="">Todos</option>
+          </select>
+        </div>
+        <div>
+          <label class="label-xs">Prioridade</label>
+          <select id="reu-enc-filtro-prioridade" onchange="_reu_filtrarEncaminhamentos()" class="input-sm mt-0.5">
+            <option value="">Todas</option>
+            <option value="critica">Crítica</option>
+            <option value="alta">Alta</option>
+            <option value="media">Média</option>
+            <option value="baixa">Baixa</option>
+          </select>
+        </div>
+        <div>
+          <label class="label-xs">Visão</label>
+          <div class="flex gap-1 mt-0.5">
+            <button id="reu-enc-btn-kanban" onclick="_reu_toggleVisaoEnc('kanban')" class="btn-ghost text-xs px-2 py-1 bg-slate-100">
+              <i class="fas fa-columns text-xs"></i>
+            </button>
+            <button id="reu-enc-btn-lista" onclick="_reu_toggleVisaoEnc('lista')" class="btn-ghost text-xs px-2 py-1">
+              <i class="fas fa-list text-xs"></i>
+            </button>
+          </div>
+        </div>
+        <label class="flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer mt-3">
+          <input type="checkbox" id="reu-enc-filtro-atrasados" onchange="_reu_filtrarEncaminhamentos()" class="rounded">
+          Apenas atrasados
+        </label>
+        <label class="flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer mt-3">
+          <input type="checkbox" id="reu-enc-filtro-incompletos" onchange="_reu_filtrarEncaminhamentos()" class="rounded">
+          Incompletos
+        </label>
+        <button onclick="_reu_redefinirFiltrosEnc()" class="btn-ghost text-xs px-2 py-1 text-slate-500 mt-3">
+          <i class="fas fa-times mr-1"></i>Redefinir
+        </button>
+      </div>
+
+      <!-- Kanban -->
+      <div id="reu-enc-kanban" class="flex gap-3 overflow-x-auto pb-4">
+        <!-- Colunas geradas pelo JS -->
+      </div>
+
+      <!-- Lista -->
+      <div id="reu-enc-lista" class="hidden space-y-2">
+        <!-- Itens gerados pelo JS -->
+      </div>
+
+    </div>
+
+    <!-- ─────────────────────────────────────────────────────────────────── -->
+    <!-- VISÃO 5: DASHBOARD                                                    -->
+    <!-- ─────────────────────────────────────────────────────────────────── -->
+    <div id="reu-visao-dashboard" class="reu-visao hidden p-5">
+
+      <!-- Cards de métricas -->
+      <div id="reu-dash-cards" class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+        <div class="dash-card">
+          <div class="text-2xl font-black text-slate-800" id="reu-dash-total-reunioes">—</div>
+          <div class="text-xs text-slate-500 mt-0.5">Total de reuniões</div>
+        </div>
+        <div class="dash-card">
+          <div class="text-2xl font-black text-orange-600" id="reu-dash-enc-pendentes">—</div>
+          <div class="text-xs text-slate-500 mt-0.5">Encaminhamentos pendentes</div>
+        </div>
+        <div class="dash-card">
+          <div class="text-2xl font-black text-red-600" id="reu-dash-enc-atrasados">—</div>
+          <div class="text-xs text-slate-500 mt-0.5">Encaminhamentos atrasados</div>
+        </div>
+        <div class="dash-card">
+          <div class="text-2xl font-black text-amber-600" id="reu-dash-sem-execucao">—</div>
+          <div class="text-xs text-slate-500 mt-0.5">Reuniões sem execução</div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+        <!-- Próximas reuniões -->
+        <div class="card">
+          <h3 class="section-title mb-3"><i class="fas fa-calendar-check mr-1.5 text-blue-500"></i>Próximas 14 dias</h3>
+          <div id="reu-dash-proximas" class="space-y-2"></div>
+        </div>
+
+        <!-- Encaminhamentos críticos / atrasados -->
+        <div class="card">
+          <h3 class="section-title mb-3"><i class="fas fa-exclamation-circle mr-1.5 text-red-500"></i>Atenção imediata</h3>
+          <div id="reu-dash-atencao" class="space-y-2"></div>
+        </div>
+
+        <!-- Por responsável -->
+        <div class="card">
+          <h3 class="section-title mb-3"><i class="fas fa-user-clock mr-1.5 text-purple-500"></i>Encaminhamentos por responsável</h3>
+          <div id="reu-dash-por-responsavel" class="space-y-2"></div>
+        </div>
+
+        <!-- Timeline institucional -->
+        <div class="card">
+          <h3 class="section-title mb-3"><i class="fas fa-stream mr-1.5 text-indigo-500"></i>Timeline institucional</h3>
+          <div id="reu-dash-timeline" class="space-y-2 max-h-64 overflow-y-auto custom-scrollbar"></div>
+        </div>
+
+      </div>
+    </div>
+
+  </div><!-- fim flex-1 overflow-auto -->
+</div><!-- fim aba-reunioes -->
+
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- MODAIS                                                                   -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+
+<!-- Modal: Nova/Editar Reunião -->
+<div id="modal-nova-reuniao" class="modal-overlay hidden z-[200]" role="dialog" aria-modal="true" aria-labelledby="modal-reuniao-titulo">
+  <div class="modal-box w-full max-w-2xl">
+    <div class="modal-header">
+      <h3 id="modal-reuniao-titulo" class="modal-title">Nova Reunião</h3>
+      <button onclick="_reu_fecharModal('modal-nova-reuniao')" class="modal-close-btn">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+    <div class="modal-body space-y-4">
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div class="md:col-span-2">
+          <label class="label-sm">Título <span class="text-red-400">*</span></label>
+          <input id="reu-form-titulo" type="text" class="input-sm w-full mt-1" placeholder="Título da reunião">
+        </div>
+        <div>
+          <label class="label-sm">Data <span class="text-red-400">*</span></label>
+          <input id="reu-form-data" type="date" class="input-sm w-full mt-1">
+        </div>
+        <div>
+          <label class="label-sm">Tipo</label>
+          <select id="reu-form-tipo" class="input-sm w-full mt-1">
+            <option value="ordinaria">Ordinária</option>
+            <option value="extraordinaria">Extraordinária</option>
+            <option value="emergencial">Emergencial</option>
+          </select>
+        </div>
+        <div>
+          <label class="label-sm">Início</label>
+          <input id="reu-form-hora-inicio" type="time" class="input-sm w-full mt-1">
+        </div>
+        <div>
+          <label class="label-sm">Término</label>
+          <input id="reu-form-hora-termino" type="time" class="input-sm w-full mt-1">
+        </div>
+        <div>
+          <label class="label-sm">Modalidade</label>
+          <select id="reu-form-modalidade" class="input-sm w-full mt-1">
+            <option value="presencial">Presencial</option>
+            <option value="hibrido">Híbrido</option>
+            <option value="remoto">Remoto</option>
+          </select>
+        </div>
+        <div>
+          <label class="label-sm">Local / Sala</label>
+          <input id="reu-form-local" type="text" class="input-sm w-full mt-1" placeholder="Sala ou link">
+        </div>
+        <div class="md:col-span-2">
+          <label class="label-sm">Link remoto (opcional)</label>
+          <input id="reu-form-link" type="url" class="input-sm w-full mt-1" placeholder="https://meet.google.com/...">
+        </div>
+      </div>
+
+      <!-- Participantes -->
+      <div>
+        <label class="label-sm">Participantes</label>
+        <div id="reu-form-participantes-chips" class="flex flex-wrap gap-1 min-h-[32px] p-2 bg-slate-50 rounded-lg border border-slate-200 mt-1 cursor-pointer" onclick="_reu_abrirSeletorParticipantes()"></div>
+        <p class="text-xs text-slate-400 mt-0.5">Clique para adicionar participantes</p>
+      </div>
+
+      <!-- Pauta -->
+      <div>
+        <div class="flex items-center justify-between mb-1">
+          <label class="label-sm">Pauta</label>
+          <button onclick="_reu_adicionarItemPauta()" class="btn-ghost text-xs">
+            <i class="fas fa-plus mr-1"></i>Item
+          </button>
+        </div>
+        <div id="reu-form-pauta-lista" class="space-y-2"></div>
+      </div>
+
+      <!-- Descrição -->
+      <div>
+        <label class="label-sm">Descrição / Observações</label>
+        <textarea id="reu-form-descricao" rows="2" class="input-textarea mt-1" placeholder="Contexto, objetivos..."></textarea>
+      </div>
+
+      <!-- Opções -->
+      <div class="flex gap-4 items-center">
+        <label class="flex items-center gap-2 text-xs text-slate-600 cursor-pointer">
+          <input type="checkbox" id="reu-form-sigilosa" class="rounded">
+          Reunião sigilosa
+          <span class="text-[10px] text-slate-400">(apenas convidados veem)</span>
+        </label>
+      </div>
+
+    </div>
+    <div class="modal-footer">
+      <button onclick="_reu_fecharModal('modal-nova-reuniao')" class="btn-ghost text-sm">Cancelar</button>
+      <button id="btn-salvar-reuniao" onclick="_reu_salvarReuniao()" class="btn-primary text-sm">
+        <i class="fas fa-save mr-1"></i>Salvar Reunião
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Novo Encaminhamento -->
+<div id="modal-novo-enc" class="modal-overlay hidden z-[200]" role="dialog" aria-modal="true" aria-label="Novo Encaminhamento">
+  <div class="modal-box w-full max-w-lg">
+    <div class="modal-header">
+      <h3 class="modal-title">Novo Encaminhamento</h3>
+      <button onclick="_reu_fecharModal('modal-novo-enc')" class="modal-close-btn">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+    <div class="modal-body space-y-3">
+
+      <div id="reu-enc-alerta-campos" class="hidden p-2 bg-amber-50 border border-amber-200 rounded text-xs text-amber-700">
+        <i class="fas fa-exclamation-triangle mr-1"></i>
+        Um encaminhamento precisa de: <strong>O QUÊ, QUEM e QUANDO</strong>.
+        Campos faltando serão marcados em vermelho. O encaminhamento será salvo como incompleto.
+      </div>
+
+      <div>
+        <label class="label-sm">O QUÊ — Ação a realizar <span class="text-red-400">*</span></label>
+        <input id="reu-enc-form-titulo" type="text" class="input-sm w-full mt-1" placeholder="Descreva a ação...">
+      </div>
+      <div>
+        <label class="label-sm">Descrição detalhada</label>
+        <textarea id="reu-enc-form-desc" rows="2" class="input-textarea mt-1" placeholder="Contexto adicional..."></textarea>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="label-sm">QUEM — Responsável <span class="text-red-400">*</span></label>
+          <select id="reu-enc-form-responsavel" class="input-sm w-full mt-1">
+            <option value="">-- Selecione --</option>
+          </select>
+        </div>
+        <div>
+          <label class="label-sm">QUANDO — Prazo <span class="text-red-400">*</span></label>
+          <input id="reu-enc-form-prazo" type="date" class="input-sm w-full mt-1">
+        </div>
+      </div>
+      <div>
+        <label class="label-sm">Envolvidos (opcional)</label>
+        <div id="reu-enc-form-envolvidos-chips" class="flex flex-wrap gap-1 min-h-[32px] p-2 bg-slate-50 rounded border border-slate-200 mt-1 cursor-pointer" onclick="_reu_abrirSeletorEnvolvidos()">
+          <span class="text-xs text-slate-400">Clique para adicionar...</span>
+        </div>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="label-sm">Prioridade</label>
+          <select id="reu-enc-form-prioridade" class="input-sm w-full mt-1">
+            <option value="media">Média</option>
+            <option value="alta">Alta</option>
+            <option value="critica">Crítica</option>
+            <option value="baixa">Baixa</option>
+          </select>
+        </div>
+        <div>
+          <label class="label-sm">Módulo destino</label>
+          <select id="reu-enc-form-modulo" class="input-sm w-full mt-1">
+            <option value="">Nenhum</option>
+            <option value="tarefas">Tarefas</option>
+            <option value="rh">RH</option>
+            <option value="financeiro">Financeiro</option>
+            <option value="comunicacao">Comunicação</option>
+            <option value="reservas">Espaços/Reservas</option>
+          </select>
+        </div>
+      </div>
+
+    </div>
+    <div class="modal-footer">
+      <button onclick="_reu_fecharModal('modal-novo-enc')" class="btn-ghost text-sm">Cancelar</button>
+      <button id="btn-salvar-enc" onclick="_reu_salvarEncaminhamento()" class="btn-primary text-sm">
+        <i class="fas fa-arrow-right mr-1"></i>Salvar Encaminhamento
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Detalhe Encaminhamento -->
+<div id="modal-detalhe-enc" class="modal-overlay hidden z-[200]" role="dialog" aria-modal="true" aria-labelledby="modal-enc-titulo">
+  <div class="modal-box w-full max-w-lg">
+    <div class="modal-header">
+      <div>
+        <h3 id="modal-enc-titulo" class="modal-title text-base"></h3>
+        <p id="modal-enc-reuniao-origem" class="text-xs text-slate-500 mt-0.5"></p>
+      </div>
+      <button onclick="_reu_fecharModal('modal-detalhe-enc')" class="modal-close-btn">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+    <div class="modal-body space-y-3">
+
+      <!-- Responsáveis -->
+      <div id="modal-enc-responsaveis" class="flex flex-wrap gap-2"></div>
+
+      <!-- Status + prazo -->
+      <div class="flex items-center gap-3 text-xs">
+        <span id="modal-enc-status-badge"></span>
+        <span id="modal-enc-prazo" class="text-slate-500"></span>
+        <span id="modal-enc-prioridade-badge"></span>
+      </div>
+
+      <!-- Aviso de incompleto -->
+      <div id="modal-enc-aviso-incompleto" class="hidden p-2 bg-amber-50 border border-amber-200 rounded text-xs text-amber-700">
+        <i class="fas fa-exclamation-triangle mr-1"></i>
+        Encaminhamento incompleto. Faltam: <span id="modal-enc-campos-faltando"></span>
+      </div>
+
+      <!-- Descrição -->
+      <div id="modal-enc-descricao" class="text-sm text-slate-600 bg-slate-50 p-2 rounded"></div>
+
+      <!-- Histórico -->
+      <div>
+        <p class="label-sm mb-1">Histórico</p>
+        <div id="modal-enc-historico" class="space-y-1 max-h-36 overflow-y-auto custom-scrollbar"></div>
+      </div>
+
+      <!-- Comentários -->
+      <div>
+        <p class="label-sm mb-1">Comentários</p>
+        <div id="modal-enc-comentarios" class="space-y-1 max-h-28 overflow-y-auto custom-scrollbar mb-2"></div>
+        <div class="flex gap-2">
+          <input id="modal-enc-novo-comentario" type="text" class="input-sm flex-1" placeholder="Adicionar comentário...">
+          <button onclick="_reu_enviarComentario()" class="btn-ghost text-xs px-2">
+            <i class="fas fa-paper-plane"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Ações de status -->
+      <div>
+        <p class="label-sm mb-1">Alterar status</p>
+        <div id="modal-enc-acoes-status" class="flex flex-wrap gap-1"></div>
+      </div>
+
+      <!-- Gerar tarefa -->
+      <div id="modal-enc-gerar-tarefa" class="pt-1 border-t border-slate-100">
+        <button onclick="_reu_gerarTarefa()" class="btn-ghost text-xs text-blue-600 border-blue-200 hover:bg-blue-50 w-full">
+          <i class="fas fa-tasks mr-1.5"></i>Gerar Tarefa no sistema
+        </button>
+        <p id="modal-enc-tarefa-vinculada" class="text-xs text-slate-500 mt-1 text-center hidden"></p>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Seletor de participantes -->
+<div id="modal-seletor-participantes" class="modal-overlay hidden z-[300]" role="dialog" aria-modal="true" aria-label="Selecionar participantes">
+  <div class="modal-box w-full max-w-sm">
+    <div class="modal-header">
+      <h3 class="modal-title text-sm">Selecionar participantes</h3>
+      <button onclick="_reu_fecharModal('modal-seletor-participantes')" class="modal-close-btn">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+    <div class="modal-body">
+      <input id="reu-busca-participantes" type="text" placeholder="Buscar usuário..." oninput="_reu_filtrarUsuarios(this.value)"
+        class="input-sm w-full mb-2">
+      <div id="reu-lista-usuarios-seletor" class="space-y-1 max-h-64 overflow-y-auto custom-scrollbar"></div>
+    </div>
+    <div class="modal-footer">
+      <button onclick="_reu_fecharModal('modal-seletor-participantes')" class="btn-primary text-sm">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Assistente IA para Ata -->
+<div id="modal-ia-ata" class="modal-overlay hidden z-[200]" role="dialog" aria-modal="true" aria-label="Assistente IA — Organizar Ata">
+  <div class="modal-box w-full max-w-lg">
+    <div class="modal-header">
+      <div>
+        <h3 class="modal-title">Assistente IA — Organizar Ata</h3>
+        <p class="text-xs text-slate-500 mt-0.5">A IA auxilia na organização. Toda decisão precisa de validação humana.</p>
+      </div>
+      <button onclick="_reu_fecharModal('modal-ia-ata')" class="modal-close-btn">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+    <div class="modal-body space-y-3">
+      <div>
+        <label class="label-sm">Cole aqui as notas ou transcrição da reunião:</label>
+        <textarea id="reu-ia-input" rows="6" class="input-textarea mt-1"
+          placeholder="Exemplo: Fulano ficou de entregar o relatório até dia 30. Sicrana vai contratar o fornecedor. Aprovado orçamento de R$5.000..."></textarea>
+      </div>
+      <div id="reu-ia-resultado" class="hidden">
+        <p class="label-sm mb-1">Sugestão da IA (revise antes de aplicar):</p>
+        <div id="reu-ia-conteudo" class="bg-purple-50 border border-purple-200 rounded p-3 text-xs text-slate-700 space-y-2 max-h-48 overflow-y-auto custom-scrollbar"></div>
+        <button onclick="_reu_aplicarSugestaoIA()" class="btn-ghost text-xs mt-2 w-full border-purple-200 text-purple-600 hover:bg-purple-50">
+          <i class="fas fa-check mr-1"></i>Aplicar sugestão na ata
+        </button>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button onclick="_reu_fecharModal('modal-ia-ata')" class="btn-ghost text-sm">Fechar</button>
+      <button id="btn-enviar-ia" onclick="_reu_enviarParaIA()" class="btn-primary text-sm">
+        <i class="fas fa-brain mr-1.5"></i>Processar com IA
+      </button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- ESTILOS LOCAIS                                                            -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<style>
+/* ── Sub-tabs ────────────────────────────────────────────────────── */
+.reu-tab-btn {
+  padding: 6px 14px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+  border-bottom: 2px solid transparent;
+  transition: all .15s;
+  white-space: nowrap;
+  background: transparent;
+  border-top: none; border-left: none; border-right: none;
+  cursor: pointer;
+}
+.reu-tab-btn:hover { color: #7c3aed; }
+.reu-tab-ativo {
+  color: #7c3aed;
+  border-bottom-color: #7c3aed;
+}
+
+/* ── Visões ──────────────────────────────────────────────────────── */
+.reu-visao { animation: fadeIn .2s ease; }
+
+/* ── Cards de dashboard ─────────────────────────────────────────── */
+.dash-card {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 14px 16px;
+}
+
+/* ── Card de reunião ─────────────────────────────────────────────── */
+.reu-card {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 12px 14px;
+  transition: box-shadow .15s;
+  cursor: pointer;
+}
+.reu-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,.06); }
+.reu-card-status-bar {
+  width: 4px;
+  border-radius: 2px;
+  flex-shrink: 0;
+  align-self: stretch;
+}
+
+/* ── Kanban ──────────────────────────────────────────────────────── */
+.reu-kanban-col {
+  min-width: 220px;
+  max-width: 240px;
+  background: #f8fafc;
+  border-radius: 10px;
+  padding: 10px;
+  flex-shrink: 0;
+}
+.reu-kanban-col-header {
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #e2e8f0;
+}
+.reu-enc-card {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 10px;
+  margin-bottom: 6px;
+  cursor: pointer;
+  transition: box-shadow .15s;
+  font-size: 12px;
+}
+.reu-enc-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,.08); }
+.reu-enc-card.atrasado { border-left: 3px solid #ef4444; }
+.reu-enc-card.incompleto { border-left: 3px solid #f59e0b; }
+
+/* ── Item de pauta ao vivo ───────────────────────────────────────── */
+.reu-pauta-item {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 10px;
+  background: white;
+}
+.reu-pauta-item.ativo {
+  border-color: #7c3aed;
+  background: #faf5ff;
+}
+.reu-pauta-item.discutido {
+  border-color: #10b981;
+  background: #f0fdf4;
+  opacity: .7;
+}
+
+/* ── Avatar ──────────────────────────────────────────────────────── */
+.reu-avatar {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px; font-weight: 800; color: white;
+  flex-shrink: 0;
+}
+
+/* ── Participante chip ───────────────────────────────────────────── */
+.reu-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 8px 2px 6px;
+  border-radius: 20px;
+  font-size: 11px; font-weight: 600;
+  background: #ede9fe; color: #5b21b6;
+}
+.reu-chip button { background: none; border: none; cursor: pointer; color: #7c3aed; font-size: 10px; padding: 0; }
+
+/* ── Tag de status ───────────────────────────────────────────────── */
+.reu-tag { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 20px; font-size: 10px; font-weight: 700; }
+.reu-tag-gray    { background: #f1f5f9; color: #64748b; }
+.reu-tag-blue    { background: #dbeafe; color: #1d4ed8; }
+.reu-tag-green   { background: #dcfce7; color: #15803d; }
+.reu-tag-indigo  { background: #e0e7ff; color: #4338ca; }
+.reu-tag-yellow  { background: #fef3c7; color: #92400e; }
+.reu-tag-purple  { background: #ede9fe; color: #5b21b6; }
+.reu-tag-slate   { background: #f1f5f9; color: #475569; }
+.reu-tag-red     { background: #fee2e2; color: #b91c1c; }
+.reu-tag-orange  { background: #ffedd5; color: #c2410c; }
+
+/* ── Deliberação editor ──────────────────────────────────────────── */
+.reu-delib-item {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 10px;
+  background: #fafafa;
+}
+.reu-delib-item:hover { background: white; }
+
+/* ── Inputs helpers ──────────────────────────────────────────────── */
+.input-sm { border: 1px solid #e2e8f0; border-radius: 6px; padding: 5px 8px; font-size: 12px; color: #1e293b; background: white; }
+.input-sm:focus { outline: none; border-color: #7c3aed; box-shadow: 0 0 0 2px rgba(124,58,237,.1); }
+.input-textarea { width: 100%; border: 1px solid #e2e8f0; border-radius: 6px; padding: 7px 8px; font-size: 12px; color: #1e293b; resize: vertical; background: white; }
+.input-textarea:focus { outline: none; border-color: #7c3aed; box-shadow: 0 0 0 2px rgba(124,58,237,.1); }
+.label-sm  { font-size: 11px; font-weight: 700; color: #475569; display: block; }
+.label-xs  { font-size: 10px; font-weight: 700; color: #64748b; display: block; }
+.section-title { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: #475569; }
+.card { background: white; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px; }
+
+/* ── Botões ──────────────────────────────────────────────────────── */
+.btn-primary { background: #7c3aed; color: white; border: none; border-radius: 6px; padding: 6px 14px; font-size: 12px; font-weight: 700; cursor: pointer; transition: background .15s; }
+.btn-primary:hover { background: #6d28d9; }
+.btn-ghost  { background: transparent; color: #475569; border: 1px solid #e2e8f0; border-radius: 6px; padding: 5px 12px; font-size: 12px; font-weight: 600; cursor: pointer; transition: all .15s; }
+.btn-ghost:hover { background: #f8fafc; }
+.btn-icon   { background: none; border: none; cursor: pointer; padding: 4px; transition: color .15s; }
+
+/* ── Modal ───────────────────────────────────────────────────────── */
+/*
+ * display: none como padrão evita conflito com Tailwind .hidden
+ * (mesma especificidade 0,1,0 — quem aparece por último no CSS vence,
+ *  e este arquivo é carregado depois do CDN Tailwind)
+ * .modal-overlay:not(.hidden) tem especificidade 0,2,0 e garante display:flex
+ * quando o modal está visível, independente da ordem da cascata.
+ */
+.modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.45);
+  align-items: center; justify-content: center;
+  padding: 16px;
+  display: none;
+  z-index: 200;
+}
+.modal-overlay:not(.hidden) { display: flex; }
+.modal-overlay.z-\[300\]    { z-index: 300; }
+
+.modal-box     { background: white; border-radius: 14px; max-height: 90vh; overflow-y: auto; width: 100%; box-shadow: 0 24px 64px rgba(0,0,0,.22); }
+.modal-header  { display: flex; align-items: flex-start; justify-content: space-between; padding: 16px 20px 0; }
+.modal-title   { font-size: 14px; font-weight: 800; color: #1e293b; }
+.modal-body    { padding: 14px 20px; }
+.modal-footer  { display: flex; gap: 8px; justify-content: flex-end; padding: 12px 20px 16px; border-top: 1px solid #f1f5f9; }
+.modal-close-btn { background: none; border: none; cursor: pointer; color: #94a3b8; font-size: 16px; padding: 0; }
+.modal-close-btn:hover { color: #475569; }
+
+/* ── Animação ────────────────────────────────────────────────────── */
+@keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+</style>

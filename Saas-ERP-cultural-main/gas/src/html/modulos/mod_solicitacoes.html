@@ -1,0 +1,289 @@
+<!-- mod_solicitacoes.html — Solicitações Internas Institucionais -->
+<div id="aba-solicitacoes" class="tab-content hidden animate-fadeIn">
+
+  <!-- ── Header ───────────────────────────────────────────────────────────── -->
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+    <div class="flex items-center gap-2">
+      <i class="fas fa-file-invoice text-violet-500 text-xl"></i>
+      <h2 class="text-lg font-bold text-gray-800">Solicitações Institucionais</h2>
+      <span id="sol-badge-total" class="ml-1 bg-violet-100 text-violet-700 text-xs font-semibold px-2 py-0.5 rounded-full hidden">0</span>
+    </div>
+    <div class="flex items-center gap-2 flex-wrap">
+      <input type="text" id="sol-busca" placeholder="Buscar por título ou protocolo…"
+        class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400 w-56"
+        oninput="solFiltrarLista()">
+      <select id="sol-filtro-status" onchange="solFiltrarLista()"
+        class="border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400">
+        <option value="">Todos os status</option>
+        <option value="rascunho">Rascunho</option>
+        <option value="solicitada">Solicitada</option>
+        <option value="em_analise">Em Análise</option>
+        <option value="aguardando_ajuste">Aguard. Ajuste</option>
+        <option value="aprovada">Aprovada</option>
+        <option value="parcialmente_aprovada">Parcialmente Aprovada</option>
+        <option value="em_execucao">Em Execução</option>
+        <option value="concluida">Concluída</option>
+        <option value="cancelada">Cancelada</option>
+      </select>
+      <select id="sol-filtro-tipo" onchange="solFiltrarLista()"
+        class="border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400">
+        <option value="">Todos os tipos</option>
+        <option value="bolsista">Bolsista</option>
+        <option value="professor">Professor</option>
+        <option value="servico">Serviço</option>
+        <option value="transporte">Transporte</option>
+        <option value="traslado">Traslado</option>
+        <option value="alimentacao">Alimentação</option>
+        <option value="estrutura_tecnica">Estrutura Técnica</option>
+        <option value="aluguel_equipamento">Aluguel de Equip.</option>
+        <option value="compra">Compra</option>
+        <option value="aquisicao">Aquisição</option>
+        <option value="material_grafico">Material Gráfico</option>
+        <option value="camarim">Camarim</option>
+        <option value="logistica">Logística</option>
+      </select>
+      <button onclick="solAbrirModalCriar()"
+        class="bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition">
+        <i class="fas fa-plus text-xs"></i> Nova Solicitação
+      </button>
+      <button onclick="solCarregar()" class="text-gray-500 hover:text-gray-700 p-1.5 rounded-lg hover:bg-gray-100 transition" title="Atualizar">
+        <i class="fas fa-sync-alt text-sm"></i>
+      </button>
+    </div>
+  </div>
+
+  <!-- ── Stats bar ─────────────────────────────────────────────────────────── -->
+  <div id="sol-stats-bar" class="flex flex-wrap gap-2 mb-4"></div>
+
+  <!-- ── Layout: lista + detalhe ────────────────────────────────────────────── -->
+  <div class="flex flex-col lg:flex-row gap-4" style="min-height:500px">
+
+    <!-- Lista -->
+    <div class="w-full lg:w-80 xl:w-96 flex-shrink-0">
+      <div id="sol-lista" class="space-y-2 overflow-y-auto pr-1" style="max-height:70vh">
+        <div class="text-center text-gray-400 py-10">
+          <i class="fas fa-spinner fa-spin text-2xl mb-2 text-violet-300"></i>
+          <p class="text-sm">Carregando solicitações…</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Detalhe -->
+    <div class="flex-1 min-w-0">
+      <div id="sol-detalhe" class="bg-white rounded-2xl border border-gray-200 shadow-sm h-full flex items-center justify-center text-gray-400">
+        <div class="text-center py-16">
+          <i class="fas fa-file-invoice text-5xl text-violet-100 mb-4"></i>
+          <p class="text-sm">Selecione uma solicitação para ver os detalhes</p>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── Modal Nova/Editar Solicitação ──────────────────────────────────────── -->
+  <div id="sol-modal" class="fixed inset-0 z-50 hidden bg-black/40 flex items-start justify-center pt-10 px-4">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col">
+
+      <!-- Header modal -->
+      <div class="flex items-center justify-between p-5 border-b border-gray-100">
+        <h3 id="sol-modal-titulo" class="font-bold text-gray-800 text-base">Nova Solicitação</h3>
+        <button onclick="solFecharModal()" class="text-gray-400 hover:text-gray-600 w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+
+      <!-- Corpo modal -->
+      <div class="overflow-y-auto flex-1 p-5 space-y-4">
+
+        <!-- Tipo + Título -->
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="text-xs font-semibold text-gray-600 mb-1 block">Tipo *</label>
+            <select id="sol-tipo" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400">
+              <option value="">Selecione o tipo…</option>
+              <option value="bolsista">Contratação de Bolsista</option>
+              <option value="professor">Contratação de Professor</option>
+              <option value="servico">Contratação de Serviço</option>
+              <option value="transporte">Transporte</option>
+              <option value="traslado">Traslado</option>
+              <option value="alimentacao">Alimentação</option>
+              <option value="estrutura_tecnica">Estrutura Técnica</option>
+              <option value="aluguel_equipamento">Aluguel de Equipamento</option>
+              <option value="compra">Compra</option>
+              <option value="aquisicao">Aquisição</option>
+              <option value="material_grafico">Material Gráfico</option>
+              <option value="camarim">Camarim</option>
+              <option value="logistica">Logística</option>
+              <option value="outro">Outro</option>
+            </select>
+          </div>
+          <div>
+            <label class="text-xs font-semibold text-gray-600 mb-1 block">Prioridade *</label>
+            <select id="sol-prioridade" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400">
+              <option value="baixa">Baixa</option>
+              <option value="media" selected>Média</option>
+              <option value="alta">Alta</option>
+              <option value="critica">Crítica</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label class="text-xs font-semibold text-gray-600 mb-1 block">Título *</label>
+          <input id="sol-titulo" type="text" placeholder="Descreva brevemente o que está solicitando…"
+            class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400">
+        </div>
+
+        <div>
+          <label class="text-xs font-semibold text-gray-600 mb-1 block">Descrição / Justificativa</label>
+          <textarea id="sol-descricao" rows="3" placeholder="Detalhe a necessidade, contexto e justificativa…"
+            class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400 resize-none"></textarea>
+        </div>
+
+        <!-- Setores + Responsável -->
+        <div class="grid grid-cols-3 gap-3">
+          <div>
+            <label class="text-xs font-semibold text-gray-600 mb-1 block">Setor Solicitante</label>
+            <select id="sol-setor-sol" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400">
+              <option value="">Selecione o setor…</option>
+              <option value="administrativo">Administrativo</option>
+              <option value="comunicacao">Comunicação</option>
+              <option value="direcao">Direção</option>
+              <option value="financeiro">Financeiro</option>
+              <option value="infraestrutura">Infraestrutura</option>
+              <option value="producao">Produção</option>
+              <option value="programacao">Programação</option>
+              <option value="rh">RH / Pessoal</option>
+            </select>
+          </div>
+          <div>
+            <label class="text-xs font-semibold text-gray-600 mb-1 block">Setor Executor</label>
+            <select id="sol-setor-exec" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400">
+              <option value="">Selecione o setor…</option>
+              <option value="administrativo">Administrativo</option>
+              <option value="comunicacao">Comunicação</option>
+              <option value="direcao">Direção</option>
+              <option value="financeiro">Financeiro</option>
+              <option value="infraestrutura">Infraestrutura</option>
+              <option value="producao">Produção</option>
+              <option value="programacao">Programação</option>
+              <option value="rh">RH / Pessoal</option>
+            </select>
+          </div>
+          <div>
+            <label class="text-xs font-semibold text-gray-600 mb-1 block">Aprovador *</label>
+            <select id="sol-aprovador" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400">
+              <option value="">Carregando usuários…</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Financeiro -->
+        <div class="bg-amber-50 border border-amber-200 rounded-xl p-3">
+          <p class="text-xs font-bold text-amber-700 mb-2 uppercase tracking-wide">Vínculo Financeiro</p>
+          <div class="grid grid-cols-3 gap-2">
+            <div>
+              <label class="text-xs text-gray-600 mb-1 block">Contrato</label>
+              <select id="sol-contrato" onchange="solContratoChange(this.value)" class="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-amber-400">
+                <option value="">— nenhum —</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-xs text-gray-600 mb-1 block">Meta</label>
+              <select id="sol-meta" onchange="solMetaChange(this.value)" class="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-amber-400" disabled>
+                <option value="">— selecione o contrato —</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-xs text-gray-600 mb-1 block">Rubrica</label>
+              <select id="sol-rubrica" class="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-amber-400" disabled>
+                <option value="">— selecione a meta —</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Datas -->
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="text-xs font-semibold text-gray-600 mb-1 block">Data de Necessidade</label>
+            <input id="sol-data-needed" type="date"
+              class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400">
+          </div>
+          <div>
+            <label class="text-xs font-semibold text-gray-600 mb-1 block">Local de Entrega</label>
+            <select id="sol-local" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400">
+              <option value="">Carregando espaços…</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Itens -->
+        <div>
+          <div class="flex items-center justify-between mb-2">
+            <label class="text-xs font-semibold text-gray-600 uppercase tracking-wide">Itens Solicitados</label>
+            <button onclick="solAdicionarItem()"
+              class="text-xs text-violet-600 hover:text-violet-800 font-semibold flex items-center gap-1">
+              <i class="fas fa-plus-circle"></i> Adicionar Item
+            </button>
+          </div>
+          <div id="sol-itens-container" class="space-y-2">
+            <div class="text-center text-gray-400 text-xs py-3 border border-dashed border-gray-200 rounded-lg">
+              Nenhum item adicionado. Clique em "Adicionar Item".
+            </div>
+          </div>
+          <div class="flex justify-end mt-2">
+            <span class="text-sm font-bold text-gray-700">Total estimado: <span id="sol-valor-total" class="text-violet-700">R$ 0,00</span></span>
+          </div>
+        </div>
+
+        <div>
+          <label class="text-xs font-semibold text-gray-600 mb-1 block">Observações Gerais</label>
+          <textarea id="sol-obs" rows="2" placeholder="Informações adicionais relevantes…"
+            class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400 resize-none"></textarea>
+        </div>
+
+      </div>
+
+      <!-- Footer modal -->
+      <div class="border-t border-gray-100 p-4 flex justify-end gap-2">
+        <button onclick="solFecharModal()"
+          class="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 border border-gray-300 rounded-lg hover:bg-gray-50 transition">
+          Cancelar
+        </button>
+        <button onclick="solSalvarRascunho()"
+          class="px-4 py-2 text-sm text-violet-600 border border-violet-300 rounded-lg hover:bg-violet-50 transition font-medium">
+          Salvar Rascunho
+        </button>
+        <button onclick="solEnviarSolicitacao()"
+          class="px-4 py-2 text-sm bg-violet-600 hover:bg-violet-700 text-white rounded-lg font-medium transition flex items-center gap-2">
+          <i class="fas fa-paper-plane text-xs"></i> Enviar para Análise
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Modal Aprovação ─────────────────────────────────────────────────────── -->
+  <div id="sol-modal-aprov" class="fixed inset-0 z-50 hidden bg-black/40 flex items-center justify-center px-4">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+      <h3 class="font-bold text-gray-800 mb-4">Aprovação de Solicitação</h3>
+      <input type="hidden" id="sol-aprov-id">
+      <label class="text-xs font-semibold text-gray-600 mb-1 block">Parecer do Aprovador</label>
+      <textarea id="sol-aprov-parecer" rows="3" placeholder="Registre seu parecer (opcional para aprovação)…"
+        class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400 resize-none mb-3"></textarea>
+      <div class="flex gap-2 justify-end">
+        <button onclick="document.getElementById('sol-modal-aprov').classList.add('hidden')"
+          class="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">Cancelar</button>
+        <button onclick="solDevolver(document.getElementById('sol-aprov-id').value)"
+          class="px-4 py-2 text-sm text-amber-600 border border-amber-300 rounded-lg hover:bg-amber-50 font-medium">
+          <i class="fas fa-undo text-xs mr-1"></i>Devolver para Ajuste
+        </button>
+        <button onclick="solAprovar(document.getElementById('sol-aprov-id').value, document.getElementById('sol-aprov-parecer').value)"
+          class="px-4 py-2 text-sm bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium">
+          <i class="fas fa-check text-xs mr-1"></i>Aprovar
+        </button>
+      </div>
+    </div>
+  </div>
+
+</div>

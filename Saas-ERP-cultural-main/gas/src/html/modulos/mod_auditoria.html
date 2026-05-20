@@ -1,0 +1,257 @@
+<!--
+@file mod_auditoria.html
+@type module
+@description Painel de auditoria operacional — trilha estruturada de eventos com filtros
+             avançados, timeline, agrupamento por dia, visualização de antes/depois.
+             Usa AuditoriaStore (auditoria_operacional.json) como fonte de verdade.
+@responsibility Estrutura HTML + JS inline da aba de auditoria (#aba-auditoria).
+@dependencies GAS.admin.auditoriaV2, GAS.admin.obterLogs, GAS.admin.obterLogAcessos
+-->
+<section id="aba-auditoria" class="tab-content animate-fadeIn hidden pb-20">
+
+  <!-- Cabeçalho -->
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+    <div>
+      <h2 class="text-xl font-black text-slate-800 flex items-center gap-2">
+        <i class="fas fa-shield-alt text-purple-600"></i>Painel de Auditoria
+      </h2>
+      <p class="text-xs text-slate-500 mt-0.5">Trilha operacional de eventos, acessos e rastreabilidade institucional</p>
+    </div>
+    <button id="audit-btn-atualizar" onclick="auditCarregar()"
+      class="flex items-center gap-2 px-4 py-2 bg-slate-800 text-white text-[10px] font-black rounded-xl hover:bg-slate-700 uppercase transition-all">
+      <i class="fas fa-sync-alt"></i> Atualizar
+    </button>
+  </div>
+
+  <!-- Stats bar -->
+  <div id="audit-stats" class="hidden grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+    <div class="bg-white rounded-2xl border border-slate-100 p-4 flex items-center gap-3">
+      <div class="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center">
+        <i class="fas fa-list text-slate-600 text-sm"></i>
+      </div>
+      <div>
+        <div id="audit-stat-total" class="text-xl font-black text-slate-800">—</div>
+        <div class="text-[10px] text-slate-400 font-bold uppercase">Total</div>
+      </div>
+    </div>
+    <div class="bg-white rounded-2xl border border-red-100 p-4 flex items-center gap-3">
+      <div class="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center">
+        <i class="fas fa-exclamation-triangle text-red-500 text-sm"></i>
+      </div>
+      <div>
+        <div id="audit-stat-criticos" class="text-xl font-black text-red-600">—</div>
+        <div class="text-[10px] text-slate-400 font-bold uppercase">Críticos</div>
+      </div>
+    </div>
+    <div class="bg-white rounded-2xl border border-blue-100 p-4 flex items-center gap-3">
+      <div class="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center">
+        <i class="fas fa-circle-check text-blue-500 text-sm"></i>
+      </div>
+      <div>
+        <div id="audit-stat-operacionais" class="text-xl font-black text-blue-600">—</div>
+        <div class="text-[10px] text-slate-400 font-bold uppercase">Operacionais</div>
+      </div>
+    </div>
+    <div class="bg-white rounded-2xl border border-amber-100 p-4 flex items-center gap-3">
+      <div class="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center">
+        <i class="fas fa-xmark text-amber-500 text-sm"></i>
+      </div>
+      <div>
+        <div id="audit-stat-falhas" class="text-xl font-black text-amber-600">—</div>
+        <div class="text-[10px] text-slate-400 font-bold uppercase">Falhas</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sub-abas -->
+  <div class="flex gap-2 mb-4 flex-wrap">
+    <button onclick="auditMostrarSubAba('trilha')" id="audit-tab-trilha"
+      class="audit-tab-btn active px-4 py-2 bg-slate-900 text-white text-xs font-black rounded-xl uppercase">
+      <i class="fas fa-shield-alt mr-1"></i>Trilha de Auditoria
+    </button>
+    <button onclick="auditMostrarSubAba('logs')" id="audit-tab-logs"
+      class="audit-tab-btn px-4 py-2 bg-slate-200 text-slate-600 text-xs font-black rounded-xl uppercase">
+      <i class="fas fa-table mr-1"></i>Logs do Sistema
+    </button>
+    <button onclick="auditMostrarSubAba('acessos')" id="audit-tab-acessos"
+      class="audit-tab-btn px-4 py-2 bg-slate-200 text-slate-600 text-xs font-black rounded-xl uppercase">
+      <i class="fas fa-users mr-1"></i>Log de Acessos
+    </button>
+  </div>
+
+  <!-- ── SUBABA TRILHA ───────────────────────────────────── -->
+  <div id="audit-subaba-trilha">
+
+    <!-- Filtros avançados -->
+    <div class="bg-white rounded-2xl border border-slate-100 p-4 mb-4">
+      <div class="grid grid-cols-1 md:grid-cols-5 gap-3">
+
+        <div>
+          <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Busca</label>
+          <div class="relative">
+            <i class="fas fa-search absolute left-3 top-2.5 text-slate-300 text-xs"></i>
+            <input type="text" id="audit-f-busca" placeholder="Usuário, ação, ID..."
+              oninput="auditAplicarFiltros()"
+              class="w-full pl-8 pr-3 py-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-purple-400">
+          </div>
+        </div>
+
+        <div>
+          <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Categoria</label>
+          <select id="audit-f-categoria" onchange="auditAplicarFiltros()"
+            class="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-purple-400">
+            <option value="">Todas</option>
+            <option value="CRITICO">Crítico</option>
+            <option value="OPERACIONAL">Operacional</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Módulo</label>
+          <select id="audit-f-modulo" onchange="auditAplicarFiltros()"
+            class="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-purple-400">
+            <option value="">Todos</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Período — início</label>
+          <input type="date" id="audit-f-de" onchange="auditAplicarFiltros()"
+            class="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-purple-400">
+        </div>
+
+        <div>
+          <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Período — fim</label>
+          <input type="date" id="audit-f-ate" onchange="auditAplicarFiltros()"
+            class="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-purple-400">
+        </div>
+
+      </div>
+      <div class="flex items-center justify-between mt-3">
+        <span id="audit-filtro-label" class="text-[10px] text-slate-400 font-medium"></span>
+        <button onclick="auditLimparFiltros()"
+          class="text-[10px] text-slate-400 hover:text-slate-600 font-bold uppercase underline transition-colors">
+          Limpar filtros
+        </button>
+      </div>
+    </div>
+
+    <!-- Timeline de eventos -->
+    <div class="bg-white rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-200 overflow-hidden">
+      <div class="p-6 border-b border-slate-100 bg-slate-900 text-white">
+        <div class="flex items-center gap-3">
+          <div class="w-2 h-6 bg-purple-500 rounded-full"></div>
+          <h3 class="font-black uppercase tracking-widest text-sm">Trilha de Auditoria</h3>
+        </div>
+        <p class="text-[10px] text-slate-400 font-bold mt-1 ml-5 uppercase tracking-tighter">
+          Eventos persistidos em auditoria_operacional.json — classificados por categoria e módulo
+        </p>
+      </div>
+      <div id="audit-timeline" class="p-4">
+        <div class="flex flex-col items-center justify-center py-16 text-center">
+          <i class="fas fa-shield-halved text-slate-100 text-5xl mb-4"></i>
+          <p class="text-slate-400 font-bold text-xs uppercase tracking-widest">Aguardando carregamento...</p>
+          <p class="text-slate-300 text-[10px] mt-1">Abra esta aba para carregar os eventos</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SUBABA LOGS DO SISTEMA ───────────────────────────────── -->
+  <div id="audit-subaba-logs" class="hidden">
+    <div class="bg-white rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-200 overflow-hidden">
+      <div class="p-6 border-b border-slate-100 bg-slate-900 text-white flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+          <div class="flex items-center gap-3">
+            <div class="w-2 h-6 bg-emerald-400 rounded-full"></div>
+            <h3 class="font-black uppercase tracking-widest text-sm">Logs do Sistema</h3>
+          </div>
+          <p class="text-[10px] text-slate-400 font-bold mt-2 ml-5 uppercase tracking-tighter">
+            Aba <code class="font-mono bg-white/10 px-1 rounded">Logs</code> da planilha master — eventos operacionais registrados pelo sistema
+          </p>
+        </div>
+        <div class="flex gap-2 shrink-0">
+          <div class="relative w-full md:w-64">
+            <i class="fas fa-search absolute left-4 top-3.5 text-emerald-400 text-xs"></i>
+            <input type="text" id="audit-busca-logs" oninput="auditFiltrarLogs(this.value)"
+              placeholder="Filtrar logs..."
+              class="w-full pl-10 pr-4 py-3 bg-white/10 border border-white/5 rounded-2xl text-xs text-white placeholder:text-slate-500 focus:bg-white focus:text-slate-900 outline-none transition-all font-semibold">
+          </div>
+          <button onclick="_audCarregarLogs(true)"
+            class="px-4 py-2 bg-white/10 hover:bg-white/20 text-white text-[10px] font-black rounded-xl uppercase transition-all">
+            <i class="fas fa-sync-alt"></i>
+          </button>
+        </div>
+      </div>
+      <!-- Contador -->
+      <div class="px-6 py-2 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
+        <span id="audit-logs-count" class="text-[10px] text-slate-400 font-medium"></span>
+        <span class="text-[9px] text-slate-300 italic">Exibindo últimas 500 entradas · mais recentes primeiro</span>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full min-w-[900px] text-left border-collapse">
+          <thead class="bg-slate-50 border-b border-slate-100 sticky top-0">
+            <tr>
+              <th class="p-3 text-[9px] font-black text-slate-400 uppercase tracking-widest w-36">Data/Hora</th>
+              <th class="p-3 text-[9px] font-black text-slate-400 uppercase tracking-widest w-40">Usuário</th>
+              <th class="p-3 text-[9px] font-black text-slate-400 uppercase tracking-widest w-36">Ação</th>
+              <th class="p-3 text-[9px] font-black text-slate-400 uppercase tracking-widest w-28">Tipo</th>
+              <th class="p-3 text-[9px] font-black text-slate-400 uppercase tracking-widest w-40">Alvo</th>
+              <th class="p-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Detalhes</th>
+            </tr>
+          </thead>
+          <tbody id="audit-tbody-logs" class="divide-y divide-slate-50">
+            <tr>
+              <td colspan="6" class="p-12 text-center">
+                <i class="fas fa-spinner animate-spin text-slate-200 text-2xl mb-3 block"></i>
+                <p class="text-slate-300 text-xs font-bold uppercase">Clique na aba para carregar</p>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SUBABA ACESSOS ─────────────────────────────────────── -->
+  <div id="audit-subaba-acessos" class="hidden">
+    <div class="bg-white rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-200 overflow-hidden">
+      <div class="p-6 border-b border-slate-100 bg-slate-900 text-white flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+          <div class="flex items-center gap-3">
+            <div class="w-2 h-6 bg-blue-500 rounded-full"></div>
+            <h3 class="font-black uppercase tracking-widest text-sm">Log de Acessos</h3>
+          </div>
+          <p class="text-[10px] text-slate-400 font-bold mt-2 ml-5 uppercase tracking-tighter">Registro de logins e sessões no sistema</p>
+        </div>
+        <div class="relative w-full md:w-72">
+          <i class="fas fa-search absolute left-4 top-3.5 text-blue-400 text-xs"></i>
+          <input type="text" id="audit-busca-acessos" oninput="auditFiltrarAcessos(this.value)"
+            placeholder="Filtrar por usuário..."
+            class="w-full pl-10 pr-4 py-3 bg-white/10 border border-white/5 rounded-2xl text-xs text-white placeholder:text-slate-500 focus:bg-white focus:text-slate-900 outline-none transition-all font-semibold">
+        </div>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full min-w-[640px] text-left border-collapse">
+          <thead class="bg-slate-50 border-b border-slate-100">
+            <tr>
+              <th class="p-4 text-[9px] font-black text-slate-400 uppercase tracking-widest w-44">Data/Hora</th>
+              <th class="p-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">Usuário</th>
+              <th class="p-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center w-32">Tipo</th>
+            </tr>
+          </thead>
+          <tbody id="audit-tbody-acessos" class="divide-y divide-slate-50">
+            <tr>
+              <td colspan="3" class="p-12 text-center">
+                <i class="fas fa-spinner animate-spin text-slate-200 text-2xl mb-3"></i>
+                <p class="text-slate-300 text-xs font-bold uppercase">Carregando...</p>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</section>
+
